@@ -20,8 +20,10 @@ export function GarmentViewport({ snapshot, simulateVersion }: GarmentViewportPr
     if (!host) return;
 
     let active = true;
+    const abortController = new AbortController();
+    setError(null);
 
-    void ThreeViewport.create(host)
+    void ThreeViewport.create(host, abortController.signal)
       .then((viewport) => {
         if (!active) {
           viewport.dispose();
@@ -31,12 +33,14 @@ export function GarmentViewport({ snapshot, simulateVersion }: GarmentViewportPr
         viewport.updatePattern(latestSnapshotRef.current);
       })
       .catch((reason: unknown) => {
+        if (!active) return;
         console.error(reason);
         setError("Não foi possível iniciar o viewport 3D neste navegador.");
       });
 
     return () => {
       active = false;
+      abortController.abort();
       viewportRef.current?.dispose();
       viewportRef.current = null;
     };
