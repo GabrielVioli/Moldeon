@@ -1,4 +1,5 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
+import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PatternPoint, PatternSnapshot } from "../domain/pattern";
 import { triangulatePatternContour } from "../domain/polygonGeometry";
@@ -10,39 +11,66 @@ interface GarmentMeshData {
   dressed: Float32Array;
 }
 
+type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
+export type RenderBackend = "webgpu" | "webgl2";
+
+interface PerformanceProfile {
+  antialias: boolean;
+  maxPixelRatio: number;
+  shadows: boolean;
+  geometrySegments: number;
+}
+
 export class ThreeViewport {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100);
-  private readonly renderer = new THREE.WebGPURenderer({ antialias: true, alpha: false });
+  private readonly renderer: ViewportRenderer;
   private readonly controls: OrbitControls;
   private readonly garmentGroup = new THREE.Group();
   private readonly resizeObserver: ResizeObserver;
+  private readonly profile: PerformanceProfile;
+  private frameId: number | null = null;
   private garmentMeshes: GarmentMeshData[] = [];
   private dressProgress = 1;
   private dressStartedAt = 0;
+  private lastFrameAt = 0;
   private disposed = false;
 
-  private constructor(private readonly host: HTMLElement) {
+  private constructor(
+    private readonly host: HTMLElement,
+    renderer: ViewportRenderer,
+    readonly backend: RenderBackend,
+    profile: PerformanceProfile,
+  ) {
+    this.renderer = renderer;
+    this.profile = profile;
     this.scene.background = new THREE.Color(0xe9e6df);
     this.camera.position.set(2.4, 1.45, 3.8);
 
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, profile.maxPixelRatio),
+    );
+    this.renderer.shadowMap.enabled = profile.shadows;
     this.renderer.domElement.className = "three-canvas";
     this.host.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 1.05, 0);
     this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 2.2;
     this.controls.maxDistance = 8;
+    this.controls.addEventListener("change", this.requestRender);
 
     this.scene.add(this.createLights());
     this.scene.add(this.createMannequin());
     this.scene.add(this.garmentGroup);
     this.scene.add(this.createFloor());
 
-    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver = new ResizeObserver(() => {
+      this.resize();
+      this.requestRender();
+    });
     this.resizeObserver.observe(this.host);
   }
 
@@ -54,19 +82,24 @@ export class ThreeViewport {
       throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
     }
 
-    const viewport = new ThreeViewport(host);
+    const profile = getPerformanceProfile();
+    const rendererResult = await createRenderer(profile, signal);
+    const viewport = new ThreeViewport(
+      host,
+      rendererResult.renderer,
+      rendererResult.backend,
+      profile,
+    );
     const abort = () => viewport.dispose();
     signal?.addEventListener("abort", abort, { once: true });
 
     try {
-      await viewport.renderer.init();
-
       if (signal?.aborted || viewport.disposed) {
         throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
       }
 
       viewport.resize();
-      viewport.renderer.setAnimationLoop((time) => viewport.render(time));
+      viewport.requestRender();
       return viewport;
     } catch (error) {
       viewport.dispose();
@@ -111,19 +144,25 @@ export class ThreeViewport {
     this.garmentMeshes = [front, back];
     this.garmentMeshes.forEach(({ mesh }) => this.garmentGroup.add(mesh));
     this.applyDressProgress(1);
+    this.requestRender();
   }
 
   dress() {
     this.dressProgress = 0;
     this.dressStartedAt = performance.now();
     this.applyDressProgress(0);
+    this.requestRender();
   }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver.disconnect();
-    this.renderer.setAnimationLoop(null);
+    if (this.frameId !== null) {
+      window.cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+    this.controls.removeEventListener("change", this.requestRender);
     this.controls.dispose();
     disposeObjectTree(this.scene);
     this.garmentMeshes = [];
@@ -186,8 +225,8 @@ export class ThreeViewport {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = this.profile.shadows;
+    mesh.receiveShadow = this.profile.shadows;
 
     return { mesh, flat, dressed };
   }
@@ -223,25 +262,43 @@ export class ThreeViewport {
     const group = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({ color: 0xb7aa9a, roughness: 0.92 });
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.65, 8, 24), material);
+    const radialSegments = this.profile.geometrySegments;
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.3, 0.65, 6, radialSegments),
+      material,
+    );
     torso.position.y = 1.25;
     torso.scale.set(1, 1, 0.72);
     torso.castShadow = true;
 
-    const hips = new THREE.Mesh(new THREE.SphereGeometry(0.36, 32, 20), material);
+    const hips = new THREE.Mesh(
+      new THREE.SphereGeometry(0.36, radialSegments, 12),
+      material,
+    );
     hips.position.y = 0.86;
     hips.scale.set(1, 0.72, 0.82);
     hips.castShadow = true;
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 16), material);
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.17, radialSegments, 10),
+      material,
+    );
     head.position.y = 2.05;
     head.scale.set(0.9, 1.15, 0.92);
     head.castShadow = true;
 
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.22, 20), material);
+    const neck = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.1, 0.22, radialSegments),
+      material,
+    );
     neck.position.y = 1.84;
 
-    const legGeometry = new THREE.CapsuleGeometry(0.105, 0.75, 6, 18);
+    const legGeometry = new THREE.CapsuleGeometry(
+      0.105,
+      0.75,
+      5,
+      radialSegments,
+    );
     const leftLeg = new THREE.Mesh(legGeometry, material);
     leftLeg.position.set(-0.14, 0.25, 0);
     leftLeg.castShadow = true;
@@ -257,7 +314,7 @@ export class ThreeViewport {
     const ambient = new THREE.HemisphereLight(0xffffff, 0x4a4a50, 2.1);
     const key = new THREE.DirectionalLight(0xffffff, 3.2);
     key.position.set(3, 5, 4);
-    key.castShadow = true;
+    key.castShadow = this.profile.shadows;
     const fill = new THREE.DirectionalLight(0xc8d2ff, 1.2);
     fill.position.set(-3, 2, 2);
     group.add(ambient, key, fill);
@@ -266,7 +323,7 @@ export class ThreeViewport {
 
   private createFloor(): THREE.Mesh {
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(2.6, 64),
+      new THREE.CircleGeometry(2.6, this.profile.geometrySegments * 2),
       new THREE.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 1 }),
     );
     floor.rotation.x = -Math.PI / 2;
@@ -283,15 +340,96 @@ export class ThreeViewport {
     this.renderer.setSize(width, height, false);
   }
 
-  private render(time: number) {
+  private readonly requestRender = () => {
+    if (this.disposed || this.frameId !== null) return;
+    this.frameId = window.requestAnimationFrame(this.render);
+  };
+
+  private readonly render = (time: number) => {
+    this.frameId = null;
     if (this.disposed) return;
+
+    const deltaSeconds =
+      this.lastFrameAt === 0 ? 1 / 60 : Math.min((time - this.lastFrameAt) / 1000, 0.05);
+    this.lastFrameAt = time;
+    let needsAnotherFrame = false;
 
     if (this.dressProgress < 1) {
       this.dressProgress = Math.min(1, (time - this.dressStartedAt) / 1200);
       this.applyDressProgress(this.dressProgress);
+      needsAnotherFrame = this.dressProgress < 1;
     }
 
-    this.controls.update();
+    needsAnotherFrame = this.controls.update(deltaSeconds) || needsAnotherFrame;
     this.renderer.render(this.scene, this.camera);
+    if (needsAnotherFrame) this.requestRender();
+  };
+}
+
+async function createRenderer(
+  profile: PerformanceProfile,
+  signal?: AbortSignal,
+): Promise<{ renderer: ViewportRenderer; backend: RenderBackend }> {
+  if ("gpu" in navigator) {
+    let renderer: WebGPURenderer | null = null;
+    try {
+      const { WebGPURenderer } = await import("three/webgpu");
+      if (signal?.aborted) {
+        throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
+      }
+
+      renderer = new WebGPURenderer({
+        antialias: profile.antialias,
+        alpha: false,
+      });
+      await renderer.init();
+      return { renderer, backend: "webgpu" };
+    } catch (error) {
+      renderer?.dispose();
+      if (signal?.aborted) throw error;
+      console.info("WebGPU indisponível; iniciando o fallback WebGL 2.", error);
+    }
   }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: profile.antialias,
+    powerPreference: "high-performance",
+  });
+
+  if (!context) {
+    throw new Error("Este navegador não disponibiliza WebGPU nem WebGL 2.");
+  }
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    context,
+    alpha: false,
+    antialias: profile.antialias,
+    powerPreference: "high-performance",
+  });
+  return { renderer, backend: "webgl2" };
+}
+
+function getPerformanceProfile(): PerformanceProfile {
+  const compact = window.matchMedia("(max-width: 760px)").matches;
+  const lowPower =
+    navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
+
+  if (compact || lowPower) {
+    return {
+      antialias: false,
+      maxPixelRatio: 1.25,
+      shadows: false,
+      geometrySegments: 14,
+    };
+  }
+
+  return {
+    antialias: true,
+    maxPixelRatio: 1.75,
+    shadows: true,
+    geometrySegments: 20,
+  };
 }

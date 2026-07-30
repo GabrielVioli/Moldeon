@@ -1,4 +1,11 @@
-import { PointerEvent, WheelEvent, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
+import { createSeamAllowanceContour } from "../domain/polygonGeometry";
 import { PatternPoint, PatternSnapshot, distanceMm } from "../domain/pattern";
 import { Camera2D, ScreenPoint, cameraFromGesture, clampZoom } from "./camera";
 
@@ -11,10 +18,17 @@ interface PatternCanvasProps {
 
 const POINT_RADIUS_PX = 7;
 const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
+const MOBILE_QUERY = "(max-width: 760px)";
 
 interface PointerPosition {
   clientX: number;
   clientY: number;
+}
+
+interface PendingPointMove {
+  pointId: string;
+  xMm: number;
+  yMm: number;
 }
 
 export function PatternCanvas({
@@ -24,8 +38,15 @@ export function PatternCanvas({
   onMovePoint,
 }: PatternCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [camera, setCamera] = useState<Camera2D>(INITIAL_CAMERA);
+  const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const cameraRef = useRef<Camera2D>(INITIAL_CAMERA);
+  const snapshotRef = useRef(snapshot);
+  const selectedPointIdRef = useRef(selectedPointId);
+  const onMovePointRef = useRef(onMovePoint);
+  const canvasSizeRef = useRef({ width: 0, height: 0 });
+  const drawFrameRef = useRef<number | null>(null);
+  const moveFrameRef = useRef<number | null>(null);
+  const pendingMoveRef = useRef<PendingPointMove | null>(null);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
   const dragRef = useRef<
     | { type: "point"; pointerId: number; pointId: string }
@@ -47,10 +68,30 @@ export function PatternCanvas({
     | null
   >(null);
 
-  function updateCamera(nextCamera: Camera2D) {
-    cameraRef.current = nextCamera;
-    setCamera(nextCamera);
-  }
+  snapshotRef.current = snapshot;
+  selectedPointIdRef.current = selectedPointId;
+  onMovePointRef.current = onMovePoint;
+
+  const drawLatest = useCallback(() => {
+    drawFrameRef.current = null;
+    const context = contextRef.current;
+    if (!context) return;
+
+    const { width, height } = canvasSizeRef.current;
+    draw(
+      context,
+      width,
+      height,
+      snapshotRef.current,
+      selectedPointIdRef.current,
+      cameraRef.current,
+    );
+  }, []);
+
+  const scheduleDraw = useCallback(() => {
+    if (drawFrameRef.current !== null) return;
+    drawFrameRef.current = window.requestAnimationFrame(drawLatest);
+  }, [drawLatest]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -58,25 +99,70 @@ export function PatternCanvas({
 
     const context = canvas.getContext("2d");
     if (!context) return;
+    contextRef.current = context;
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(rect.width * dpr));
-      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      const dpr = preferredCanvasDpr();
+      const pixelWidth = Math.max(1, Math.round(rect.width * dpr));
+      const pixelHeight = Math.max(1, Math.round(rect.height * dpr));
+
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      draw(context, rect.width, rect.height, snapshot, selectedPointId, camera);
+      canvasSizeRef.current = { width: rect.width, height: rect.height };
+      scheduleDraw();
     };
 
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
     resize();
 
-    return () => observer.disconnect();
-  }, [snapshot, selectedPointId, camera]);
+    return () => {
+      observer.disconnect();
+      contextRef.current = null;
+      if (drawFrameRef.current !== null) {
+        window.cancelAnimationFrame(drawFrameRef.current);
+        drawFrameRef.current = null;
+      }
+      if (moveFrameRef.current !== null) {
+        window.cancelAnimationFrame(moveFrameRef.current);
+        moveFrameRef.current = null;
+      }
+    };
+  }, [scheduleDraw]);
+
+  useEffect(() => {
+    scheduleDraw();
+  }, [snapshot, selectedPointId, scheduleDraw]);
+
+  function updateCamera(nextCamera: Camera2D) {
+    cameraRef.current = nextCamera;
+    scheduleDraw();
+  }
+
+  function queuePointMove(move: PendingPointMove) {
+    pendingMoveRef.current = move;
+    if (moveFrameRef.current !== null) return;
+
+    moveFrameRef.current = window.requestAnimationFrame(() => {
+      moveFrameRef.current = null;
+      const pending = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      if (pending) {
+        onMovePointRef.current(pending.pointId, pending.xMm, pending.yMm);
+      }
+    });
+  }
 
   function screenToWorld(clientX: number, clientY: number) {
-    const rect = canvasRef.current!.getBoundingClientRect();
+    const canvas = canvasRef.current;
+    if (!canvas) return { xMm: 0, yMm: 0 };
+
+    const rect = canvas.getBoundingClientRect();
     const currentCamera = cameraRef.current;
     return {
       xMm: (clientX - rect.left - currentCamera.panX) / currentCamera.zoom,
@@ -89,8 +175,10 @@ export function PatternCanvas({
     const maxDistanceMm = (POINT_RADIUS_PX + 5) / cameraRef.current.zoom;
 
     return (
-      snapshot.piece.points.find(
-        (point) => Math.hypot(point.xMm - world.xMm, point.yMm - world.yMm) <= maxDistanceMm,
+      snapshotRef.current.piece.points.find(
+        (point) =>
+          Math.hypot(point.xMm - world.xMm, point.yMm - world.yMm) <=
+          maxDistanceMm,
       ) ?? null
     );
   }
@@ -118,7 +206,11 @@ export function PatternCanvas({
     }
 
     if (event.button === 1 || event.shiftKey) {
-      dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
+      dragRef.current = createPanDrag(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+      );
       return;
     }
 
@@ -126,7 +218,11 @@ export function PatternCanvas({
     onSelectPoint(point?.id ?? null);
 
     if (point) {
-      dragRef.current = { type: "point", pointerId: event.pointerId, pointId: point.id };
+      dragRef.current = {
+        type: "point",
+        pointerId: event.pointerId,
+        pointId: point.id,
+      };
     }
   }
 
@@ -173,11 +269,11 @@ export function PatternCanvas({
     }
 
     const world = screenToWorld(event.clientX, event.clientY);
-    onMovePoint(drag.pointId, Math.round(world.xMm * 10) / 10, Math.round(world.yMm * 10) / 10);
-  }
-
-  function handlePointerUp(event: PointerEvent<HTMLCanvasElement>) {
-    finishPointer(event);
+    queuePointMove({
+      pointId: drag.pointId,
+      xMm: Math.round(world.xMm * 10) / 10,
+      yMm: Math.round(world.yMm * 10) / 10,
+    });
   }
 
   function handleWheel(event: WheelEvent<HTMLCanvasElement>) {
@@ -198,7 +294,11 @@ export function PatternCanvas({
     });
   }
 
-  function createPanDrag(pointerId: number, clientX: number, clientY: number) {
+  function createPanDrag(
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+  ) {
     return {
       type: "pan" as const,
       pointerId,
@@ -240,7 +340,11 @@ export function PatternCanvas({
     const remaining = [...activePointersRef.current.entries()][0];
     if (remaining) {
       const [pointerId, position] = remaining;
-      dragRef.current = createPanDrag(pointerId, position.clientX, position.clientY);
+      dragRef.current = createPanDrag(
+        pointerId,
+        position.clientX,
+        position.clientY,
+      );
       return;
     }
 
@@ -254,7 +358,7 @@ export function PatternCanvas({
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
+      onPointerUp={finishPointer}
       onPointerCancel={finishPointer}
       onWheel={handleWheel}
       aria-label="Editor de molde 2D"
@@ -262,8 +366,20 @@ export function PatternCanvas({
   );
 }
 
-function pointerDistance(first: PointerPosition, second: PointerPosition): number {
-  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+function preferredCanvasDpr(): number {
+  const compact = window.matchMedia(MOBILE_QUERY).matches;
+  const lowPower = navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
+  return Math.min(window.devicePixelRatio || 1, compact || lowPower ? 1.5 : 2);
+}
+
+function pointerDistance(
+  first: PointerPosition,
+  second: PointerPosition,
+): number {
+  return Math.hypot(
+    second.clientX - first.clientX,
+    second.clientY - first.clientY,
+  );
 }
 
 function pointerCenter(
@@ -299,18 +415,25 @@ function draw(
   context.translate(camera.panX, camera.panY);
   context.scale(camera.zoom, camera.zoom);
 
-  context.beginPath();
-  context.moveTo(points[0].xMm, points[0].yMm);
-  for (const point of points.slice(1)) {
-    context.lineTo(point.xMm, point.yMm);
-  }
-  context.closePath();
+  traceContour(context, points);
   context.fillStyle = "rgba(32, 33, 36, 0.08)";
   context.fill();
   context.strokeStyle = "#202124";
   context.lineWidth = 2 / camera.zoom;
   context.stroke();
 
+  const seamPoints = createSeamAllowanceContour(
+    points,
+    snapshot.piece.seamAllowanceMm,
+  );
+  if (seamPoints && snapshot.piece.seamAllowanceMm > 0) {
+    traceContour(context, seamPoints);
+    context.setLineDash([7 / camera.zoom, 5 / camera.zoom]);
+    context.strokeStyle = "#777a75";
+    context.lineWidth = 1.25 / camera.zoom;
+    context.stroke();
+    context.setLineDash([]);
+  }
 
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index];
@@ -335,7 +458,13 @@ function draw(
   for (const point of points) {
     const selected = point.id === selectedPointId;
     context.beginPath();
-    context.arc(point.xMm, point.yMm, (selected ? 7 : 5) / camera.zoom, 0, Math.PI * 2);
+    context.arc(
+      point.xMm,
+      point.yMm,
+      (selected ? 7 : 5) / camera.zoom,
+      0,
+      Math.PI * 2,
+    );
     context.fillStyle = selected ? "#111214" : "#ffffff";
     context.fill();
     context.strokeStyle = "#111214";
@@ -344,6 +473,18 @@ function draw(
   }
 
   context.restore();
+}
+
+function traceContour(
+  context: CanvasRenderingContext2D,
+  points: readonly PatternPoint[],
+) {
+  context.beginPath();
+  context.moveTo(points[0].xMm, points[0].yMm);
+  for (let index = 1; index < points.length; index += 1) {
+    context.lineTo(points[index].xMm, points[index].yMm);
+  }
+  context.closePath();
 }
 
 function drawGrid(

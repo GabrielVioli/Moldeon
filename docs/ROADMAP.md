@@ -15,14 +15,14 @@
 - Snap e restrições geométricas.
 - Pence.
 - Espelhamento.
-- Margem de costura real.
+- Margem de costura básica com offset e exportação SVG. ✅
 - Piques e fio do tecido.
 - Undo/redo por Command Pattern.
 - PDF A4 em escala 1:1.
 
 ## Marco 3: preparação 3D
 
-- Triangulação robusta de peças arbitrárias.
+- Triangulação de polígonos simples convexos e côncavos. ✅
 - Frente, costas e peças múltiplas.
 - Costuras entre intervalos de borda.
 - Posicionamento dos painéis ao redor do avatar.

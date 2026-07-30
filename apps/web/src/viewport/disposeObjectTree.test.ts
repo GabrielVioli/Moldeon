@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { disposeObjectTree } from "./disposeObjectTree";
 

@@ -2,7 +2,7 @@ import {
   PatternEngineFacade,
   PatternPiece,
   PatternSnapshot,
-  PatternSnapshotSchema,
+  parsePatternSnapshot,
 } from "../domain/pattern";
 import { FallbackPatternEngine } from "../core/fallbackPatternEngine";
 
@@ -25,23 +25,23 @@ class RustPatternEngine implements PatternEngineFacade {
   constructor(private readonly engine: WasmPatternEngine) {}
 
   snapshot(): PatternSnapshot {
-    return PatternSnapshotSchema.parse(this.engine.snapshot());
+    return parsePatternSnapshot(this.engine.snapshot());
   }
 
   restorePiece(piece: PatternPiece): PatternSnapshot {
-    return PatternSnapshotSchema.parse(this.engine.restore_piece(piece));
+    return parsePatternSnapshot(this.engine.restore_piece(piece));
   }
 
   movePoint(pointId: string, xMm: number, yMm: number): PatternSnapshot {
-    return PatternSnapshotSchema.parse(this.engine.move_point(pointId, xMm, yMm));
+    return parsePatternSnapshot(this.engine.move_point(pointId, xMm, yMm));
   }
 
   setSeamAllowance(valueMm: number): PatternSnapshot {
-    return PatternSnapshotSchema.parse(this.engine.set_seam_allowance(valueMm));
+    return parsePatternSnapshot(this.engine.set_seam_allowance(valueMm));
   }
 
   reset(): PatternSnapshot {
-    return PatternSnapshotSchema.parse(this.engine.reset());
+    return parsePatternSnapshot(this.engine.reset());
   }
 }
 

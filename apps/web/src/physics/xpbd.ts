@@ -14,6 +14,10 @@ export interface XpbdState {
 }
 
 export function solveDistanceConstraints(state: XpbdState, deltaSeconds: number, iterations = 6) {
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+    throw new RangeError("O passo da simulação precisa ser positivo e finito.");
+  }
+
   const alphaScale = 1 / (deltaSeconds * deltaSeconds);
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
@@ -30,7 +34,11 @@ export function solveDistanceConstraints(state: XpbdState, deltaSeconds: number,
       const wB = state.inverseMasses[constraint.b];
       const compliance = constraint.compliance * alphaScale;
       const constraintValue = length - constraint.restLength;
-      const deltaLambda = (-constraintValue - compliance * constraint.lambda) / (wA + wB + compliance);
+      const effectiveMass = wA + wB + compliance;
+      if (effectiveMass <= 1e-12) continue;
+
+      const deltaLambda =
+        (-constraintValue - compliance * constraint.lambda) / effectiveMass;
       constraint.lambda += deltaLambda;
 
       const nx = dx / length;

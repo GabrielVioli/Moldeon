@@ -2,7 +2,7 @@
 name = "pattern-core"
 version = "0.1.0"
 edition = "2021"
-description = "Núcleo geométrico do Moreóris Studio"
+description = "Núcleo geométrico do Moldeon"
 license = "MIT"
 
 [lib]

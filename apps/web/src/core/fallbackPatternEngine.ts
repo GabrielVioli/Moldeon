@@ -1,8 +1,8 @@
 import {
   PatternEngineFacade,
   PatternPiece,
-  PatternPieceSchema,
   PatternSnapshot,
+  parsePatternPiece,
   polygonAreaMm2,
   polygonPerimeterMm,
 } from "../domain/pattern";
@@ -40,7 +40,7 @@ export class FallbackPatternEngine implements PatternEngineFacade {
   }
 
   restorePiece(piece: PatternPiece): PatternSnapshot {
-    this.piece = structuredClone(PatternPieceSchema.parse(piece));
+    this.piece = structuredClone(parsePatternPiece(piece));
     return this.snapshot();
   }
 

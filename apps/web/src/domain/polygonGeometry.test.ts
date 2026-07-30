@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PatternPoint } from "./pattern";
 import {
+  createSeamAllowanceContour,
   polygonSignedAreaMm2,
   triangulatePatternContour,
   validatePatternContour,
@@ -86,6 +87,41 @@ describe("pattern contour geometry", () => {
         "Existem pontos sobrepostos no contorno.",
       ]),
     );
+  });
+
+  it("creates an outward seam allowance in either winding order", () => {
+    const square = points([
+      [0, 0],
+      [100, 0],
+      [100, 100],
+      [0, 100],
+    ]);
+
+    for (const contour of [square, [...square].reverse()]) {
+      const seam = createSeamAllowanceContour(contour, 10);
+      expect(seam).not.toBeNull();
+      expect(seam?.map(({ xMm, yMm }) => [xMm, yMm])).toEqual(
+        expect.arrayContaining([
+          [-10, -10],
+          [110, -10],
+          [110, 110],
+          [-10, 110],
+        ]),
+      );
+      expect(Math.abs(polygonSignedAreaMm2(seam ?? []))).toBeCloseTo(14_400);
+    }
+  });
+
+  it("does not create a seam allowance for an invalid contour", () => {
+    const crossed = points([
+      [0, 0],
+      [100, 100],
+      [0, 100],
+      [100, 0],
+    ]);
+
+    expect(createSeamAllowanceContour(crossed, 10)).toBeNull();
+    expect(createSeamAllowanceContour(points([[0, 0], [100, 0], [0, 100]]), -1)).toBeNull();
   });
 });
 

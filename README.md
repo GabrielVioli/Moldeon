@@ -1,22 +1,39 @@
-# Moreóris Studio
+# Moldeon
 
 Fundação web para um software de modelagem de roupas com molde técnico 2D, visualização 3D e núcleo matemático em Rust/WebAssembly.
 
 ## O que esta entrega já faz
 
 - Editor 2D em milímetros, com grade, zoom, pan e pontos arrastáveis.
+- Interface móvel com abas, pan por toque e zoom por pinça.
 - Molde-base de saia paramétrico como peça inicial.
-- Cálculo de área, perímetro e validações no núcleo Rust/WASM.
+- Cálculo de área, perímetro e validações equivalentes em Rust/WASM e TypeScript.
+- Validação de pontos duplicados, autointerseções e contornos degenerados.
+- Triangulação explícita de polígonos convexos e côncavos.
 - Fallback em TypeScript, permitindo abrir o projeto mesmo sem compilar Rust.
-- Viewport 3D com Three.js e `WebGPURenderer`, com fallback automático para WebGL 2.
+- Viewport 3D sob demanda com Three.js, WebGPU e fallback WebGL 2 explícito.
 - Manequim procedural, sem depender de arquivo 3D externo.
 - Conversão visual do molde plano em painel curvado sobre o manequim.
-- Exportação do molde para SVG em escala vetorial.
+- Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
 - Autosave local usando OPFS quando disponível.
 - Cabeçalhos necessários para `SharedArrayBuffer` no Vite e exemplos de deploy.
 - Estrutura inicial para solver XPBD em Web Worker.
 - Infraestrutura opcional com PostgreSQL, Redis e MinIO.
 - Template de API para Laravel 13.
+- CI para TypeScript, testes, build, Rust, Clippy e rustfmt.
+
+## Desempenho
+
+O carregamento inicial do editor fallback caiu de aproximadamente **1,07 MB para 216 KB** de JavaScript minificado, ou de **301 KB para 69 KB comprimidos**.
+
+- Three.js não entra no JavaScript inicial.
+- No celular, o 3D só é baixado depois que a aba **Prévia 3D** é aberta.
+- WebGL 2 e os recursos comuns do Three.js formam o caminho 3D mais leve.
+- O módulo adicional de WebGPU só é baixado quando a API está disponível.
+- O Canvas 2D reutiliza o mesmo `ResizeObserver` e limita atualizações ao frame da tela.
+- O viewport 3D renderiza sob demanda, em vez de manter 60 FPS sem alterações.
+- Celulares usam DPR, geometria e iluminação reduzidos; sombras ficam desativadas.
+- Sourcemaps de produção ficam desativados.
 
 ## O que ainda não é uma simulação profissional
 
@@ -68,6 +85,8 @@ npm run typecheck       # Verificação TypeScript
 npm run test            # Testes do frontend e solver inicial
 ```
 
+O build de produção gera chunks separados para editor, Three.js comum e WebGPU. O chunk WebGPU é propositalmente opcional e não bloqueia a abertura do editor no celular.
+
 ## Backend opcional
 
 A primeira versão funciona localmente sem servidor. Para contas, nuvem e compartilhamento:
@@ -105,3 +124,15 @@ Leia também:
 - `docs/ROADMAP.md`
 - `docs/INSTALL_WINDOWS.md`
 - `docs/PHYSICS_PLAN.md`
+
+## Limitações atuais
+
+- O molde inicial ainda usa segmentos retos; curvas Bézier, pences e graduação não foram implementadas.
+- A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
+- A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
+- O Worker XPBD ainda não alimenta a malha do Three.js.
+- O backend Laravel continua opcional e não é necessário para usar o editor.
+
+## Próxima etapa recomendada
+
+Implementar comandos de edição com undo/redo e curvas Bézier no núcleo geométrico antes de conectar a física XPBD ao viewport.

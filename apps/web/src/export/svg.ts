@@ -1,32 +1,80 @@
-import { PatternSnapshot } from "../domain/pattern";
+import { createSeamAllowanceContour } from "../domain/polygonGeometry";
+import type { PatternPoint, PatternSnapshot } from "../domain/pattern";
+
+const EXPORT_PADDING_MM = 20;
+
+export function createPatternSvg(snapshot: PatternSnapshot): string {
+  const points = snapshot.piece.points;
+  const seamPoints = createSeamAllowanceContour(
+    points,
+    snapshot.piece.seamAllowanceMm,
+  );
+  const cuttingLine =
+    seamPoints && snapshot.piece.seamAllowanceMm > 0 ? seamPoints : points;
+  const bounds = contourBounds(cuttingLine);
+  const width = bounds.maxX - bounds.minX + EXPORT_PADDING_MM * 2;
+  const height = bounds.maxY - bounds.minY + EXPORT_PADDING_MM * 2;
+  const transformPoint = (point: PatternPoint) => ({
+    ...point,
+    xMm: point.xMm - bounds.minX + EXPORT_PADDING_MM,
+    yMm: point.yMm - bounds.minY + EXPORT_PADDING_MM,
+  });
+  const transformedPattern = points.map(transformPoint);
+  const transformedCuttingLine = cuttingLine.map(transformPoint);
+  const hasSeparateCuttingLine = cuttingLine !== points;
+  const title = escapeXml(snapshot.piece.name);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(width)}mm" height="${formatNumber(height)}mm" viewBox="0 0 ${formatNumber(width)} ${formatNumber(height)}">
+  <title>${title}</title>
+  <g fill="none" stroke="#000">
+    <path id="cutting-line" d="${contourPath(transformedCuttingLine)}" stroke-width="0.5" />
+    ${hasSeparateCuttingLine ? `<path id="stitching-line" d="${contourPath(transformedPattern)}" stroke-width="0.35" stroke-dasharray="4 2" />` : ""}
+  </g>
+  <text x="${EXPORT_PADDING_MM}" y="10" font-family="Arial, sans-serif" font-size="5">${title}</text>
+  <text x="${EXPORT_PADDING_MM}" y="${formatNumber(height - 7)}" font-family="Arial, sans-serif" font-size="4">Margem de costura: ${formatNumber(snapshot.piece.seamAllowanceMm)} mm · escala vetorial 1:1</text>
+</svg>`;
+}
 
 export function exportPatternAsSvg(snapshot: PatternSnapshot) {
-  const points = snapshot.piece.points;
-  const minX = Math.min(...points.map((point) => point.xMm));
-  const maxX = Math.max(...points.map((point) => point.xMm));
-  const minY = Math.min(...points.map((point) => point.yMm));
-  const maxY = Math.max(...points.map((point) => point.yMm));
-  const padding = 30;
-  const width = maxX - minX + padding * 2;
-  const height = maxY - minY + padding * 2;
-  const path = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.xMm - minX + padding} ${point.yMm - minY + padding}`)
-    .join(" ");
-
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">
-  <title>${escapeXml(snapshot.piece.name)}</title>
-  <path d="${path} Z" fill="none" stroke="#000" stroke-width="0.5" />
-  <text x="${padding}" y="${padding - 8}" font-family="Arial" font-size="6">${escapeXml(snapshot.piece.name)}</text>
-</svg>`;
-
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const blob = new Blob([createPatternSvg(snapshot)], {
+    type: "image/svg+xml;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${slugify(snapshot.piece.name)}.svg`;
   anchor.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function contourPath(points: readonly PatternPoint[]): string {
+  return `${points
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"} ${formatNumber(point.xMm)} ${formatNumber(point.yMm)}`,
+    )
+    .join(" ")} Z`;
+}
+
+function contourBounds(points: readonly PatternPoint[]) {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const point of points) {
+    minX = Math.min(minX, point.xMm);
+    maxX = Math.max(maxX, point.xMm);
+    minY = Math.min(minY, point.yMm);
+    maxY = Math.max(maxY, point.yMm);
+  }
+
+  return { minX, maxX, minY, maxY };
+}
+
+function formatNumber(value: number): string {
+  return Number(value.toFixed(3)).toString();
 }
 
 function slugify(value: string) {

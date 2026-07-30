@@ -1,17 +1,23 @@
+import { memo } from "react";
+
 interface ToolbarProps {
   onSimulate(): void;
   onReset(): void;
   onExportSvg(): void;
 }
 
-export function Toolbar({ onSimulate, onReset, onExportSvg }: ToolbarProps) {
+export const Toolbar = memo(function Toolbar({
+  onSimulate,
+  onReset,
+  onExportSvg,
+}: ToolbarProps) {
   return (
     <header className="toolbar">
       <div className="brand">
         <span className="brand-mark">M</span>
         <div>
-          <strong>Moreóris Studio</strong>
-          <span>Pattern Lab</span>
+          <strong>Moldeon</strong>
+          <span>Modelagem técnica</span>
         </div>
       </div>
 
@@ -29,4 +35,4 @@ export function Toolbar({ onSimulate, onReset, onExportSvg }: ToolbarProps) {
       </div>
     </header>
   );
-}
+});

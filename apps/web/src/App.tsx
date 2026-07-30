@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { initializeEngine } from "./core/engineRuntime";
 import { PatternCanvas } from "./editor/PatternCanvas";
-import { GarmentViewport } from "./viewport/GarmentViewport";
 import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
@@ -10,6 +9,14 @@ import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
+type RenderBackend = "deferred" | "webgpu" | "webgl2";
+
+const MOBILE_QUERY = "(max-width: 760px)";
+const loadGarmentViewport = () => import("./viewport/GarmentViewport");
+const LazyGarmentViewport = lazy(async () => {
+  const module = await loadGarmentViewport();
+  return { default: module.GarmentViewport };
+});
 
 export function App() {
   const snapshot = useEditorStore((state) => state.snapshot);
@@ -25,6 +32,20 @@ export function App() {
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
+  const [previewRequested, setPreviewRequested] = useState(false);
+  const [renderBackend, setRenderBackend] =
+    useState<RenderBackend>("deferred");
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const showViewport =
+    !isMobile || previewRequested || mobileView === "preview";
+  const handleSimulate = useCallback(() => {
+    setPreviewRequested(true);
+    if (isMobile) setMobileView("preview");
+    simulate();
+  }, [isMobile, simulate]);
+  const handleExportSvg = useCallback(() => {
+    exportPatternAsSvg(useEditorStore.getState().snapshot);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -72,9 +93,9 @@ export function App() {
   return (
     <div className="app-shell">
       <Toolbar
-        onSimulate={simulate}
+        onSimulate={handleSimulate}
         onReset={resetPattern}
-        onExportSvg={() => exportPatternAsSvg(snapshot)}
+        onExportSvg={handleExportSvg}
       />
 
       <main className="workspace">
@@ -91,7 +112,14 @@ export function App() {
             id="preview-tab"
             panelId="preview-panel"
             active={mobileView === "preview"}
-            onSelect={() => setMobileView("preview")}
+            onPrepare={() => {
+              setPreviewRequested(true);
+              void loadGarmentViewport();
+            }}
+            onSelect={() => {
+              setPreviewRequested(true);
+              setMobileView("preview");
+            }}
           >
             Prévia 3D
           </WorkspaceTab>
@@ -131,7 +159,18 @@ export function App() {
           id="preview-panel"
           aria-labelledby="preview-tab"
         >
-          <GarmentViewport snapshot={snapshot} simulateVersion={simulateVersion} />
+          {showViewport ? (
+            <Suspense fallback={<ViewportPlaceholder />}>
+              <LazyGarmentViewport
+                snapshot={snapshot}
+                simulateVersion={simulateVersion}
+                active={!isMobile || mobileView === "preview"}
+                onBackendChange={setRenderBackend}
+              />
+            </Suspense>
+          ) : (
+            <ViewportPlaceholder />
+          )}
         </section>
 
         <Inspector
@@ -145,7 +184,11 @@ export function App() {
         />
       </main>
 
-      <StatusBar backend={engineBackend} autosaveStatus={autosaveStatus} />
+      <StatusBar
+        backend={engineBackend}
+        renderBackend={renderBackend}
+        autosaveStatus={autosaveStatus}
+      />
     </div>
   );
 }
@@ -155,6 +198,7 @@ interface WorkspaceTabProps {
   panelId: string;
   active: boolean;
   onSelect(): void;
+  onPrepare?(): void;
   children: string;
 }
 
@@ -163,6 +207,7 @@ function WorkspaceTab({
   panelId,
   active,
   onSelect,
+  onPrepare,
   children,
 }: WorkspaceTabProps) {
   return (
@@ -174,9 +219,37 @@ function WorkspaceTab({
       aria-controls={panelId}
       aria-selected={active}
       tabIndex={active ? 0 : -1}
+      onFocus={onPrepare}
+      onPointerEnter={onPrepare}
       onClick={onSelect}
     >
       {children}
     </button>
   );
+}
+
+function ViewportPlaceholder() {
+  return (
+    <div className="viewport-placeholder" role="status">
+      <span className="viewport-spinner" aria-hidden="true" />
+      <strong>Preparando prévia 3D</strong>
+      <span>O editor 2D continua leve enquanto o 3D carrega.</span>
+    </div>
+  );
+}
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const update = () => setMatches(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, [query]);
+
+  return matches;
 }

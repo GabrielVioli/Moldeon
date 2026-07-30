@@ -17,8 +17,8 @@ Copy-Item (Join-Path $templatePath "app/Http/Controllers/ProjectController.php")
 Copy-Item (Join-Path $templatePath "app/Http/Requests/StoreProjectRequest.php") "app/Http/Requests/StoreProjectRequest.php" -Force
 Copy-Item (Join-Path $templatePath "database/migrations/2026_07_30_000000_create_projects_table.php") "database/migrations/2026_07_30_000000_create_projects_table.php" -Force
 Copy-Item (Join-Path $templatePath "routes/api.php") "routes/api.php" -Force
-Copy-Item (Join-Path $templatePath ".env.moreoris.example") ".env.moreoris.example" -Force
+Copy-Item (Join-Path $templatePath ".env.moldeon.example") ".env.moldeon.example" -Force
 
 Write-Host ""
 Write-Host "API criada em apps/api." -ForegroundColor Green
-Write-Host "Copie as variáveis de .env.moreoris.example para .env, execute docker compose up -d e php artisan migrate."
+Write-Host "Copie as variáveis de .env.moldeon.example para .env, execute docker compose up -d e php artisan migrate."

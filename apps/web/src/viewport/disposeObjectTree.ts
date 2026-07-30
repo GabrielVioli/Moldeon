@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 
 interface RenderableObject extends THREE.Object3D {
   geometry?: THREE.BufferGeometry;

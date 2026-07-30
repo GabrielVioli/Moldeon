@@ -5,15 +5,28 @@ import { ThreeViewport } from "./ThreeViewport";
 interface GarmentViewportProps {
   snapshot: PatternSnapshot;
   simulateVersion: number;
+  active: boolean;
+  onBackendChange(backend: "webgpu" | "webgl2"): void;
 }
 
-export function GarmentViewport({ snapshot, simulateVersion }: GarmentViewportProps) {
+export function GarmentViewport({
+  snapshot,
+  simulateVersion,
+  active,
+  onBackendChange,
+}: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
   const latestSnapshotRef = useRef(snapshot);
+  const latestActiveRef = useRef(active);
+  const latestSimulateVersionRef = useRef(simulateVersion);
+  const lastDressedVersionRef = useRef(0);
+  const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   latestSnapshotRef.current = snapshot;
+  latestActiveRef.current = active;
+  latestSimulateVersionRef.current = simulateVersion;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -30,10 +43,24 @@ export function GarmentViewport({ snapshot, simulateVersion }: GarmentViewportPr
           return;
         }
         viewportRef.current = viewport;
-        viewport.updatePattern(latestSnapshotRef.current);
+        onBackendChange(viewport.backend);
+
+        if (latestActiveRef.current) {
+          viewport.updatePattern(latestSnapshotRef.current);
+        }
+
+        if (
+          latestActiveRef.current &&
+          latestSimulateVersionRef.current > 0
+        ) {
+          viewport.dress();
+          lastDressedVersionRef.current =
+            latestSimulateVersionRef.current;
+        }
       })
       .catch((reason: unknown) => {
         if (!active) return;
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
         console.error(reason);
         setError("Não foi possível iniciar o viewport 3D neste navegador.");
       });
@@ -41,17 +68,32 @@ export function GarmentViewport({ snapshot, simulateVersion }: GarmentViewportPr
     return () => {
       active = false;
       abortController.abort();
+      if (updateFrameRef.current !== null) {
+        window.cancelAnimationFrame(updateFrameRef.current);
+        updateFrameRef.current = null;
+      }
       viewportRef.current?.dispose();
       viewportRef.current = null;
     };
-  }, []);
+  }, [onBackendChange]);
 
   useEffect(() => {
-    viewportRef.current?.updatePattern(snapshot);
-  }, [snapshot]);
+    if (!active) return;
+    if (updateFrameRef.current !== null) return;
+    updateFrameRef.current = window.requestAnimationFrame(() => {
+      updateFrameRef.current = null;
+      viewportRef.current?.updatePattern(latestSnapshotRef.current);
+    });
+  }, [active, snapshot]);
 
   useEffect(() => {
-    if (simulateVersion > 0) viewportRef.current?.dress();
+    if (
+      simulateVersion > lastDressedVersionRef.current &&
+      viewportRef.current
+    ) {
+      viewportRef.current.dress();
+      lastDressedVersionRef.current = simulateVersion;
+    }
   }, [simulateVersion]);
 
   return (

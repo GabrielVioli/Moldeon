@@ -17,6 +17,76 @@ export type PatternContourResult =
   | TriangulatedPatternContour
   | InvalidPatternContour;
 
+export function createSeamAllowanceContour(
+  points: readonly PatternPoint[],
+  allowanceMm: number,
+): PatternPoint[] | null {
+  if (
+    !Number.isFinite(allowanceMm) ||
+    allowanceMm < 0 ||
+    validatePatternContour(points).length > 0
+  ) {
+    return null;
+  }
+
+  if (allowanceMm <= GEOMETRY_EPSILON) {
+    return points.map((point) => ({ ...point, id: `seam-${point.id}` }));
+  }
+
+  const orientation = polygonSignedAreaMm2(points) > 0 ? 1 : -1;
+  const miterLimit = allowanceMm * 4;
+
+  return points.map((point, index) => {
+    const previous = points[(index - 1 + points.length) % points.length];
+    const next = points[(index + 1) % points.length];
+    const incoming = unitDirection(previous, point);
+    const outgoing = unitDirection(point, next);
+    const incomingNormal = outwardNormal(incoming, orientation);
+    const outgoingNormal = outwardNormal(outgoing, orientation);
+    const firstShifted = {
+      x: point.xMm + incomingNormal.x * allowanceMm,
+      y: point.yMm + incomingNormal.y * allowanceMm,
+    };
+    const secondShifted = {
+      x: point.xMm + outgoingNormal.x * allowanceMm,
+      y: point.yMm + outgoingNormal.y * allowanceMm,
+    };
+    const denominator = vectorCross(incoming, outgoing);
+
+    let xMm: number;
+    let yMm: number;
+
+    if (Math.abs(denominator) <= GEOMETRY_EPSILON) {
+      const combined = normalizeVector({
+        x: incomingNormal.x + outgoingNormal.x,
+        y: incomingNormal.y + outgoingNormal.y,
+      });
+      xMm = point.xMm + combined.x * allowanceMm;
+      yMm = point.yMm + combined.y * allowanceMm;
+    } else {
+      const betweenShifted = {
+        x: secondShifted.x - firstShifted.x,
+        y: secondShifted.y - firstShifted.y,
+      };
+      const alongIncoming =
+        vectorCross(betweenShifted, outgoing) / denominator;
+      xMm = firstShifted.x + incoming.x * alongIncoming;
+      yMm = firstShifted.y + incoming.y * alongIncoming;
+    }
+
+    const offsetX = xMm - point.xMm;
+    const offsetY = yMm - point.yMm;
+    const miterLength = Math.hypot(offsetX, offsetY);
+    if (miterLength > miterLimit) {
+      const scale = miterLimit / miterLength;
+      xMm = point.xMm + offsetX * scale;
+      yMm = point.yMm + offsetY * scale;
+    }
+
+    return { id: `seam-${point.id}`, xMm, yMm };
+  });
+}
+
 export function triangulatePatternContour(
   points: readonly PatternPoint[],
 ): PatternContourResult {
@@ -252,4 +322,32 @@ function cross(
     (b.xMm - a.xMm) * (c.yMm - a.yMm) -
     (b.yMm - a.yMm) * (c.xMm - a.xMm)
   );
+}
+
+interface Vector2 {
+  x: number;
+  y: number;
+}
+
+function unitDirection(start: PatternPoint, end: PatternPoint): Vector2 {
+  return normalizeVector({
+    x: end.xMm - start.xMm,
+    y: end.yMm - start.yMm,
+  });
+}
+
+function normalizeVector(vector: Vector2): Vector2 {
+  const length = Math.hypot(vector.x, vector.y);
+  if (length <= GEOMETRY_EPSILON) return { x: 0, y: 0 };
+  return { x: vector.x / length, y: vector.y / length };
+}
+
+function outwardNormal(direction: Vector2, orientation: 1 | -1): Vector2 {
+  return orientation === 1
+    ? { x: direction.y, y: -direction.x }
+    : { x: -direction.y, y: direction.x };
+}
+
+function vectorCross(left: Vector2, right: Vector2): number {
+  return left.x * right.y - left.y * right.x;
 }

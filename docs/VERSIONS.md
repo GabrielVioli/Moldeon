@@ -5,7 +5,6 @@
 - Vite 8.1.5
 - TypeScript 6.0.3, mantido em uma versão anterior ao TypeScript 7 para reduzir risco de incompatibilidade inicial
 - Zustand 5.0.14
-- Zod 4.4.3
 - Vitest 4.1.10
 - @types/three 0.185.1
 - wasm-pack 0.13.1
