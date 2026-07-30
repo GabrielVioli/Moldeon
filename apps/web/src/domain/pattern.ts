@@ -1,3 +1,9 @@
+import {
+  createDefaultFabricSource,
+  parseFabricSources,
+  type FabricSource,
+} from "./fabric";
+
 export interface PatternPoint {
   id: string;
   xMm: number;
@@ -16,8 +22,13 @@ export interface BodyMeasurements {
   bustMm: number;
   waistMm: number;
   hipMm: number;
+  shoulderWidthMm: number;
+  torsoLengthMm: number;
+  armLengthMm: number;
+  inseamMm: number;
 }
 
+export type BodyType = "feminine" | "masculine";
 export type PreviewRegion = "torso" | "lower" | "leg" | "sleeve";
 export type PreviewSurface = "front" | "back";
 export type PreviewBodySide = "center" | "left" | "right";
@@ -35,6 +46,7 @@ export interface PatternPiece {
   seamAllowanceMm: number;
   cutQuantity?: number;
   cutOnFold?: boolean;
+  fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
   points: PatternPoint[];
 }
@@ -44,7 +56,9 @@ export interface GarmentDraft {
   templateId: string;
   name: string;
   description: string;
+  bodyType: BodyType;
   measurements: BodyMeasurements;
+  fabrics: FabricSource[];
   pieces: PatternPiece[];
 }
 
@@ -98,6 +112,10 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     value.cutOnFold === undefined
       ? undefined
       : readBoolean(value.cutOnFold, "A indicação de corte na dobra");
+  const fabricId =
+    value.fabricId === undefined
+      ? undefined
+      : readString(value.fabricId, "O tecido da peça");
   const previewPlacements =
     value.previewPlacements === undefined
       ? undefined
@@ -109,6 +127,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     seamAllowanceMm,
     ...(cutQuantity === undefined ? {} : { cutQuantity }),
     ...(cutOnFold === undefined ? {} : { cutOnFold }),
+    ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
     points,
   };
@@ -119,11 +138,35 @@ export function parseBodyMeasurements(value: unknown): BodyMeasurements {
     throw new TypeError("As medidas corporais precisam ser um objeto.");
   }
 
+  const heightMm = readFiniteNumber(value.heightMm, "A altura");
+  const bustMm = readFiniteNumber(value.bustMm, "A medida de busto ou tórax");
+  const waistMm = readFiniteNumber(value.waistMm, "A medida de cintura");
+  const hipMm = readFiniteNumber(value.hipMm, "A medida de quadril");
   const measurements = {
-    heightMm: readFiniteNumber(value.heightMm, "A altura"),
-    bustMm: readFiniteNumber(value.bustMm, "A medida de busto ou tórax"),
-    waistMm: readFiniteNumber(value.waistMm, "A medida de cintura"),
-    hipMm: readFiniteNumber(value.hipMm, "A medida de quadril"),
+    heightMm,
+    bustMm,
+    waistMm,
+    hipMm,
+    shoulderWidthMm: readOptionalPositiveNumber(
+      value.shoulderWidthMm,
+      heightMm * 0.238,
+      "A largura de ombros",
+    ),
+    torsoLengthMm: readOptionalPositiveNumber(
+      value.torsoLengthMm,
+      heightMm * 0.262,
+      "O comprimento do tronco",
+    ),
+    armLengthMm: readOptionalPositiveNumber(
+      value.armLengthMm,
+      heightMm * 0.35,
+      "O comprimento do braço",
+    ),
+    inseamMm: readOptionalPositiveNumber(
+      value.inseamMm,
+      heightMm * 0.465,
+      "A medida de entreperna",
+    ),
   };
   if (Object.values(measurements).some((measurement) => measurement <= 0)) {
     throw new TypeError("As medidas corporais precisam ser maiores que zero.");
@@ -145,13 +188,33 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     throw new TypeError("As peças do projeto precisam ter identificadores únicos.");
   }
 
+  const fabrics = parseFabricSources(value.fabrics);
+  const fallbackFabricId = fabrics[0]?.id ?? createDefaultFabricSource().id;
+  const fabricIds = new Set(fabrics.map((fabric) => fabric.id));
+  const normalizedPieces = pieces.map((piece) => ({
+    ...piece,
+    fabricId:
+      piece.fabricId && fabricIds.has(piece.fabricId)
+        ? piece.fabricId
+        : fallbackFabricId,
+  }));
+
   return {
     id: readString(value.id, "O identificador do projeto"),
     templateId: readString(value.templateId, "O identificador do molde-base"),
     name: readString(value.name, "O nome do projeto"),
     description: readString(value.description, "A descrição do projeto"),
+    bodyType:
+      value.bodyType === undefined
+        ? "feminine"
+        : readEnum(
+            value.bodyType,
+            ["feminine", "masculine"] as const,
+            "O tipo de corpo",
+          ),
     measurements: parseBodyMeasurements(value.measurements),
-    pieces,
+    fabrics,
+    pieces: normalizedPieces,
   };
 }
 
@@ -251,6 +314,19 @@ function readFiniteNumber(value: unknown, label: string): number {
     throw new TypeError(`${label} precisa ser um número finito.`);
   }
   return value;
+}
+
+function readOptionalPositiveNumber(
+  value: unknown,
+  fallback: number,
+  label: string,
+): number {
+  if (value === undefined) return Math.round(fallback);
+  const parsed = readFiniteNumber(value, label);
+  if (parsed <= 0) {
+    throw new TypeError(`${label} precisa ser maior que zero.`);
+  }
+  return parsed;
 }
 
 function readPositiveInteger(value: unknown, label: string): number {

@@ -5,6 +5,8 @@ interface ToolbarProps {
   garmentName: string;
   onOpenLibrary(): void;
   onPrepareLibrary(): void;
+  onOpenFitting(): void;
+  onPrepareFitting(): void;
   onSimulate(): void;
   onReset(): void;
   onExportSvg(): void;
@@ -23,6 +25,8 @@ export const Toolbar = memo(function Toolbar({
   garmentName,
   onOpenLibrary,
   onPrepareLibrary,
+  onOpenFitting,
+  onPrepareFitting,
   onSimulate,
   onReset,
   onExportSvg,
@@ -88,6 +92,15 @@ export const Toolbar = memo(function Toolbar({
           onClick={onOpenLibrary}
         >
           Moldes
+        </button>
+        <button
+          className="fitting-button"
+          type="button"
+          onFocus={onPrepareFitting}
+          onPointerEnter={onPrepareFitting}
+          onClick={onOpenFitting}
+        >
+          Corpo e tecido
         </button>
         <div
           className="history-actions"

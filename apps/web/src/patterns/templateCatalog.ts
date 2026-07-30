@@ -1,10 +1,12 @@
 import type {
   BodyMeasurements,
+  BodyType,
   GarmentDraft,
   PatternPiece,
   PatternPoint,
   PatternPreviewPlacement,
 } from "../domain/pattern";
+import { createDefaultFabricSource } from "../domain/fabric";
 
 export type PatternTemplateId =
   | "tshirt"
@@ -27,6 +29,21 @@ export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
   bustMm: 920,
   waistMm: 760,
   hipMm: 1000,
+  shoulderWidthMm: 400,
+  torsoLengthMm: 440,
+  armLengthMm: 590,
+  inseamMm: 780,
+};
+
+export const DEFAULT_MASCULINE_BODY_MEASUREMENTS: BodyMeasurements = {
+  heightMm: 1780,
+  bustMm: 1000,
+  waistMm: 850,
+  hipMm: 980,
+  shoulderWidthMm: 460,
+  torsoLengthMm: 475,
+  armLengthMm: 630,
+  inseamMm: 830,
 };
 
 export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
@@ -77,19 +94,27 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
 export function createGarmentFromTemplate(
   templateId: PatternTemplateId,
   inputMeasurements: BodyMeasurements,
+  bodyType: BodyType = "feminine",
 ): GarmentDraft {
   const measurements = validateMeasurements(inputMeasurements);
   const generator = GENERATORS[templateId];
   const summary = PATTERN_TEMPLATES.find((template) => template.id === templateId);
   if (!summary) throw new RangeError("Molde-base desconhecido.");
 
+  const fabric = createDefaultFabricSource();
+  const pieces = generator(measurements).map((piece) => ({
+    ...piece,
+    fabricId: fabric.id,
+  }));
   return {
     id: `${templateId}-${Date.now().toString(36)}`,
     templateId,
     name: summary.name,
     description: summary.description,
+    bodyType,
     measurements: { ...measurements },
-    pieces: generator(measurements),
+    fabrics: [fabric],
+    pieces,
   };
 }
 
@@ -526,6 +551,7 @@ function piece(
     name,
     seamAllowanceMm: 10,
     cutQuantity: options.cutQuantity,
+    fabricId: "fabric-primary",
     ...(options.cutOnFold === undefined
       ? {}
       : { cutOnFold: options.cutOnFold }),
@@ -559,6 +585,10 @@ function validateMeasurements(
     bustMm: [600, 1600],
     waistMm: [500, 1500],
     hipMm: [650, 1700],
+    shoulderWidthMm: [300, 650],
+    torsoLengthMm: [320, 650],
+    armLengthMm: [430, 850],
+    inseamMm: [580, 1100],
   };
   for (const [key, value] of Object.entries(measurements) as [
     keyof BodyMeasurements,
@@ -577,4 +607,3 @@ function validateMeasurements(
 function roundMm(value: number): number {
   return Math.round(value * 10) / 10;
 }
-

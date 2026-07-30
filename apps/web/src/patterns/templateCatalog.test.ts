@@ -24,12 +24,14 @@ describe("pattern template catalog", () => {
       const garment = createGarmentFromTemplate(id, DEFAULT_BODY_MEASUREMENTS);
       const engine = new FallbackPatternEngine();
       expect(garment.pieces.length).toBeGreaterThanOrEqual(2);
+      expect(garment.fabrics).toHaveLength(1);
 
       for (const piece of garment.pieces) {
         const snapshot = engine.restorePiece(piece);
         expect(snapshot.issues, piece.name).toEqual([]);
         expect(piece.previewPlacements?.length, piece.name).toBeGreaterThan(0);
         expect(piece.cutQuantity, piece.name).toBeGreaterThan(0);
+        expect(piece.fabricId).toBe(garment.fabrics[0].id);
       }
     },
   );
@@ -54,6 +56,18 @@ describe("pattern template catalog", () => {
     expect(larger.measurements.bustMm).toBe(1200);
   });
 
+  it("stores the selected body type with all avatar measurements", () => {
+    const garment = createGarmentFromTemplate(
+      "basic-jacket",
+      DEFAULT_BODY_MEASUREMENTS,
+      "masculine",
+    );
+
+    expect(garment.bodyType).toBe("masculine");
+    expect(garment.measurements.shoulderWidthMm).toBeGreaterThan(0);
+    expect(garment.measurements.armLengthMm).toBeGreaterThan(0);
+  });
+
   it("rejects measurements outside the supported drafting range", () => {
     expect(() =>
       createGarmentFromTemplate("straight-pants", {
@@ -63,4 +77,3 @@ describe("pattern template catalog", () => {
     ).toThrow(/quadril|hipMm/i);
   });
 });
-

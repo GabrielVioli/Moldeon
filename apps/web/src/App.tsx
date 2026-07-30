@@ -24,6 +24,7 @@ type RenderBackend = "deferred" | "webgpu" | "webgl2";
 const MOBILE_QUERY = "(max-width: 760px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
 const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
+const loadFittingRoom = () => import("./components/FittingRoomDialog");
 const LazyGarmentViewport = lazy(async () => {
   const module = await loadGarmentViewport();
   return { default: module.GarmentViewport };
@@ -31,6 +32,10 @@ const LazyGarmentViewport = lazy(async () => {
 const LazyPatternLibraryDialog = lazy(async () => {
   const module = await loadPatternLibrary();
   return { default: module.PatternLibraryDialog };
+});
+const LazyFittingRoomDialog = lazy(async () => {
+  const module = await loadFittingRoom();
+  return { default: module.FittingRoomDialog };
 });
 
 export function App() {
@@ -65,6 +70,7 @@ export function App() {
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [fittingOpen, setFittingOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
@@ -240,6 +246,10 @@ export function App() {
         onPrepareLibrary={() => {
           void loadPatternLibrary();
         }}
+        onOpenFitting={() => setFittingOpen(true)}
+        onPrepareFitting={() => {
+          void loadFittingRoom();
+        }}
         onSimulate={handleSimulate}
         onReset={resetPattern}
         onExportSvg={handleExportSvg}
@@ -335,6 +345,7 @@ export function App() {
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder />}>
               <LazyGarmentViewport
+                garment={garment}
                 snapshots={garmentSnapshots}
                 simulateVersion={simulateVersion}
                 active={!isMobile || mobileView === "preview"}
@@ -373,6 +384,18 @@ export function App() {
           <LazyPatternLibraryDialog
             onClose={() => setLibraryOpen(false)}
             onChoose={handleChooseTemplate}
+          />
+        </Suspense>
+      ) : null}
+
+      {fittingOpen ? (
+        <Suspense fallback={<DialogPlaceholder label="Abrindo sala de prova" />}>
+          <LazyFittingRoomDialog
+            onClose={() => setFittingOpen(false)}
+            onPreview={() => {
+              setFittingOpen(false);
+              handleSimulate();
+            }}
           />
         </Suspense>
       ) : null}
@@ -495,12 +518,16 @@ function ViewportPlaceholder() {
   );
 }
 
-function DialogPlaceholder() {
+function DialogPlaceholder({
+  label = "Carregando moldes essenciais",
+}: {
+  label?: string;
+}) {
   return (
     <div className="dialog-backdrop" role="status">
       <div className="dialog-loading">
         <span className="viewport-spinner" aria-hidden="true" />
-        <strong>Carregando moldes essenciais</strong>
+        <strong>{label}</strong>
       </div>
     </div>
   );

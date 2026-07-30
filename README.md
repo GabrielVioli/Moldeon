@@ -8,6 +8,11 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Interface móvel com abas, pan por toque e zoom por pinça.
 - Biblioteca paramétrica com camiseta, blusa, saia, minissaia, calça e jaqueta.
 - Geração por altura, busto/tórax, cintura e quadril explícitos.
+- Avatar procedural feminino ou masculino com altura, busto/tórax, cintura,
+  quadril, ombros, tronco, braço e entreperna.
+- Sala de prova com tecidos leves, algodão, malha, jeans e couro sintético.
+- Vários tecidos/retalhos no mesmo projeto, dimensões disponíveis, cor e
+  atribuição por peça para criações upcycled.
 - Projetos com frente, costas, manga, quantidade de corte e corte na dobra.
 - Alternância entre peças, inserção/remoção de pontos e enquadramento automático.
 - Cálculo de área, perímetro e validações equivalentes em Rust/WASM e TypeScript.
@@ -15,8 +20,12 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Triangulação explícita de polígonos convexos e côncavos.
 - Fallback em TypeScript, permitindo abrir o projeto mesmo sem compilar Rust.
 - Viewport 3D sob demanda com Three.js, WebGPU e fallback WebGL 2 explícito.
-- Manequim procedural, sem depender de arquivo 3D externo.
+- Manequim procedural proporcional às medidas, sem depender de arquivo 3D
+  externo pesado.
 - Conversão visual de todas as peças em painéis posicionados ao redor do manequim.
+- Região, frente/costas e lado do corpo configuráveis por peça.
+- Caimento visual rápido que responde à gramatura, espessura, elasticidade,
+  rigidez e atrito do tecido.
 - Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
 - Undo/redo transacional com limite de memória, atalhos de teclado e um único comando por gesto.
 - Curvas Bézier cúbicas editáveis por alças, preservadas no SVG e amostradas com limite de custo para 3D.
@@ -45,7 +54,11 @@ baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 ## O que ainda não é uma simulação profissional
 
-O botão **Vestir no 3D** desta versão executa uma prévia geométrica animada. Ele ainda não calcula tecido real, autocolisão, atrito, franzido, elástico ou costuras complexas. O solver XPBD inicial está isolado para ser desenvolvido e testado sem contaminar o editor.
+O botão **Vestir no 3D** desta versão executa uma prévia geométrica animada.
+Os presets já alteram aderência, volume e ondulação de forma aproximada, mas
+ainda não calculam gravidade, autocolisão, franzido, elástico ou costuras
+complexas. O solver XPBD inicial está isolado para ser desenvolvido e testado
+sem contaminar o editor.
 
 Isso é intencional: primeiro validamos editor, dados, triangulação, interação e pipeline 2D → 3D. Depois conectamos o solver físico.
 
@@ -141,6 +154,10 @@ Leia também:
 - A inserção de ponto acontece em um contorno existente; a criação livre de novas peças ainda não foi implementada.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
+- O consumo de tecido é uma estimativa por área; ainda não considera encaixe,
+  sentido do fio ou aproveitamento automático dos retalhos.
+- Um tecido pode ser atribuído por peça. Patchwork dentro de uma mesma peça
+  dependerá da futura ferramenta de dividir/criar painéis.
 - O Worker XPBD ainda não alimenta a malha do Three.js.
 - O backend Laravel continua opcional e não é necessário para usar o editor.
 

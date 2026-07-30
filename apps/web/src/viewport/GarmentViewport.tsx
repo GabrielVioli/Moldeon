@@ -1,8 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { PatternSnapshot } from "../domain/pattern";
+import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
 interface GarmentViewportProps {
+  garment: GarmentDraft;
   snapshots: PatternSnapshot[];
   simulateVersion: number;
   active: boolean;
@@ -10,6 +11,7 @@ interface GarmentViewportProps {
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
+  garment,
   snapshots,
   simulateVersion,
   active,
@@ -18,6 +20,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
   const latestSnapshotsRef = useRef(snapshots);
+  const latestGarmentRef = useRef(garment);
   const latestActiveRef = useRef(active);
   const latestSimulateVersionRef = useRef(simulateVersion);
   const lastDressedVersionRef = useRef(0);
@@ -25,6 +28,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [error, setError] = useState<string | null>(null);
 
   latestSnapshotsRef.current = snapshots;
+  latestGarmentRef.current = garment;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
 
@@ -46,7 +50,10 @@ export const GarmentViewport = memo(function GarmentViewport({
         onBackendChange(viewport.backend);
 
         if (latestActiveRef.current) {
-          viewport.updatePatterns(latestSnapshotsRef.current);
+          viewport.updateGarment(
+            latestSnapshotsRef.current,
+            latestGarmentRef.current,
+          );
         }
 
         if (
@@ -82,9 +89,12 @@ export const GarmentViewport = memo(function GarmentViewport({
     if (updateFrameRef.current !== null) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
-      viewportRef.current?.updatePatterns(latestSnapshotsRef.current);
+      viewportRef.current?.updateGarment(
+        latestSnapshotsRef.current,
+        latestGarmentRef.current,
+      );
     });
-  }, [active, snapshots]);
+  }, [active, garment, snapshots]);
 
   useEffect(() => {
     if (
@@ -99,7 +109,12 @@ export const GarmentViewport = memo(function GarmentViewport({
   return (
     <div className="viewport-host" ref={hostRef}>
       {error ? <div className="viewport-error">{error}</div> : null}
-      <div className="viewport-label">Preview 3D · arraste para girar</div>
+      <div className="viewport-label">
+        Preview 3D · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
+        {garment.fabrics.length > 1
+          ? `${garment.fabrics.length} tecidos`
+          : garment.fabrics[0]?.name ?? "sem tecido"}
+      </div>
     </div>
   );
 });

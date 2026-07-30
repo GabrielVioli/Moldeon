@@ -2,10 +2,19 @@ import { create } from "zustand";
 import { currentEngine } from "../core/engineRuntime";
 import type {
   BodyMeasurements,
+  BodyType,
   GarmentDraft,
   PatternPiece,
+  PatternPreviewPlacement,
   PatternSnapshot,
 } from "../domain/pattern";
+import {
+  applyFabricPreset,
+  createDefaultFabricSource,
+  createFabricSource,
+  type FabricPresetId,
+  type FabricSource,
+} from "../domain/fabric";
 import {
   insertPatternPoint,
   removePatternPoint,
@@ -45,6 +54,17 @@ interface EditorState {
   insertPoint(startPointId: string, t: number): void;
   removePoint(pointId: string): void;
   setSeamAllowance(valueMm: number): void;
+  setBodyType(bodyType: BodyType): void;
+  setBodyMeasurement(
+    measurement: keyof BodyMeasurements,
+    valueMm: number,
+  ): void;
+  addFabric(presetId: FabricPresetId): string;
+  updateFabric(fabricId: string, update: Partial<FabricSource>): void;
+  applyFabricPreset(fabricId: string, presetId: FabricPresetId): void;
+  removeFabric(fabricId: string): void;
+  assignFabricToActivePiece(fabricId: string): void;
+  setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
   resetPattern(): void;
   undo(): void;
   redo(): void;
@@ -213,6 +233,105 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     updateActiveSnapshot(set, get, snapshot);
   },
 
+  setBodyType: (bodyType) => {
+    set((state) => ({
+      garment: {
+        ...state.garment,
+        bodyType,
+      },
+    }));
+  },
+
+  setBodyMeasurement: (measurement, valueMm) => {
+    if (!Number.isFinite(valueMm) || valueMm <= 0) return;
+    set((state) => ({
+      garment: {
+        ...state.garment,
+        measurements: {
+          ...state.garment.measurements,
+          [measurement]: valueMm,
+        },
+      },
+    }));
+  },
+
+  addFabric: (presetId) => {
+    const source = createFabricSource(presetId, get().garment.fabrics.length);
+    set((state) => ({
+      garment: {
+        ...state.garment,
+        fabrics: [...state.garment.fabrics, source],
+      },
+    }));
+    return source.id;
+  },
+
+  updateFabric: (fabricId, update) => {
+    set((state) => ({
+      garment: {
+        ...state.garment,
+        fabrics: state.garment.fabrics.map((source) =>
+          source.id === fabricId
+            ? sanitizeFabricUpdate({ ...source, ...update }, source)
+            : source,
+        ),
+      },
+    }));
+  },
+
+  applyFabricPreset: (fabricId, presetId) => {
+    set((state) => ({
+      garment: {
+        ...state.garment,
+        fabrics: state.garment.fabrics.map((source) =>
+          source.id === fabricId
+            ? applyFabricPreset(source, presetId)
+            : source,
+        ),
+      },
+    }));
+  },
+
+  removeFabric: (fabricId) => {
+    const state = get();
+    if (state.garment.fabrics.length <= 1) return;
+    const fabrics = state.garment.fabrics.filter(
+      (source) => source.id !== fabricId,
+    );
+    const fallbackFabricId = fabrics[0].id;
+    const garment = {
+      ...state.garment,
+      fabrics,
+      pieces: state.garment.pieces.map((piece) =>
+        piece.fabricId === fabricId
+          ? { ...piece, fabricId: fallbackFabricId }
+          : piece,
+      ),
+    };
+    const activePiece =
+      garment.pieces.find((piece) => piece.id === state.activePieceId) ??
+      state.snapshot.piece;
+    set({
+      garment,
+      snapshot: {
+        ...state.snapshot,
+        piece: structuredClone(activePiece),
+      },
+    });
+  },
+
+  assignFabricToActivePiece: (fabricId) => {
+    if (!get().garment.fabrics.some((source) => source.id === fabricId)) return;
+    updatePieceMetadata(set, get, { fabricId });
+  },
+
+  setActivePiecePlacements: (placements) => {
+    if (placements.length === 0) return;
+    updatePieceMetadata(set, get, {
+      previewPlacements: placements.map((placement) => ({ ...placement })),
+    });
+  },
+
   resetPattern: () => {
     const before = get().snapshot.piece;
     const original =
@@ -307,6 +426,7 @@ function preservePieceMetadata(
         ? {}
         : { cutQuantity: source.cutQuantity }),
       ...(source.cutOnFold === undefined ? {} : { cutOnFold: source.cutOnFold }),
+      ...(source.fabricId === undefined ? {} : { fabricId: source.fabricId }),
       ...(source.previewPlacements === undefined
         ? {}
         : {
@@ -332,28 +452,80 @@ function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {
 }
 
 function createLegacyGarment(piece: PatternPiece): GarmentDraft {
+  const fabric = createDefaultFabricSource();
   const measurements: BodyMeasurements = {
     heightMm: 1680,
     bustMm: 920,
     waistMm: 760,
     hipMm: 1000,
+    shoulderWidthMm: 400,
+    torsoLengthMm: 440,
+    armLengthMm: 590,
+    inseamMm: 780,
   };
   return {
     id: "legacy-skirt",
     templateId: "legacy-skirt",
     name: "Saia base",
     description: "Molde inicial preservado para compatibilidade.",
+    bodyType: "feminine",
     measurements,
+    fabrics: [fabric],
     pieces: [
       {
         ...structuredClone(piece),
         cutQuantity: 1,
         cutOnFold: true,
+        fabricId: fabric.id,
         previewPlacements: [
           { region: "lower", surface: "front", bodySide: "center" },
           { region: "lower", surface: "back", bodySide: "center" },
         ],
       },
     ],
+  };
+}
+
+function updatePieceMetadata(
+  set: StoreSetter,
+  get: StoreGetter,
+  update: Partial<PatternPiece>,
+): void {
+  const state = get();
+  const piece = {
+    ...state.snapshot.piece,
+    ...update,
+  };
+  set({
+    garment: replacePiece(state.garment, piece),
+    snapshot: {
+      ...state.snapshot,
+      piece: structuredClone(piece),
+    },
+  });
+}
+
+function sanitizeFabricUpdate(
+  candidate: FabricSource,
+  fallback: FabricSource,
+): FabricSource {
+  return {
+    ...candidate,
+    name: candidate.name.trim() || fallback.name,
+    color: /^#[0-9a-f]{6}$/i.test(candidate.color)
+      ? candidate.color
+      : fallback.color,
+    widthMm:
+      Number.isFinite(candidate.widthMm) && candidate.widthMm > 0
+        ? candidate.widthMm
+        : fallback.widthMm,
+    lengthMm:
+      Number.isFinite(candidate.lengthMm) && candidate.lengthMm > 0
+        ? candidate.lengthMm
+        : fallback.lengthMm,
+    quantity:
+      Number.isInteger(candidate.quantity) && candidate.quantity > 0
+        ? candidate.quantity
+        : fallback.quantity,
   };
 }

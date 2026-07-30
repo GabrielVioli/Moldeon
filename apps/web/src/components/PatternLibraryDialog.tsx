@@ -1,11 +1,17 @@
 import { memo, useEffect, useState } from "react";
-import type { BodyMeasurements, GarmentDraft } from "../domain/pattern";
+import type {
+  BodyMeasurements,
+  BodyType,
+  GarmentDraft,
+} from "../domain/pattern";
 import {
   DEFAULT_BODY_MEASUREMENTS,
+  DEFAULT_MASCULINE_BODY_MEASUREMENTS,
   PATTERN_TEMPLATES,
   createGarmentFromTemplate,
   type PatternTemplateId,
 } from "../patterns/templateCatalog";
+import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
 
 interface PatternLibraryDialogProps {
   onClose(): void;
@@ -19,6 +25,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
   const [measurements, setMeasurements] = useState<BodyMeasurements>(
     DEFAULT_BODY_MEASUREMENTS,
   );
+  const [bodyType, setBodyType] = useState<BodyType>("feminine");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +39,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
   const chooseTemplate = (templateId: PatternTemplateId) => {
     try {
       setError(null);
-      onChoose(createGarmentFromTemplate(templateId, measurements));
+      onChoose(createGarmentFromTemplate(templateId, measurements, bodyType));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -75,45 +82,25 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
           </button>
         </header>
 
-        <fieldset className="body-measurements">
-          <legend>Medidas corporais</legend>
-          <MeasurementField
-            label="Altura"
-            valueMm={measurements.heightMm}
-            minimumCm={130}
-            maximumCm={210}
-            onChange={(heightMm) =>
-              setMeasurements((current) => ({ ...current, heightMm }))
-            }
-          />
-          <MeasurementField
-            label="Busto/tórax"
-            valueMm={measurements.bustMm}
-            minimumCm={60}
-            maximumCm={160}
-            onChange={(bustMm) =>
-              setMeasurements((current) => ({ ...current, bustMm }))
-            }
-          />
-          <MeasurementField
-            label="Cintura"
-            valueMm={measurements.waistMm}
-            minimumCm={50}
-            maximumCm={150}
-            onChange={(waistMm) =>
-              setMeasurements((current) => ({ ...current, waistMm }))
-            }
-          />
-          <MeasurementField
-            label="Quadril"
-            valueMm={measurements.hipMm}
-            minimumCm={65}
-            maximumCm={170}
-            onChange={(hipMm) =>
-              setMeasurements((current) => ({ ...current, hipMm }))
-            }
-          />
-        </fieldset>
+        <BodyMeasurementsForm
+          compact
+          bodyType={bodyType}
+          measurements={measurements}
+          onBodyTypeChange={(nextBodyType) => {
+            setBodyType(nextBodyType);
+            setMeasurements(
+              nextBodyType === "feminine"
+                ? DEFAULT_BODY_MEASUREMENTS
+                : DEFAULT_MASCULINE_BODY_MEASUREMENTS,
+            );
+          }}
+          onMeasurementChange={(measurement, valueMm) =>
+            setMeasurements((current) => ({
+              ...current,
+              [measurement]: valueMm,
+            }))
+          }
+        />
 
         <div className="template-grid">
           {PATTERN_TEMPLATES.map((template) => (
@@ -143,40 +130,3 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
     </div>
   );
 });
-
-interface MeasurementFieldProps {
-  label: string;
-  valueMm: number;
-  minimumCm: number;
-  maximumCm: number;
-  onChange(valueMm: number): void;
-}
-
-function MeasurementField({
-  label,
-  valueMm,
-  minimumCm,
-  maximumCm,
-  onChange,
-}: MeasurementFieldProps) {
-  return (
-    <label>
-      <span>{label}</span>
-      <span className="measurement-input">
-        <input
-          type="number"
-          min={minimumCm}
-          max={maximumCm}
-          step="0.5"
-          value={valueMm / 10}
-          onChange={(event) => {
-            const valueCm = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(valueCm)) onChange(valueCm * 10);
-          }}
-        />
-        <span>cm</span>
-      </span>
-    </label>
-  );
-}
-

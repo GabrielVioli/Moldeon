@@ -28,6 +28,9 @@
 - Frente, costas e peças múltiplas. ✅
 - Costuras entre intervalos de borda.
 - Posicionamento geométrico inicial dos painéis ao redor do avatar. ✅
+- Escolha editável de região, face e lado do corpo por peça. ✅
+- Avatar procedural feminino/masculino guiado por oito medidas reais. ✅
+- Fontes de tecido múltiplas e atribuição por peça para upcycling. ✅
 - Avatar GLB com morph targets.
 
 ## Marco 4: XPBD utilizável
@@ -57,7 +60,8 @@
 - Versionamento na nuvem.
 - Compartilhamento.
 - Biblioteca paramétrica dos seis moldes essenciais. ✅
-- Tecidos e biblioteca ampliada.
+- Biblioteca inicial de tecidos, cores e inventário de retalhos. ✅
+- Biblioteca ampliada e importação de tecidos medidos.
 - Assinaturas.
 - DXF e glTF.
 - Render de alta qualidade em serviço GPU opcional.
