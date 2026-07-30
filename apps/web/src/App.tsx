@@ -9,6 +9,8 @@ import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 
+type WorkspaceView = "editor" | "preview" | "inspector";
+
 export function App() {
   const snapshot = useEditorStore((state) => state.snapshot);
   const engineBackend = useEditorStore((state) => state.engineBackend);
@@ -22,6 +24,7 @@ export function App() {
   const simulate = useEditorStore((state) => state.simulate);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const [persistenceReady, setPersistenceReady] = useState(false);
+  const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
 
   useEffect(() => {
     let active = true;
@@ -75,13 +78,45 @@ export function App() {
       />
 
       <main className="workspace">
-        <section className="editor-panel">
+        <nav className="mobile-workspace-tabs" aria-label="Painéis do projeto" role="tablist">
+          <WorkspaceTab
+            id="editor-tab"
+            panelId="editor-panel"
+            active={mobileView === "editor"}
+            onSelect={() => setMobileView("editor")}
+          >
+            Molde 2D
+          </WorkspaceTab>
+          <WorkspaceTab
+            id="preview-tab"
+            panelId="preview-panel"
+            active={mobileView === "preview"}
+            onSelect={() => setMobileView("preview")}
+          >
+            Prévia 3D
+          </WorkspaceTab>
+          <WorkspaceTab
+            id="inspector-tab"
+            panelId="inspector-panel"
+            active={mobileView === "inspector"}
+            onSelect={() => setMobileView("inspector")}
+          >
+            Medidas
+          </WorkspaceTab>
+        </nav>
+
+        <section
+          className={`editor-panel workspace-view${mobileView === "editor" ? " is-mobile-active" : ""}`}
+          id="editor-panel"
+          aria-labelledby="editor-tab"
+        >
           <div className="panel-titlebar">
             <div>
               <span className="section-eyebrow">Molde 2D</span>
               <strong>Frente · milímetros</strong>
             </div>
-            <span className="hint">Shift + arrastar: mover tela · roda: zoom</span>
+            <span className="hint desktop-hint">Shift + arrastar: mover tela · roda: zoom</span>
+            <span className="hint mobile-hint">Arraste pontos · fundo move · pinça aproxima</span>
           </div>
           <PatternCanvas
             snapshot={snapshot}
@@ -91,11 +126,18 @@ export function App() {
           />
         </section>
 
-        <section className="preview-panel">
+        <section
+          className={`preview-panel workspace-view${mobileView === "preview" ? " is-mobile-active" : ""}`}
+          id="preview-panel"
+          aria-labelledby="preview-tab"
+        >
           <GarmentViewport snapshot={snapshot} simulateVersion={simulateVersion} />
         </section>
 
         <Inspector
+          id="inspector-panel"
+          labelledBy="inspector-tab"
+          mobileActive={mobileView === "inspector"}
           snapshot={snapshot}
           selectedPointId={selectedPointId}
           onMovePoint={movePoint}
@@ -105,5 +147,36 @@ export function App() {
 
       <StatusBar backend={engineBackend} autosaveStatus={autosaveStatus} />
     </div>
+  );
+}
+
+interface WorkspaceTabProps {
+  id: string;
+  panelId: string;
+  active: boolean;
+  onSelect(): void;
+  children: string;
+}
+
+function WorkspaceTab({
+  id,
+  panelId,
+  active,
+  onSelect,
+  children,
+}: WorkspaceTabProps) {
+  return (
+    <button
+      className="workspace-tab"
+      id={id}
+      type="button"
+      role="tab"
+      aria-controls={panelId}
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
+      onClick={onSelect}
+    >
+      {children}
+    </button>
   );
 }
