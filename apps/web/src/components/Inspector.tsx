@@ -1,6 +1,9 @@
 import { PatternSnapshot } from "../domain/pattern";
 
 interface InspectorProps {
+  id: string;
+  labelledBy: string;
+  mobileActive: boolean;
   snapshot: PatternSnapshot;
   selectedPointId: string | null;
   onMovePoint(pointId: string, xMm: number, yMm: number): void;
@@ -8,6 +11,9 @@ interface InspectorProps {
 }
 
 export function Inspector({
+  id,
+  labelledBy,
+  mobileActive,
   snapshot,
   selectedPointId,
   onMovePoint,
@@ -16,7 +22,11 @@ export function Inspector({
   const selectedPoint = snapshot.piece.points.find((point) => point.id === selectedPointId) ?? null;
 
   return (
-    <aside className="inspector">
+    <aside
+      className={`inspector workspace-view${mobileActive ? " is-mobile-active" : ""}`}
+      id={id}
+      aria-labelledby={labelledBy}
+    >
       <section>
         <div className="section-eyebrow">Peça ativa</div>
         <h2>{snapshot.piece.name}</h2>
