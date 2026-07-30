@@ -27,4 +27,21 @@ describe("FallbackPatternEngine", () => {
       "A coordenada X precisa ser um número finito.",
     );
   });
+
+  it("reports a self-intersection without creating invalid preview geometry", () => {
+    const engine = new FallbackPatternEngine();
+    const snapshot = engine.restorePiece({
+      id: "crossed-piece",
+      name: "Molde cruzado",
+      seamAllowanceMm: 10,
+      points: [
+        { id: "a", xMm: 0, yMm: 0 },
+        { id: "b", xMm: 100, yMm: 100 },
+        { id: "c", xMm: 0, yMm: 100 },
+        { id: "d", xMm: 100, yMm: 0 },
+      ],
+    });
+
+    expect(snapshot.issues).toContain("O contorno possui uma autointerseção.");
+  });
 });

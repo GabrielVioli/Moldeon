@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PatternSnapshot } from "../domain/pattern";
+import { PatternPoint, PatternSnapshot } from "../domain/pattern";
+import { triangulatePatternContour } from "../domain/polygonGeometry";
 import { disposeObjectTree } from "./disposeObjectTree";
 
 interface GarmentMeshData {
@@ -79,6 +80,9 @@ export class ThreeViewport {
     this.clearGarment();
 
     const points = snapshot.piece.points;
+    const triangulation = triangulatePatternContour(points);
+    if (!triangulation.ok) return;
+
     const minX = Math.min(...points.map((point) => point.xMm));
     const maxX = Math.max(...points.map((point) => point.xMm));
     const minY = Math.min(...points.map((point) => point.yMm));
@@ -86,17 +90,24 @@ export class ThreeViewport {
     const centerX = (minX + maxX) / 2;
     const scale = 0.00145;
 
-    const shape = new THREE.Shape();
-    points.forEach((point, index) => {
-      const x = (point.xMm - centerX) * scale;
-      const y = -(point.yMm - minY) * scale;
-      if (index === 0) shape.moveTo(x, y);
-      else shape.lineTo(x, y);
-    });
-    shape.closePath();
-
-    const front = this.createPanel(shape, widthMm * scale, false);
-    const back = this.createPanel(shape, widthMm * scale, true);
+    const front = this.createPanel(
+      points,
+      triangulation.indices,
+      centerX,
+      minY,
+      widthMm * scale,
+      scale,
+      false,
+    );
+    const back = this.createPanel(
+      points,
+      triangulation.indices,
+      centerX,
+      minY,
+      widthMm * scale,
+      scale,
+      true,
+    );
     this.garmentMeshes = [front, back];
     this.garmentMeshes.forEach(({ mesh }) => this.garmentGroup.add(mesh));
     this.applyDressProgress(1);
@@ -121,8 +132,28 @@ export class ThreeViewport {
     this.renderer.domElement.remove();
   }
 
-  private createPanel(shape: THREE.Shape, width: number, back: boolean): GarmentMeshData {
-    const geometry = new THREE.ShapeGeometry(shape, 20);
+  private createPanel(
+    points: readonly PatternPoint[],
+    indices: readonly number[],
+    centerX: number,
+    minY: number,
+    width: number,
+    scale: number,
+    back: boolean,
+  ): GarmentMeshData {
+    const initialPositions = new Float32Array(points.length * 3);
+    points.forEach((point, index) => {
+      initialPositions[index * 3] = (point.xMm - centerX) * scale;
+      initialPositions[index * 3 + 1] = -(point.yMm - minY) * scale;
+      initialPositions[index * 3 + 2] = 0;
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(initialPositions, 3),
+    );
+    geometry.setIndex([...indices]);
     geometry.computeVertexNormals();
 
     const positions = geometry.getAttribute("position") as THREE.BufferAttribute;

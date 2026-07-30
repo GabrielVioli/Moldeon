@@ -6,6 +6,7 @@ import {
   polygonAreaMm2,
   polygonPerimeterMm,
 } from "../domain/pattern";
+import { triangulatePatternContour } from "../domain/polygonGeometry";
 
 const DEFAULT_PIECE: PatternPiece = {
   id: "skirt-front",
@@ -25,21 +26,10 @@ export class FallbackPatternEngine implements PatternEngineFacade {
   private piece: PatternPiece = structuredClone(DEFAULT_PIECE);
 
   snapshot(): PatternSnapshot {
-    const issues: string[] = [];
     const areaMm2 = polygonAreaMm2(this.piece.points);
     const perimeterMm = polygonPerimeterMm(this.piece.points);
-
-    if (areaMm2 < 1) {
-      issues.push("O contorno não possui área suficiente.");
-    }
-
-    if (
-      this.piece.points.some(
-        (point) => !Number.isFinite(point.xMm) || !Number.isFinite(point.yMm),
-      )
-    ) {
-      issues.push("Existe um ponto com coordenada inválida.");
-    }
+    const triangulation = triangulatePatternContour(this.piece.points);
+    const issues = triangulation.ok ? [] : triangulation.issues;
 
     return {
       piece: structuredClone(this.piece),
