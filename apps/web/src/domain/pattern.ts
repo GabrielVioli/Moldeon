@@ -27,6 +27,7 @@ export type PatternSnapshot = z.infer<typeof PatternSnapshotSchema>;
 export interface PatternEngineFacade {
   readonly backend: "wasm" | "typescript";
   snapshot(): PatternSnapshot;
+  restorePiece(piece: PatternPiece): PatternSnapshot;
   movePoint(pointId: string, xMm: number, yMm: number): PatternSnapshot;
   setSeamAllowance(valueMm: number): PatternSnapshot;
   reset(): PatternSnapshot;

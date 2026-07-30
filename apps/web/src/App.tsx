@@ -6,7 +6,7 @@ import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import { exportPatternAsSvg } from "./export/svg";
-import { saveAutosave } from "./storage/opfs";
+import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 
 export function App() {
@@ -21,13 +21,30 @@ export function App() {
   const resetPattern = useEditorStore((state) => state.resetPattern);
   const simulate = useEditorStore((state) => state.simulate);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
+  const [persistenceReady, setPersistenceReady] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    void initializeEngine().then((engine) => {
-      if (active) setEngineSnapshot(engine.snapshot(), engine.backend);
-    });
+    void (async () => {
+      try {
+        const engine = await initializeEngine();
+        const autosave = await loadAutosave();
+        const nextSnapshot = autosave
+          ? engine.restorePiece(autosave.snapshot.piece)
+          : engine.snapshot();
+
+        if (active) {
+          setEngineSnapshot(nextSnapshot, engine.backend);
+          if (autosave) setAutosaveStatus(`Restaurado · ${autosave.method}`);
+        }
+      } catch (error) {
+        console.error("Falha ao inicializar o editor.", error);
+        if (active) setAutosaveStatus("Falha ao inicializar");
+      } finally {
+        if (active) setPersistenceReady(true);
+      }
+    })();
 
     return () => {
       active = false;
@@ -35,6 +52,8 @@ export function App() {
   }, [setEngineSnapshot]);
 
   useEffect(() => {
+    if (!persistenceReady) return;
+
     const timeout = window.setTimeout(() => {
       void saveAutosave(snapshot)
         .then((method) => setAutosaveStatus(`Salvo localmente · ${method}`))
@@ -45,7 +64,7 @@ export function App() {
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [snapshot]);
+  }, [persistenceReady, snapshot]);
 
   return (
     <div className="app-shell">

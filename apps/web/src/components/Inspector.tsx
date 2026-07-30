@@ -37,7 +37,10 @@ export function Inspector({
             min="0"
             step="1"
             value={snapshot.piece.seamAllowanceMm}
-            onChange={(event) => onSeamAllowanceChange(Number(event.target.value))}
+            onChange={(event) => {
+              const value = event.currentTarget.valueAsNumber;
+              if (Number.isFinite(value)) onSeamAllowanceChange(value);
+            }}
           />
           <span>mm</span>
         </div>
@@ -53,9 +56,12 @@ export function Inspector({
                 type="number"
                 step="0.1"
                 value={selectedPoint.xMm}
-                onChange={(event) =>
-                  onMovePoint(selectedPoint.id, Number(event.target.value), selectedPoint.yMm)
-                }
+                onChange={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isFinite(value)) {
+                    onMovePoint(selectedPoint.id, value, selectedPoint.yMm);
+                  }
+                }}
               />
             </label>
             <label>
@@ -64,9 +70,12 @@ export function Inspector({
                 type="number"
                 step="0.1"
                 value={selectedPoint.yMm}
-                onChange={(event) =>
-                  onMovePoint(selectedPoint.id, selectedPoint.xMm, Number(event.target.value))
-                }
+                onChange={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isFinite(value)) {
+                    onMovePoint(selectedPoint.id, selectedPoint.xMm, value);
+                  }
+                }}
               />
             </label>
           </div>

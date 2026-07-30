@@ -1,52 +1,64 @@
 import {
   PatternEngineFacade,
-  PatternPoint,
+  PatternPiece,
+  PatternPieceSchema,
   PatternSnapshot,
   polygonAreaMm2,
   polygonPerimeterMm,
 } from "../domain/pattern";
 
-const DEFAULT_POINTS: PatternPoint[] = [
-  { id: "waist-left", xMm: 0, yMm: 0 },
-  { id: "waist-right", xMm: 260, yMm: 0 },
-  { id: "hem-right", xMm: 315, yMm: 620 },
-  { id: "hem-left", xMm: -20, yMm: 620 },
-];
+const DEFAULT_PIECE: PatternPiece = {
+  id: "skirt-front",
+  name: "Saia base — frente",
+  seamAllowanceMm: 10,
+  points: [
+    { id: "waist-left", xMm: 0, yMm: 0 },
+    { id: "waist-right", xMm: 260, yMm: 0 },
+    { id: "hem-right", xMm: 315, yMm: 620 },
+    { id: "hem-left", xMm: -20, yMm: 620 },
+  ],
+};
 
 export class FallbackPatternEngine implements PatternEngineFacade {
   readonly backend = "typescript" as const;
 
-  private points: PatternPoint[] = structuredClone(DEFAULT_POINTS);
-  private seamAllowanceMm = 10;
+  private piece: PatternPiece = structuredClone(DEFAULT_PIECE);
 
   snapshot(): PatternSnapshot {
     const issues: string[] = [];
-    const areaMm2 = polygonAreaMm2(this.points);
-    const perimeterMm = polygonPerimeterMm(this.points);
+    const areaMm2 = polygonAreaMm2(this.piece.points);
+    const perimeterMm = polygonPerimeterMm(this.piece.points);
 
     if (areaMm2 < 1) {
       issues.push("O contorno não possui área suficiente.");
     }
 
-    if (this.points.some((point) => !Number.isFinite(point.xMm) || !Number.isFinite(point.yMm))) {
+    if (
+      this.piece.points.some(
+        (point) => !Number.isFinite(point.xMm) || !Number.isFinite(point.yMm),
+      )
+    ) {
       issues.push("Existe um ponto com coordenada inválida.");
     }
 
     return {
-      piece: {
-        id: "skirt-front",
-        name: "Saia base — frente",
-        seamAllowanceMm: this.seamAllowanceMm,
-        points: structuredClone(this.points),
-      },
+      piece: structuredClone(this.piece),
       areaMm2,
       perimeterMm,
       issues,
     };
   }
 
+  restorePiece(piece: PatternPiece): PatternSnapshot {
+    this.piece = structuredClone(PatternPieceSchema.parse(piece));
+    return this.snapshot();
+  }
+
   movePoint(pointId: string, xMm: number, yMm: number): PatternSnapshot {
-    this.points = this.points.map((point) =>
+    assertFinite(xMm, "A coordenada X");
+    assertFinite(yMm, "A coordenada Y");
+
+    this.piece.points = this.piece.points.map((point) =>
       point.id === pointId ? { ...point, xMm, yMm } : point,
     );
 
@@ -54,13 +66,19 @@ export class FallbackPatternEngine implements PatternEngineFacade {
   }
 
   setSeamAllowance(valueMm: number): PatternSnapshot {
-    this.seamAllowanceMm = Math.max(0, valueMm);
+    assertFinite(valueMm, "A margem de costura");
+    this.piece.seamAllowanceMm = Math.max(0, valueMm);
     return this.snapshot();
   }
 
   reset(): PatternSnapshot {
-    this.points = structuredClone(DEFAULT_POINTS);
-    this.seamAllowanceMm = 10;
+    this.piece = structuredClone(DEFAULT_PIECE);
     return this.snapshot();
+  }
+}
+
+function assertFinite(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new TypeError(`${label} precisa ser um número finito.`);
   }
 }

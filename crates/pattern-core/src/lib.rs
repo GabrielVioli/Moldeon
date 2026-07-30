@@ -46,6 +46,14 @@ impl PatternEngine {
         to_js_value(&self.build_snapshot())
     }
 
+    pub fn restore_piece(&mut self, piece: JsValue) -> Result<JsValue, JsValue> {
+        let piece: PatternPiece = serde_wasm_bindgen::from_value(piece)
+            .map_err(|error| JsValue::from_str(&format!("Molde salvo inválido: {error}")))?;
+        validate_piece(&piece)?;
+        self.piece = piece;
+        to_js_value(&self.build_snapshot())
+    }
+
     pub fn move_point(&mut self, point_id: &str, x_mm: f64, y_mm: f64) -> Result<JsValue, JsValue> {
         if !x_mm.is_finite() || !y_mm.is_finite() {
             return Err(JsValue::from_str("As coordenadas precisam ser números finitos."));
@@ -124,6 +132,26 @@ fn default_skirt_front() -> PatternPiece {
             Point2 { id: "hem-left".to_string(), x_mm: -20.0, y_mm: 620.0 },
         ],
     }
+}
+
+fn validate_piece(piece: &PatternPiece) -> Result<(), JsValue> {
+    if piece.points.len() < 3 {
+        return Err(JsValue::from_str("O contorno precisa de pelo menos três pontos."));
+    }
+
+    if !piece.seam_allowance_mm.is_finite() || piece.seam_allowance_mm < 0.0 {
+        return Err(JsValue::from_str("A margem de costura precisa ser um número finito e não negativo."));
+    }
+
+    if piece
+        .points
+        .iter()
+        .any(|point| !point.x_mm.is_finite() || !point.y_mm.is_finite())
+    {
+        return Err(JsValue::from_str("Existe um ponto com coordenada inválida."));
+    }
+
+    Ok(())
 }
 
 fn polygon_area(points: &[Point2]) -> f64 {
