@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PatternSnapshot } from "../domain/pattern";
+import { disposeObjectTree } from "./disposeObjectTree";
 
 interface GarmentMeshData {
   mesh: THREE.Mesh;
@@ -44,12 +45,34 @@ export class ThreeViewport {
     this.resizeObserver.observe(this.host);
   }
 
-  static async create(host: HTMLElement): Promise<ThreeViewport> {
+  static async create(
+    host: HTMLElement,
+    signal?: AbortSignal,
+  ): Promise<ThreeViewport> {
+    if (signal?.aborted) {
+      throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
+    }
+
     const viewport = new ThreeViewport(host);
-    await viewport.renderer.init();
-    viewport.resize();
-    viewport.renderer.setAnimationLoop((time) => viewport.render(time));
-    return viewport;
+    const abort = () => viewport.dispose();
+    signal?.addEventListener("abort", abort, { once: true });
+
+    try {
+      await viewport.renderer.init();
+
+      if (signal?.aborted || viewport.disposed) {
+        throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
+      }
+
+      viewport.resize();
+      viewport.renderer.setAnimationLoop((time) => viewport.render(time));
+      return viewport;
+    } catch (error) {
+      viewport.dispose();
+      throw error;
+    } finally {
+      signal?.removeEventListener("abort", abort);
+    }
   }
 
   updatePattern(snapshot: PatternSnapshot) {
@@ -86,11 +109,14 @@ export class ThreeViewport {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
     this.controls.dispose();
-    this.clearGarment();
+    disposeObjectTree(this.scene);
+    this.garmentMeshes = [];
+    this.scene.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
