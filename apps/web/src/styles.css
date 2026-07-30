@@ -131,6 +131,11 @@ button {
   background: #b5b1aa;
 }
 
+.mobile-workspace-tabs,
+.mobile-hint {
+  display: none;
+}
+
 .editor-panel,
 .preview-panel,
 .inspector {
@@ -364,5 +369,144 @@ button {
 
   .tool-buttons {
     display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-rows: auto minmax(0, 1fr) 28px;
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr;
+    grid-template-rows: 44px 38px;
+    gap: 4px;
+    padding: 4px 10px 8px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    font-size: 17px;
+  }
+
+  .brand strong {
+    font-size: 13px;
+  }
+
+  .toolbar-actions {
+    display: grid;
+    grid-template-columns: 1.2fr 0.85fr 1fr;
+    gap: 5px;
+  }
+
+  .secondary-button,
+  .primary-button {
+    height: 36px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .workspace {
+    position: relative;
+    grid-template-columns: 1fr;
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-column: 1;
+    grid-row: 1;
+    padding: 4px;
+    background: #dfdcd5;
+    border-bottom: 1px solid #c3c0ba;
+  }
+
+  .workspace-tab {
+    position: relative;
+    color: #696a66;
+    background: transparent;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .workspace-tab[aria-selected="true"] {
+    color: #17181a;
+    background: #f7f5f0;
+    box-shadow: 0 1px 3px rgba(20, 20, 20, 0.12);
+  }
+
+  .workspace-view {
+    grid-column: 1;
+    grid-row: 2;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .workspace-view.is-mobile-active {
+    z-index: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .inspector.workspace-view {
+    display: block;
+    padding: 16px;
+    border-left: 0;
+  }
+
+  .panel-titlebar {
+    min-width: 0;
+    padding: 0 12px;
+  }
+
+  .panel-titlebar strong {
+    font-size: 13px;
+  }
+
+  .desktop-hint {
+    display: none;
+  }
+
+  .mobile-hint {
+    display: block;
+    max-width: 54%;
+    font-size: 10px;
+    text-align: right;
+  }
+
+  .viewport-label {
+    top: 10px;
+    left: 10px;
+  }
+
+  .status-bar {
+    gap: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .status-bar span:nth-child(2),
+  .status-bar span:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .secondary-button,
+  .primary-button {
+    font-size: 10px;
+  }
+
+  .mobile-hint {
+    max-width: 50%;
+    font-size: 9px;
   }
 }
