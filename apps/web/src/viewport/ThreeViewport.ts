@@ -2,7 +2,10 @@ import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PatternPoint, PatternSnapshot } from "../domain/pattern";
-import { triangulatePatternContour } from "../domain/polygonGeometry";
+import {
+  samplePatternContour,
+  triangulatePatternContour,
+} from "../domain/polygonGeometry";
 import { disposeObjectTree } from "./disposeObjectTree";
 
 interface GarmentMeshData {
@@ -112,7 +115,7 @@ export class ThreeViewport {
   updatePattern(snapshot: PatternSnapshot) {
     this.clearGarment();
 
-    const points = snapshot.piece.points;
+    const points = samplePatternContour(snapshot.piece.points);
     const triangulation = triangulatePatternContour(points);
     if (!triangulation.ok) return;
 

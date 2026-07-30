@@ -3,6 +3,8 @@ import type { PatternPoint } from "./pattern";
 import {
   createSeamAllowanceContour,
   polygonSignedAreaMm2,
+  samplePatternContour,
+  samplePatternSegment,
   triangulatePatternContour,
   validatePatternContour,
 } from "./polygonGeometry";
@@ -122,6 +124,37 @@ describe("pattern contour geometry", () => {
 
     expect(createSeamAllowanceContour(crossed, 10)).toBeNull();
     expect(createSeamAllowanceContour(points([[0, 0], [100, 0], [0, 100]]), -1)).toBeNull();
+  });
+
+  it("samples cubic curves deterministically with a bounded point count", () => {
+    const [start, end] = points([
+      [0, 0],
+      [180, 0],
+    ]);
+    start.handleOut = { xMm: 60, yMm: -80 };
+    end.handleIn = { xMm: -60, yMm: -80 };
+
+    const segment = samplePatternSegment(start, end);
+    expect(segment.length).toBeGreaterThan(2);
+    expect(segment.length).toBeLessThanOrEqual(25);
+    expect(segment[0]).toMatchObject({ xMm: 0, yMm: 0 });
+    expect(segment.at(-1)).toMatchObject({ xMm: 180, yMm: 0 });
+    expect(Math.min(...segment.map((point) => point.yMm))).toBeLessThan(-50);
+  });
+
+  it("samples every curved edge once in a closed contour", () => {
+    const contour = points([
+      [0, 0],
+      [100, 0],
+      [100, 100],
+      [0, 100],
+    ]);
+    contour[0].handleOut = { xMm: 30, yMm: -30 };
+    contour[1].handleIn = { xMm: -30, yMm: -30 };
+
+    const sampled = samplePatternContour(contour);
+    expect(sampled.length).toBeGreaterThan(contour.length);
+    expect(new Set(sampled.map((point) => point.id)).size).toBe(sampled.length);
   });
 });
 

@@ -23,11 +23,20 @@ export function App() {
   const engineBackend = useEditorStore((state) => state.engineBackend);
   const selectedPointId = useEditorStore((state) => state.selectedPointId);
   const simulateVersion = useEditorStore((state) => state.simulateVersion);
+  const canUndo = useEditorStore((state) => state.canUndo);
+  const canRedo = useEditorStore((state) => state.canRedo);
   const setEngineSnapshot = useEditorStore((state) => state.setEngineSnapshot);
   const selectPoint = useEditorStore((state) => state.selectPoint);
+  const beginEdit = useEditorStore((state) => state.beginEdit);
+  const commitEdit = useEditorStore((state) => state.commitEdit);
+  const cancelEdit = useEditorStore((state) => state.cancelEdit);
   const movePoint = useEditorStore((state) => state.movePoint);
+  const moveHandle = useEditorStore((state) => state.moveHandle);
+  const setSegmentCurve = useEditorStore((state) => state.setSegmentCurve);
   const setSeamAllowance = useEditorStore((state) => state.setSeamAllowance);
   const resetPattern = useEditorStore((state) => state.resetPattern);
+  const undo = useEditorStore((state) => state.undo);
+  const redo = useEditorStore((state) => state.redo);
   const simulate = useEditorStore((state) => state.simulate);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const [persistenceReady, setPersistenceReady] = useState(false);
@@ -46,6 +55,38 @@ export function App() {
   const handleExportSvg = useCallback(() => {
     exportPatternAsSvg(useEditorStore.getState().snapshot);
   }, []);
+  const selectedPointIndex = snapshot.piece.points.findIndex(
+    (point) => point.id === selectedPointId,
+  );
+  const selectedPoint =
+    selectedPointIndex >= 0 ? snapshot.piece.points[selectedPointIndex] : null;
+  const nextPoint =
+    selectedPointIndex >= 0
+      ? snapshot.piece.points[
+          (selectedPointIndex + 1) % snapshot.piece.points.length
+        ]
+      : null;
+  const selectedCurveActive =
+    selectedPoint !== null &&
+    nextPoint !== null &&
+    (selectedPoint.handleOut !== undefined || nextPoint.handleIn !== undefined);
+  const handleToggleCurve = useCallback(() => {
+    const currentSelectedPointId =
+      useEditorStore.getState().selectedPointId;
+    if (!currentSelectedPointId) return;
+
+    const currentPoints = useEditorStore.getState().snapshot.piece.points;
+    const currentIndex = currentPoints.findIndex(
+      (point) => point.id === currentSelectedPointId,
+    );
+    if (currentIndex < 0) return;
+    const current = currentPoints[currentIndex];
+    const next = currentPoints[(currentIndex + 1) % currentPoints.length];
+    setSegmentCurve(
+      currentSelectedPointId,
+      !(current.handleOut || next.handleIn),
+    );
+  }, [setSegmentCurve]);
 
   useEffect(() => {
     let active = true;
@@ -90,12 +131,44 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [persistenceReady, snapshot]);
 
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey ||
+        isEditableTarget(event.target)
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [redo, undo]);
+
   return (
     <div className="app-shell">
       <Toolbar
         onSimulate={handleSimulate}
         onReset={resetPattern}
         onExportSvg={handleExportSvg}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        canEditCurve={selectedPoint !== null}
+        curveActive={selectedCurveActive}
+        onToggleCurve={handleToggleCurve}
       />
 
       <main className="workspace">
@@ -150,7 +223,10 @@ export function App() {
             snapshot={snapshot}
             selectedPointId={selectedPointId}
             onSelectPoint={selectPoint}
+            onEditStart={beginEdit}
+            onEditEnd={commitEdit}
             onMovePoint={movePoint}
+            onMoveHandle={moveHandle}
           />
         </section>
 
@@ -179,7 +255,12 @@ export function App() {
           mobileActive={mobileView === "inspector"}
           snapshot={snapshot}
           selectedPointId={selectedPointId}
+          onEditStart={beginEdit}
+          onEditEnd={commitEdit}
+          onEditCancel={cancelEdit}
           onMovePoint={movePoint}
+          curveActive={selectedCurveActive}
+          onToggleCurve={handleToggleCurve}
           onSeamAllowanceChange={setSeamAllowance}
         />
       </main>
@@ -190,6 +271,16 @@ export function App() {
         autosaveStatus={autosaveStatus}
       />
     </div>
+  );
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT")
   );
 }
 

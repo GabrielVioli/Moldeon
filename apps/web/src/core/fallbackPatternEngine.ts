@@ -6,7 +6,10 @@ import {
   polygonAreaMm2,
   polygonPerimeterMm,
 } from "../domain/pattern";
-import { triangulatePatternContour } from "../domain/polygonGeometry";
+import {
+  samplePatternContour,
+  triangulatePatternContour,
+} from "../domain/polygonGeometry";
 
 const DEFAULT_PIECE: PatternPiece = {
   id: "skirt-front",
@@ -26,9 +29,10 @@ export class FallbackPatternEngine implements PatternEngineFacade {
   private piece: PatternPiece = structuredClone(DEFAULT_PIECE);
 
   snapshot(): PatternSnapshot {
-    const areaMm2 = polygonAreaMm2(this.piece.points);
-    const perimeterMm = polygonPerimeterMm(this.piece.points);
-    const triangulation = triangulatePatternContour(this.piece.points);
+    const contour = samplePatternContour(this.piece.points);
+    const areaMm2 = polygonAreaMm2(contour);
+    const perimeterMm = polygonPerimeterMm(contour);
+    const triangulation = triangulatePatternContour(contour);
     const issues = triangulation.ok ? [] : triangulation.issues;
 
     return {
@@ -52,6 +56,56 @@ export class FallbackPatternEngine implements PatternEngineFacade {
       point.id === pointId ? { ...point, xMm, yMm } : point,
     );
 
+    return this.snapshot();
+  }
+
+  moveHandle(
+    pointId: string,
+    handle: "in" | "out",
+    xMm: number,
+    yMm: number,
+  ): PatternSnapshot {
+    assertFinite(xMm, "A coordenada X da alça");
+    assertFinite(yMm, "A coordenada Y da alça");
+
+    this.piece.points = this.piece.points.map((point) =>
+      point.id === pointId
+        ? {
+            ...point,
+            [handle === "in" ? "handleIn" : "handleOut"]: { xMm, yMm },
+          }
+        : point,
+    );
+    return this.snapshot();
+  }
+
+  setSegmentCurve(pointId: string, enabled: boolean): PatternSnapshot {
+    const startIndex = this.piece.points.findIndex(
+      (point) => point.id === pointId,
+    );
+    if (startIndex < 0) return this.snapshot();
+
+    const endIndex = (startIndex + 1) % this.piece.points.length;
+    const start = this.piece.points[startIndex];
+    const end = this.piece.points[endIndex];
+    const deltaX = end.xMm - start.xMm;
+    const deltaY = end.yMm - start.yMm;
+
+    this.piece.points = this.piece.points.map((point, index) => {
+      if (index === startIndex) {
+        const { handleOut: _removed, ...rest } = point;
+        return enabled
+          ? { ...rest, handleOut: { xMm: deltaX / 3, yMm: deltaY / 3 } }
+          : rest;
+      }
+      if (index === endIndex) {
+        const { handleIn: _removed, ...rest } = point;
+        return enabled
+          ? { ...rest, handleIn: { xMm: -deltaX / 3, yMm: -deltaY / 3 } }
+          : rest;
+      }
+      return point;
+    });
     return this.snapshot();
   }
 

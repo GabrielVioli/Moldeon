@@ -10,14 +10,15 @@
 
 ## Marco 2: CAD 2D útil
 
-- Linhas e curvas Bézier.
+- Linhas e criação livre de pontos.
+- Curvas Bézier cúbicas em segmentos existentes. ✅
 - Réguas e guias.
 - Snap e restrições geométricas.
 - Pence.
 - Espelhamento.
 - Margem de costura básica com offset e exportação SVG. ✅
 - Piques e fio do tecido.
-- Undo/redo por Command Pattern.
+- Undo/redo por Command Pattern. ✅
 - PDF A4 em escala 1:1.
 
 ## Marco 3: preparação 3D

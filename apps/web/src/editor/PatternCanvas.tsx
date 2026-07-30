@@ -1,11 +1,16 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useRef,
   type PointerEvent,
   type WheelEvent,
 } from "react";
-import { createSeamAllowanceContour } from "../domain/polygonGeometry";
+import {
+  createSeamAllowanceContour,
+  samplePatternContour,
+  samplePatternSegment,
+} from "../domain/polygonGeometry";
 import { PatternPoint, PatternSnapshot, distanceMm } from "../domain/pattern";
 import { Camera2D, ScreenPoint, cameraFromGesture, clampZoom } from "./camera";
 
@@ -13,7 +18,15 @@ interface PatternCanvasProps {
   snapshot: PatternSnapshot;
   selectedPointId: string | null;
   onSelectPoint(pointId: string | null): void;
+  onEditStart(label: string): void;
+  onEditEnd(): void;
   onMovePoint(pointId: string, xMm: number, yMm: number): void;
+  onMoveHandle(
+    pointId: string,
+    handle: "in" | "out",
+    xMm: number,
+    yMm: number,
+  ): void;
 }
 
 const POINT_RADIUS_PX = 7;
@@ -25,31 +38,47 @@ interface PointerPosition {
   clientY: number;
 }
 
-interface PendingPointMove {
-  pointId: string;
-  xMm: number;
-  yMm: number;
-}
+type PendingGeometryMove =
+  | { type: "point"; pointId: string; xMm: number; yMm: number }
+  | {
+      type: "handle";
+      pointId: string;
+      handle: "in" | "out";
+      xMm: number;
+      yMm: number;
+    };
 
-export function PatternCanvas({
+function PatternCanvasComponent({
   snapshot,
   selectedPointId,
   onSelectPoint,
+  onEditStart,
+  onEditEnd,
   onMovePoint,
+  onMoveHandle,
 }: PatternCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const cameraRef = useRef<Camera2D>(INITIAL_CAMERA);
   const snapshotRef = useRef(snapshot);
   const selectedPointIdRef = useRef(selectedPointId);
+  const onEditStartRef = useRef(onEditStart);
+  const onEditEndRef = useRef(onEditEnd);
   const onMovePointRef = useRef(onMovePoint);
+  const onMoveHandleRef = useRef(onMoveHandle);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
   const drawFrameRef = useRef<number | null>(null);
   const moveFrameRef = useRef<number | null>(null);
-  const pendingMoveRef = useRef<PendingPointMove | null>(null);
+  const pendingMoveRef = useRef<PendingGeometryMove | null>(null);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
   const dragRef = useRef<
     | { type: "point"; pointerId: number; pointId: string }
+    | {
+        type: "handle";
+        pointerId: number;
+        pointId: string;
+        handle: "in" | "out";
+      }
     | {
         type: "pan";
         pointerId: number;
@@ -70,7 +99,10 @@ export function PatternCanvas({
 
   snapshotRef.current = snapshot;
   selectedPointIdRef.current = selectedPointId;
+  onEditStartRef.current = onEditStart;
+  onEditEndRef.current = onEditEnd;
   onMovePointRef.current = onMovePoint;
+  onMoveHandleRef.current = onMoveHandle;
 
   const drawLatest = useCallback(() => {
     drawFrameRef.current = null;
@@ -144,7 +176,7 @@ export function PatternCanvas({
     scheduleDraw();
   }
 
-  function queuePointMove(move: PendingPointMove) {
+  function queueGeometryMove(move: PendingGeometryMove) {
     pendingMoveRef.current = move;
     if (moveFrameRef.current !== null) return;
 
@@ -153,9 +185,32 @@ export function PatternCanvas({
       const pending = pendingMoveRef.current;
       pendingMoveRef.current = null;
       if (pending) {
-        onMovePointRef.current(pending.pointId, pending.xMm, pending.yMm);
+        applyGeometryMove(pending);
       }
     });
+  }
+
+  function applyGeometryMove(move: PendingGeometryMove) {
+    if (move.type === "point") {
+      onMovePointRef.current(move.pointId, move.xMm, move.yMm);
+    } else {
+      onMoveHandleRef.current(
+        move.pointId,
+        move.handle,
+        move.xMm,
+        move.yMm,
+      );
+    }
+  }
+
+  function flushGeometryMove() {
+    if (moveFrameRef.current !== null) {
+      window.cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = null;
+    }
+    const pending = pendingMoveRef.current;
+    pendingMoveRef.current = null;
+    if (pending) applyGeometryMove(pending);
   }
 
   function screenToWorld(clientX: number, clientY: number) {
@@ -183,6 +238,33 @@ export function PatternCanvas({
     );
   }
 
+  function findHandle(
+    clientX: number,
+    clientY: number,
+  ): { pointId: string; handle: "in" | "out" } | null {
+    const selected = snapshotRef.current.piece.points.find(
+      (point) => point.id === selectedPointIdRef.current,
+    );
+    if (!selected) return null;
+
+    const world = screenToWorld(clientX, clientY);
+    const maxDistanceMm = (POINT_RADIUS_PX + 6) / cameraRef.current.zoom;
+    for (const handle of ["in", "out"] as const) {
+      const vector =
+        handle === "in" ? selected.handleIn : selected.handleOut;
+      if (
+        vector &&
+        Math.hypot(
+          selected.xMm + vector.xMm - world.xMm,
+          selected.yMm + vector.yMm - world.yMm,
+        ) <= maxDistanceMm
+      ) {
+        return { pointId: selected.id, handle };
+      }
+    }
+    return null;
+  }
+
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -193,12 +275,31 @@ export function PatternCanvas({
       });
 
       if (activePointersRef.current.size >= 2) {
+        if (
+          dragRef.current?.type === "point" ||
+          dragRef.current?.type === "handle"
+        ) {
+          flushGeometryMove();
+          onEditEndRef.current();
+        }
         beginPinch();
+        return;
+      }
+
+      const controlHandle = findHandle(event.clientX, event.clientY);
+      if (controlHandle) {
+        onEditStartRef.current("Ajustar curva");
+        dragRef.current = {
+          type: "handle",
+          pointerId: event.pointerId,
+          ...controlHandle,
+        };
         return;
       }
 
       const point = findPoint(event.clientX, event.clientY);
       onSelectPoint(point?.id ?? null);
+      if (point) onEditStartRef.current("Mover ponto");
       dragRef.current = point
         ? { type: "point", pointerId: event.pointerId, pointId: point.id }
         : createPanDrag(event.pointerId, event.clientX, event.clientY);
@@ -214,10 +315,22 @@ export function PatternCanvas({
       return;
     }
 
+    const controlHandle = findHandle(event.clientX, event.clientY);
+    if (controlHandle) {
+      onEditStartRef.current("Ajustar curva");
+      dragRef.current = {
+        type: "handle",
+        pointerId: event.pointerId,
+        ...controlHandle,
+      };
+      return;
+    }
+
     const point = findPoint(event.clientX, event.clientY);
     onSelectPoint(point?.id ?? null);
 
     if (point) {
+      onEditStartRef.current("Mover ponto");
       dragRef.current = {
         type: "point",
         pointerId: event.pointerId,
@@ -269,10 +382,26 @@ export function PatternCanvas({
     }
 
     const world = screenToWorld(event.clientX, event.clientY);
-    queuePointMove({
+    if (drag.type === "point") {
+      queueGeometryMove({
+        type: "point",
+        pointId: drag.pointId,
+        xMm: Math.round(world.xMm * 10) / 10,
+        yMm: Math.round(world.yMm * 10) / 10,
+      });
+      return;
+    }
+
+    const anchor = snapshotRef.current.piece.points.find(
+      (point) => point.id === drag.pointId,
+    );
+    if (!anchor) return;
+    queueGeometryMove({
+      type: "handle",
       pointId: drag.pointId,
-      xMm: Math.round(world.xMm * 10) / 10,
-      yMm: Math.round(world.yMm * 10) / 10,
+      handle: drag.handle,
+      xMm: Math.round((world.xMm - anchor.xMm) * 10) / 10,
+      yMm: Math.round((world.yMm - anchor.yMm) * 10) / 10,
     });
   }
 
@@ -326,6 +455,7 @@ export function PatternCanvas({
   }
 
   function finishPointer(event: PointerEvent<HTMLCanvasElement>) {
+    const finishedDrag = dragRef.current;
     activePointersRef.current.delete(event.pointerId);
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -335,6 +465,21 @@ export function PatternCanvas({
     if (activePointersRef.current.size >= 2) {
       beginPinch();
       return;
+    }
+
+    if (
+      finishedDrag?.type === "point" &&
+      finishedDrag.pointerId === event.pointerId
+    ) {
+      flushGeometryMove();
+      onEditEndRef.current();
+    }
+    if (
+      finishedDrag?.type === "handle" &&
+      finishedDrag.pointerId === event.pointerId
+    ) {
+      flushGeometryMove();
+      onEditEndRef.current();
     }
 
     const remaining = [...activePointersRef.current.entries()][0];
@@ -365,6 +510,8 @@ export function PatternCanvas({
     />
   );
 }
+
+export const PatternCanvas = memo(PatternCanvasComponent);
 
 function preferredCanvasDpr(): number {
   const compact = window.matchMedia(MOBILE_QUERY).matches;
@@ -410,12 +557,13 @@ function draw(
 
   const points = snapshot.piece.points;
   if (points.length < 3) return;
+  const sampledContour = samplePatternContour(points);
 
   context.save();
   context.translate(camera.panX, camera.panY);
   context.scale(camera.zoom, camera.zoom);
 
-  traceContour(context, points);
+  tracePatternContour(context, points);
   context.fillStyle = "rgba(32, 33, 36, 0.08)";
   context.fill();
   context.strokeStyle = "#202124";
@@ -423,7 +571,7 @@ function draw(
   context.stroke();
 
   const seamPoints = createSeamAllowanceContour(
-    points,
+    sampledContour,
     snapshot.piece.seamAllowanceMm,
   );
   if (seamPoints && snapshot.piece.seamAllowanceMm > 0) {
@@ -440,7 +588,14 @@ function draw(
     const next = points[(index + 1) % points.length];
     const middleX = (point.xMm + next.xMm) / 2;
     const middleY = (point.yMm + next.yMm) / 2;
-    const length = distanceMm(point, next);
+    const sampledSegment = samplePatternSegment(point, next);
+    const length = sampledSegment
+      .slice(0, -1)
+      .reduce(
+        (total, current, segmentIndex) =>
+          total + distanceMm(current, sampledSegment[segmentIndex + 1]),
+        0,
+      );
 
     context.save();
     context.translate(middleX, middleY);
@@ -453,6 +608,12 @@ function draw(
     context.fillStyle = "#505258";
     context.fillText(`${length.toFixed(1)} mm`, 0, 0);
     context.restore();
+  }
+
+  const selectedPoint = points.find((point) => point.id === selectedPointId);
+  if (selectedPoint) {
+    drawControlHandle(context, selectedPoint, "in", camera.zoom);
+    drawControlHandle(context, selectedPoint, "out", camera.zoom);
   }
 
   for (const point of points) {
@@ -475,6 +636,31 @@ function draw(
   context.restore();
 }
 
+function tracePatternContour(
+  context: CanvasRenderingContext2D,
+  points: readonly PatternPoint[],
+) {
+  context.beginPath();
+  context.moveTo(points[0].xMm, points[0].yMm);
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    if (current.handleOut || next.handleIn) {
+      context.bezierCurveTo(
+        current.xMm + (current.handleOut?.xMm ?? 0),
+        current.yMm + (current.handleOut?.yMm ?? 0),
+        next.xMm + (next.handleIn?.xMm ?? 0),
+        next.yMm + (next.handleIn?.yMm ?? 0),
+        next.xMm,
+        next.yMm,
+      );
+    } else {
+      context.lineTo(next.xMm, next.yMm);
+    }
+  }
+  context.closePath();
+}
+
 function traceContour(
   context: CanvasRenderingContext2D,
   points: readonly PatternPoint[],
@@ -485,6 +671,33 @@ function traceContour(
     context.lineTo(points[index].xMm, points[index].yMm);
   }
   context.closePath();
+}
+
+function drawControlHandle(
+  context: CanvasRenderingContext2D,
+  point: PatternPoint,
+  handle: "in" | "out",
+  zoom: number,
+) {
+  const vector = handle === "in" ? point.handleIn : point.handleOut;
+  if (!vector) return;
+
+  const xMm = point.xMm + vector.xMm;
+  const yMm = point.yMm + vector.yMm;
+  context.beginPath();
+  context.moveTo(point.xMm, point.yMm);
+  context.lineTo(xMm, yMm);
+  context.strokeStyle = "#4a6990";
+  context.lineWidth = 1 / zoom;
+  context.stroke();
+
+  context.beginPath();
+  context.arc(xMm, yMm, 5 / zoom, 0, Math.PI * 2);
+  context.fillStyle = "#f4f2ed";
+  context.fill();
+  context.strokeStyle = "#31577f";
+  context.lineWidth = 2 / zoom;
+  context.stroke();
 }
 
 function drawGrid(

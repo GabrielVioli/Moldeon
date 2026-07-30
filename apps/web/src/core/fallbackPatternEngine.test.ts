@@ -44,4 +44,20 @@ describe("FallbackPatternEngine", () => {
 
     expect(snapshot.issues).toContain("O contorno possui uma autointerseção.");
   });
+
+  it("creates and edits a cubic segment without changing the straight baseline", () => {
+    const engine = new FallbackPatternEngine();
+    const baseline = engine.snapshot();
+    const curved = engine.setSegmentCurve("waist-left", true);
+
+    expect(curved.piece.points[0].handleOut).toEqual({
+      xMm: 260 / 3,
+      yMm: 0,
+    });
+    expect(curved.areaMm2).toBeCloseTo(baseline.areaMm2);
+
+    const edited = engine.moveHandle("waist-left", "out", 80, -45);
+    expect(edited.piece.points[0].handleOut).toEqual({ xMm: 80, yMm: -45 });
+    expect(edited.areaMm2).not.toBeCloseTo(baseline.areaMm2);
+  });
 });

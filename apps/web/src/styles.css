@@ -88,13 +88,30 @@ button {
   gap: 6px;
 }
 
+.history-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .tool-button,
 .secondary-button,
-.primary-button {
+.primary-button,
+.history-button {
   height: 34px;
   padding: 0 13px;
   border-radius: 7px;
   cursor: pointer;
+}
+
+.history-button {
+  display: grid;
+  width: 34px;
+  place-items: center;
+  padding: 0;
+  color: #e5e5e2;
+  background: #292b2f;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .tool-button {
@@ -107,7 +124,8 @@ button {
   background: #2d2f33;
 }
 
-.tool-button:disabled {
+.tool-button:disabled,
+.history-button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }
@@ -362,6 +380,25 @@ button {
   font-size: 11px;
 }
 
+.curve-toggle-button {
+  grid-column: 1 / -1;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: #50545a;
+  background: #e2dfd8;
+  border: 1px solid #c8c5be;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.curve-toggle-button.active {
+  color: #24476a;
+  background: #dce8f2;
+  border-color: #9db6cd;
+}
+
 .validation-ok {
   padding: 10px;
   color: #315b3c;
@@ -438,8 +475,17 @@ button {
 
   .toolbar-actions {
     display: grid;
-    grid-template-columns: 1.2fr 0.85fr 1fr;
+    grid-template-columns: auto 1.2fr 0.85fr 1fr;
     gap: 5px;
+  }
+
+  .history-actions {
+    gap: 3px;
+  }
+
+  .history-button {
+    width: 32px;
+    height: 36px;
   }
 
   .secondary-button,

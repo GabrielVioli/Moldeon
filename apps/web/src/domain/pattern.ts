@@ -2,6 +2,13 @@ export interface PatternPoint {
   id: string;
   xMm: number;
   yMm: number;
+  handleIn?: PatternVector;
+  handleOut?: PatternVector;
+}
+
+export interface PatternVector {
+  xMm: number;
+  yMm: number;
 }
 
 export interface PatternPiece {
@@ -23,6 +30,13 @@ export interface PatternEngineFacade {
   snapshot(): PatternSnapshot;
   restorePiece(piece: PatternPiece): PatternSnapshot;
   movePoint(pointId: string, xMm: number, yMm: number): PatternSnapshot;
+  moveHandle(
+    pointId: string,
+    handle: "in" | "out",
+    xMm: number,
+    yMm: number,
+  ): PatternSnapshot;
+  setSegmentCurve(pointId: string, enabled: boolean): PatternSnapshot;
   setSeamAllowance(valueMm: number): PatternSnapshot;
   reset(): PatternSnapshot;
 }
@@ -101,10 +115,35 @@ function parsePatternPoint(value: unknown, index: number): PatternPoint {
     throw new TypeError(`O ponto ${index + 1} precisa ser um objeto.`);
   }
 
-  return {
+  const point: PatternPoint = {
     id: readString(value.id, `O identificador do ponto ${index + 1}`),
     xMm: readFiniteNumber(value.xMm, `A coordenada X do ponto ${index + 1}`),
     yMm: readFiniteNumber(value.yMm, `A coordenada Y do ponto ${index + 1}`),
+  };
+
+  const handleIn = parseOptionalVector(
+    value.handleIn,
+    `A alça de entrada do ponto ${index + 1}`,
+  );
+  const handleOut = parseOptionalVector(
+    value.handleOut,
+    `A alça de saída do ponto ${index + 1}`,
+  );
+  if (handleIn) point.handleIn = handleIn;
+  if (handleOut) point.handleOut = handleOut;
+  return point;
+}
+
+function parseOptionalVector(
+  value: unknown,
+  label: string,
+): PatternVector | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError(`${label} precisa ser um objeto.`);
+
+  return {
+    xMm: readFiniteNumber(value.xMm, `${label}: X`),
+    yMm: readFiniteNumber(value.yMm, `${label}: Y`),
   };
 }
 

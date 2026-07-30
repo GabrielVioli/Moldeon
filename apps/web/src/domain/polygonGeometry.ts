@@ -1,6 +1,8 @@
 import type { PatternPoint } from "./pattern";
 
 const GEOMETRY_EPSILON = 1e-8;
+const CUBIC_SAMPLE_SPACING_MM = 18;
+const MAX_CUBIC_STEPS = 24;
 
 export interface TriangulatedPatternContour {
   ok: true;
@@ -16,6 +18,74 @@ export interface InvalidPatternContour {
 export type PatternContourResult =
   | TriangulatedPatternContour
   | InvalidPatternContour;
+
+export function segmentIsCurve(
+  start: PatternPoint,
+  end: PatternPoint,
+): boolean {
+  return start.handleOut !== undefined || end.handleIn !== undefined;
+}
+
+export function samplePatternContour(
+  points: readonly PatternPoint[],
+): PatternPoint[] {
+  if (points.length < 2) return points.map((point) => ({ ...point }));
+
+  const sampled: PatternPoint[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const segment = samplePatternSegment(current, next);
+    sampled.push(...segment.slice(0, -1));
+  }
+  return sampled;
+}
+
+export function samplePatternSegment(
+  start: PatternPoint,
+  end: PatternPoint,
+): PatternPoint[] {
+  if (!segmentIsCurve(start, end)) {
+    return [{ ...start }, { ...end }];
+  }
+
+  const control1 = absoluteHandle(start, start.handleOut);
+  const control2 = absoluteHandle(end, end.handleIn);
+  if (isStraightCubic(start, control1, control2, end)) {
+    return [{ ...start }, { ...end }];
+  }
+
+  const controlLength =
+    distanceBetween(start, control1) +
+    distanceBetween(control1, control2) +
+    distanceBetween(control2, end);
+  const steps = Math.min(
+    MAX_CUBIC_STEPS,
+    Math.max(4, Math.ceil(controlLength / CUBIC_SAMPLE_SPACING_MM)),
+  );
+  const sampled: PatternPoint[] = [{ ...start }];
+
+  for (let step = 1; step < steps; step += 1) {
+    const t = step / steps;
+    const inverse = 1 - t;
+    sampled.push({
+      id: `${start.id}::${end.id}::${step}`,
+      xMm:
+        inverse ** 3 * start.xMm +
+        3 * inverse ** 2 * t * control1.xMm +
+        3 * inverse * t ** 2 * control2.xMm +
+        t ** 3 * end.xMm,
+      yMm:
+        inverse ** 3 * start.yMm +
+        3 * inverse ** 2 * t * control1.yMm +
+        3 * inverse * t ** 2 * control2.yMm +
+        t ** 3 * end.yMm,
+    });
+  }
+
+  sampled.push({ ...end });
+  return sampled;
+}
 
 export function createSeamAllowanceContour(
   points: readonly PatternPoint[],
@@ -350,4 +420,45 @@ function outwardNormal(direction: Vector2, orientation: 1 | -1): Vector2 {
 
 function vectorCross(left: Vector2, right: Vector2): number {
   return left.x * right.y - left.y * right.x;
+}
+
+function absoluteHandle(
+  point: PatternPoint,
+  handle: PatternPoint["handleIn"] | PatternPoint["handleOut"],
+): PatternPoint {
+  return {
+    id: `${point.id}-handle`,
+    xMm: point.xMm + (handle?.xMm ?? 0),
+    yMm: point.yMm + (handle?.yMm ?? 0),
+  };
+}
+
+function distanceBetween(left: PatternPoint, right: PatternPoint): number {
+  return Math.hypot(right.xMm - left.xMm, right.yMm - left.yMm);
+}
+
+function isStraightCubic(
+  start: PatternPoint,
+  control1: PatternPoint,
+  control2: PatternPoint,
+  end: PatternPoint,
+): boolean {
+  const chordX = end.xMm - start.xMm;
+  const chordY = end.yMm - start.yMm;
+  const chordSquared = chordX * chordX + chordY * chordY;
+  if (chordSquared <= GEOMETRY_EPSILON) return false;
+
+  return [control1, control2].every((control) => {
+    const relativeX = control.xMm - start.xMm;
+    const relativeY = control.yMm - start.yMm;
+    const distanceNumerator = Math.abs(
+      chordX * relativeY - chordY * relativeX,
+    );
+    const projection = relativeX * chordX + relativeY * chordY;
+    return (
+      distanceNumerator / Math.sqrt(chordSquared) <= 0.01 &&
+      projection >= 0 &&
+      projection <= chordSquared
+    );
+  });
 }

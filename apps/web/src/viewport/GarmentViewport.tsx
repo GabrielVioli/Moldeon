@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { PatternSnapshot } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
@@ -9,7 +9,7 @@ interface GarmentViewportProps {
   onBackendChange(backend: "webgpu" | "webgl2"): void;
 }
 
-export function GarmentViewport({
+export const GarmentViewport = memo(function GarmentViewport({
   snapshot,
   simulateVersion,
   active,
@@ -102,4 +102,4 @@ export function GarmentViewport({
       <div className="viewport-label">Preview 3D · arraste para girar</div>
     </div>
   );
-}
+});

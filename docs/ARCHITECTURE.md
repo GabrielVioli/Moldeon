@@ -30,7 +30,7 @@ Responsabilidades:
 - Área e perímetro.
 - Margens de costura.
 - Validação.
-- Triangulação futura.
+- Triangulação determinística de contornos amostrados.
 - Preparação de costuras.
 
 ## Viewport 3D

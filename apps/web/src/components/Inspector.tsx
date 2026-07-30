@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { PatternSnapshot } from "../domain/pattern";
 
 interface InspectorProps {
@@ -6,17 +7,27 @@ interface InspectorProps {
   mobileActive: boolean;
   snapshot: PatternSnapshot;
   selectedPointId: string | null;
+  onEditStart(label: string): void;
+  onEditEnd(): void;
+  onEditCancel(): void;
   onMovePoint(pointId: string, xMm: number, yMm: number): void;
+  curveActive: boolean;
+  onToggleCurve(): void;
   onSeamAllowanceChange(valueMm: number): void;
 }
 
-export function Inspector({
+export const Inspector = memo(function Inspector({
   id,
   labelledBy,
   mobileActive,
   snapshot,
   selectedPointId,
+  onEditStart,
+  onEditEnd,
+  onEditCancel,
   onMovePoint,
+  curveActive,
+  onToggleCurve,
   onSeamAllowanceChange,
 }: InspectorProps) {
   const selectedPoint = snapshot.piece.points.find((point) => point.id === selectedPointId) ?? null;
@@ -47,6 +58,14 @@ export function Inspector({
             min="0"
             step="1"
             value={snapshot.piece.seamAllowanceMm}
+            onFocus={() => onEditStart("Alterar margem")}
+            onBlur={onEditEnd}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                onEditCancel();
+                event.currentTarget.blur();
+              }
+            }}
             onChange={(event) => {
               const value = event.currentTarget.valueAsNumber;
               if (Number.isFinite(value)) onSeamAllowanceChange(value);
@@ -66,6 +85,14 @@ export function Inspector({
                 type="number"
                 step="0.1"
                 value={selectedPoint.xMm}
+                onFocus={() => onEditStart("Mover ponto")}
+                onBlur={onEditEnd}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    onEditCancel();
+                    event.currentTarget.blur();
+                  }
+                }}
                 onChange={(event) => {
                   const value = event.currentTarget.valueAsNumber;
                   if (Number.isFinite(value)) {
@@ -80,6 +107,14 @@ export function Inspector({
                 type="number"
                 step="0.1"
                 value={selectedPoint.yMm}
+                onFocus={() => onEditStart("Mover ponto")}
+                onBlur={onEditEnd}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    onEditCancel();
+                    event.currentTarget.blur();
+                  }
+                }}
                 onChange={(event) => {
                   const value = event.currentTarget.valueAsNumber;
                   if (Number.isFinite(value)) {
@@ -88,6 +123,14 @@ export function Inspector({
                 }}
               />
             </label>
+            <button
+              className={`curve-toggle-button${curveActive ? " active" : ""}`}
+              type="button"
+              onClick={onToggleCurve}
+              aria-pressed={curveActive}
+            >
+              {curveActive ? "Converter saída em linha" : "Curvar segmento de saída"}
+            </button>
           </div>
         ) : (
           <p className="muted">Clique em um ponto do molde.</p>
@@ -106,7 +149,7 @@ export function Inspector({
       </section>
     </aside>
   );
-}
+});
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (

@@ -15,6 +15,8 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Manequim procedural, sem depender de arquivo 3D externo.
 - Conversão visual do molde plano em painel curvado sobre o manequim.
 - Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
+- Undo/redo transacional com limite de memória, atalhos de teclado e um único comando por gesto.
+- Curvas Bézier cúbicas editáveis por alças, preservadas no SVG e amostradas com limite de custo para 3D.
 - Autosave local usando OPFS quando disponível.
 - Cabeçalhos necessários para `SharedArrayBuffer` no Vite e exemplos de deploy.
 - Estrutura inicial para solver XPBD em Web Worker.
@@ -127,7 +129,7 @@ Leia também:
 
 ## Limitações atuais
 
-- O molde inicial ainda usa segmentos retos; curvas Bézier, pences e graduação não foram implementadas.
+- O molde inicial ainda não permite criar ou remover pontos; pences e graduação não foram implementadas.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
 - O Worker XPBD ainda não alimenta a malha do Three.js.
@@ -135,4 +137,4 @@ Leia também:
 
 ## Próxima etapa recomendada
 
-Implementar comandos de edição com undo/redo e curvas Bézier no núcleo geométrico antes de conectar a física XPBD ao viewport.
+Implementar criação de pontos, snap, réguas e guias antes de conectar a física XPBD ao viewport.

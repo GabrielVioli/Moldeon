@@ -10,6 +10,8 @@ type WasmPatternEngine = {
   snapshot(): unknown;
   restore_piece(piece: PatternPiece): unknown;
   move_point(pointId: string, xMm: number, yMm: number): unknown;
+  move_handle(pointId: string, handle: "in" | "out", xMm: number, yMm: number): unknown;
+  set_segment_curve(pointId: string, enabled: boolean): unknown;
   set_seam_allowance(valueMm: number): unknown;
   reset(): unknown;
 };
@@ -34,6 +36,23 @@ class RustPatternEngine implements PatternEngineFacade {
 
   movePoint(pointId: string, xMm: number, yMm: number): PatternSnapshot {
     return parsePatternSnapshot(this.engine.move_point(pointId, xMm, yMm));
+  }
+
+  moveHandle(
+    pointId: string,
+    handle: "in" | "out",
+    xMm: number,
+    yMm: number,
+  ): PatternSnapshot {
+    return parsePatternSnapshot(
+      this.engine.move_handle(pointId, handle, xMm, yMm),
+    );
+  }
+
+  setSegmentCurve(pointId: string, enabled: boolean): PatternSnapshot {
+    return parsePatternSnapshot(
+      this.engine.set_segment_curve(pointId, enabled),
+    );
   }
 
   setSeamAllowance(valueMm: number): PatternSnapshot {

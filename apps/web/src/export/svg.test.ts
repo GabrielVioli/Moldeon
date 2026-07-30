@@ -40,4 +40,19 @@ describe("SVG export", () => {
     expect(svg).toContain('width="140mm"');
     expect(svg).not.toContain('id="stitching-line"');
   });
+
+  it("preserves cubic commands on the stitching line", () => {
+    const curved: PatternSnapshot = {
+      ...SNAPSHOT,
+      piece: {
+        ...SNAPSHOT.piece,
+        points: SNAPSHOT.piece.points.map((point) => ({ ...point })),
+      },
+    };
+    curved.piece.points[0].handleOut = { xMm: 30, yMm: -25 };
+    curved.piece.points[1].handleIn = { xMm: -30, yMm: -25 };
+
+    const svg = createPatternSvg(curved);
+    expect(svg).toMatch(/id="stitching-line" d="M [^"]+ C /);
+  });
 });

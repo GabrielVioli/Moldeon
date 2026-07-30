@@ -58,4 +58,21 @@ describe("pattern geometry", () => {
       }),
     ).toThrow("A coordenada X do ponto 4 precisa ser um número finito.");
   });
+
+  it("parses optional Bézier handles while keeping old files compatible", () => {
+    const piece = parsePatternPiece({
+      id: "curve",
+      name: "Curva",
+      seamAllowanceMm: 10,
+      points: [
+        { ...square[0], handleOut: { xMm: 20, yMm: -10 } },
+        { ...square[1], handleIn: { xMm: -20, yMm: -10 } },
+        square[2],
+        square[3],
+      ],
+    });
+
+    expect(piece.points[0].handleOut).toEqual({ xMm: 20, yMm: -10 });
+    expect(piece.points[2].handleIn).toBeUndefined();
+  });
 });
