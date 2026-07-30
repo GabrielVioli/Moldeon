@@ -46,6 +46,46 @@ export function createPatternSvg(snapshot: PatternSnapshot): string {
 </svg>`;
 }
 
+export function createGarmentSvg(
+  snapshots: readonly PatternSnapshot[],
+  garmentName: string,
+): string {
+  if (snapshots.length === 0) {
+    throw new RangeError("O projeto precisa ter ao menos uma peça para exportar.");
+  }
+  const gapMm = 25;
+  const prepared = snapshots.map(prepareExportPiece);
+  let cursorX = EXPORT_PADDING_MM;
+  let maximumHeight = 0;
+  const groups = prepared.map((current, index) => {
+    const translateX = cursorX - current.bounds.minX;
+    const translateY = EXPORT_PADDING_MM - current.bounds.minY;
+    cursorX += current.width + gapMm;
+    maximumHeight = Math.max(maximumHeight, current.height);
+    const pieceTitle = escapeXml(current.snapshot.piece.name);
+    return `  <g id="piece-${index + 1}" transform="translate(${formatNumber(translateX)} ${formatNumber(translateY)})">
+    <title>${pieceTitle}</title>
+    <path class="cutting-line" d="${current.cuttingPath}" />
+    ${current.stitchingPath ? `<path class="stitching-line" d="${current.stitchingPath}" />` : ""}
+    <text x="${formatNumber(current.bounds.minX)}" y="${formatNumber(current.bounds.minY - 5)}" font-family="Arial, sans-serif" font-size="5" fill="#000" stroke="none">${pieceTitle}${current.snapshot.piece.cutQuantity ? ` · cortar ${current.snapshot.piece.cutQuantity}×` : ""}${current.snapshot.piece.cutOnFold ? " · na dobra" : ""}</text>
+  </g>`;
+  });
+  const width = cursorX - gapMm + EXPORT_PADDING_MM;
+  const height = maximumHeight + EXPORT_PADDING_MM * 2;
+  const title = escapeXml(garmentName);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(width)}mm" height="${formatNumber(height)}mm" viewBox="0 0 ${formatNumber(width)} ${formatNumber(height)}">
+  <title>${title}</title>
+  <style>
+    .cutting-line { fill: none; stroke: #000; stroke-width: 0.5; }
+    .stitching-line { fill: none; stroke: #000; stroke-width: 0.35; stroke-dasharray: 4 2; }
+  </style>
+${groups.join("\n")}
+  <text x="${EXPORT_PADDING_MM}" y="${formatNumber(height - 5)}" font-family="Arial, sans-serif" font-size="4">Moldeon · escala vetorial 1:1 · confirme com quadrado de calibração antes do corte</text>
+</svg>`;
+}
+
 function patternContourPath(points: readonly PatternPoint[]): string {
   const commands = [`M ${formatNumber(points[0].xMm)} ${formatNumber(points[0].yMm)}`];
   for (let index = 0; index < points.length; index += 1) {
@@ -64,16 +104,65 @@ function patternContourPath(points: readonly PatternPoint[]): string {
   return `${commands.join(" ")} Z`;
 }
 
-export function exportPatternAsSvg(snapshot: PatternSnapshot) {
-  const blob = new Blob([createPatternSvg(snapshot)], {
+export function exportPatternAsSvg(
+  snapshotOrSnapshots: PatternSnapshot | readonly PatternSnapshot[],
+  garmentName?: string,
+) {
+  const snapshots = Array.isArray(snapshotOrSnapshots)
+    ? snapshotOrSnapshots
+    : [snapshotOrSnapshots];
+  const resolvedName =
+    garmentName ??
+    (snapshots.length === 1 ? snapshots[0].piece.name : "moldeon");
+  const content =
+    snapshots.length === 1
+      ? createPatternSvg(snapshots[0])
+      : createGarmentSvg(snapshots, resolvedName);
+  const blob = new Blob([content], {
     type: "image/svg+xml;charset=utf-8",
   });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${slugify(snapshot.piece.name)}.svg`;
+  anchor.download = `${slugify(resolvedName)}.svg`;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+interface PreparedExportPiece {
+  snapshot: PatternSnapshot;
+  bounds: ReturnType<typeof contourBounds>;
+  width: number;
+  height: number;
+  cuttingPath: string;
+  stitchingPath: string | null;
+}
+
+function prepareExportPiece(snapshot: PatternSnapshot): PreparedExportPiece {
+  const sampledPattern = samplePatternContour(snapshot.piece.points);
+  const seamPoints = createSeamAllowanceContour(
+    sampledPattern,
+    snapshot.piece.seamAllowanceMm,
+  );
+  const cuttingLine =
+    seamPoints && snapshot.piece.seamAllowanceMm > 0
+      ? seamPoints
+      : sampledPattern;
+  const bounds = contourBounds(cuttingLine);
+  return {
+    snapshot,
+    bounds,
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY,
+    cuttingPath:
+      seamPoints && snapshot.piece.seamAllowanceMm > 0
+        ? contourPath(cuttingLine)
+        : patternContourPath(snapshot.piece.points),
+    stitchingPath:
+      seamPoints && snapshot.piece.seamAllowanceMm > 0
+        ? patternContourPath(snapshot.piece.points)
+        : null,
+  };
 }
 
 function contourPath(points: readonly PatternPoint[]): string {

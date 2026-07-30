@@ -47,6 +47,14 @@ export const Inspector = memo(function Inspector({
       <section className="metric-grid">
         <Metric label="Área" value={`${(snapshot.areaMm2 / 10000).toFixed(1)} cm²`} />
         <Metric label="Perímetro" value={`${(snapshot.perimeterMm / 10).toFixed(1)} cm`} />
+        <Metric
+          label="Cortar"
+          value={`${snapshot.piece.cutQuantity ?? 1}×${snapshot.piece.cutOnFold ? " na dobra" : ""}`}
+        />
+        <Metric
+          label="Pontos"
+          value={snapshot.piece.points.length.toString()}
+        />
       </section>
 
       <section>

@@ -12,10 +12,18 @@ import {
   samplePatternSegment,
 } from "../domain/polygonGeometry";
 import { PatternPoint, PatternSnapshot, distanceMm } from "../domain/pattern";
-import { Camera2D, ScreenPoint, cameraFromGesture, clampZoom } from "./camera";
+import { findNearestPatternSegment } from "../domain/patternEditing";
+import {
+  Camera2D,
+  ScreenPoint,
+  cameraFromGesture,
+  cameraToFitBounds,
+  clampZoom,
+} from "./camera";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
+  tool: EditorTool;
   selectedPointId: string | null;
   onSelectPoint(pointId: string | null): void;
   onEditStart(label: string): void;
@@ -27,7 +35,10 @@ interface PatternCanvasProps {
     xMm: number,
     yMm: number,
   ): void;
+  onInsertPoint(startPointId: string, t: number): void;
 }
+
+export type EditorTool = "select" | "point";
 
 const POINT_RADIUS_PX = 7;
 const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
@@ -50,23 +61,28 @@ type PendingGeometryMove =
 
 function PatternCanvasComponent({
   snapshot,
+  tool,
   selectedPointId,
   onSelectPoint,
   onEditStart,
   onEditEnd,
   onMovePoint,
   onMoveHandle,
+  onInsertPoint,
 }: PatternCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const cameraRef = useRef<Camera2D>(INITIAL_CAMERA);
   const snapshotRef = useRef(snapshot);
   const selectedPointIdRef = useRef(selectedPointId);
+  const toolRef = useRef(tool);
   const onEditStartRef = useRef(onEditStart);
   const onEditEndRef = useRef(onEditEnd);
   const onMovePointRef = useRef(onMovePoint);
   const onMoveHandleRef = useRef(onMoveHandle);
+  const onInsertPointRef = useRef(onInsertPoint);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
+  const hasFittedCameraRef = useRef(false);
   const drawFrameRef = useRef<number | null>(null);
   const moveFrameRef = useRef<number | null>(null);
   const pendingMoveRef = useRef<PendingGeometryMove | null>(null);
@@ -99,10 +115,12 @@ function PatternCanvasComponent({
 
   snapshotRef.current = snapshot;
   selectedPointIdRef.current = selectedPointId;
+  toolRef.current = tool;
   onEditStartRef.current = onEditStart;
   onEditEndRef.current = onEditEnd;
   onMovePointRef.current = onMovePoint;
   onMoveHandleRef.current = onMoveHandle;
+  onInsertPointRef.current = onInsertPoint;
 
   const drawLatest = useCallback(() => {
     drawFrameRef.current = null;
@@ -146,6 +164,14 @@ function PatternCanvasComponent({
 
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       canvasSizeRef.current = { width: rect.width, height: rect.height };
+      if (!hasFittedCameraRef.current && rect.width > 0 && rect.height > 0) {
+        cameraRef.current = cameraToFitBounds(
+          snapshotBounds(snapshotRef.current),
+          canvasSizeRef.current,
+          rect.width <= 760 ? 34 : 54,
+        );
+        hasFittedCameraRef.current = true;
+      }
       scheduleDraw();
     };
 
@@ -265,6 +291,22 @@ function PatternCanvasComponent({
     return null;
   }
 
+  function insertPointNear(clientX: number, clientY: number): boolean {
+    const world = screenToWorld(clientX, clientY);
+    const target = findNearestPatternSegment(
+      snapshotRef.current.piece.points,
+      world,
+    );
+    if (
+      !target ||
+      target.distanceMm > 18 / cameraRef.current.zoom
+    ) {
+      return false;
+    }
+    onInsertPointRef.current(target.startPointId, target.t);
+    return true;
+  }
+
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -283,6 +325,12 @@ function PatternCanvasComponent({
           onEditEndRef.current();
         }
         beginPinch();
+        return;
+      }
+
+      if (toolRef.current === "point") {
+        insertPointNear(event.clientX, event.clientY);
+        dragRef.current = null;
         return;
       }
 
@@ -312,6 +360,12 @@ function PatternCanvasComponent({
         event.clientX,
         event.clientY,
       );
+      return;
+    }
+
+    if (toolRef.current === "point") {
+      insertPointNear(event.clientX, event.clientY);
+      dragRef.current = null;
       return;
     }
 
@@ -499,7 +553,7 @@ function PatternCanvasComponent({
   return (
     <canvas
       ref={canvasRef}
-      className="pattern-canvas"
+      className={`pattern-canvas pattern-canvas-${tool}`}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -517,6 +571,29 @@ function preferredCanvasDpr(): number {
   const compact = window.matchMedia(MOBILE_QUERY).matches;
   const lowPower = navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
   return Math.min(window.devicePixelRatio || 1, compact || lowPower ? 1.5 : 2);
+}
+
+function snapshotBounds(snapshot: PatternSnapshot) {
+  const contour = samplePatternContour(snapshot.piece.points);
+  const allowance = Math.max(0, snapshot.piece.seamAllowanceMm);
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const point of contour) {
+    minX = Math.min(minX, point.xMm);
+    minY = Math.min(minY, point.yMm);
+    maxX = Math.max(maxX, point.xMm);
+    maxY = Math.max(maxY, point.yMm);
+  }
+
+  return {
+    minX: minX - allowance,
+    minY: minY - allowance,
+    maxX: maxX + allowance,
+    maxY: maxY + allowance,
+  };
 }
 
 function pointerDistance(

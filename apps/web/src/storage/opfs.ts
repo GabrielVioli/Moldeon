@@ -1,4 +1,9 @@
-import { PatternSnapshot, parsePatternSnapshot } from "../domain/pattern";
+import {
+  type GarmentDraft,
+  type PatternSnapshot,
+  parseGarmentDraft,
+  parsePatternSnapshot,
+} from "../domain/pattern";
 
 type StorageManagerWithDirectory = StorageManager & {
   getDirectory(): Promise<FileSystemDirectoryHandle>;
@@ -10,9 +15,13 @@ const AUTOSAVE_STORAGE_KEY = "moldeon-autosave";
 const LEGACY_AUTOSAVE_STORAGE_KEY = "moreoris-autosave";
 
 export interface LoadedAutosave {
-  snapshot: PatternSnapshot;
+  document: ParsedAutosave;
   method: "opfs" | "localStorage";
 }
+
+export type ParsedAutosave =
+  | { kind: "snapshot"; snapshot: PatternSnapshot }
+  | { kind: "garment"; garment: GarmentDraft; activePieceId: string };
 
 export async function loadAutosave(): Promise<LoadedAutosave | null> {
   const storage = navigator.storage as StorageManagerWithDirectory | undefined;
@@ -25,8 +34,8 @@ export async function loadAutosave(): Promise<LoadedAutosave | null> {
         try {
           const handle = await root.getFileHandle(filename);
           const file = await handle.getFile();
-          const snapshot = parseAutosave(await file.text());
-          if (snapshot) return { snapshot, method: "opfs" };
+          const document = parseAutosave(await file.text());
+          if (document) return { document, method: "opfs" };
         } catch (error) {
           if (!isMissingFile(error)) throw error;
         }
@@ -39,8 +48,8 @@ export async function loadAutosave(): Promise<LoadedAutosave | null> {
   try {
     for (const key of [AUTOSAVE_STORAGE_KEY, LEGACY_AUTOSAVE_STORAGE_KEY]) {
       const serialized = localStorage.getItem(key);
-      const snapshot = serialized ? parseAutosave(serialized) : null;
-      if (snapshot) return { snapshot, method: "localStorage" };
+      const document = serialized ? parseAutosave(serialized) : null;
+      if (document) return { document, method: "localStorage" };
     }
     return null;
   } catch (error) {
@@ -53,11 +62,13 @@ export async function loadAutosave(): Promise<LoadedAutosave | null> {
 }
 
 export async function saveAutosave(
-  snapshot: PatternSnapshot,
+  garment: GarmentDraft,
+  activePieceId: string,
 ): Promise<"opfs" | "localStorage"> {
   const serialized = JSON.stringify({
-    version: 1,
-    snapshot,
+    version: 2,
+    garment,
+    activePieceId,
     savedAt: new Date().toISOString(),
   });
   const storage = navigator.storage as StorageManagerWithDirectory | undefined;
@@ -81,17 +92,27 @@ export async function saveAutosave(
   return "localStorage";
 }
 
-export function parseAutosave(serialized: string): PatternSnapshot | null {
+export function parseAutosave(serialized: string): ParsedAutosave | null {
   try {
     const value: unknown = JSON.parse(serialized);
-    if (
-      !isRecord(value) ||
-      value.version !== 1 ||
-      typeof value.savedAt !== "string"
-    ) {
+    if (!isRecord(value) || typeof value.savedAt !== "string") {
       return null;
     }
-    return parsePatternSnapshot(value.snapshot);
+    if (value.version === 1) {
+      return { kind: "snapshot", snapshot: parsePatternSnapshot(value.snapshot) };
+    }
+    if (value.version === 2 && typeof value.activePieceId === "string") {
+      const garment = parseGarmentDraft(value.garment);
+      if (!garment.pieces.some((piece) => piece.id === value.activePieceId)) {
+        return null;
+      }
+      return {
+        kind: "garment",
+        garment,
+        activePieceId: value.activePieceId,
+      };
+    }
+    return null;
   } catch {
     return null;
   }

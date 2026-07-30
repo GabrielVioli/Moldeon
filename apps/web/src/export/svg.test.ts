@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PatternSnapshot } from "../domain/pattern";
-import { createPatternSvg } from "./svg";
+import { createGarmentSvg, createPatternSvg } from "./svg";
 
 const SNAPSHOT: PatternSnapshot = {
   piece: {
@@ -54,5 +54,25 @@ describe("SVG export", () => {
 
     const svg = createPatternSvg(curved);
     expect(svg).toMatch(/id="stitching-line" d="M [^"]+ C /);
+  });
+
+  it("lays out multiple editable pieces in one physical-size SVG", () => {
+    const second: PatternSnapshot = {
+      ...SNAPSHOT,
+      piece: {
+        ...SNAPSHOT.piece,
+        id: "second",
+        name: "Costas",
+        cutQuantity: 1,
+        cutOnFold: true,
+      },
+    };
+    const svg = createGarmentSvg([SNAPSHOT, second], "Camiseta base");
+
+    expect(svg).toContain("<title>Camiseta base</title>");
+    expect(svg).toContain('id="piece-1"');
+    expect(svg).toContain('id="piece-2"');
+    expect(svg).toContain("Costas · cortar 1× · na dobra");
+    expect(svg).toContain("escala vetorial 1:1");
   });
 });

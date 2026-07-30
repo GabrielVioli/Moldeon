@@ -70,19 +70,19 @@ impl PatternEngine {
         to_js_value(&self.build_snapshot())
     }
 
-    pub fn move_point(
-        &mut self,
-        point_id: &str,
-        x_mm: f64,
-        y_mm: f64,
-    ) -> Result<JsValue, JsValue> {
+    pub fn move_point(&mut self, point_id: &str, x_mm: f64, y_mm: f64) -> Result<JsValue, JsValue> {
         if !x_mm.is_finite() || !y_mm.is_finite() {
             return Err(JsValue::from_str(
                 "As coordenadas precisam ser números finitos.",
             ));
         }
 
-        if let Some(point) = self.piece.points.iter_mut().find(|point| point.id == point_id) {
+        if let Some(point) = self
+            .piece
+            .points
+            .iter_mut()
+            .find(|point| point.id == point_id)
+        {
             point.x_mm = x_mm;
             point.y_mm = y_mm;
         }
@@ -120,11 +120,7 @@ impl PatternEngine {
         to_js_value(&self.build_snapshot())
     }
 
-    pub fn set_segment_curve(
-        &mut self,
-        point_id: &str,
-        enabled: bool,
-    ) -> Result<JsValue, JsValue> {
+    pub fn set_segment_curve(&mut self, point_id: &str, enabled: bool) -> Result<JsValue, JsValue> {
         let Some(start_index) = self
             .piece
             .points
@@ -134,10 +130,8 @@ impl PatternEngine {
             return to_js_value(&self.build_snapshot());
         };
         let end_index = (start_index + 1) % self.piece.points.len();
-        let delta_x =
-            self.piece.points[end_index].x_mm - self.piece.points[start_index].x_mm;
-        let delta_y =
-            self.piece.points[end_index].y_mm - self.piece.points[start_index].y_mm;
+        let delta_x = self.piece.points[end_index].x_mm - self.piece.points[start_index].x_mm;
+        let delta_y = self.piece.points[end_index].y_mm - self.piece.points[start_index].y_mm;
 
         if enabled {
             self.piece.points[start_index].handle_out = Some(Vector2 {
@@ -250,22 +244,18 @@ fn validate_piece(piece: &PatternPiece) -> Result<(), JsValue> {
         ));
     }
 
-    if piece
-        .points
-        .iter()
-        .any(|point| {
-            !point.x_mm.is_finite()
-                || !point.y_mm.is_finite()
-                || point
-                    .handle_in
-                    .as_ref()
-                    .is_some_and(|handle| !handle.x_mm.is_finite() || !handle.y_mm.is_finite())
-                || point
-                    .handle_out
-                    .as_ref()
-                    .is_some_and(|handle| !handle.x_mm.is_finite() || !handle.y_mm.is_finite())
-        })
-    {
+    if piece.points.iter().any(|point| {
+        !point.x_mm.is_finite()
+            || !point.y_mm.is_finite()
+            || point
+                .handle_in
+                .as_ref()
+                .is_some_and(|handle| !handle.x_mm.is_finite() || !handle.y_mm.is_finite())
+            || point
+                .handle_out
+                .as_ref()
+                .is_some_and(|handle| !handle.x_mm.is_finite() || !handle.y_mm.is_finite())
+    }) {
         return Err(JsValue::from_str(
             "Existe um ponto com coordenada inválida.",
         ));
@@ -352,12 +342,7 @@ fn point_distance(left: &Point2, right: &Point2) -> f64 {
     (right.x_mm - left.x_mm).hypot(right.y_mm - left.y_mm)
 }
 
-fn is_straight_cubic(
-    start: &Point2,
-    control1: &Point2,
-    control2: &Point2,
-    end: &Point2,
-) -> bool {
+fn is_straight_cubic(start: &Point2, control1: &Point2, control2: &Point2, end: &Point2) -> bool {
     let chord_x = end.x_mm - start.x_mm;
     let chord_y = end.y_mm - start.y_mm;
     let chord_squared = chord_x * chord_x + chord_y * chord_y;
@@ -511,8 +496,7 @@ fn point_on_segment(point: &Point2, start: &Point2, end: &Point2) -> bool {
 }
 
 fn cross(a: &Point2, b: &Point2, c: &Point2) -> f64 {
-    (b.x_mm - a.x_mm) * (c.y_mm - a.y_mm)
-        - (b.y_mm - a.y_mm) * (c.x_mm - a.x_mm)
+    (b.x_mm - a.x_mm) * (c.y_mm - a.y_mm) - (b.y_mm - a.y_mm) * (c.x_mm - a.x_mm)
 }
 
 fn to_js_value<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {

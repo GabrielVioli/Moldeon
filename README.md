@@ -6,14 +6,17 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 
 - Editor 2D em milímetros, com grade, zoom, pan e pontos arrastáveis.
 - Interface móvel com abas, pan por toque e zoom por pinça.
-- Molde-base de saia paramétrico como peça inicial.
+- Biblioteca paramétrica com camiseta, blusa, saia, minissaia, calça e jaqueta.
+- Geração por altura, busto/tórax, cintura e quadril explícitos.
+- Projetos com frente, costas, manga, quantidade de corte e corte na dobra.
+- Alternância entre peças, inserção/remoção de pontos e enquadramento automático.
 - Cálculo de área, perímetro e validações equivalentes em Rust/WASM e TypeScript.
 - Validação de pontos duplicados, autointerseções e contornos degenerados.
 - Triangulação explícita de polígonos convexos e côncavos.
 - Fallback em TypeScript, permitindo abrir o projeto mesmo sem compilar Rust.
 - Viewport 3D sob demanda com Three.js, WebGPU e fallback WebGL 2 explícito.
 - Manequim procedural, sem depender de arquivo 3D externo.
-- Conversão visual do molde plano em painel curvado sobre o manequim.
+- Conversão visual de todas as peças em painéis posicionados ao redor do manequim.
 - Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
 - Undo/redo transacional com limite de memória, atalhos de teclado e um único comando por gesto.
 - Curvas Bézier cúbicas editáveis por alças, preservadas no SVG e amostradas com limite de custo para 3D.
@@ -26,7 +29,10 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 
 ## Desempenho
 
-O carregamento inicial do editor fallback caiu de aproximadamente **1,07 MB para 216 KB** de JavaScript minificado, ou de **301 KB para 69 KB comprimidos**.
+O carregamento inicial do editor fallback permanece em aproximadamente **239 KB**
+de JavaScript minificado, ou **76 KB comprimidos**, mesmo com a biblioteca
+paramétrica e a edição de múltiplas peças. A base anterior a essas otimizações
+baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 - Three.js não entra no JavaScript inicial.
 - No celular, o 3D só é baixado depois que a aba **Prévia 3D** é aberta.
@@ -123,13 +129,16 @@ scripts/                  Instalação e diagnóstico no Windows
 Leia também:
 
 - `docs/ARCHITECTURE.md`
+- `docs/DOMAIN_STUDY.md`
+- `docs/PATTERN_LIBRARY.md`
 - `docs/ROADMAP.md`
 - `docs/INSTALL_WINDOWS.md`
 - `docs/PHYSICS_PLAN.md`
 
 ## Limitações atuais
 
-- O molde inicial ainda não permite criar ou remover pontos; pences e graduação não foram implementadas.
+- Os seis moldes são bases simplificadas; pences, graduação, cós, vistas e aviamentos ainda não foram implementados.
+- A inserção de ponto acontece em um contorno existente; a criação livre de novas peças ainda não foi implementada.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
 - O Worker XPBD ainda não alimenta a malha do Three.js.
@@ -137,4 +146,4 @@ Leia também:
 
 ## Próxima etapa recomendada
 
-Implementar criação de pontos, snap, réguas e guias antes de conectar a física XPBD ao viewport.
+Implementar snap, réguas, guias e relações de costura antes de conectar a física XPBD ao viewport.

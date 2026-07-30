@@ -1,24 +1,41 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { initializeEngine } from "./core/engineRuntime";
+import { createPatternSnapshot } from "./core/fallbackPatternEngine";
 import { PatternCanvas } from "./editor/PatternCanvas";
+import type { EditorTool } from "./editor/PatternCanvas";
 import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
+import type { GarmentDraft, PatternPiece } from "./domain/pattern";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
 
 const MOBILE_QUERY = "(max-width: 760px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
+const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
 const LazyGarmentViewport = lazy(async () => {
   const module = await loadGarmentViewport();
   return { default: module.GarmentViewport };
 });
+const LazyPatternLibraryDialog = lazy(async () => {
+  const module = await loadPatternLibrary();
+  return { default: module.PatternLibraryDialog };
+});
 
 export function App() {
+  const garment = useEditorStore((state) => state.garment);
+  const activePieceId = useEditorStore((state) => state.activePieceId);
   const snapshot = useEditorStore((state) => state.snapshot);
   const engineBackend = useEditorStore((state) => state.engineBackend);
   const selectedPointId = useEditorStore((state) => state.selectedPointId);
@@ -26,6 +43,9 @@ export function App() {
   const canUndo = useEditorStore((state) => state.canUndo);
   const canRedo = useEditorStore((state) => state.canRedo);
   const setEngineSnapshot = useEditorStore((state) => state.setEngineSnapshot);
+  const restoreGarment = useEditorStore((state) => state.restoreGarment);
+  const loadGarment = useEditorStore((state) => state.loadGarment);
+  const selectPiece = useEditorStore((state) => state.selectPiece);
   const selectPoint = useEditorStore((state) => state.selectPoint);
   const beginEdit = useEditorStore((state) => state.beginEdit);
   const commitEdit = useEditorStore((state) => state.commitEdit);
@@ -33,6 +53,8 @@ export function App() {
   const movePoint = useEditorStore((state) => state.movePoint);
   const moveHandle = useEditorStore((state) => state.moveHandle);
   const setSegmentCurve = useEditorStore((state) => state.setSegmentCurve);
+  const insertPoint = useEditorStore((state) => state.insertPoint);
+  const removePoint = useEditorStore((state) => state.removePoint);
   const setSeamAllowance = useEditorStore((state) => state.setSeamAllowance);
   const resetPattern = useEditorStore((state) => state.resetPattern);
   const undo = useEditorStore((state) => state.undo);
@@ -42,19 +64,42 @@ export function App() {
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const showViewport =
     !isMobile || previewRequested || mobileView === "preview";
+  const garmentSnapshots = useMemo(
+    () => (showViewport ? garment.pieces.map(createPatternSnapshot) : []),
+    [garment, showViewport],
+  );
   const handleSimulate = useCallback(() => {
     setPreviewRequested(true);
     if (isMobile) setMobileView("preview");
     simulate();
   }, [isMobile, simulate]);
   const handleExportSvg = useCallback(() => {
-    exportPatternAsSvg(useEditorStore.getState().snapshot);
+    const currentGarment = useEditorStore.getState().garment;
+    exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
   }, []);
+  const handleChooseTemplate = useCallback(
+    (nextGarment: GarmentDraft) => {
+      loadGarment(nextGarment);
+      setActiveTool("select");
+      setLibraryOpen(false);
+      if (isMobile) setMobileView("editor");
+    },
+    [isMobile, loadGarment],
+  );
+  const handleInsertPoint = useCallback(
+    (startPointId: string, t: number) => {
+      insertPoint(startPointId, t);
+      setActiveTool("select");
+    },
+    [insertPoint],
+  );
   const selectedPointIndex = snapshot.piece.points.findIndex(
     (point) => point.id === selectedPointId,
   );
@@ -95,12 +140,21 @@ export function App() {
       try {
         const engine = await initializeEngine();
         const autosave = await loadAutosave();
-        const nextSnapshot = autosave
-          ? engine.restorePiece(autosave.snapshot.piece)
-          : engine.snapshot();
 
         if (active) {
-          setEngineSnapshot(nextSnapshot, engine.backend);
+          if (autosave?.document.kind === "garment") {
+            restoreGarment(
+              autosave.document.garment,
+              autosave.document.activePieceId,
+              engine.backend,
+            );
+          } else {
+            const nextSnapshot =
+              autosave?.document.kind === "snapshot"
+                ? engine.restorePiece(autosave.document.snapshot.piece)
+                : engine.snapshot();
+            setEngineSnapshot(nextSnapshot, engine.backend);
+          }
           if (autosave) setAutosaveStatus(`Restaurado · ${autosave.method}`);
         }
       } catch (error) {
@@ -114,13 +168,13 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [setEngineSnapshot]);
+  }, [restoreGarment, setEngineSnapshot]);
 
   useEffect(() => {
     if (!persistenceReady) return;
 
     const timeout = window.setTimeout(() => {
-      void saveAutosave(snapshot)
+      void saveAutosave(garment, activePieceId)
         .then((method) => setAutosaveStatus(`Salvo localmente · ${method}`))
         .catch((error: unknown) => {
           console.warn("Autosave falhou", error);
@@ -129,10 +183,14 @@ export function App() {
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [persistenceReady, snapshot]);
+  }, [activePieceId, garment, persistenceReady]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isEditableTarget(event.target)) {
+        setActiveTool("select");
+        return;
+      }
       if (
         !(event.ctrlKey || event.metaKey) ||
         event.altKey ||
@@ -156,9 +214,32 @@ export function App() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [redo, undo]);
 
+  useEffect(() => {
+    const handleDelete = (event: KeyboardEvent) => {
+      if (
+        isEditableTarget(event.target) ||
+        (event.key !== "Delete" && event.key !== "Backspace")
+      ) {
+        return;
+      }
+      const currentSelectedPointId =
+        useEditorStore.getState().selectedPointId;
+      if (!currentSelectedPointId) return;
+      event.preventDefault();
+      removePoint(currentSelectedPointId);
+    };
+    window.addEventListener("keydown", handleDelete);
+    return () => window.removeEventListener("keydown", handleDelete);
+  }, [removePoint]);
+
   return (
     <div className="app-shell">
       <Toolbar
+        garmentName={garment.name}
+        onOpenLibrary={() => setLibraryOpen(true)}
+        onPrepareLibrary={() => {
+          void loadPatternLibrary();
+        }}
         onSimulate={handleSimulate}
         onReset={resetPattern}
         onExportSvg={handleExportSvg}
@@ -169,6 +250,8 @@ export function App() {
         canEditCurve={selectedPoint !== null}
         curveActive={selectedCurveActive}
         onToggleCurve={handleToggleCurve}
+        activeTool={activeTool}
+        onSelectTool={setActiveTool}
       />
 
       <main className="workspace">
@@ -214,19 +297,33 @@ export function App() {
           <div className="panel-titlebar">
             <div>
               <span className="section-eyebrow">Molde 2D</span>
-              <strong>Frente · milímetros</strong>
+              <strong>{snapshot.piece.name} · milímetros</strong>
             </div>
             <span className="hint desktop-hint">Shift + arrastar: mover tela · roda: zoom</span>
             <span className="hint mobile-hint">Arraste pontos · fundo move · pinça aproxima</span>
           </div>
+          <PieceStrip
+            pieces={garment.pieces}
+            activePieceId={activePieceId}
+            onSelect={selectPiece}
+            activeTool={activeTool}
+            onSelectTool={setActiveTool}
+            canRemovePoint={snapshot.piece.points.length > 3 && selectedPoint !== null}
+            onRemovePoint={() => {
+              if (selectedPoint) removePoint(selectedPoint.id);
+            }}
+          />
           <PatternCanvas
+            key={`${garment.id}:${activePieceId}`}
             snapshot={snapshot}
+            tool={activeTool}
             selectedPointId={selectedPointId}
             onSelectPoint={selectPoint}
             onEditStart={beginEdit}
             onEditEnd={commitEdit}
             onMovePoint={movePoint}
             onMoveHandle={moveHandle}
+            onInsertPoint={handleInsertPoint}
           />
         </section>
 
@@ -238,7 +335,7 @@ export function App() {
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder />}>
               <LazyGarmentViewport
-                snapshot={snapshot}
+                snapshots={garmentSnapshots}
                 simulateVersion={simulateVersion}
                 active={!isMobile || mobileView === "preview"}
                 onBackendChange={setRenderBackend}
@@ -270,6 +367,75 @@ export function App() {
         renderBackend={renderBackend}
         autosaveStatus={autosaveStatus}
       />
+
+      {libraryOpen ? (
+        <Suspense fallback={<DialogPlaceholder />}>
+          <LazyPatternLibraryDialog
+            onClose={() => setLibraryOpen(false)}
+            onChoose={handleChooseTemplate}
+          />
+        </Suspense>
+      ) : null}
+    </div>
+  );
+}
+
+interface PieceStripProps {
+  pieces: PatternPiece[];
+  activePieceId: string;
+  onSelect(pieceId: string): void;
+  activeTool: EditorTool;
+  onSelectTool(tool: EditorTool): void;
+  canRemovePoint: boolean;
+  onRemovePoint(): void;
+}
+
+function PieceStrip({
+  pieces,
+  activePieceId,
+  onSelect,
+  activeTool,
+  onSelectTool,
+  canRemovePoint,
+  onRemovePoint,
+}: PieceStripProps) {
+  return (
+    <div className="piece-tools-row">
+      <nav className="piece-strip" aria-label="Peças do molde">
+        {pieces.map((piece) => (
+          <button
+            key={piece.id}
+            type="button"
+            aria-pressed={piece.id === activePieceId}
+            onClick={() => onSelect(piece.id)}
+          >
+            <span>{piece.name}</span>
+            <small>
+              {piece.cutQuantity ? `${piece.cutQuantity}×` : "1×"}
+              {piece.cutOnFold ? " · dobra" : ""}
+            </small>
+          </button>
+        ))}
+      </nav>
+      <div className="point-actions" role="group" aria-label="Editar pontos">
+        <button
+          className={activeTool === "point" ? "active" : ""}
+          type="button"
+          onClick={() =>
+            onSelectTool(activeTool === "point" ? "select" : "point")
+          }
+          aria-pressed={activeTool === "point"}
+        >
+          + Ponto
+        </button>
+        <button
+          type="button"
+          disabled={!canRemovePoint}
+          onClick={onRemovePoint}
+        >
+          Excluir
+        </button>
+      </div>
     </div>
   );
 }
@@ -325,6 +491,17 @@ function ViewportPlaceholder() {
       <span className="viewport-spinner" aria-hidden="true" />
       <strong>Preparando prévia 3D</strong>
       <span>O editor 2D continua leve enquanto o 3D carrega.</span>
+    </div>
+  );
+}
+
+function DialogPlaceholder() {
+  return (
+    <div className="dialog-backdrop" role="status">
+      <div className="dialog-loading">
+        <span className="viewport-spinner" aria-hidden="true" />
+        <strong>Carregando moldes essenciais</strong>
+      </div>
     </div>
   );
 }

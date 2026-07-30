@@ -3,28 +3,28 @@ import { PatternSnapshot } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
 interface GarmentViewportProps {
-  snapshot: PatternSnapshot;
+  snapshots: PatternSnapshot[];
   simulateVersion: number;
   active: boolean;
   onBackendChange(backend: "webgpu" | "webgl2"): void;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
-  snapshot,
+  snapshots,
   simulateVersion,
   active,
   onBackendChange,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
-  const latestSnapshotRef = useRef(snapshot);
+  const latestSnapshotsRef = useRef(snapshots);
   const latestActiveRef = useRef(active);
   const latestSimulateVersionRef = useRef(simulateVersion);
   const lastDressedVersionRef = useRef(0);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  latestSnapshotRef.current = snapshot;
+  latestSnapshotsRef.current = snapshots;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
 
@@ -46,7 +46,7 @@ export const GarmentViewport = memo(function GarmentViewport({
         onBackendChange(viewport.backend);
 
         if (latestActiveRef.current) {
-          viewport.updatePattern(latestSnapshotRef.current);
+          viewport.updatePatterns(latestSnapshotsRef.current);
         }
 
         if (
@@ -82,9 +82,9 @@ export const GarmentViewport = memo(function GarmentViewport({
     if (updateFrameRef.current !== null) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
-      viewportRef.current?.updatePattern(latestSnapshotRef.current);
+      viewportRef.current?.updatePatterns(latestSnapshotsRef.current);
     });
-  }, [active, snapshot]);
+  }, [active, snapshots]);
 
   useEffect(() => {
     if (

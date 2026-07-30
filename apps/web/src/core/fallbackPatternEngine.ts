@@ -29,18 +29,7 @@ export class FallbackPatternEngine implements PatternEngineFacade {
   private piece: PatternPiece = structuredClone(DEFAULT_PIECE);
 
   snapshot(): PatternSnapshot {
-    const contour = samplePatternContour(this.piece.points);
-    const areaMm2 = polygonAreaMm2(contour);
-    const perimeterMm = polygonPerimeterMm(contour);
-    const triangulation = triangulatePatternContour(contour);
-    const issues = triangulation.ok ? [] : triangulation.issues;
-
-    return {
-      piece: structuredClone(this.piece),
-      areaMm2,
-      perimeterMm,
-      issues,
-    };
+    return createPatternSnapshot(this.piece);
   }
 
   restorePiece(piece: PatternPiece): PatternSnapshot {
@@ -119,6 +108,22 @@ export class FallbackPatternEngine implements PatternEngineFacade {
     this.piece = structuredClone(DEFAULT_PIECE);
     return this.snapshot();
   }
+}
+
+export function createPatternSnapshot(piece: PatternPiece): PatternSnapshot {
+  const parsedPiece = parsePatternPiece(piece);
+  const contour = samplePatternContour(parsedPiece.points);
+  const areaMm2 = polygonAreaMm2(contour);
+  const perimeterMm = polygonPerimeterMm(contour);
+  const triangulation = triangulatePatternContour(contour);
+  const issues = triangulation.ok ? [] : triangulation.issues;
+
+  return {
+    piece: structuredClone(parsedPiece),
+    areaMm2,
+    perimeterMm,
+    issues,
+  };
 }
 
 function assertFinite(value: number, label: string): void {

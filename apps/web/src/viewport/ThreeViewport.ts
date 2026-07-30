@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PatternPoint, PatternSnapshot } from "../domain/pattern";
+import {
+  PatternPoint,
+  PatternPreviewPlacement,
+  PatternSnapshot,
+} from "../domain/pattern";
 import {
   samplePatternContour,
   triangulatePatternContour,
@@ -23,6 +27,14 @@ interface PerformanceProfile {
   shadows: boolean;
   geometrySegments: number;
 }
+
+const PANEL_COLORS = [
+  0x775a92,
+  0x9a7187,
+  0x5f7891,
+  0xa46f58,
+  0x677d68,
+] as const;
 
 export class ThreeViewport {
   private readonly scene = new THREE.Scene();
@@ -112,39 +124,37 @@ export class ThreeViewport {
     }
   }
 
-  updatePattern(snapshot: PatternSnapshot) {
+  updatePatterns(snapshots: readonly PatternSnapshot[]) {
     this.clearGarment();
 
-    const points = samplePatternContour(snapshot.piece.points);
-    const triangulation = triangulatePatternContour(points);
-    if (!triangulation.ok) return;
-
-    const minX = Math.min(...points.map((point) => point.xMm));
-    const maxX = Math.max(...points.map((point) => point.xMm));
-    const minY = Math.min(...points.map((point) => point.yMm));
-    const widthMm = Math.max(1, maxX - minX);
-    const centerX = (minX + maxX) / 2;
     const scale = 0.00145;
-
-    const front = this.createPanel(
-      points,
-      triangulation.indices,
-      centerX,
-      minY,
-      widthMm * scale,
-      scale,
-      false,
-    );
-    const back = this.createPanel(
-      points,
-      triangulation.indices,
-      centerX,
-      minY,
-      widthMm * scale,
-      scale,
-      true,
-    );
-    this.garmentMeshes = [front, back];
+    const meshes: GarmentMeshData[] = [];
+    snapshots.forEach((snapshot, pieceIndex) => {
+      const points = samplePatternContour(snapshot.piece.points);
+      const triangulation = triangulatePatternContour(points);
+      if (!triangulation.ok) return;
+      const placements =
+        snapshot.piece.previewPlacements ?? [
+          {
+            region: "torso",
+            surface: "front",
+            bodySide: "center",
+          } satisfies PatternPreviewPlacement,
+        ];
+      for (const placement of placements) {
+        meshes.push(
+          this.createPanel(
+            points,
+            triangulation.indices,
+            scale,
+            placement,
+            pieceIndex,
+            meshes.length,
+          ),
+        );
+      }
+    });
+    this.garmentMeshes = meshes;
     this.garmentMeshes.forEach(({ mesh }) => this.garmentGroup.add(mesh));
     this.applyDressProgress(1);
     this.requestRender();
@@ -177,16 +187,19 @@ export class ThreeViewport {
   private createPanel(
     points: readonly PatternPoint[],
     indices: readonly number[],
-    centerX: number,
-    minY: number,
-    width: number,
     scale: number,
-    back: boolean,
+    placement: PatternPreviewPlacement,
+    pieceIndex: number,
+    instanceIndex: number,
   ): GarmentMeshData {
+    const bounds = pointBounds(points);
+    const width = Math.max(1, bounds.maxX - bounds.minX) * scale;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
     const initialPositions = new Float32Array(points.length * 3);
     points.forEach((point, index) => {
-      initialPositions[index * 3] = (point.xMm - centerX) * scale;
-      initialPositions[index * 3 + 1] = -(point.yMm - minY) * scale;
+      const x = (point.xMm - centerX) * scale;
+      initialPositions[index * 3] = placement.mirrorX ? -x : x;
+      initialPositions[index * 3 + 1] = -(point.yMm - bounds.minY) * scale;
       initialPositions[index * 3 + 2] = 0;
     });
 
@@ -205,23 +218,26 @@ export class ThreeViewport {
 
     for (let index = 0; index < positions.count; index += 1) {
       const x = positions.getX(index);
-      const y = positions.getY(index) + 1.25;
+      const localY = positions.getY(index);
       const normalizedX = THREE.MathUtils.clamp(x / halfWidth, -1, 1);
-      const angle = normalizedX * 1.22;
-      const radius = 0.31 + Math.max(0, -positions.getY(index)) * 0.035;
+      const flatColumn = (instanceIndex % 4) - 1.5;
+      const flatRow = Math.floor(instanceIndex / 4);
+      flat[index * 3] = x + flatColumn * 0.58;
+      flat[index * 3 + 1] = localY + 1.65 - flatRow * 0.28;
+      flat[index * 3 + 2] = 0.82;
 
-      flat[index * 3] = x + (back ? 0.55 : -0.55);
-      flat[index * 3 + 1] = y;
-      flat[index * 3 + 2] = back ? -0.75 : 0.75;
-
-      const wrappedAngle = back ? Math.PI - angle : angle;
-      dressed[index * 3] = Math.sin(wrappedAngle) * radius;
-      dressed[index * 3 + 1] = y;
-      dressed[index * 3 + 2] = Math.cos(wrappedAngle) * radius;
+      const target = dressedPosition(
+        normalizedX,
+        localY,
+        placement,
+      );
+      dressed[index * 3] = target.x;
+      dressed[index * 3 + 1] = target.y;
+      dressed[index * 3 + 2] = target.z;
     }
 
     const material = new THREE.MeshStandardMaterial({
-      color: back ? 0x5e625f : 0x777d79,
+      color: PANEL_COLORS[pieceIndex % PANEL_COLORS.length],
       roughness: 0.8,
       metalness: 0,
       side: THREE.DoubleSide,
@@ -308,7 +324,21 @@ export class ThreeViewport {
     const rightLeg = leftLeg.clone();
     rightLeg.position.x = 0.14;
 
-    group.add(torso, hips, head, neck, leftLeg, rightLeg);
+    const armGeometry = new THREE.CapsuleGeometry(
+      0.082,
+      0.58,
+      5,
+      radialSegments,
+    );
+    const leftArm = new THREE.Mesh(armGeometry, material);
+    leftArm.position.set(-0.43, 1.3, 0);
+    leftArm.rotation.z = -0.08;
+    leftArm.castShadow = true;
+    const rightArm = leftArm.clone();
+    rightArm.position.x = 0.43;
+    rightArm.rotation.z = 0.08;
+
+    group.add(torso, hips, head, neck, leftLeg, rightLeg, leftArm, rightArm);
     return group;
   }
 
@@ -434,5 +464,80 @@ function getPerformanceProfile(): PerformanceProfile {
     maxPixelRatio: 1.75,
     shadows: true,
     geometrySegments: 20,
+  };
+}
+
+function pointBounds(points: readonly PatternPoint[]) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const point of points) {
+    minX = Math.min(minX, point.xMm);
+    minY = Math.min(minY, point.yMm);
+    maxX = Math.max(maxX, point.xMm);
+    maxY = Math.max(maxY, point.yMm);
+  }
+
+  return { minX, minY, maxX, maxY };
+}
+
+function dressedPosition(
+  normalizedX: number,
+  localY: number,
+  placement: PatternPreviewPlacement,
+): { x: number; y: number; z: number } {
+  const backRotation = placement.surface === "back" ? Math.PI : 0;
+  const surfaceDirection = placement.surface === "back" ? -1 : 1;
+
+  if (placement.region === "leg") {
+    const legCenter = placement.bodySide === "left" ? -0.14 : 0.14;
+    const angle = backRotation + surfaceDirection * normalizedX * 0.88;
+    const radius = 0.118;
+    return {
+      x: legCenter + Math.sin(angle) * radius,
+      y: 0.88 + localY,
+      z: Math.cos(angle) * radius,
+    };
+  }
+
+  if (placement.region === "sleeve") {
+    const armCenter = placement.bodySide === "left" ? -0.43 : 0.43;
+    const angle = backRotation + surfaceDirection * normalizedX * 0.95;
+    const radius = 0.092;
+    return {
+      x: armCenter + Math.sin(angle) * radius,
+      y: 1.6 + localY,
+      z: Math.cos(angle) * radius,
+    };
+  }
+
+  const sideCenter =
+    placement.bodySide === "left"
+      ? -0.62
+      : placement.bodySide === "right"
+        ? 0.62
+        : 0;
+  const angularSpan = placement.bodySide === "center" ? 1.18 : 0.62;
+  const angle =
+    backRotation +
+    surfaceDirection * (sideCenter + normalizedX * angularSpan);
+
+  if (placement.region === "lower") {
+    const radius = 0.34 + Math.max(0, -localY) * 0.035;
+    return {
+      x: Math.sin(angle) * radius,
+      y: 1.05 + localY,
+      z: Math.cos(angle) * radius,
+    };
+  }
+
+  const torsoTaper = THREE.MathUtils.clamp(-localY / 0.72, 0, 1);
+  const radius = THREE.MathUtils.lerp(0.31, 0.34, torsoTaper);
+  return {
+    x: Math.sin(angle) * radius,
+    y: 1.72 + localY,
+    z: Math.cos(angle) * radius,
   };
 }

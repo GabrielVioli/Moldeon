@@ -10,7 +10,8 @@
 
 ## Marco 2: CAD 2D útil
 
-- Linhas e criação livre de pontos.
+- Inserção e remoção de pontos no contorno. ✅
+- Criação livre de linhas e peças.
 - Curvas Bézier cúbicas em segmentos existentes. ✅
 - Réguas e guias.
 - Snap e restrições geométricas.
@@ -24,9 +25,9 @@
 ## Marco 3: preparação 3D
 
 - Triangulação de polígonos simples convexos e côncavos. ✅
-- Frente, costas e peças múltiplas.
+- Frente, costas e peças múltiplas. ✅
 - Costuras entre intervalos de borda.
-- Posicionamento dos painéis ao redor do avatar.
+- Posicionamento geométrico inicial dos painéis ao redor do avatar. ✅
 - Avatar GLB com morph targets.
 
 ## Marco 4: XPBD utilizável
@@ -55,7 +56,8 @@
 - Laravel + Sanctum.
 - Versionamento na nuvem.
 - Compartilhamento.
-- Biblioteca de moldes e tecidos.
+- Biblioteca paramétrica dos seis moldes essenciais. ✅
+- Tecidos e biblioteca ampliada.
 - Assinaturas.
 - DXF e glTF.
 - Render de alta qualidade em serviço GPU opcional.

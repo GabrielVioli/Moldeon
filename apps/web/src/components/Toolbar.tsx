@@ -1,12 +1,18 @@
 import { memo } from "react";
+import type { EditorTool } from "../editor/PatternCanvas";
 
 interface ToolbarProps {
+  garmentName: string;
+  onOpenLibrary(): void;
+  onPrepareLibrary(): void;
   onSimulate(): void;
   onReset(): void;
   onExportSvg(): void;
   onUndo(): void;
   onRedo(): void;
   onToggleCurve(): void;
+  activeTool: EditorTool;
+  onSelectTool(tool: EditorTool): void;
   canUndo: boolean;
   canRedo: boolean;
   canEditCurve: boolean;
@@ -14,12 +20,17 @@ interface ToolbarProps {
 }
 
 export const Toolbar = memo(function Toolbar({
+  garmentName,
+  onOpenLibrary,
+  onPrepareLibrary,
   onSimulate,
   onReset,
   onExportSvg,
   onUndo,
   onRedo,
   onToggleCurve,
+  activeTool,
+  onSelectTool,
   canUndo,
   canRedo,
   canEditCurve,
@@ -31,14 +42,27 @@ export const Toolbar = memo(function Toolbar({
         <span className="brand-mark">M</span>
         <div>
           <strong>Moldeon</strong>
-          <span>Modelagem técnica</span>
+          <span>{garmentName}</span>
         </div>
       </div>
 
       <nav className="tool-buttons" aria-label="Ferramentas">
-        <button className="tool-button active" type="button">Selecionar</button>
-        <button className="tool-button" type="button" disabled title="Próximo marco">Ponto</button>
-        <button className="tool-button" type="button" disabled title="Próximo marco">Linha</button>
+        <button
+          className={`tool-button${activeTool === "select" ? " active" : ""}`}
+          type="button"
+          onClick={() => onSelectTool("select")}
+        >
+          Selecionar
+        </button>
+        <button
+          className={`tool-button${activeTool === "point" ? " active" : ""}`}
+          type="button"
+          onClick={() => onSelectTool("point")}
+          aria-pressed={activeTool === "point"}
+          title="Clique ou toque perto do contorno"
+        >
+          + Ponto
+        </button>
         <button
           className={`tool-button${curveActive ? " active" : ""}`}
           type="button"
@@ -56,6 +80,15 @@ export const Toolbar = memo(function Toolbar({
       </nav>
 
       <div className="toolbar-actions">
+        <button
+          className="library-button"
+          type="button"
+          onFocus={onPrepareLibrary}
+          onPointerEnter={onPrepareLibrary}
+          onClick={onOpenLibrary}
+        >
+          Moldes
+        </button>
         <div
           className="history-actions"
           role="group"
@@ -82,8 +115,16 @@ export const Toolbar = memo(function Toolbar({
             ↷
           </button>
         </div>
-        <button className="secondary-button" type="button" onClick={onExportSvg}>Exportar SVG</button>
-        <button className="secondary-button" type="button" onClick={onReset}>Restaurar</button>
+        <button className="secondary-button" type="button" onClick={onExportSvg}>
+          <span className="desktop-action-label">Exportar </span>SVG
+        </button>
+        <button
+          className="secondary-button restore-button"
+          type="button"
+          onClick={onReset}
+        >
+          Restaurar
+        </button>
         <button className="primary-button" type="button" onClick={onSimulate}>Vestir no 3D</button>
       </div>
     </header>

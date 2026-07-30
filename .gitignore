@@ -6,6 +6,7 @@ coverage/
 !.env.example
 !templates/laravel/.env.moldeon.example
 apps/web/public/wasm/
+target/
 crates/**/target/
 *.tsbuildinfo
 apps/api/
