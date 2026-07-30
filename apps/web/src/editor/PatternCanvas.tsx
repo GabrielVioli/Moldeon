@@ -1,5 +1,6 @@
 import { PointerEvent, WheelEvent, useEffect, useRef, useState } from "react";
 import { PatternPoint, PatternSnapshot, distanceMm } from "../domain/pattern";
+import { Camera2D, ScreenPoint, cameraFromGesture, clampZoom } from "./camera";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
@@ -8,13 +9,13 @@ interface PatternCanvasProps {
   onMovePoint(pointId: string, xMm: number, yMm: number): void;
 }
 
-interface Camera2D {
-  zoom: number;
-  panX: number;
-  panY: number;
-}
-
 const POINT_RADIUS_PX = 7;
+const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
+
+interface PointerPosition {
+  clientX: number;
+  clientY: number;
+}
 
 export function PatternCanvas({
   snapshot,
@@ -23,12 +24,33 @@ export function PatternCanvas({
   onMovePoint,
 }: PatternCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [camera, setCamera] = useState<Camera2D>({ zoom: 0.72, panX: 105, panY: 70 });
+  const [camera, setCamera] = useState<Camera2D>(INITIAL_CAMERA);
+  const cameraRef = useRef<Camera2D>(INITIAL_CAMERA);
+  const activePointersRef = useRef(new Map<number, PointerPosition>());
   const dragRef = useRef<
-    | { type: "point"; pointId: string }
-    | { type: "pan"; startX: number; startY: number; panX: number; panY: number }
+    | { type: "point"; pointerId: number; pointId: string }
+    | {
+        type: "pan";
+        pointerId: number;
+        startX: number;
+        startY: number;
+        panX: number;
+        panY: number;
+      }
+    | {
+        type: "pinch";
+        pointerIds: [number, number];
+        startDistance: number;
+        startCenter: ScreenPoint;
+        startCamera: Camera2D;
+      }
     | null
   >(null);
+
+  function updateCamera(nextCamera: Camera2D) {
+    cameraRef.current = nextCamera;
+    setCamera(nextCamera);
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -55,15 +77,16 @@ export function PatternCanvas({
 
   function screenToWorld(clientX: number, clientY: number) {
     const rect = canvasRef.current!.getBoundingClientRect();
+    const currentCamera = cameraRef.current;
     return {
-      xMm: (clientX - rect.left - camera.panX) / camera.zoom,
-      yMm: (clientY - rect.top - camera.panY) / camera.zoom,
+      xMm: (clientX - rect.left - currentCamera.panX) / currentCamera.zoom,
+      yMm: (clientY - rect.top - currentCamera.panY) / currentCamera.zoom,
     };
   }
 
   function findPoint(clientX: number, clientY: number): PatternPoint | null {
     const world = screenToWorld(clientX, clientY);
-    const maxDistanceMm = (POINT_RADIUS_PX + 5) / camera.zoom;
+    const maxDistanceMm = (POINT_RADIUS_PX + 5) / cameraRef.current.zoom;
 
     return (
       snapshot.piece.points.find(
@@ -75,14 +98,27 @@ export function PatternCanvas({
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
 
+    if (event.pointerType === "touch") {
+      activePointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+
+      if (activePointersRef.current.size >= 2) {
+        beginPinch();
+        return;
+      }
+
+      const point = findPoint(event.clientX, event.clientY);
+      onSelectPoint(point?.id ?? null);
+      dragRef.current = point
+        ? { type: "point", pointerId: event.pointerId, pointId: point.id }
+        : createPanDrag(event.pointerId, event.clientX, event.clientY);
+      return;
+    }
+
     if (event.button === 1 || event.shiftKey) {
-      dragRef.current = {
-        type: "pan",
-        startX: event.clientX,
-        startY: event.clientY,
-        panX: camera.panX,
-        panY: camera.panY,
-      };
+      dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
       return;
     }
 
@@ -90,20 +126,49 @@ export function PatternCanvas({
     onSelectPoint(point?.id ?? null);
 
     if (point) {
-      dragRef.current = { type: "point", pointId: point.id };
+      dragRef.current = { type: "point", pointerId: event.pointerId, pointId: point.id };
     }
   }
 
   function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
+    if (activePointersRef.current.has(event.pointerId)) {
+      activePointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    }
+
     const drag = dragRef.current;
     if (!drag) return;
 
+    if (drag.type === "pinch") {
+      const [firstId, secondId] = drag.pointerIds;
+      const first = activePointersRef.current.get(firstId);
+      const second = activePointersRef.current.get(secondId);
+      if (!first || !second) return;
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const currentCenter = pointerCenter(first, second, rect.left, rect.top);
+      const currentDistance = pointerDistance(first, second);
+      updateCamera(
+        cameraFromGesture(
+          drag.startCamera,
+          drag.startCenter,
+          currentCenter,
+          currentDistance / drag.startDistance,
+        ),
+      );
+      return;
+    }
+
+    if (drag.pointerId !== event.pointerId) return;
+
     if (drag.type === "pan") {
-      setCamera((current) => ({
-        ...current,
+      updateCamera({
+        ...cameraRef.current,
         panX: drag.panX + event.clientX - drag.startX,
         panY: drag.panY + event.clientY - drag.startY,
-      }));
+      });
       return;
     }
 
@@ -112,8 +177,7 @@ export function PatternCanvas({
   }
 
   function handlePointerUp(event: PointerEvent<HTMLCanvasElement>) {
-    dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    finishPointer(event);
   }
 
   function handleWheel(event: WheelEvent<HTMLCanvasElement>) {
@@ -121,16 +185,66 @@ export function PatternCanvas({
     const rect = event.currentTarget.getBoundingClientRect();
     const cursorX = event.clientX - rect.left;
     const cursorY = event.clientY - rect.top;
-    const worldX = (cursorX - camera.panX) / camera.zoom;
-    const worldY = (cursorY - camera.panY) / camera.zoom;
+    const currentCamera = cameraRef.current;
+    const worldX = (cursorX - currentCamera.panX) / currentCamera.zoom;
+    const worldY = (cursorY - currentCamera.panY) / currentCamera.zoom;
     const factor = event.deltaY < 0 ? 1.1 : 0.9;
-    const nextZoom = Math.min(3, Math.max(0.15, camera.zoom * factor));
+    const nextZoom = clampZoom(currentCamera.zoom * factor);
 
-    setCamera({
+    updateCamera({
       zoom: nextZoom,
       panX: cursorX - worldX * nextZoom,
       panY: cursorY - worldY * nextZoom,
     });
+  }
+
+  function createPanDrag(pointerId: number, clientX: number, clientY: number) {
+    return {
+      type: "pan" as const,
+      pointerId,
+      startX: clientX,
+      startY: clientY,
+      panX: cameraRef.current.panX,
+      panY: cameraRef.current.panY,
+    };
+  }
+
+  function beginPinch() {
+    const canvas = canvasRef.current;
+    const pointers = [...activePointersRef.current.entries()];
+    if (!canvas || pointers.length < 2) return;
+
+    const [[firstId, first], [secondId, second]] = pointers;
+    const rect = canvas.getBoundingClientRect();
+    dragRef.current = {
+      type: "pinch",
+      pointerIds: [firstId, secondId],
+      startDistance: Math.max(pointerDistance(first, second), 1),
+      startCenter: pointerCenter(first, second, rect.left, rect.top),
+      startCamera: cameraRef.current,
+    };
+  }
+
+  function finishPointer(event: PointerEvent<HTMLCanvasElement>) {
+    activePointersRef.current.delete(event.pointerId);
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (activePointersRef.current.size >= 2) {
+      beginPinch();
+      return;
+    }
+
+    const remaining = [...activePointersRef.current.entries()][0];
+    if (remaining) {
+      const [pointerId, position] = remaining;
+      dragRef.current = createPanDrag(pointerId, position.clientX, position.clientY);
+      return;
+    }
+
+    dragRef.current = null;
   }
 
   return (
@@ -141,12 +255,27 @@ export function PatternCanvas({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
-        dragRef.current = null;
-      }}
+      onPointerCancel={finishPointer}
       onWheel={handleWheel}
+      aria-label="Editor de molde 2D"
     />
   );
+}
+
+function pointerDistance(first: PointerPosition, second: PointerPosition): number {
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+}
+
+function pointerCenter(
+  first: PointerPosition,
+  second: PointerPosition,
+  offsetX: number,
+  offsetY: number,
+): ScreenPoint {
+  return {
+    x: (first.clientX + second.clientX) / 2 - offsetX,
+    y: (first.clientY + second.clientY) / 2 - offsetY,
+  };
 }
 
 function draw(
