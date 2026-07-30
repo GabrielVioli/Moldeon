@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+!templates/laravel/.env.moreoris.example
+apps/web/public/wasm/
+crates/**/target/
+*.tsbuildinfo
+apps/api/
+.idea/
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.log

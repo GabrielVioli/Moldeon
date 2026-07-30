@@ -1,0 +1,23 @@
+{
+  "name": "moreoris-studio",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run wasm:build:dev && npm run dev --workspace @moreoris/web",
+    "dev:fallback": "npm run dev:fallback --workspace @moreoris/web",
+    "build": "npm run build --workspace @moreoris/web",
+    "build:wasm": "npm run wasm:build && npm run build:wasm --workspace @moreoris/web",
+    "build:web": "npm run build --workspace @moreoris/web",
+    "wasm:build": "node scripts/build-wasm.mjs --release",
+    "wasm:build:dev": "node scripts/build-wasm.mjs --dev",
+    "typecheck": "npm run typecheck --workspace @moreoris/web",
+    "test": "npm run test --workspace @moreoris/web",
+    "check": "npm run typecheck && npm run test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
