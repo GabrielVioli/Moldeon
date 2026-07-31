@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  createBlankPatternPiece,
+  duplicatePatternPiece,
+  parseGarmentDraft,
   parsePatternPiece,
   parsePatternSnapshot,
   polygonAreaMm2,
   polygonPerimeterMm,
 } from "./pattern";
+import { createDefaultFabricSource } from "./fabric";
 
 describe("pattern geometry", () => {
   const square = [
@@ -74,5 +78,50 @@ describe("pattern geometry", () => {
 
     expect(piece.points[0].handleOut).toEqual({ xMm: 20, yMm: -10 });
     expect(piece.points[2].handleIn).toBeUndefined();
+  });
+
+  it("duplicates a piece with new point ids while preserving geometry", () => {
+    const source = createBlankPatternPiece("Base", "piece-base");
+    const duplicate = duplicatePatternPiece(source, { newId: "piece-copy", name: "Base – cópia" });
+
+    expect(duplicate.id).toBe("piece-copy");
+    expect(duplicate.name).toBe("Base – cópia");
+    expect(duplicate.points.map((point) => point.id)).not.toContain(source.points[0].id);
+    expect(duplicate.points[0].xMm).toBe(source.points[0].xMm);
+    expect(duplicate.points[1].yMm).toBe(source.points[1].yMm);
+  });
+
+  it("parses workspace transforms for multi-piece drafting layouts", () => {
+    const garment = parseGarmentDraft({
+      id: "draft-1",
+      templateId: "base",
+      name: "Projeto",
+      description: "Projeto base",
+      bodyType: "feminine",
+      measurements: {
+        heightMm: 1680,
+        bustMm: 920,
+        waistMm: 760,
+        hipMm: 1000,
+        shoulderWidthMm: 400,
+        torsoLengthMm: 440,
+        armLengthMm: 590,
+        inseamMm: 780,
+      },
+      fabrics: [createDefaultFabricSource()],
+      pieces: [
+        createBlankPatternPiece("P1", "piece-1"),
+        createBlankPatternPiece("P2", "piece-2"),
+      ],
+      workspaceTransforms: [
+        { pieceId: "piece-1", xMm: 120, yMm: 60, rotationDeg: 0 },
+        { pieceId: "piece-2", xMm: 340, yMm: 60, rotationDeg: 0 },
+      ],
+    });
+
+    expect(garment.workspaceTransforms).toEqual([
+      { pieceId: "piece-1", xMm: 120, yMm: 60, rotationDeg: 0 },
+      { pieceId: "piece-2", xMm: 340, yMm: 60, rotationDeg: 0 },
+    ]);
   });
 });

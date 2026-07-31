@@ -151,7 +151,7 @@ Leia também:
 ## Limitações atuais
 
 - Os seis moldes são bases simplificadas; pences, graduação, cós, vistas e aviamentos ainda não foram implementados.
-- A inserção de ponto acontece em um contorno existente; a criação livre de novas peças ainda não foi implementada.
+- A inserção de ponto acontece em um contorno existente; a criação livre de novas peças e a prancheta multi-peça agora entram como fluxo principal do editor.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
 - O consumo de tecido é uma estimativa por área; ainda não considera encaixe,

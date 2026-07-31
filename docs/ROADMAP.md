@@ -27,6 +27,7 @@
 - Implementado snap no editor 2D (pontos, grade, alinhamento horizontal/vertical, pontos médios) com feedback visual.
 - Réguas horizontal/vertical e guias arrastáveis adicionadas ao editor; guias são persistidas no documento.
 - Introduzida semântica de arestas e ranges (`EdgeRange`, `Seam`) e a ferramenta de costura para relacionar duas arestas, visualizar comprimentos e diferença, alternar direção e salvar `seams[]` no projeto.
+- A prancheta 2D passou a trabalhar com várias peças ao mesmo tempo, com transformações independentes de posição na mesa de modelagem, seleção de peça, duplicação, espelhamento, criação de peça em branco e edição numérica básica de segmentos retos.
 
 Essas mudanças preservam compatibilidade com projetos existentes: campos novos são opcionais e o autosave e restore continuam funcionando como antes.
 

@@ -10,6 +10,11 @@ import type {
   EdgeRange,
   Seam,
   Guide,
+  PieceWorkspaceTransform,
+} from "../domain/pattern";
+import {
+  createBlankPatternPiece,
+  duplicatePatternPiece,
 } from "../domain/pattern";
 import {
   applyFabricPreset,
@@ -75,6 +80,12 @@ interface EditorState {
   removeFabric(fabricId: string): void;
   assignFabricToActivePiece(fabricId: string): void;
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
+  movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
+  setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
+  duplicatePiece(pieceId: string, mirrored?: boolean): void;
+  createBlankPiece(name: string): void;
+  deletePiece(pieceId: string): void;
+  renamePiece(pieceId: string, name: string): void;
   resetPattern(): void;
   undo(): void;
   redo(): void;
@@ -83,6 +94,8 @@ interface EditorState {
 
 const initialSnapshot = currentEngine().snapshot();
 const commandHistory = new PatternCommandHistory();
+const workspaceHistory: Array<{ label: string; before: PieceWorkspaceTransform[]; after: PieceWorkspaceTransform[] }> = [];
+const workspaceFuture: Array<{ label: string; before: PieceWorkspaceTransform[]; after: PieceWorkspaceTransform[] }> = [];
 const initialGarment = createLegacyGarment(initialSnapshot.piece);
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -115,9 +128,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   restoreGarment: (garment, requestedPieceId, backend) => {
+    const normalizedGarment = ensureWorkspaceTransforms(garment);
     const activePiece =
-      garment.pieces.find((piece) => piece.id === requestedPieceId) ??
-      garment.pieces[0];
+      normalizedGarment.pieces.find((piece) => piece.id === requestedPieceId) ??
+      normalizedGarment.pieces[0];
     if (!activePiece) return;
     commandHistory.clear();
     const snapshot = preservePieceMetadata(
@@ -125,7 +139,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activePiece,
     );
     set({
-      garment: replacePiece(garment, snapshot.piece),
+      garment: replacePiece(normalizedGarment, snapshot.piece),
       baselinePieces: clonePieces(garment.pieces),
       activePieceId: activePiece.id,
       snapshot,
@@ -137,7 +151,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   loadGarment: (garment) => {
-    const activePiece = garment.pieces[0];
+    const normalizedGarment = ensureWorkspaceTransforms(garment);
+    const activePiece = normalizedGarment.pieces[0];
     if (!activePiece) return;
     commandHistory.clear();
     const snapshot = preservePieceMetadata(
@@ -145,7 +160,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activePiece,
     );
     set({
-      garment: replacePiece(garment, snapshot.piece),
+      garment: replacePiece(normalizedGarment, snapshot.piece),
       baselinePieces: clonePieces(garment.pieces),
       activePieceId: activePiece.id,
       snapshot,
@@ -421,6 +436,138 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
+  movePieceInWorkspace: (pieceId, xMm, yMm) => {
+    const state = get();
+    const beforeTransforms = cloneTransforms(state.garment.workspaceTransforms ?? []);
+    const patched = beforeTransforms.some((transform) => transform.pieceId === pieceId)
+      ? beforeTransforms.map((transform) =>
+          transform.pieceId === pieceId
+            ? { ...transform, xMm, yMm }
+            : transform,
+        )
+      : [...beforeTransforms, { pieceId, xMm, yMm, rotationDeg: 0 }];
+
+    if (transformsEqual(beforeTransforms, patched)) return;
+    workspaceHistory.push({ label: "Mover peça", before: beforeTransforms, after: patched });
+    workspaceFuture.length = 0;
+    set({
+      garment: {
+        ...state.garment,
+        workspaceTransforms: patched,
+      },
+      canUndo: true,
+      canRedo: false,
+    });
+  },
+
+  setPieceWorkspaceTransform: (pieceId, transform) => {
+    const state = get();
+    const beforeTransforms = cloneTransforms(state.garment.workspaceTransforms ?? []);
+    const patched = beforeTransforms.some((candidate) => candidate.pieceId === pieceId)
+      ? beforeTransforms.map((candidate) =>
+          candidate.pieceId === pieceId ? { ...candidate, ...transform } : candidate,
+        )
+      : [...beforeTransforms, { ...transform, pieceId }];
+    if (transformsEqual(beforeTransforms, patched)) return;
+    workspaceHistory.push({ label: "Alterar posição da peça", before: beforeTransforms, after: patched });
+    workspaceFuture.length = 0;
+    set({
+      garment: {
+        ...state.garment,
+        workspaceTransforms: patched,
+      },
+      canUndo: true,
+      canRedo: false,
+    });
+  },
+
+  duplicatePiece: (pieceId, mirrored = false) => {
+    const state = get();
+    const sourcePiece = state.garment.pieces.find((piece) => piece.id === pieceId);
+    if (!sourcePiece) return;
+    const draggedTransform = getTransform(state.garment.workspaceTransforms ?? [], pieceId);
+    const duplicate = duplicatePatternPiece(sourcePiece, {
+      mirrored,
+      newId: `${sourcePiece.id}-copy-${Math.random().toString(36).slice(2, 8)}`,
+      name: `${sourcePiece.name} – cópia`,
+    });
+    const newTransform: PieceWorkspaceTransform = {
+      pieceId: duplicate.id,
+      xMm: (draggedTransform?.xMm ?? 0) + 140,
+      yMm: (draggedTransform?.yMm ?? 0) + 120,
+      rotationDeg: draggedTransform?.rotationDeg ?? 0,
+    };
+    const nextGarment = {
+      ...state.garment,
+      pieces: [...state.garment.pieces, duplicate],
+      workspaceTransforms: [...(state.garment.workspaceTransforms ?? []), newTransform],
+    };
+    const snapshot = currentEngine().restorePiece(duplicate);
+    set({
+      garment: nextGarment,
+      activePieceId: duplicate.id,
+      snapshot,
+      selectedPointId: null,
+      canUndo: false,
+      canRedo: false,
+    });
+  },
+
+  createBlankPiece: (name) => {
+    const state = get();
+    const piece = createBlankPatternPiece(name || "Nova peça");
+    const transform: PieceWorkspaceTransform = {
+      pieceId: piece.id,
+      xMm: 220 + 180 * state.garment.pieces.length,
+      yMm: 140,
+      rotationDeg: 0,
+    };
+    const nextGarment = {
+      ...state.garment,
+      pieces: [...state.garment.pieces, piece],
+      workspaceTransforms: [...(state.garment.workspaceTransforms ?? []), transform],
+    };
+    const snapshot = currentEngine().restorePiece(piece);
+    set({
+      garment: nextGarment,
+      activePieceId: piece.id,
+      snapshot,
+      selectedPointId: null,
+      canUndo: false,
+      canRedo: false,
+    });
+  },
+
+  deletePiece: (pieceId) => {
+    const state = get();
+    const nextPieces = state.garment.pieces.filter((piece) => piece.id !== pieceId);
+    if (nextPieces.length === 0) return;
+    const nextTransforms = (state.garment.workspaceTransforms ?? []).filter((transform) => transform.pieceId !== pieceId);
+    const fallbackPieceId = nextPieces[0].id;
+    const nextGarment = {
+      ...state.garment,
+      pieces: nextPieces,
+      workspaceTransforms: nextTransforms,
+    };
+    const fallbackSnapshot = currentEngine().restorePiece(nextPieces[0]);
+    set({
+      garment: nextGarment,
+      activePieceId: fallbackPieceId,
+      snapshot: fallbackSnapshot,
+      selectedPointId: null,
+      canUndo: false,
+      canRedo: false,
+    });
+  },
+
+  renamePiece: (pieceId, name) => {
+    const state = get();
+    const nextPieces = state.garment.pieces.map((piece) =>
+      piece.id === pieceId ? { ...piece, name } : piece,
+    );
+    set({ garment: { ...state.garment, pieces: nextPieces } });
+  },
+
   resetPattern: () => {
     const before = get().snapshot.piece;
     const original =
@@ -435,6 +582,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (commandHistory.isTransactionActive) {
       commandHistory.commit(get().snapshot.piece);
     }
+    if (workspaceHistory.length > 0) {
+      const last = workspaceHistory.pop();
+      if (last) {
+        workspaceFuture.push(last);
+        const state = get();
+        set({
+          garment: {
+            ...state.garment,
+            workspaceTransforms: cloneTransforms(last.before),
+          },
+          canUndo: workspaceHistory.length > 0,
+          canRedo: true,
+        });
+        return;
+      }
+    }
     const piece = commandHistory.undo();
     if (!piece) return;
 
@@ -447,6 +610,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redo: () => {
     if (commandHistory.isTransactionActive) {
       commandHistory.commit(get().snapshot.piece);
+    }
+    if (workspaceFuture.length > 0) {
+      const next = workspaceFuture.pop();
+      if (next) {
+        workspaceHistory.push(next);
+        const state = get();
+        set({
+          garment: {
+            ...state.garment,
+            workspaceTransforms: cloneTransforms(next.after),
+          },
+          canUndo: true,
+          canRedo: workspaceFuture.length > 0,
+        });
+        return;
+      }
     }
     const piece = commandHistory.redo();
     if (!piece) return;
@@ -549,6 +728,52 @@ function replacePiece(garment: GarmentDraft, piece: PatternPiece): GarmentDraft 
 
 function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {
   return pieces.map((piece) => structuredClone(piece));
+}
+
+function cloneTransforms(transforms: readonly PieceWorkspaceTransform[]): PieceWorkspaceTransform[] {
+  return transforms.map((transform) => ({ ...transform }));
+}
+
+function transformsEqual(left: readonly PieceWorkspaceTransform[], right: readonly PieceWorkspaceTransform[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((transform, index) => {
+    const other = right[index];
+    return (
+      transform.pieceId === other?.pieceId &&
+      transform.xMm === other.xMm &&
+      transform.yMm === other.yMm &&
+      transform.rotationDeg === other.rotationDeg
+    );
+  });
+}
+
+function getTransform(
+  transforms: readonly PieceWorkspaceTransform[],
+  pieceId: string,
+): PieceWorkspaceTransform | undefined {
+  return transforms.find((transform) => transform.pieceId === pieceId);
+}
+
+function ensureWorkspaceTransforms(garment: GarmentDraft): GarmentDraft {
+  if (garment.workspaceTransforms && garment.workspaceTransforms.length > 0) {
+    return garment;
+  }
+  const gap = 180;
+  let x = 0;
+  const transforms = garment.pieces.map((piece) => {
+    const transform: PieceWorkspaceTransform = {
+      pieceId: piece.id,
+      xMm: x,
+      yMm: 0,
+      rotationDeg: 0,
+    };
+    x += 240 + gap;
+    return transform;
+  });
+  return {
+    ...garment,
+    workspaceTransforms: transforms,
+  };
 }
 
 function createLegacyGarment(piece: PatternPiece): GarmentDraft {

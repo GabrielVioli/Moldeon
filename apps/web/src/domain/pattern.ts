@@ -86,6 +86,13 @@ export interface PatternPiece {
   guides?: Guide[];
 }
 
+export interface PieceWorkspaceTransform {
+  pieceId: string;
+  xMm: number;
+  yMm: number;
+  rotationDeg: number;
+}
+
 export interface GarmentDraft {
   id: string;
   templateId: string;
@@ -97,6 +104,8 @@ export interface GarmentDraft {
   pieces: PatternPiece[];
   // seams now live at the garment level
   seams?: Seam[];
+  // workspace transforms for arranging pieces on the prancheta (visual only)
+  workspaceTransforms?: PieceWorkspaceTransform[];
 }
 
 export interface PatternSnapshot {
@@ -120,6 +129,62 @@ export interface PatternEngineFacade {
   setSegmentCurve(pointId: string, enabled: boolean): PatternSnapshot;
   setSeamAllowance(valueMm: number): PatternSnapshot;
   reset(): PatternSnapshot;
+}
+
+export function createBlankPatternPiece(name: string, id = `piece-${Math.random().toString(36).slice(2, 8)}`): PatternPiece {
+  return {
+    id,
+    name,
+    seamAllowanceMm: 10,
+    points: [
+      { id: `${id}:a`, xMm: 0, yMm: 0 },
+      { id: `${id}:b`, xMm: 120, yMm: 0 },
+      { id: `${id}:c`, xMm: 120, yMm: 90 },
+      { id: `${id}:d`, xMm: 0, yMm: 90 },
+    ],
+  };
+}
+
+export function duplicatePatternPiece(
+  piece: PatternPiece,
+  options: { mirrored?: boolean; newId?: string; name?: string } = {},
+): PatternPiece {
+  const clone = structuredClone(piece);
+  const newId = options.newId ?? `${piece.id}-copy`;
+  const newName = options.name ?? `${piece.name} – cópia`;
+  const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
+
+  return {
+    ...clone,
+    id: newId,
+    name: newName,
+    points: points.map((point, index) => ({
+      ...point,
+      id: `${newId}:p${index + 1}`,
+      handleIn: point.handleIn ? { ...point.handleIn } : undefined,
+      handleOut: point.handleOut ? { ...point.handleOut } : undefined,
+    })),
+  };
+}
+
+function mirrorPatternPoints(points: PatternPoint[]): PatternPoint[] {
+  const centerX = points.reduce((sum, point) => sum + point.xMm, 0) / points.length;
+  return points.map((point) => ({
+    ...point,
+    xMm: centerX * 2 - point.xMm,
+    handleIn: point.handleIn
+      ? {
+          xMm: -point.handleIn.xMm,
+          yMm: point.handleIn.yMm,
+        }
+      : undefined,
+    handleOut: point.handleOut
+      ? {
+          xMm: -point.handleOut.xMm,
+          yMm: point.handleOut.yMm,
+        }
+      : undefined,
+  }));
 }
 
 export function parsePatternPiece(value: unknown): PatternPiece {
@@ -286,6 +351,20 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     }
   }
 
+  // Parse workspace transforms if present (compatibility); otherwise we'll generate defaults later
+  let workspaceTransforms: PieceWorkspaceTransform[] | undefined;
+  if (value.workspaceTransforms !== undefined) {
+    if (!Array.isArray(value.workspaceTransforms)) throw new TypeError("workspaceTransforms inválido.");
+    workspaceTransforms = value.workspaceTransforms.map((t, idx) => {
+      if (!isRecord(t)) throw new TypeError(`workspaceTransforms[${idx}] inválido.`);
+      const pieceId = readString(t.pieceId, `workspaceTransforms[${idx}].pieceId`);
+      const xMm = readFiniteNumber(t.xMm, `workspaceTransforms[${idx}].xMm`);
+      const yMm = readFiniteNumber(t.yMm, `workspaceTransforms[${idx}].yMm`);
+      const rotationDeg = readFiniteNumber(t.rotationDeg, `workspaceTransforms[${idx}].rotationDeg`);
+      return { pieceId, xMm, yMm, rotationDeg } as PieceWorkspaceTransform;
+    });
+  }
+
   // Migrate legacy per-piece seams if present in rawPieces
   for (let pIdx = 0; pIdx < rawPieces.length; pIdx += 1) {
     const raw = rawPieces[pIdx] as Record<string, unknown>;
@@ -330,6 +409,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     }
   }
 
+  const transforms = workspaceTransforms ?? [];
+
   return {
     id: readString(value.id, "O identificador do projeto"),
     templateId: readString(value.templateId, "O identificador do molde-base"),
@@ -347,6 +428,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     fabrics,
     pieces: normalizedPieces,
     ...(seams.length === 0 ? {} : { seams }),
+    ...(transforms.length === 0 ? {} : { workspaceTransforms: transforms }),
   };
 }
 

@@ -61,6 +61,10 @@ export function App() {
   const insertPoint = useEditorStore((state) => state.insertPoint);
   const removePoint = useEditorStore((state) => state.removePoint);
   const setSeamAllowance = useEditorStore((state) => state.setSeamAllowance);
+  const duplicatePiece = useEditorStore((state) => state.duplicatePiece);
+  const createBlankPiece = useEditorStore((state) => state.createBlankPiece);
+  const deletePiece = useEditorStore((state) => state.deletePiece);
+  const renamePiece = useEditorStore((state) => state.renamePiece);
   const resetPattern = useEditorStore((state) => state.resetPattern);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
@@ -105,6 +109,39 @@ export function App() {
       setActiveTool("select");
     },
     [insertPoint],
+  );
+  const handleCreateBlankPiece = useCallback(() => {
+    const name = window.prompt("Nome da peça", "Nova peça");
+    if (name === null) return;
+    createBlankPiece(name.trim() || "Nova peça");
+    setActiveTool("point");
+  }, [createBlankPiece]);
+  const handleDuplicatePiece = useCallback(
+    (pieceId: string, mirrored = false) => {
+      duplicatePiece(pieceId, mirrored);
+      setActiveTool("select");
+    },
+    [duplicatePiece],
+  );
+  const handleRenamePiece = useCallback(
+    (pieceId: string) => {
+      const current = garment.pieces.find((piece) => piece.id === pieceId);
+      if (!current) return;
+      const nextName = window.prompt("Novo nome da peça", current.name);
+      if (nextName === null) return;
+      renamePiece(pieceId, nextName.trim() || current.name);
+    },
+    [garment.pieces, renamePiece],
+  );
+  const handleDeletePiece = useCallback(
+    (pieceId: string) => {
+      const piece = garment.pieces.find((candidate) => candidate.id === pieceId);
+      if (!piece) return;
+      const confirmed = window.confirm(`Excluir “${piece.name}”?`);
+      if (!confirmed) return;
+      deletePiece(pieceId);
+    },
+    [deletePiece, garment.pieces],
   );
   const selectedPointIndex = snapshot.piece.points.findIndex(
     (point) => point.id === selectedPointId,
@@ -213,12 +250,17 @@ export function App() {
       } else if (key === "y") {
         event.preventDefault();
         redo();
+      } else if ((event.ctrlKey || event.metaKey) && key === "d") {
+        event.preventDefault();
+        if (activePieceId) {
+          duplicatePiece(activePieceId, event.shiftKey);
+        }
       }
     };
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [redo, undo]);
+  }, [activePieceId, duplicatePiece, redo, undo]);
 
   useEffect(() => {
     const handleDelete = (event: KeyboardEvent) => {
@@ -230,13 +272,23 @@ export function App() {
       }
       const currentSelectedPointId =
         useEditorStore.getState().selectedPointId;
-      if (!currentSelectedPointId) return;
+      const currentPieceId = useEditorStore.getState().activePieceId;
       event.preventDefault();
-      removePoint(currentSelectedPointId);
+      if (currentSelectedPointId) {
+        removePoint(currentSelectedPointId);
+        return;
+      }
+      if (currentPieceId) {
+        const piece = useEditorStore.getState().garment.pieces.find((candidate) => candidate.id === currentPieceId);
+        if (piece) {
+          const confirmed = window.confirm(`Excluir “${piece.name}”?`);
+          if (confirmed) deletePiece(currentPieceId);
+        }
+      }
     };
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
-  }, [removePoint]);
+  }, [deletePiece, removePoint]);
 
   return (
     <div className="app-shell">
@@ -322,6 +374,11 @@ export function App() {
             onRemovePoint={() => {
               if (selectedPoint) removePoint(selectedPoint.id);
             }}
+            onCreateBlank={handleCreateBlankPiece}
+            onDuplicate={handleDuplicatePiece}
+            onDuplicateMirrored={(pieceId) => handleDuplicatePiece(pieceId, true)}
+            onRename={handleRenamePiece}
+            onDelete={handleDeletePiece}
           />
           <PatternCanvas
             key={`${garment.id}:${activePieceId}`}
@@ -411,6 +468,11 @@ interface PieceStripProps {
   onSelectTool(tool: EditorTool): void;
   canRemovePoint: boolean;
   onRemovePoint(): void;
+  onCreateBlank(): void;
+  onDuplicate(pieceId: string): void;
+  onDuplicateMirrored(pieceId: string): void;
+  onRename(pieceId: string): void;
+  onDelete(pieceId: string): void;
 }
 
 function PieceStrip({
@@ -421,26 +483,53 @@ function PieceStrip({
   onSelectTool,
   canRemovePoint,
   onRemovePoint,
+  onCreateBlank,
+  onDuplicate,
+  onDuplicateMirrored,
+  onRename,
+  onDelete,
 }: PieceStripProps) {
   return (
     <div className="piece-tools-row">
       <nav className="piece-strip" aria-label="Peças do molde">
         {pieces.map((piece) => (
-          <button
+          <div
             key={piece.id}
-            type="button"
-            aria-pressed={piece.id === activePieceId}
-            onClick={() => onSelect(piece.id)}
+            className={`piece-strip-item${piece.id === activePieceId ? " is-active" : ""}`}
           >
-            <span>{piece.name}</span>
-            <small>
-              {piece.cutQuantity ? `${piece.cutQuantity}×` : "1×"}
-              {piece.cutOnFold ? " · dobra" : ""}
-            </small>
-          </button>
+            <button
+              type="button"
+              className="piece-strip-main"
+              aria-pressed={piece.id === activePieceId}
+              onClick={() => onSelect(piece.id)}
+            >
+              <span>{piece.name}</span>
+              <small>
+                {piece.cutQuantity ? `${piece.cutQuantity}×` : "1×"}
+                {piece.cutOnFold ? " · dobra" : ""}
+              </small>
+            </button>
+            <div className="piece-strip-actions" role="group" aria-label={`Ações de ${piece.name}`}>
+              <button type="button" title="Duplicar" onClick={(event) => { event.stopPropagation(); onDuplicate(piece.id); }}>
+                ⧉
+              </button>
+              <button type="button" title="Duplicar espelhado" onClick={(event) => { event.stopPropagation(); onDuplicateMirrored(piece.id); }}>
+                ⇄
+              </button>
+              <button type="button" title="Renomear" onClick={(event) => { event.stopPropagation(); onRename(piece.id); }}>
+                ✎
+              </button>
+              <button type="button" title="Excluir" onClick={(event) => { event.stopPropagation(); onDelete(piece.id); }}>
+                🗑
+              </button>
+            </div>
+          </div>
         ))}
       </nav>
       <div className="point-actions" role="group" aria-label="Editar pontos">
+        <button type="button" onClick={onCreateBlank}>
+          + Nova peça
+        </button>
         <button
           className={activeTool === "point" ? "active" : ""}
           type="button"
