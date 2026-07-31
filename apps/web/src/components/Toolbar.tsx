@@ -81,6 +81,14 @@ export const Toolbar = memo(function Toolbar({
         >
           Curva
         </button>
+        <button
+          className={`tool-button${activeTool === "seam" ? " active" : ""}`}
+          type="button"
+          onClick={() => onSelectTool("seam")}
+          title="Ferramenta de costura: selecione duas arestas"
+        >
+          Costura
+        </button>
       </nav>
 
       <div className="toolbar-actions">

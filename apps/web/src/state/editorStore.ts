@@ -7,6 +7,9 @@ import type {
   PatternPiece,
   PatternPreviewPlacement,
   PatternSnapshot,
+  EdgeRange,
+  Seam,
+  Guide,
 } from "../domain/pattern";
 import {
   applyFabricPreset,
@@ -54,6 +57,13 @@ interface EditorState {
   insertPoint(startPointId: string, t: number): void;
   removePoint(pointId: string): void;
   setSeamAllowance(valueMm: number): void;
+  // seams and guides manipulation
+  addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
+  removeSeam(seamId: string): void;
+  toggleSeamDirection(seamId: string): void;
+  addGuide(orientation: "horizontal" | "vertical", positionMm: number): void;
+  moveGuide(guideId: string, positionMm: number): void;
+  removeGuide(guideId: string): void;
   setBodyType(bodyType: BodyType): void;
   setBodyMeasurement(
     measurement: keyof BodyMeasurements,
@@ -231,6 +241,64 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const snapshot = currentEngine().setSeamAllowance(valueMm);
     commandHistory.record("Alterar margem", before, snapshot.piece);
     updateActiveSnapshot(set, get, snapshot);
+  },
+
+  // Seams: create / remove / toggle direction
+  addSeam: (first: EdgeRange, second: EdgeRange, direction: "forward" | "reverse" = "forward") => {
+    const before = get().snapshot.piece;
+    const nextSeams = [...(before.seams ?? [])];
+    const id = `${before.id}:seam-${nextSeams.length + 1}`;
+    nextSeams.push({ id, first: { ...first }, second: { ...second }, direction } as Seam);
+    const piece = { ...before, seams: nextSeams };
+    commandHistory.record("Criar costura", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any, { selectedPointId: null });
+  },
+
+  removeSeam: (seamId: string) => {
+    const before = get().snapshot.piece;
+    const nextSeams = (before.seams ?? []).filter((s) => s.id !== seamId);
+    const piece = { ...before, seams: nextSeams };
+    commandHistory.record("Remover costura", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+  },
+
+  toggleSeamDirection: (seamId: string) => {
+    const before = get().snapshot.piece;
+    const nextSeams = (before.seams ?? []).map((s) =>
+      s.id === seamId ? ({ ...s, direction: (s.direction === "forward" ? "reverse" : "forward") } as Seam) : s,
+    );
+    const piece = { ...before, seams: nextSeams };
+    commandHistory.record("Alternar direção da costura", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+  },
+
+  // Guides: simple create / move / remove
+  addGuide: (orientation: "horizontal" | "vertical", positionMm: number) => {
+    const before = get().snapshot.piece;
+    const nextGuides = [...(before.guides ?? [])];
+    const id = `${before.id}:guide-${nextGuides.length + 1}`;
+    nextGuides.push({ id, orientation, positionMm });
+    const piece = { ...before, guides: nextGuides };
+    commandHistory.record("Adicionar guia", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+  },
+
+  moveGuide: (guideId: string, positionMm: number) => {
+    const before = get().snapshot.piece;
+    const nextGuides = (before.guides ?? []).map((g) =>
+      g.id === guideId ? { ...g, positionMm } : g,
+    );
+    const piece = { ...before, guides: nextGuides };
+    commandHistory.record("Mover guia", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+  },
+
+  removeGuide: (guideId: string) => {
+    const before = get().snapshot.piece;
+    const nextGuides = (before.guides ?? []).filter((g) => g.id !== guideId);
+    const piece = { ...before, guides: nextGuides };
+    commandHistory.record("Remover guia", before, piece);
+    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
   },
 
   setBodyType: (bodyType) => {
@@ -434,6 +502,12 @@ function preservePieceMetadata(
               ...placement,
             })),
           }),
+      ...(source.seams === undefined
+        ? {}
+        : { seams: source.seams.map((s) => ({ ...s })) }),
+      ...(source.guides === undefined
+        ? {}
+        : { guides: source.guides.map((g) => ({ ...g })) }),
     },
   };
 }

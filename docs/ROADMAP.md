@@ -22,6 +22,14 @@
 - Undo/redo por Command Pattern. ✅
 - PDF A4 em escala 1:1.
 
+## Atualizações recentes
+
+- Implementado snap no editor 2D (pontos, grade, alinhamento horizontal/vertical, pontos médios) com feedback visual.
+- Réguas horizontal/vertical e guias arrastáveis adicionadas ao editor; guias são persistidas no documento.
+- Introduzida semântica de arestas e ranges (`EdgeRange`, `Seam`) e a ferramenta de costura para relacionar duas arestas, visualizar comprimentos e diferença, alternar direção e salvar `seams[]` no projeto.
+
+Essas mudanças preservam compatibilidade com projetos existentes: campos novos são opcionais e o autosave e restore continuam funcionando como antes.
+
 ## Marco 3: preparação 3D
 
 - Triangulação de polígonos simples convexos e côncavos. ✅

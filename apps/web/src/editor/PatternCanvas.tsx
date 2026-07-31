@@ -11,7 +11,7 @@ import {
   samplePatternContour,
   samplePatternSegment,
 } from "../domain/polygonGeometry";
-import { PatternPoint, PatternSnapshot, distanceMm } from "../domain/pattern";
+import { PatternPoint, PatternSnapshot, distanceMm, type EdgeRange } from "../domain/pattern";
 import { findNearestPatternSegment } from "../domain/patternEditing";
 import {
   Camera2D,
@@ -20,6 +20,7 @@ import {
   cameraToFitBounds,
   clampZoom,
 } from "./camera";
+import { useEditorStore } from "../state/editorStore";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
@@ -38,7 +39,7 @@ interface PatternCanvasProps {
   onInsertPoint(startPointId: string, t: number): void;
 }
 
-export type EditorTool = "select" | "point";
+export type EditorTool = "select" | "point" | "seam";
 
 const POINT_RADIUS_PX = 7;
 const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
@@ -122,6 +123,9 @@ function PatternCanvasComponent({
   onMoveHandleRef.current = onMoveHandle;
   onInsertPointRef.current = onInsertPoint;
 
+  const snapRef = useRef<{ xMm: number; yMm: number; type: string } | null>(null);
+  const seamSelectionRef = useRef<{ first?: EdgeRange; second?: EdgeRange } | null>(null);
+
   const drawLatest = useCallback(() => {
     drawFrameRef.current = null;
     const context = contextRef.current;
@@ -135,6 +139,8 @@ function PatternCanvasComponent({
       snapshotRef.current,
       selectedPointIdRef.current,
       cameraRef.current,
+      snapRef.current,
+      seamSelectionRef.current,
     );
   }, []);
 
@@ -334,6 +340,37 @@ function PatternCanvasComponent({
         return;
       }
 
+      if (toolRef.current === "seam") {
+        const world = screenToWorld(event.clientX, event.clientY);
+        const target = findNearestPatternSegment(
+          snapshotRef.current.piece.points,
+          world,
+        );
+        if (!target || target.distanceMm > 18 / cameraRef.current.zoom) {
+          dragRef.current = null;
+          return;
+        }
+        const edge: EdgeRange = { startPointId: target.startPointId, t0: 0, t1: 1 };
+        const selection = seamSelectionRef.current ?? (seamSelectionRef.current = {});
+        if (!selection.first) {
+          selection.first = edge;
+          scheduleDraw();
+          return;
+        }
+        if (!selection.second) {
+          selection.second = edge;
+          try {
+            useEditorStore.getState().addSeam(selection.first, selection.second, "forward");
+          } catch (e) {
+            console.warn("Falha ao criar costura", e);
+          }
+          seamSelectionRef.current = null;
+          scheduleDraw();
+          return;
+        }
+        return;
+      }
+
       const controlHandle = findHandle(event.clientX, event.clientY);
       if (controlHandle) {
         onEditStartRef.current("Ajustar curva");
@@ -366,6 +403,37 @@ function PatternCanvasComponent({
     if (toolRef.current === "point") {
       insertPointNear(event.clientX, event.clientY);
       dragRef.current = null;
+      return;
+    }
+
+    if (toolRef.current === "seam") {
+      const world = screenToWorld(event.clientX, event.clientY);
+      const target = findNearestPatternSegment(
+        snapshotRef.current.piece.points,
+        world,
+      );
+      if (!target || target.distanceMm > 18 / cameraRef.current.zoom) {
+        dragRef.current = null;
+        return;
+      }
+      const edge: EdgeRange = { startPointId: target.startPointId, t0: 0, t1: 1 };
+      const selection = seamSelectionRef.current ?? (seamSelectionRef.current = {});
+      if (!selection.first) {
+        selection.first = edge;
+        scheduleDraw();
+        return;
+      }
+      if (!selection.second) {
+        selection.second = edge;
+        try {
+          useEditorStore.getState().addSeam(selection.first, selection.second, "forward");
+        } catch (e) {
+          console.warn("Falha ao criar costura", e);
+        }
+        seamSelectionRef.current = null;
+        scheduleDraw();
+        return;
+      }
       return;
     }
 
@@ -437,6 +505,69 @@ function PatternCanvasComponent({
 
     const world = screenToWorld(event.clientX, event.clientY);
     if (drag.type === "point") {
+      // snapping logic
+      const snapPx = 10; // pixels
+      const thresholdMm = snapPx / cameraRef.current.zoom;
+      let snapped = null as { xMm: number; yMm: number; type: string } | null;
+      // snap to other points
+      for (const other of snapshotRef.current.piece.points) {
+        if (other.id === drag.pointId) continue;
+        const d = Math.hypot(other.xMm - world.xMm, other.yMm - world.yMm);
+        if (d <= thresholdMm) {
+          snapped = { xMm: other.xMm, yMm: other.yMm, type: "point" };
+          break;
+        }
+      }
+      // snap to midpoint of segments
+      if (!snapped) {
+        for (let i = 0; i < snapshotRef.current.piece.points.length; i += 1) {
+          const a = snapshotRef.current.piece.points[i];
+          const b = snapshotRef.current.piece.points[(i + 1) % snapshotRef.current.piece.points.length];
+          const mx = (a.xMm + b.xMm) / 2;
+          const my = (a.yMm + b.yMm) / 2;
+          const d = Math.hypot(mx - world.xMm, my - world.yMm);
+          if (d <= thresholdMm) {
+            snapped = { xMm: mx, yMm: my, type: "midpoint" };
+            break;
+          }
+        }
+      }
+      // snap to horizontal/vertical alignment with other points
+      if (!snapped) {
+        for (const other of snapshotRef.current.piece.points) {
+          if (other.id === drag.pointId) continue;
+          if (Math.abs(other.xMm - world.xMm) <= thresholdMm) {
+            snapped = { xMm: other.xMm, yMm: world.yMm, type: "hv" };
+            break;
+          }
+          if (Math.abs(other.yMm - world.yMm) <= thresholdMm) {
+            snapped = { xMm: world.xMm, yMm: other.yMm, type: "hv" };
+            break;
+          }
+        }
+      }
+      // snap to grid (10mm)
+      if (!snapped) {
+        const gx = Math.round(world.xMm / 10) * 10;
+        const gy = Math.round(world.yMm / 10) * 10;
+        if (Math.hypot(gx - world.xMm, gy - world.yMm) <= thresholdMm) {
+          snapped = { xMm: gx, yMm: gy, type: "grid" };
+        }
+      }
+
+      if (snapped) {
+        snapRef.current = snapped;
+        scheduleDraw();
+        queueGeometryMove({
+          type: "point",
+          pointId: drag.pointId,
+          xMm: Math.round(snapped.xMm * 10) / 10,
+          yMm: Math.round(snapped.yMm * 10) / 10,
+        });
+        return;
+      }
+
+      snapRef.current = null;
       queueGeometryMove({
         type: "point",
         pointId: drag.pointId,
@@ -450,6 +581,43 @@ function PatternCanvasComponent({
       (point) => point.id === drag.pointId,
     );
     if (!anchor) return;
+
+    // snapping for handles respects anchor position (only grid/hv/points)
+    const snapPx = 10;
+    const thresholdMm = snapPx / cameraRef.current.zoom;
+    let snappedHandle = null as { xMm: number; yMm: number; type: string } | null;
+    for (const other of snapshotRef.current.piece.points) {
+      if (Math.abs(other.xMm - (world.xMm)) <= thresholdMm) {
+        snappedHandle = { xMm: other.xMm - anchor.xMm, yMm: world.yMm - anchor.yMm, type: "hv" };
+        break;
+      }
+      if (Math.abs(other.yMm - (world.yMm)) <= thresholdMm) {
+        snappedHandle = { xMm: world.xMm - anchor.xMm, yMm: other.yMm - anchor.yMm, type: "hv" };
+        break;
+      }
+    }
+    if (!snappedHandle) {
+      const gx = Math.round(world.xMm / 10) * 10;
+      const gy = Math.round(world.yMm / 10) * 10;
+      if (Math.hypot(gx - world.xMm, gy - world.yMm) <= thresholdMm) {
+        snappedHandle = { xMm: gx - anchor.xMm, yMm: gy - anchor.yMm, type: "grid" };
+      }
+    }
+
+    if (snappedHandle) {
+      snapRef.current = { xMm: anchor.xMm + snappedHandle.xMm, yMm: anchor.yMm + snappedHandle.yMm, type: snappedHandle.type };
+      scheduleDraw();
+      queueGeometryMove({
+        type: "handle",
+        pointId: drag.pointId,
+        handle: drag.handle,
+        xMm: Math.round(snappedHandle.xMm * 10) / 10,
+        yMm: Math.round(snappedHandle.yMm * 10) / 10,
+      });
+      return;
+    }
+
+    snapRef.current = null;
     queueGeometryMove({
       type: "handle",
       pointId: drag.pointId,
@@ -547,6 +715,8 @@ function PatternCanvasComponent({
       return;
     }
 
+    snapRef.current = null;
+    scheduleDraw();
     dragRef.current = null;
   }
 
@@ -625,10 +795,17 @@ function draw(
   snapshot: PatternSnapshot,
   selectedPointId: string | null,
   camera: Camera2D,
+  snapOverlay: { xMm: number; yMm: number; type: string } | null,
+  seamSelection:
+    | { first?: EdgeRange; second?: EdgeRange }
+    | null,
 ) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#f4f2ed";
   context.fillRect(0, 0, width, height);
+
+  // draw rulers in screen space
+  drawRulers(context, width, height, camera);
 
   drawGrid(context, width, height, camera);
 
@@ -639,6 +816,25 @@ function draw(
   context.save();
   context.translate(camera.panX, camera.panY);
   context.scale(camera.zoom, camera.zoom);
+
+  // draw persistent guides (from piece metadata)
+  if (snapshot.piece.guides) {
+    for (const guide of snapshot.piece.guides) {
+      context.beginPath();
+      if (guide.orientation === "vertical") {
+        context.moveTo(guide.positionMm, -10000);
+        context.lineTo(guide.positionMm, 10000);
+      } else {
+        context.moveTo(-10000, guide.positionMm);
+        context.lineTo(10000, guide.positionMm);
+      }
+      context.strokeStyle = "rgba(100,120,140,0.45)";
+      context.lineWidth = 1 / camera.zoom;
+      context.setLineDash([4 / camera.zoom, 6 / camera.zoom]);
+      context.stroke();
+      context.setLineDash([]);
+    }
+  }
 
   tracePatternContour(context, points);
   context.fillStyle = "rgba(32, 33, 36, 0.08)";
@@ -658,6 +854,23 @@ function draw(
     context.lineWidth = 1.25 / camera.zoom;
     context.stroke();
     context.setLineDash([]);
+  }
+
+  // draw defined seams
+  if (snapshot.piece.seams) {
+    for (const seam of snapshot.piece.seams) {
+      // render both intervals as highlighted strokes
+      drawSeamInterval(context, snapshot.piece.points, seam.first, camera.zoom, "#a23d3d");
+      drawSeamInterval(context, snapshot.piece.points, seam.second, camera.zoom, "#3d6aa2");
+    }
+  }
+
+  // draw selection preview for seam tool
+  if (seamSelection?.first) {
+    drawSeamInterval(context, points, seamSelection.first, camera.zoom, "rgba(160,160,60,0.9)");
+  }
+  if (seamSelection?.second) {
+    drawSeamInterval(context, points, seamSelection.second, camera.zoom, "rgba(60,160,60,0.9)");
   }
 
   for (let index = 0; index < points.length; index += 1) {
@@ -710,7 +923,153 @@ function draw(
     context.stroke();
   }
 
+  // draw snapping feedback if present
+  if (snapOverlay) {
+    context.beginPath();
+    context.arc(snapOverlay.xMm, snapOverlay.yMm, 6 / camera.zoom, 0, Math.PI * 2);
+    context.fillStyle = "rgba(200,50,150,0.9)";
+    context.fill();
+    context.strokeStyle = "#fff";
+    context.lineWidth = 1 / camera.zoom;
+    context.stroke();
+
+    if (snapOverlay.type === "hv") {
+      context.beginPath();
+      context.strokeStyle = "rgba(200,50,150,0.25)";
+      context.lineWidth = 1 / camera.zoom;
+      context.moveTo(-10000, snapOverlay.yMm);
+      context.lineTo(10000, snapOverlay.yMm);
+      context.moveTo(snapOverlay.xMm, -10000);
+      context.lineTo(snapOverlay.xMm, 10000);
+      context.stroke();
+    }
+  }
+
   context.restore();
+
+  // show seam info overlay in screen space if selection complete
+  if (seamSelection?.first && seamSelection?.second) {
+    const pointsArr = snapshot.piece.points;
+    const firstLength = computeIntervalLength(pointsArr, seamSelection.first);
+    const secondLength = computeIntervalLength(pointsArr, seamSelection.second);
+    const diff = Math.abs(firstLength - secondLength);
+
+    context.save();
+    context.font = "13px system-ui, sans-serif";
+    context.fillStyle = "rgba(32,33,36,0.9)";
+    const lines = [
+      `A: ${firstLength.toFixed(1)} mm`,
+      `B: ${secondLength.toFixed(1)} mm`,
+      `Diferença: ${diff.toFixed(1)} mm`,
+    ];
+    const padding = 8;
+    const boxWidth = 200;
+    const boxHeight = lines.length * 18 + padding * 2;
+    context.fillStyle = "rgba(244,242,237,0.95)";
+    context.fillRect(12, 12, boxWidth, boxHeight);
+    context.fillStyle = "#404247";
+    for (let i = 0; i < lines.length; i += 1) {
+      context.fillText(lines[i], 20, 12 + padding + 16 * (i + 1));
+    }
+    context.restore();
+  }
+}
+
+function drawRulers(context: CanvasRenderingContext2D, width: number, height: number, camera: Camera2D) {
+  // top ruler
+  const rulerSize = 28;
+  context.save();
+  context.fillStyle = "#e9e7e2";
+  context.fillRect(0, 0, width, rulerSize);
+  context.fillRect(0, 0, rulerSize, height);
+  context.strokeStyle = "#d0cdc9";
+  context.beginPath();
+  context.moveTo(0, rulerSize - 0.5);
+  context.lineTo(width, rulerSize - 0.5);
+  context.moveTo(rulerSize - 0.5, 0);
+  context.lineTo(rulerSize - 0.5, height);
+  context.stroke();
+
+  context.fillStyle = "#505258";
+  context.font = "11px system-ui, sans-serif";
+  context.textBaseline = "top";
+
+  const minorPx = 10 * camera.zoom;
+  const majorPx = 50 * camera.zoom;
+  // draw ticks along top using camera pan offset
+  for (let x = ((camera.panX % minorPx) + minorPx) % minorPx; x < width; x += minorPx) {
+    const isMajor = Math.abs((x - (camera.panX % majorPx + majorPx) % majorPx)) < 0.0001 || (x % majorPx === 0);
+    const tickHeight = isMajor ? 10 : 6;
+    context.beginPath();
+    context.moveTo(x + 0.5, rulerSize - 1);
+    context.lineTo(x + 0.5, rulerSize - 1 - tickHeight);
+    context.stroke();
+    if (isMajor) {
+      // compute world coordinate at this screen x
+      const worldX = (x - camera.panX) / camera.zoom;
+      context.fillText(`${Math.round(worldX)} mm`, x + 4, 2);
+    }
+  }
+
+  // left ticks
+  context.textAlign = "left";
+  for (let y = ((camera.panY % minorPx) + minorPx) % minorPx; y < height; y += minorPx) {
+    const isMajor = Math.abs((y - (camera.panY % majorPx + majorPx) % majorPx)) < 0.0001 || (y % majorPx === 0);
+    const tickWidth = isMajor ? 10 : 6;
+    context.beginPath();
+    context.moveTo(rulerSize - 1, y + 0.5);
+    context.lineTo(rulerSize - 1 - tickWidth, y + 0.5);
+    context.stroke();
+    if (isMajor) {
+      const worldY = (y - camera.panY) / camera.zoom;
+      context.fillText(`${Math.round(worldY)} mm`, 4, y + 2);
+    }
+  }
+
+  context.restore();
+}
+
+function drawSeamInterval(
+  context: CanvasRenderingContext2D,
+  points: readonly PatternPoint[],
+  range: EdgeRange,
+  zoom: number,
+  color: string,
+) {
+  const startIndex = points.findIndex((p) => p.id === range.startPointId);
+  if (startIndex < 0) return;
+  const p0 = points[startIndex];
+  const p1 = points[(startIndex + 1) % points.length];
+  const samples = samplePatternSegment(p0, p1);
+  if (samples.length < 2) return;
+  const totalSteps = samples.length - 1;
+  const startIndexF = Math.floor(range.t0 * totalSteps);
+  const endIndexF = Math.ceil(range.t1 * totalSteps);
+  context.beginPath();
+  context.moveTo(samples[startIndexF].xMm, samples[startIndexF].yMm);
+  for (let i = startIndexF + 1; i <= endIndexF; i += 1) {
+    context.lineTo(samples[i].xMm, samples[i].yMm);
+  }
+  context.strokeStyle = color;
+  context.lineWidth = 3 / zoom;
+  context.stroke();
+}
+
+function computeIntervalLength(points: readonly PatternPoint[], range: EdgeRange): number {
+  const startIndex = points.findIndex((p) => p.id === range.startPointId);
+  if (startIndex < 0) return 0;
+  const p0 = points[startIndex];
+  const p1 = points[(startIndex + 1) % points.length];
+  const samples = samplePatternSegment(p0, p1);
+  if (samples.length < 2) return 0;
+  const totalSteps = samples.length - 1;
+  const startIndexF = Math.floor(range.t0 * totalSteps);
+  const endIndexF = Math.ceil(range.t1 * totalSteps);
+  let length = 0;
+  for (let i = startIndexF; i < endIndexF; i += 1) {
+    length += distanceMm(samples[i], samples[i + 1]);
+  }
+  return length;
 }
 
 function tracePatternContour(

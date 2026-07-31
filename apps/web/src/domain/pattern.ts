@@ -40,6 +40,31 @@ export interface PatternPreviewPlacement {
   mirrorX?: boolean;
 }
 
+export interface EdgeRange {
+  // The segment starting point id (the interval lies on the segment from this point to the next point)
+  startPointId: string;
+  // normalized param along the segment, 0 <= t0 <= t1 <= 1
+  t0: number;
+  t1: number;
+}
+
+export type SeamDirection = "forward" | "reverse";
+
+export interface Seam {
+  id: string;
+  first: EdgeRange;
+  second: EdgeRange;
+  // direction controls whether the second interval is to be stitched in the same
+  // parametric direction or reversed relative to the first
+  direction: SeamDirection;
+}
+
+export interface Guide {
+  id: string;
+  orientation: "horizontal" | "vertical";
+  positionMm: number;
+}
+
 export interface PatternPiece {
   id: string;
   name: string;
@@ -49,6 +74,9 @@ export interface PatternPiece {
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
   points: PatternPoint[];
+  // optional semantics added later; keep undefined when absent for compatibility
+  seams?: Seam[];
+  guides?: Guide[];
 }
 
 export interface GarmentDraft {
@@ -121,6 +149,38 @@ export function parsePatternPiece(value: unknown): PatternPiece {
       ? undefined
       : parsePreviewPlacements(value.previewPlacements);
 
+  // parse optional seams array for backward compatibility
+  let seams: Seam[] | undefined;
+  if (value.seams !== undefined) {
+    if (!Array.isArray(value.seams)) {
+      throw new TypeError("A lista de costuras é inválida.");
+    }
+    seams = value.seams.map((item, index) => {
+      if (!isRecord(item)) throw new TypeError(`A costura ${index + 1} é inválida.`);
+      const sid = readString(item.id ?? `seam-${index + 1}`, `O identificador da costura ${index + 1}`);
+      const first = parseEdgeRange(item.first, `A primeira aresta da costura ${index + 1}`);
+      const second = parseEdgeRange(item.second, `A segunda aresta da costura ${index + 1}`);
+      const direction =
+        item.direction === undefined
+          ? "forward"
+          : readEnum(item.direction, ["forward", "reverse"] as const, `A direção da costura ${index + 1}`);
+      return { id: sid, first, second, direction } as Seam;
+    });
+  }
+
+  // parse optional guides
+  let guides: Guide[] | undefined;
+  if (value.guides !== undefined) {
+    if (!Array.isArray(value.guides)) throw new TypeError("A lista de guias é inválida.");
+    guides = value.guides.map((g, index) => {
+      if (!isRecord(g)) throw new TypeError(`A guia ${index + 1} é inválida.`);
+      const gid = readString(g.id ?? `guide-${index + 1}`, `O identificador da guia ${index + 1}`);
+      const orientation = readEnum(g.orientation, ["horizontal", "vertical"] as const, `A orientação da guia ${index + 1}`);
+      const positionMm = readFiniteNumber(g.positionMm, `A posição da guia ${index + 1}`);
+      return { id: gid, orientation, positionMm } as Guide;
+    });
+  }
+
   return {
     id,
     name,
@@ -130,7 +190,20 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
     points,
+    ...(seams === undefined ? {} : { seams }),
+    ...(guides === undefined ? {} : { guides }),
   };
+}
+
+function parseEdgeRange(value: unknown, label: string): EdgeRange {
+  if (!isRecord(value)) throw new TypeError(`${label} precisa ser um objeto.`);
+  const startPointId = readString(value.startPointId, `${label}: identificador do ponto inicial`);
+  const t0 = readFiniteNumber(value.t0, `${label}: t0`);
+  const t1 = readFiniteNumber(value.t1, `${label}: t1`);
+  if (!(t0 >= 0 && t0 <= 1 && t1 >= 0 && t1 <= 1 && t0 <= t1)) {
+    throw new TypeError(`${label}: t0/t1 precisam satisfazer 0 <= t0 <= t1 <= 1`);
+  }
+  return { startPointId, t0, t1 };
 }
 
 export function parseBodyMeasurements(value: unknown): BodyMeasurements {
