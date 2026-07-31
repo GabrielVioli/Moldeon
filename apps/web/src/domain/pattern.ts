@@ -41,28 +41,36 @@ export interface PatternPreviewPlacement {
 }
 
 export interface EdgeRange {
-  // The segment starting point id (the interval lies on the segment from this point to the next point)
-  startPointId: string;
-  // normalized param along the segment, 0 <= t0 <= t1 <= 1
-  t0: number;
-  t1: number;
+  pieceId: string;
+  edgeId: string;
+  // normalized param along the edge, 0 <= startT <= endT <= 1
+  startT: number;
+  endT: number;
 }
 
-export type SeamDirection = "forward" | "reverse";
+export type SeamDirection = "same" | "opposite";
 
 export interface Seam {
   id: string;
   first: EdgeRange;
   second: EdgeRange;
-  // direction controls whether the second interval is to be stitched in the same
-  // parametric direction or reversed relative to the first
+  // direction: whether second is stitched in parametric same/opposite direction
   direction: SeamDirection;
+  easeRatio: number; // placeholder for future easing
+  type: string; // e.g. 'standard'
 }
 
 export interface Guide {
   id: string;
   orientation: "horizontal" | "vertical";
   positionMm: number;
+}
+
+export interface PatternEdge {
+  id: string;
+  pieceId: string;
+  startPointId: string;
+  endPointId: string;
 }
 
 export interface PatternPiece {
@@ -74,8 +82,7 @@ export interface PatternPiece {
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
   points: PatternPoint[];
-  // optional semantics added later; keep undefined when absent for compatibility
-  seams?: Seam[];
+  // guides remain piece-local
   guides?: Guide[];
 }
 
@@ -88,6 +95,8 @@ export interface GarmentDraft {
   measurements: BodyMeasurements;
   fabrics: FabricSource[];
   pieces: PatternPiece[];
+  // seams now live at the garment level
+  seams?: Seam[];
 }
 
 export interface PatternSnapshot {
@@ -149,25 +158,6 @@ export function parsePatternPiece(value: unknown): PatternPiece {
       ? undefined
       : parsePreviewPlacements(value.previewPlacements);
 
-  // parse optional seams array for backward compatibility
-  let seams: Seam[] | undefined;
-  if (value.seams !== undefined) {
-    if (!Array.isArray(value.seams)) {
-      throw new TypeError("A lista de costuras é inválida.");
-    }
-    seams = value.seams.map((item, index) => {
-      if (!isRecord(item)) throw new TypeError(`A costura ${index + 1} é inválida.`);
-      const sid = readString(item.id ?? `seam-${index + 1}`, `O identificador da costura ${index + 1}`);
-      const first = parseEdgeRange(item.first, `A primeira aresta da costura ${index + 1}`);
-      const second = parseEdgeRange(item.second, `A segunda aresta da costura ${index + 1}`);
-      const direction =
-        item.direction === undefined
-          ? "forward"
-          : readEnum(item.direction, ["forward", "reverse"] as const, `A direção da costura ${index + 1}`);
-      return { id: sid, first, second, direction } as Seam;
-    });
-  }
-
   // parse optional guides
   let guides: Guide[] | undefined;
   if (value.guides !== undefined) {
@@ -190,20 +180,21 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
     points,
-    ...(seams === undefined ? {} : { seams }),
     ...(guides === undefined ? {} : { guides }),
   };
 }
 
-function parseEdgeRange(value: unknown, label: string): EdgeRange {
+// new: parse an EdgeRange in the new format
+function parseEdgeRangeNew(value: unknown, label: string) {
   if (!isRecord(value)) throw new TypeError(`${label} precisa ser um objeto.`);
-  const startPointId = readString(value.startPointId, `${label}: identificador do ponto inicial`);
-  const t0 = readFiniteNumber(value.t0, `${label}: t0`);
-  const t1 = readFiniteNumber(value.t1, `${label}: t1`);
-  if (!(t0 >= 0 && t0 <= 1 && t1 >= 0 && t1 <= 1 && t0 <= t1)) {
-    throw new TypeError(`${label}: t0/t1 precisam satisfazer 0 <= t0 <= t1 <= 1`);
+  const pieceId = readString(value.pieceId, `${label}: pieceId`);
+  const edgeId = readString(value.edgeId, `${label}: edgeId`);
+  const startT = readFiniteNumber(value.startT, `${label}: startT`);
+  const endT = readFiniteNumber(value.endT, `${label}: endT`);
+  if (!(startT >= 0 && startT <= 1 && endT >= 0 && endT <= 1 && startT <= endT)) {
+    throw new TypeError(`${label}: startT/endT precisam satisfazer 0 <= startT <= endT <= 1`);
   }
-  return { startPointId, t0, t1 };
+  return { pieceId, edgeId, startT, endT };
 }
 
 export function parseBodyMeasurements(value: unknown): BodyMeasurements {
@@ -255,7 +246,9 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     throw new TypeError("O projeto precisa ter pelo menos uma peça.");
   }
 
-  const pieces = value.pieces.map(parsePatternPiece);
+  // keep raw pieces for legacy migration (some older documents may include seams per-piece)
+  const rawPieces: unknown[] = value.pieces as unknown[];
+  const pieces = rawPieces.map(parsePatternPiece);
   const pieceIds = new Set(pieces.map((piece) => piece.id));
   if (pieceIds.size !== pieces.length) {
     throw new TypeError("As peças do projeto precisam ter identificadores únicos.");
@@ -271,6 +264,71 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         ? piece.fabricId
         : fallbackFabricId,
   }));
+
+  // Parse seams at root (new format) if present
+  const seams: Seam[] = [];
+  const seamIds = new Set<string>();
+  if (value.seams !== undefined) {
+    if (!Array.isArray(value.seams)) throw new TypeError("A lista de costuras é inválida.");
+    for (let i = 0; i < value.seams.length; i += 1) {
+      const s = value.seams[i];
+      if (!isRecord(s)) throw new TypeError(`A costura ${i + 1} é inválida.`);
+      const id = readString(s.id ?? `seam-${i + 1}`, `O identificador da costura ${i + 1}`);
+      const first = parseEdgeRangeNew(s.first, `A primeira faixa da costura ${i + 1}`);
+      const second = parseEdgeRangeNew(s.second, `A segunda faixa da costura ${i + 1}`);
+      const direction = s.direction === undefined ? "same" : readEnum(s.direction, ["same", "opposite"] as const, `A direção da costura ${i + 1}`);
+      const easeRatio = s.easeRatio === undefined ? 0 : readFiniteNumber(s.easeRatio, `O easeRatio da costura ${i + 1}`);
+      const type = s.type === undefined ? "standard" : readString(s.type, `O tipo da costura ${i + 1}`);
+      if (!seamIds.has(id)) {
+        seams.push({ id, first, second, direction, easeRatio, type } as any);
+        seamIds.add(id);
+      }
+    }
+  }
+
+  // Migrate legacy per-piece seams if present in rawPieces
+  for (let pIdx = 0; pIdx < rawPieces.length; pIdx += 1) {
+    const raw = rawPieces[pIdx] as Record<string, unknown>;
+    const piece = normalizedPieces[pIdx];
+    if (!isRecord(raw)) continue;
+    if (!raw.seams) continue;
+    if (!Array.isArray(raw.seams)) continue;
+    for (let si = 0; si < raw.seams.length; si += 1) {
+      const legacy = raw.seams[si];
+      if (!isRecord(legacy)) continue;
+      const id = typeof legacy.id === "string" && legacy.id.length > 0 ? legacy.id : `${piece.id}:seam-${si + 1}`;
+      if (seamIds.has(id)) continue; // avoid dup
+
+      // legacy ranges have startPointId, t0, t1 (local to piece)
+      const parseLegacyRange = (rng: unknown) => {
+        if (!isRecord(rng)) throw new TypeError("Faixa de costura legado inválida.");
+        const startPointId = readString(rng.startPointId, "startPointId");
+        const t0 = readFiniteNumber(rng.t0, "t0");
+        const t1 = readFiniteNumber(rng.t1, "t1");
+        if (!(t0 >= 0 && t0 <= 1 && t1 >= 0 && t1 <= 1 && t0 <= t1)) {
+          throw new TypeError("t0/t1 inválidos no legado");
+        }
+        // derive edgeId from piece: segment startPointId -> next point
+        const points = piece.points;
+        const startIndex = points.findIndex((pt) => pt.id === startPointId);
+        if (startIndex < 0) throw new TypeError("startPointId não encontrado ao migrar costura");
+        const endPointId = points[(startIndex + 1) % points.length].id;
+        const edgeId = makeEdgeId(piece.id, startPointId, endPointId);
+        return { pieceId: piece.id, edgeId, startT: t0, endT: t1 };
+      };
+
+      try {
+        const first = parseLegacyRange(legacy.first);
+        const second = parseLegacyRange(legacy.second);
+        const direction = legacy.direction === "reverse" ? "opposite" : "same";
+        seams.push({ id, first, second, direction, easeRatio: 0, type: "standard" } as any);
+        seamIds.add(id);
+      } catch (e) {
+        // skip invalid legacy seam but keep project loadable
+        // collect nothing here; validation will report issues later
+      }
+    }
+  }
 
   return {
     id: readString(value.id, "O identificador do projeto"),
@@ -288,7 +346,81 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     measurements: parseBodyMeasurements(value.measurements),
     fabrics,
     pieces: normalizedPieces,
+    ...(seams.length === 0 ? {} : { seams }),
   };
+}
+
+// helpers for legacy -> new migration use edge ids
+export function makeEdgeId(pieceId: string, startPointId: string, endPointId: string) {
+  return `${pieceId}:edge:${startPointId}->${endPointId}`;
+}
+
+export function getPatternEdges(piece: PatternPiece): PatternEdge[] {
+  const edges: PatternEdge[] = [];
+  const pts = piece.points;
+  for (let i = 0; i < pts.length; i += 1) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    edges.push({ id: makeEdgeId(piece.id, a.id, b.id), pieceId: piece.id, startPointId: a.id, endPointId: b.id });
+  }
+  return edges;
+}
+
+export function getEdgeById(piece: PatternPiece, edgeId: string): PatternEdge | undefined {
+  return getPatternEdges(piece).find((e) => e.id === edgeId);
+}
+
+import { samplePatternSegment } from "./polygonGeometry";
+
+export function edgeLength(piece: PatternPiece, edgeId: string): number {
+  const edge = getEdgeById(piece, edgeId);
+  if (!edge) return 0;
+  const startIndex = piece.points.findIndex((p) => p.id === edge.startPointId);
+  if (startIndex < 0) return 0;
+  // sample the segment between startIndex and startIndex+1
+  const p0 = piece.points[startIndex];
+  const p1 = piece.points[(startIndex + 1) % piece.points.length];
+  const samples = samplePatternSegment(p0, p1);
+  let len = 0;
+  for (let i = 1; i < samples.length; i += 1) {
+    const a = samples[i - 1];
+    const b = samples[i];
+    const dx = b.xMm - a.xMm;
+    const dy = b.yMm - a.yMm;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  return len;
+}
+
+export function sampleEdgeRange(piece: PatternPiece, edgeRange: EdgeRange): PatternPoint[] {
+  // edgeRange here expected to reference pieceId === piece.id and have edgeId
+  const edge = getEdgeById(piece, edgeRange.edgeId);
+  if (!edge) return [];
+  const startIndex = piece.points.findIndex((p) => p.id === edge.startPointId);
+  if (startIndex < 0) return [];
+  const p0 = piece.points[startIndex];
+  const p1 = piece.points[(startIndex + 1) % piece.points.length];
+  const samples = samplePatternSegment(p0, p1);
+  const n = samples.length;
+  if (edgeRange.startT === 0 && edgeRange.endT === 1) return samples;
+  const si = Math.floor(edgeRange.startT * (n - 1));
+  const ei = Math.ceil(edgeRange.endT * (n - 1));
+  const seg = samples.slice(si, ei + 1);
+  // For better endpoints, interpolate at fractional positions
+  return seg;
+}
+
+export function edgeRangeLength(piece: PatternPiece, edgeRange: EdgeRange): number {
+  const pts = sampleEdgeRange(piece, edgeRange);
+  let len = 0;
+  for (let i = 1; i < pts.length; i += 1) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const dx = b.xMm - a.xMm;
+    const dy = b.yMm - a.yMm;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  return len;
 }
 
 export function parsePatternSnapshot(value: unknown): PatternSnapshot {

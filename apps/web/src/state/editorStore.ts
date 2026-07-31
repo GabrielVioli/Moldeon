@@ -243,33 +243,54 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     updateActiveSnapshot(set, get, snapshot);
   },
 
-  // Seams: create / remove / toggle direction
+  // Seams: create / remove / toggle direction (now stored at garment level)
   addSeam: (first: EdgeRange, second: EdgeRange, direction: "forward" | "reverse" = "forward") => {
-    const before = get().snapshot.piece;
-    const nextSeams = [...(before.seams ?? [])];
-    const id = `${before.id}:seam-${nextSeams.length + 1}`;
-    nextSeams.push({ id, first: { ...first }, second: { ...second }, direction } as Seam);
-    const piece = { ...before, seams: nextSeams };
-    commandHistory.record("Criar costura", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any, { selectedPointId: null });
+    const state = get();
+    const beforeGarment = state.garment;
+    const beforeSeams = [...(beforeGarment.seams ?? [])];
+    const id = `${beforeGarment.id}:seam-${beforeSeams.length + 1}`;
+    // map legacy direction to new semantics
+    const dir: any = direction === "reverse" ? "opposite" : "same";
+    const newSeam: Seam = { id, first: { ...first } as any, second: { ...second } as any, direction: dir, easeRatio: 0, type: "standard" } as any;
+    const afterSeams = [...beforeSeams, newSeam];
+
+    // record a synthetic piece change carrying seams so undo/redo can carry them back
+    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
+    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
+    commandHistory.record("Criar costura", beforePiece, afterPiece);
+
+    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
+    updateActiveSnapshot(set, get, snapshot, { selectedPointId: null });
   },
 
   removeSeam: (seamId: string) => {
-    const before = get().snapshot.piece;
-    const nextSeams = (before.seams ?? []).filter((s) => s.id !== seamId);
-    const piece = { ...before, seams: nextSeams };
-    commandHistory.record("Remover costura", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+    const state = get();
+    const beforeGarment = state.garment;
+    const beforeSeams = [...(beforeGarment.seams ?? [])];
+    const afterSeams = beforeSeams.filter((s) => s.id !== seamId);
+
+    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
+    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
+    commandHistory.record("Remover costura", beforePiece, afterPiece);
+
+    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
+    updateActiveSnapshot(set, get, snapshot);
   },
 
   toggleSeamDirection: (seamId: string) => {
-    const before = get().snapshot.piece;
-    const nextSeams = (before.seams ?? []).map((s) =>
-      s.id === seamId ? ({ ...s, direction: (s.direction === "forward" ? "reverse" : "forward") } as Seam) : s,
+    const state = get();
+    const beforeGarment = state.garment;
+    const beforeSeams = [...(beforeGarment.seams ?? [])];
+    const afterSeams = beforeSeams.map((s) =>
+      s.id === seamId ? ({ ...s, direction: s.direction === "same" ? "opposite" : "same" } as Seam) : s,
     );
-    const piece = { ...before, seams: nextSeams };
-    commandHistory.record("Alternar direção da costura", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
+
+    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
+    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
+    commandHistory.record("Alternar direção da costura", beforePiece, afterPiece);
+
+    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
+    updateActiveSnapshot(set, get, snapshot);
   },
 
   // Guides: simple create / move / remove
@@ -458,12 +479,20 @@ function updateActiveSnapshot(
     get().garment.pieces.find((piece) => piece.id === get().activePieceId) ??
     rawSnapshot.piece;
   const snapshot = preservePieceMetadata(rawSnapshot, sourcePiece);
-  set({
-    garment: replacePiece(get().garment, snapshot.piece),
-    snapshot,
-    ...historyAvailability(),
-    ...additional,
-  });
+
+// if snapshot.piece carries seams (used for undo/redo of seam operations),
+// apply them to the garment-level seams as well
+const currentGarment = get().garment;
+const newGarment = (snapshot.piece as any).seams
+  ? { ...currentGarment, pieces: currentGarment.pieces.map((candidate) => (candidate.id === snapshot.piece.id ? structuredClone(snapshot.piece) : candidate)), seams: structuredClone((snapshot.piece as any).seams) }
+  : replacePiece(currentGarment, snapshot.piece);
+
+set({
+  garment: newGarment,
+  snapshot,
+  ...historyAvailability(),
+  ...additional,
+});
 }
 
 function historyAvailability() {
@@ -502,9 +531,6 @@ function preservePieceMetadata(
               ...placement,
             })),
           }),
-      ...(source.seams === undefined
-        ? {}
-        : { seams: source.seams.map((s) => ({ ...s })) }),
       ...(source.guides === undefined
         ? {}
         : { guides: source.guides.map((g) => ({ ...g })) }),

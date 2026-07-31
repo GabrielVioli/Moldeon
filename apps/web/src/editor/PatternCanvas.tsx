@@ -11,7 +11,7 @@ import {
   samplePatternContour,
   samplePatternSegment,
 } from "../domain/polygonGeometry";
-import { PatternPoint, PatternSnapshot, distanceMm, type EdgeRange } from "../domain/pattern";
+import { PatternPoint, PatternSnapshot, distanceMm, type EdgeRange, getEdgeById, type Seam, type PatternPiece } from "../domain/pattern";
 import { findNearestPatternSegment } from "../domain/patternEditing";
 import {
   Camera2D,
@@ -126,6 +126,8 @@ function PatternCanvasComponent({
   const snapRef = useRef<{ xMm: number; yMm: number; type: string } | null>(null);
   const seamSelectionRef = useRef<{ first?: EdgeRange; second?: EdgeRange } | null>(null);
 
+  const garmentSeams = useEditorStore((s) => s.garment.seams ?? []);
+
   const drawLatest = useCallback(() => {
     drawFrameRef.current = null;
     const context = contextRef.current;
@@ -141,8 +143,9 @@ function PatternCanvasComponent({
       cameraRef.current,
       snapRef.current,
       seamSelectionRef.current,
+      garmentSeams,
     );
-  }, []);
+  }, [garmentSeams]);
 
   const scheduleDraw = useCallback(() => {
     if (drawFrameRef.current !== null) return;
@@ -350,7 +353,7 @@ function PatternCanvasComponent({
           dragRef.current = null;
           return;
         }
-        const edge: EdgeRange = { startPointId: target.startPointId, t0: 0, t1: 1 };
+        const edge = { startPointId: target.startPointId, t0: 0, t1: 1 } as any;
         const selection = seamSelectionRef.current ?? (seamSelectionRef.current = {});
         if (!selection.first) {
           selection.first = edge;
@@ -360,7 +363,7 @@ function PatternCanvasComponent({
         if (!selection.second) {
           selection.second = edge;
           try {
-            useEditorStore.getState().addSeam(selection.first, selection.second, "forward");
+            useEditorStore.getState().addSeam(selection.first!, selection.second!, "forward");
           } catch (e) {
             console.warn("Falha ao criar costura", e);
           }
@@ -416,7 +419,7 @@ function PatternCanvasComponent({
         dragRef.current = null;
         return;
       }
-      const edge: EdgeRange = { startPointId: target.startPointId, t0: 0, t1: 1 };
+      const edge = { startPointId: target.startPointId, t0: 0, t1: 1 } as any;
       const selection = seamSelectionRef.current ?? (seamSelectionRef.current = {});
       if (!selection.first) {
         selection.first = edge;
@@ -426,7 +429,7 @@ function PatternCanvasComponent({
       if (!selection.second) {
         selection.second = edge;
         try {
-          useEditorStore.getState().addSeam(selection.first, selection.second, "forward");
+          useEditorStore.getState().addSeam(selection.first!, selection.second!, "forward");
         } catch (e) {
           console.warn("Falha ao criar costura", e);
         }
@@ -796,9 +799,8 @@ function draw(
   selectedPointId: string | null,
   camera: Camera2D,
   snapOverlay: { xMm: number; yMm: number; type: string } | null,
-  seamSelection:
-    | { first?: EdgeRange; second?: EdgeRange }
-    | null,
+  seamSelection: | { first?: EdgeRange; second?: EdgeRange } | null,
+  seams: Seam[],
 ) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#f4f2ed";
@@ -856,21 +858,30 @@ function draw(
     context.setLineDash([]);
   }
 
-  // draw defined seams
-  if (snapshot.piece.seams) {
-    for (const seam of snapshot.piece.seams) {
-      // render both intervals as highlighted strokes
-      drawSeamInterval(context, snapshot.piece.points, seam.first, camera.zoom, "#a23d3d");
-      drawSeamInterval(context, snapshot.piece.points, seam.second, camera.zoom, "#3d6aa2");
+  // draw defined seams for this piece (garment-level seams array may include many pieces)
+  for (const seam of seams) {
+    try {
+      // first interval: if it targets this piece, draw it
+      const f: any = seam.first as any;
+      const s: any = seam.second as any;
+      if ((f.pieceId && f.pieceId === snapshot.piece.id) || f.startPointId) {
+        // normalize to legacy-like range for drawing
+        drawSeamIntervalAny(context, snapshot.piece, f, camera.zoom, "#a23d3d");
+      }
+      if ((s.pieceId && s.pieceId === snapshot.piece.id) || s.startPointId) {
+        drawSeamIntervalAny(context, snapshot.piece, s, camera.zoom, "#3d6aa2");
+      }
+    } catch (e) {
+      // ignore malformed seams
     }
   }
 
   // draw selection preview for seam tool
   if (seamSelection?.first) {
-    drawSeamInterval(context, points, seamSelection.first, camera.zoom, "rgba(160,160,60,0.9)");
+    drawSeamIntervalAny(context, snapshot.piece, seamSelection.first as any, camera.zoom, "rgba(160,160,60,0.9)");
   }
   if (seamSelection?.second) {
-    drawSeamInterval(context, points, seamSelection.second, camera.zoom, "rgba(60,160,60,0.9)");
+    drawSeamIntervalAny(context, snapshot.piece, seamSelection.second as any, camera.zoom, "rgba(60,160,60,0.9)");
   }
 
   for (let index = 0; index < points.length; index += 1) {
@@ -1032,19 +1043,21 @@ function drawRulers(context: CanvasRenderingContext2D, width: number, height: nu
 function drawSeamInterval(
   context: CanvasRenderingContext2D,
   points: readonly PatternPoint[],
-  range: EdgeRange,
+  startPointId: string,
+  t0: number,
+  t1: number,
   zoom: number,
   color: string,
 ) {
-  const startIndex = points.findIndex((p) => p.id === range.startPointId);
+  const startIndex = points.findIndex((p) => p.id === startPointId);
   if (startIndex < 0) return;
   const p0 = points[startIndex];
   const p1 = points[(startIndex + 1) % points.length];
   const samples = samplePatternSegment(p0, p1);
   if (samples.length < 2) return;
   const totalSteps = samples.length - 1;
-  const startIndexF = Math.floor(range.t0 * totalSteps);
-  const endIndexF = Math.ceil(range.t1 * totalSteps);
+  const startIndexF = Math.floor(t0 * totalSteps);
+  const endIndexF = Math.ceil(t1 * totalSteps);
   context.beginPath();
   context.moveTo(samples[startIndexF].xMm, samples[startIndexF].yMm);
   for (let i = startIndexF + 1; i <= endIndexF; i += 1) {
@@ -1055,21 +1068,45 @@ function drawSeamInterval(
   context.stroke();
 }
 
-function computeIntervalLength(points: readonly PatternPoint[], range: EdgeRange): number {
-  const startIndex = points.findIndex((p) => p.id === range.startPointId);
-  if (startIndex < 0) return 0;
-  const p0 = points[startIndex];
-  const p1 = points[(startIndex + 1) % points.length];
-  const samples = samplePatternSegment(p0, p1);
-  if (samples.length < 2) return 0;
-  const totalSteps = samples.length - 1;
-  const startIndexF = Math.floor(range.t0 * totalSteps);
-  const endIndexF = Math.ceil(range.t1 * totalSteps);
-  let length = 0;
-  for (let i = startIndexF; i < endIndexF; i += 1) {
-    length += distanceMm(samples[i], samples[i + 1]);
+function drawSeamIntervalAny(
+  context: CanvasRenderingContext2D,
+  piece: PatternPiece,
+  range: any,
+  zoom: number,
+  color: string,
+) {
+  // support legacy range { startPointId, t0, t1 } and new range { pieceId, edgeId, startT, endT }
+  if (range.startPointId !== undefined) {
+    drawSeamInterval(context, piece.points, range.startPointId, range.t0, range.t1, zoom, color);
+    return;
   }
-  return length;
+  if (range.pieceId !== piece.id) return; // range references another piece
+  // try to resolve edgeId to startPointId
+  const edge = getEdgeById(piece, range.edgeId);
+  if (!edge) return;
+  drawSeamInterval(context, piece.points, edge.startPointId, range.startT, range.endT, zoom, color);
+}
+
+function computeIntervalLength(points: readonly PatternPoint[], range: any): number {
+  // support legacy { startPointId, t0, t1 } and new { pieceId, edgeId, startT, endT }
+  if (range.startPointId !== undefined) {
+    const startIndex = points.findIndex((p) => p.id === range.startPointId);
+    if (startIndex < 0) return 0;
+    const p0 = points[startIndex];
+    const p1 = points[(startIndex + 1) % points.length];
+    const samples = samplePatternSegment(p0, p1);
+    if (samples.length < 2) return 0;
+    const totalSteps = samples.length - 1;
+    const startIndexF = Math.floor(range.t0 * totalSteps);
+    const endIndexF = Math.ceil(range.t1 * totalSteps);
+    let length = 0;
+    for (let i = startIndexF; i < endIndexF; i += 1) {
+      length += distanceMm(samples[i], samples[i + 1]);
+    }
+    return length;
+  }
+  // new shape expected to be handled elsewhere; if edgeId present we cannot compute here
+  return 0;
 }
 
 function tracePatternContour(
