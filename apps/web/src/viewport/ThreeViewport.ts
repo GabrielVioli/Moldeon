@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BodyMeasurements,
   BodyType,
@@ -69,6 +70,7 @@ export class ThreeViewport {
   private readonly mannequinGroup = new THREE.Group();
   private readonly resizeObserver: ResizeObserver;
   private readonly profile: PerformanceProfile;
+  private readonly gltfLoader = new GLTFLoader();
   private frameId: number | null = null;
   private garmentMeshes: GarmentMeshData[] = [];
   private dressProgress = 1;
@@ -87,6 +89,8 @@ export class ThreeViewport {
     armLengthMm: 590,
     inseamMm: 780,
   });
+  private loadedGlbModel: THREE.Group | null = null;
+  private bodyType: BodyType = "feminine";
 
   private constructor(
     private readonly host: HTMLElement,
@@ -385,10 +389,40 @@ export class ThreeViewport {
 
     disposeObjectTree(this.mannequinGroup);
     this.mannequinGroup.clear();
+    this.bodyType = bodyType;
     this.avatarMetrics = createAvatarMetrics(bodyType, measurements);
-    this.mannequinGroup.add(
-      this.createMannequin(bodyType, this.avatarMetrics),
-    );
+
+    if (!this.mannequinGroup.visible) {
+      this.mannequinGroup.add(this.createMannequin(bodyType, this.avatarMetrics));
+      this.bodySignature = signature;
+      this.requestRender();
+      return;
+    }
+
+    // Tenta carregar modelo GLB, fallback para procedural
+    const modelPath = bodyType === "feminine"
+      ? "/models/avatar-feminine.glb"
+      : "/models/avatar-masculine.glb";
+
+    this.loadGlbModel(modelPath, bodyType, measurements)
+      .then((model) => {
+        if (model && !this.disposed) {
+          this.loadedGlbModel = model;
+          this.mannequinGroup.add(model);
+          this.applyMorphTargets(model, measurements);
+          this.requestRender();
+        }
+      })
+      .catch((error) => {
+        console.warn("Falha ao carregar modelo GLB, usando fallback procedural:", error);
+        if (!this.disposed) {
+          this.mannequinGroup.add(
+            this.createMannequin(bodyType, this.avatarMetrics),
+          );
+          this.requestRender();
+        }
+      });
+
     this.bodySignature = signature;
   }
 
@@ -478,6 +512,96 @@ export class ThreeViewport {
 
     group.add(torso, head, neck, leftLeg, rightLeg, leftArm, rightArm);
     return group;
+  }
+
+  private async loadGlbModel(
+    path: string,
+    bodyType: BodyType,
+    measurements: BodyMeasurements,
+  ): Promise<THREE.Group | null> {
+    return new Promise((resolve, reject) => {
+      this.gltfLoader.load(
+        path,
+        (gltf) => {
+          const model = gltf.scene;
+          // Configurar materiais
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = this.profile.shadows;
+              child.receiveShadow = this.profile.shadows;
+              // Ajustar cor baseada no tipo de corpo
+              if (child.material instanceof THREE.MeshStandardMaterial) {
+                child.material.color.setHex(
+                  bodyType === "feminine" ? 0xc3aa9a : 0xb8a08f
+                );
+                child.material.roughness = 0.94;
+              }
+            }
+          });
+
+          // Escalar e posicionar o modelo
+          model.scale.set(1, 1, 1);
+          model.position.set(0, 0, 0);
+          resolve(model);
+        },
+        (progress) => {
+          // Progresso do carregamento (opcional)
+          console.log(`Loading model: ${(progress.loaded / progress.total * 100).toFixed(1)}%`);
+        },
+        (error: unknown) => {
+          reject(error);
+        }
+      );
+    });
+  }
+
+  private applyMorphTargets(
+    model: THREE.Group,
+    measurements: BodyMeasurements,
+  ): void {
+    // Valores base para normalização
+    const baseMeasurements: BodyMeasurements = {
+      heightMm: 1680,
+      bustMm: 920,
+      waistMm: 760,
+      hipMm: 1000,
+      shoulderWidthMm: 400,
+      torsoLengthMm: 440,
+      armLengthMm: 590,
+      inseamMm: 780,
+    };
+
+    model.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (!child.morphTargetDictionary || !child.morphTargetInfluences) return;
+
+      const dict = child.morphTargetDictionary;
+      const influences = child.morphTargetInfluences;
+
+      // Aplicar morph targets baseados nas diferenças de medidas
+      // Estes nomes devem corresponder aos morph targets do modelo GLB
+      const morphTargets: Array<{
+        key: keyof typeof dict;
+        ratio: number;
+        clamp: [number, number];
+      }> = [
+        { key: "height", ratio: measurements.heightMm / baseMeasurements.heightMm, clamp: [-0.5, 0.5] },
+        { key: "bust", ratio: measurements.bustMm / baseMeasurements.bustMm, clamp: [-0.3, 0.3] },
+        { key: "waist", ratio: measurements.waistMm / baseMeasurements.waistMm, clamp: [-0.3, 0.3] },
+        { key: "hip", ratio: measurements.hipMm / baseMeasurements.hipMm, clamp: [-0.3, 0.3] },
+        { key: "shoulders", ratio: measurements.shoulderWidthMm / baseMeasurements.shoulderWidthMm, clamp: [-0.2, 0.2] },
+        { key: "torso", ratio: measurements.torsoLengthMm / baseMeasurements.torsoLengthMm, clamp: [-0.2, 0.2] },
+        { key: "arms", ratio: measurements.armLengthMm / baseMeasurements.armLengthMm, clamp: [-0.2, 0.2] },
+        { key: "legs", ratio: measurements.inseamMm / baseMeasurements.inseamMm, clamp: [-0.2, 0.2] },
+      ];
+
+      for (const morph of morphTargets) {
+        const index = dict[morph.key];
+        if (typeof index === "number" && influences[index] !== undefined) {
+          influences[index] = THREE.MathUtils.clamp(morph.ratio - 1, morph.clamp[0], morph.clamp[1]);
+        }
+      }
+    });
   }
 
   private createLights(): THREE.Group {
