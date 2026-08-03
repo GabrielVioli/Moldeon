@@ -4,6 +4,7 @@ import {
   createGarmentFromTemplate,
 } from "../patterns/templateCatalog";
 import { useEditorStore } from "./editorStore";
+import { createPreviewPlacement } from "../domain/pattern";
 
 describe("garment 3D configuration", () => {
   beforeEach(() => {
@@ -50,33 +51,12 @@ describe("garment 3D configuration", () => {
 
   it("changes the body region used by the active pattern piece", () => {
     useEditorStore.getState().setActivePiecePlacements([
-      {
-        region: "sleeve",
-        surface: "back",
-        bodySide: "left",
-      },
-      {
-        region: "sleeve",
-        surface: "back",
-        bodySide: "right",
-        mirrorX: true,
-      },
+      createPreviewPlacement(useEditorStore.getState().activePieceId, { region: "arm", surface: "back", bodySide: "left" }),
+      createPreviewPlacement(useEditorStore.getState().activePieceId, { region: "arm", surface: "back", bodySide: "right", mirrorX: true }),
     ]);
 
     expect(
       useEditorStore.getState().snapshot.piece.previewPlacements,
-    ).toEqual([
-      {
-        region: "sleeve",
-        surface: "back",
-        bodySide: "left",
-      },
-      {
-        region: "sleeve",
-        surface: "back",
-        bodySide: "right",
-        mirrorX: true,
-      },
-    ]);
+    ).toMatchObject([{ region: "arm", surface: "back", bodySide: "left" }, { region: "arm", surface: "back", bodySide: "right", mirrorX: true }]);
   });
 });

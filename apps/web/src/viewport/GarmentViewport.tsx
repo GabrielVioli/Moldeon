@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
+import type { GarmentDraft, PatternSnapshot, PreviewRegion } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
 interface GarmentViewportProps {
@@ -8,6 +8,7 @@ interface GarmentViewportProps {
   simulateVersion: number;
   active: boolean;
   onBackendChange(backend: "webgpu" | "webgl2"): void;
+  onPieceDrop?(pieceId: string, region: PreviewRegion): void;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -16,6 +17,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   simulateVersion,
   active,
   onBackendChange,
+  onPieceDrop,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -26,6 +28,8 @@ export const GarmentViewport = memo(function GarmentViewport({
   const lastDressedVersionRef = useRef(0);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [draggingPiece, setDraggingPiece] = useState(false);
 
   latestSnapshotsRef.current = snapshots;
   latestGarmentRef.current = garment;
@@ -50,10 +54,10 @@ export const GarmentViewport = memo(function GarmentViewport({
         onBackendChange(viewport.backend);
 
         if (latestActiveRef.current) {
-          viewport.updateGarment(
+          setWarnings(viewport.updateGarment(
             latestSnapshotsRef.current,
             latestGarmentRef.current,
-          );
+          ));
         }
 
         if (
@@ -89,10 +93,11 @@ export const GarmentViewport = memo(function GarmentViewport({
     if (updateFrameRef.current !== null) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
-      viewportRef.current?.updateGarment(
+      const nextWarnings = viewportRef.current?.updateGarment(
         latestSnapshotsRef.current,
         latestGarmentRef.current,
       );
+      if (nextWarnings) setWarnings(nextWarnings);
     });
   }, [active, garment, snapshots]);
 
@@ -107,8 +112,41 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [simulateVersion]);
 
   return (
-    <div className="viewport-host" ref={hostRef}>
+    <div
+      className={`viewport-host${draggingPiece ? " is-piece-dragging" : ""}`}
+      ref={hostRef}
+      onDragEnter={(event) => {
+        if (event.dataTransfer.types.includes("application/x-moldeon-piece")) setDraggingPiece(true);
+      }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("application/x-moldeon-piece")) event.preventDefault();
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingPiece(false);
+      }}
+      onDrop={() => setDraggingPiece(false)}
+    >
       {error ? <div className="viewport-error">{error}</div> : null}
+      {warnings.length ? <div className="viewport-warnings" role="alert">{warnings.join(" ")}</div> : null}
+      {draggingPiece ? (
+        <div className="preview-drop-zones" aria-label="Regiões de posicionamento">
+          {(["torso", "waist", "hip", "arm", "leg"] as const).map((region) => (
+            <button
+              key={region}
+              type="button"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const pieceId = event.dataTransfer.getData("application/x-moldeon-piece");
+                if (pieceId) onPieceDrop?.(pieceId, region);
+                setDraggingPiece(false);
+              }}
+            >
+              {regionLabel(region)}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="viewport-label">
         Preview 3D · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
         {garment.fabrics.length > 1
@@ -118,3 +156,7 @@ export const GarmentViewport = memo(function GarmentViewport({
     </div>
   );
 });
+
+function regionLabel(region: PreviewRegion): string {
+  return { torso: "Tronco", waist: "Cintura", hip: "Quadril", arm: "Braço", leg: "Perna" }[region];
+}

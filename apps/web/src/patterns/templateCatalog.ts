@@ -309,8 +309,8 @@ function createSleevePiece({
     {
       cutQuantity: 2,
       previewPlacements: [
-        placement("sleeve", "front", "left"),
-        placement("sleeve", "front", "right", true),
+        placement("arm", "front", "left"),
+        placement("arm", "front", "right", true),
       ],
     },
   );
@@ -353,7 +353,7 @@ function createSkirtPieces(
       {
         cutQuantity: 1,
         cutOnFold: true,
-        previewPlacements: [placement("lower", surface, "center")],
+        previewPlacements: [placement("hip", surface, "center")],
       },
     );
 
@@ -555,7 +555,10 @@ function piece(
     ...(options.cutOnFold === undefined
       ? {}
       : { cutOnFold: options.cutOnFold }),
-    previewPlacements: options.previewPlacements,
+    previewPlacements: options.previewPlacements.map((placement) => ({
+      ...placement,
+      pieceId: id,
+    })),
     points: points.map((current) => ({
       ...current,
       id: `${id}:${current.id}`,
@@ -570,9 +573,16 @@ function placement(
   mirrorX = false,
 ): PatternPreviewPlacement {
   return {
+    id: `placement-${region}-${surface}-${bodySide}`,
+    pieceId: "pending-piece",
     region,
     surface,
     bodySide,
+    rotationDeg: 0,
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 25,
+    scale: 1,
     ...(mirrorX ? { mirrorX: true } : {}),
   };
 }

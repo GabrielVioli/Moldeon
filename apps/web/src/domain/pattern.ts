@@ -29,14 +29,21 @@ export interface BodyMeasurements {
 }
 
 export type BodyType = "feminine" | "masculine";
-export type PreviewRegion = "torso" | "lower" | "leg" | "sleeve";
-export type PreviewSurface = "front" | "back";
+export type PreviewRegion = "torso" | "waist" | "hip" | "arm" | "leg";
+export type PreviewSurface = "front" | "back" | "side";
 export type PreviewBodySide = "center" | "left" | "right";
 
 export interface PatternPreviewPlacement {
+  id: string;
+  pieceId: string;
   region: PreviewRegion;
   surface: PreviewSurface;
   bodySide: PreviewBodySide;
+  rotationDeg: number;
+  offsetXMm: number;
+  offsetYMm: number;
+  offsetZMm: number;
+  scale: number;
   mirrorX?: boolean;
 }
 
@@ -82,6 +89,13 @@ export interface PatternPiece {
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
   points: PatternPoint[];
+  grainline?: { start: PatternVector; end: PatternVector };
+  annotations?: Array<{
+    id: string;
+    label: string;
+    xMm: number;
+    yMm: number;
+  }>;
   // guides remain piece-local
   guides?: Guide[];
 }
@@ -91,6 +105,35 @@ export interface PieceWorkspaceTransform {
   xMm: number;
   yMm: number;
   rotationDeg: number;
+}
+
+export type SeamIssueCode =
+  | "piece-not-found"
+  | "edge-not-found"
+  | "invalid-range"
+  | "empty-range"
+  | "duplicate-seam"
+  | "invalid-self-seam"
+  | "length-mismatch";
+
+export interface SeamValidationIssue {
+  code: SeamIssueCode;
+  message: string;
+  seamId: string;
+}
+
+export interface PieceWorkspaceState {
+  pieceId: string;
+  transform: PieceWorkspaceTransform;
+  visible: boolean;
+  locked: boolean;
+}
+
+export interface DraftContour {
+  id: string;
+  name: string;
+  points: PatternPoint[];
+  closed: boolean;
 }
 
 export interface GarmentDraft {
@@ -106,6 +149,7 @@ export interface GarmentDraft {
   seams?: Seam[];
   // workspace transforms for arranging pieces on the prancheta (visual only)
   workspaceTransforms?: PieceWorkspaceTransform[];
+  workspaceStates?: PieceWorkspaceState[];
 }
 
 export interface PatternSnapshot {
@@ -131,17 +175,15 @@ export interface PatternEngineFacade {
   reset(): PatternSnapshot;
 }
 
-export function createBlankPatternPiece(name: string, id = `piece-${Math.random().toString(36).slice(2, 8)}`): PatternPiece {
+export function createPatternPieceFromDraft(draft: DraftContour): PatternPiece {
+  if (!draft.closed || draft.points.length < 3) {
+    throw new TypeError("O contorno precisa estar fechado e ter pelo menos três pontos.");
+  }
   return {
-    id,
-    name,
+    id: draft.id,
+    name: draft.name,
     seamAllowanceMm: 10,
-    points: [
-      { id: `${id}:a`, xMm: 0, yMm: 0 },
-      { id: `${id}:b`, xMm: 120, yMm: 0 },
-      { id: `${id}:c`, xMm: 120, yMm: 90 },
-      { id: `${id}:d`, xMm: 0, yMm: 90 },
-    ],
+    points: draft.points.map((point) => structuredClone(point)),
   };
 }
 
@@ -150,26 +192,29 @@ export function duplicatePatternPiece(
   options: { mirrored?: boolean; newId?: string; name?: string } = {},
 ): PatternPiece {
   const clone = structuredClone(piece);
-  const newId = options.newId ?? `${piece.id}-copy`;
+  const newId = options.newId ?? createDocumentId("piece");
   const newName = options.name ?? `${piece.name} – cópia`;
   const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
+  const { previewPlacements: _placements, ...copyable } = clone;
 
   return {
-    ...clone,
+    ...copyable,
     id: newId,
     name: newName,
     points: points.map((point, index) => ({
       ...point,
-      id: `${newId}:p${index + 1}`,
+      id: createDocumentId(`${newId}:point-${index + 1}`),
       handleIn: point.handleIn ? { ...point.handleIn } : undefined,
       handleOut: point.handleOut ? { ...point.handleOut } : undefined,
     })),
   };
 }
 
-function mirrorPatternPoints(points: PatternPoint[]): PatternPoint[] {
-  const centerX = points.reduce((sum, point) => sum + point.xMm, 0) / points.length;
-  return points.map((point) => ({
+export function mirrorPatternPoints(points: readonly PatternPoint[]): PatternPoint[] {
+  const minX = Math.min(...points.map((point) => point.xMm));
+  const maxX = Math.max(...points.map((point) => point.xMm));
+  const centerX = (minX + maxX) / 2;
+  const mirrored = points.map((point) => ({
     ...point,
     xMm: centerX * 2 - point.xMm,
     handleIn: point.handleIn
@@ -185,6 +230,19 @@ function mirrorPatternPoints(points: PatternPoint[]): PatternPoint[] {
         }
       : undefined,
   }));
+  return mirrored.reverse().map((point) => ({
+    ...point,
+    handleIn: point.handleOut ? { ...point.handleOut } : undefined,
+    handleOut: point.handleIn ? { ...point.handleIn } : undefined,
+  }));
+}
+
+export function createDocumentId(prefix: string): string {
+  const suffix =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
 }
 
 export function parsePatternPiece(value: unknown): PatternPiece {
@@ -221,7 +279,13 @@ export function parsePatternPiece(value: unknown): PatternPiece {
   const previewPlacements =
     value.previewPlacements === undefined
       ? undefined
-      : parsePreviewPlacements(value.previewPlacements);
+      : parsePreviewPlacements(value.previewPlacements).map((placement) => ({
+          ...placement,
+          pieceId: placement.pieceId === "legacy-piece" ? id : placement.pieceId,
+        }));
+
+  const grainline = value.grainline === undefined ? undefined : parseGrainline(value.grainline);
+  const annotations = value.annotations === undefined ? undefined : parseAnnotations(value.annotations);
 
   // parse optional guides
   let guides: Guide[] | undefined;
@@ -245,8 +309,26 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
     points,
+    ...(grainline === undefined ? {} : { grainline }),
+    ...(annotations === undefined ? {} : { annotations }),
     ...(guides === undefined ? {} : { guides }),
   };
+}
+
+function parseGrainline(value: unknown): NonNullable<PatternPiece["grainline"]> {
+  if (!isRecord(value) || !isRecord(value.start) || !isRecord(value.end)) throw new TypeError("O fio da peça é inválido.");
+  return {
+    start: { xMm: readFiniteNumber(value.start.xMm, "O X inicial do fio"), yMm: readFiniteNumber(value.start.yMm, "O Y inicial do fio") },
+    end: { xMm: readFiniteNumber(value.end.xMm, "O X final do fio"), yMm: readFiniteNumber(value.end.yMm, "O Y final do fio") },
+  };
+}
+
+function parseAnnotations(value: unknown): NonNullable<PatternPiece["annotations"]> {
+  if (!Array.isArray(value)) throw new TypeError("As anotações da peça são inválidas.");
+  return value.map((annotation, index) => {
+    if (!isRecord(annotation)) throw new TypeError(`A anotação ${index + 1} é inválida.`);
+    return { id: readString(annotation.id, "O id da anotação"), label: readString(annotation.label, "O texto da anotação"), xMm: readFiniteNumber(annotation.xMm, "O X da anotação"), yMm: readFiniteNumber(annotation.yMm, "O Y da anotação") };
+  });
 }
 
 // new: parse an EdgeRange in the new format
@@ -345,7 +427,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const easeRatio = s.easeRatio === undefined ? 0 : readFiniteNumber(s.easeRatio, `O easeRatio da costura ${i + 1}`);
       const type = s.type === undefined ? "standard" : readString(s.type, `O tipo da costura ${i + 1}`);
       if (!seamIds.has(id)) {
-        seams.push({ id, first, second, direction, easeRatio, type } as any);
+        seams.push({ id, first, second, direction, easeRatio, type });
         seamIds.add(id);
       }
     }
@@ -362,6 +444,36 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const yMm = readFiniteNumber(t.yMm, `workspaceTransforms[${idx}].yMm`);
       const rotationDeg = readFiniteNumber(t.rotationDeg, `workspaceTransforms[${idx}].rotationDeg`);
       return { pieceId, xMm, yMm, rotationDeg } as PieceWorkspaceTransform;
+    });
+  }
+
+  let workspaceStates: PieceWorkspaceState[] | undefined;
+  if (value.workspaceStates !== undefined) {
+    if (!Array.isArray(value.workspaceStates)) {
+      throw new TypeError("workspaceStates inválido.");
+    }
+    workspaceStates = value.workspaceStates.map((candidate, index) => {
+      if (!isRecord(candidate) || !isRecord(candidate.transform)) {
+        throw new TypeError(`workspaceStates[${index}] inválido.`);
+      }
+      const pieceId = readString(candidate.pieceId, `workspaceStates[${index}].pieceId`);
+      return {
+        pieceId,
+        transform: {
+          pieceId,
+          xMm: readFiniteNumber(candidate.transform.xMm, `workspaceStates[${index}].transform.xMm`),
+          yMm: readFiniteNumber(candidate.transform.yMm, `workspaceStates[${index}].transform.yMm`),
+          rotationDeg: readFiniteNumber(candidate.transform.rotationDeg, `workspaceStates[${index}].transform.rotationDeg`),
+        },
+        visible:
+          candidate.visible === undefined
+            ? true
+            : readBoolean(candidate.visible, `workspaceStates[${index}].visible`),
+        locked:
+          candidate.locked === undefined
+            ? false
+            : readBoolean(candidate.locked, `workspaceStates[${index}].locked`),
+      };
     });
   }
 
@@ -400,7 +512,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         const first = parseLegacyRange(legacy.first);
         const second = parseLegacyRange(legacy.second);
         const direction = legacy.direction === "reverse" ? "opposite" : "same";
-        seams.push({ id, first, second, direction, easeRatio: 0, type: "standard" } as any);
+        seams.push({ id, first, second, direction, easeRatio: 0, type: "standard" });
         seamIds.add(id);
       } catch (e) {
         // skip invalid legacy seam but keep project loadable
@@ -429,6 +541,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     pieces: normalizedPieces,
     ...(seams.length === 0 ? {} : { seams }),
     ...(transforms.length === 0 ? {} : { workspaceTransforms: transforms }),
+    ...(workspaceStates === undefined ? {} : { workspaceStates }),
   };
 }
 
@@ -638,14 +751,20 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
     if (!isRecord(placement)) {
       throw new TypeError(`A posição de prévia ${index + 1} é inválida.`);
     }
-    const region = readEnum(
+    const legacyRegion = readEnum(
       placement.region,
-      ["torso", "lower", "leg", "sleeve"] as const,
+      ["torso", "waist", "hip", "arm", "leg", "lower", "sleeve"] as const,
       `A região da posição ${index + 1}`,
     );
+    const region: PreviewRegion =
+      legacyRegion === "lower"
+        ? "hip"
+        : legacyRegion === "sleeve"
+          ? "arm"
+          : legacyRegion;
     const surface = readEnum(
       placement.surface,
-      ["front", "back"] as const,
+      ["front", "back", "side"] as const,
       `A face da posição ${index + 1}`,
     );
     const bodySide = readEnum(
@@ -658,12 +777,142 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
         ? undefined
         : readBoolean(placement.mirrorX, `O espelhamento da posição ${index + 1}`);
     return {
+      id:
+        placement.id === undefined
+          ? createDocumentId("placement")
+          : readString(placement.id, `O identificador da posição ${index + 1}`),
+      pieceId:
+        placement.pieceId === undefined
+          ? "legacy-piece"
+          : readString(placement.pieceId, `A peça da posição ${index + 1}`),
       region,
       surface,
       bodySide,
+      rotationDeg:
+        placement.rotationDeg === undefined
+          ? 0
+          : readFiniteNumber(placement.rotationDeg, `A rotação da posição ${index + 1}`),
+      offsetXMm:
+        placement.offsetXMm === undefined
+          ? 0
+          : readFiniteNumber(placement.offsetXMm, `O deslocamento X da posição ${index + 1}`),
+      offsetYMm:
+        placement.offsetYMm === undefined
+          ? 0
+          : readFiniteNumber(placement.offsetYMm, `O deslocamento Y da posição ${index + 1}`),
+      offsetZMm:
+        placement.offsetZMm === undefined
+          ? 25
+          : readFiniteNumber(placement.offsetZMm, `O afastamento da posição ${index + 1}`),
+      scale:
+        placement.scale === undefined
+          ? 1
+          : readOptionalPositiveNumber(placement.scale, 1, `A escala da posição ${index + 1}`),
       ...(mirrorX === undefined ? {} : { mirrorX }),
     };
   });
+}
+
+export function validateSeam(
+  seam: Seam,
+  garment: Pick<GarmentDraft, "pieces" | "seams">,
+): SeamValidationIssue[] {
+  const issues: SeamValidationIssue[] = [];
+  const ranges = [seam.first, seam.second] as const;
+  const resolved: Array<{ piece: PatternPiece; range: EdgeRange } | null> = [];
+
+  for (const range of ranges) {
+    const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId);
+    if (!piece) {
+      issues.push(issue("piece-not-found", seam.id, `A peça ${range.pieceId} não existe.`));
+      resolved.push(null);
+      continue;
+    }
+    if (!getEdgeById(piece, range.edgeId)) {
+      issues.push(issue("edge-not-found", seam.id, `A borda ${range.edgeId} não existe.`));
+      resolved.push(null);
+      continue;
+    }
+    if (
+      !Number.isFinite(range.startT) ||
+      !Number.isFinite(range.endT) ||
+      range.startT < 0 ||
+      range.endT > 1 ||
+      range.startT > range.endT
+    ) {
+      issues.push(issue("invalid-range", seam.id, "O intervalo da costura deve estar entre 0 e 1."));
+    } else if (range.endT - range.startT <= 1e-6) {
+      issues.push(issue("empty-range", seam.id, "O intervalo da costura está vazio."));
+    }
+    resolved.push({ piece, range });
+  }
+
+  if (
+    seam.first.pieceId === seam.second.pieceId &&
+    seam.first.edgeId === seam.second.edgeId
+  ) {
+    issues.push(issue("invalid-self-seam", seam.id, "Uma borda não pode ser costurada nela mesma."));
+  }
+
+  const duplicate = (garment.seams ?? []).some(
+    (candidate) =>
+      candidate.id !== seam.id &&
+      ((rangesEqual(candidate.first, seam.first) && rangesEqual(candidate.second, seam.second)) ||
+        (rangesEqual(candidate.first, seam.second) && rangesEqual(candidate.second, seam.first))),
+  );
+  if (duplicate) {
+    issues.push(issue("duplicate-seam", seam.id, "Esta costura já existe."));
+  }
+
+  if (resolved[0] && resolved[1] && !issues.some((candidate) => candidate.code === "invalid-range")) {
+    const firstLength = edgeRangeLength(resolved[0].piece, resolved[0].range);
+    const secondLength = edgeRangeLength(resolved[1].piece, resolved[1].range);
+    const difference = Math.abs(firstLength - secondLength);
+    const tolerance = Math.max(10, Math.max(firstLength, secondLength) * 0.15);
+    if (difference > tolerance) {
+      issues.push(
+        issue(
+          "length-mismatch",
+          seam.id,
+          `Diferença excessiva de comprimento: ${difference.toFixed(1)} mm.`,
+        ),
+      );
+    }
+  }
+
+  return issues;
+}
+
+function issue(code: SeamIssueCode, seamId: string, message: string): SeamValidationIssue {
+  return { code, seamId, message };
+}
+
+function rangesEqual(left: EdgeRange, right: EdgeRange): boolean {
+  return (
+    left.pieceId === right.pieceId &&
+    left.edgeId === right.edgeId &&
+    left.startT === right.startT &&
+    left.endT === right.endT
+  );
+}
+
+export function createPreviewPlacement(
+  pieceId: string,
+  update: Partial<Omit<PatternPreviewPlacement, "id" | "pieceId">> = {},
+): PatternPreviewPlacement {
+  return {
+    id: createDocumentId("placement"),
+    pieceId,
+    region: "torso",
+    surface: "front",
+    bodySide: "center",
+    rotationDeg: 0,
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 25,
+    scale: 1,
+    ...update,
+  };
 }
 
 function readEnum<const T extends readonly string[]>(

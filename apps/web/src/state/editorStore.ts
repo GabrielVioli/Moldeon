@@ -1,21 +1,27 @@
 import { create } from "zustand";
 import { currentEngine } from "../core/engineRuntime";
-import type {
-  BodyMeasurements,
-  BodyType,
-  GarmentDraft,
-  PatternPiece,
-  PatternPreviewPlacement,
-  PatternSnapshot,
-  EdgeRange,
-  Seam,
-  Guide,
-  PieceWorkspaceTransform,
-} from "../domain/pattern";
 import {
-  createBlankPatternPiece,
+  createDocumentId,
+  createPatternPieceFromDraft,
+  createPreviewPlacement,
   duplicatePatternPiece,
+  validateSeam,
+  type BodyMeasurements,
+  type BodyType,
+  type DraftContour,
+  type EdgeRange,
+  type GarmentDraft,
+  type Guide,
+  type PatternPiece,
+  type PatternPoint,
+  type PatternPreviewPlacement,
+  type PatternSnapshot,
+  type PieceWorkspaceState,
+  type PieceWorkspaceTransform,
+  type Seam,
+  type SeamValidationIssue,
 } from "../domain/pattern";
+import { validatePatternContour } from "../domain/polygonGeometry";
 import {
   applyFabricPreset,
   createDefaultFabricSource,
@@ -23,57 +29,53 @@ import {
   type FabricPresetId,
   type FabricSource,
 } from "../domain/fabric";
+import { insertPatternPoint, removePatternPoint } from "../domain/patternEditing";
 import {
-  insertPatternPoint,
-  removePatternPoint,
-} from "../domain/patternEditing";
-import { PatternCommandHistory } from "./patternCommandHistory";
+  DocumentCommandHistory,
+  type DocumentCommandType,
+  type EditorDocumentState,
+} from "./documentCommandHistory";
 
-interface EditorState {
+export interface EditorState {
   garment: GarmentDraft;
   baselinePieces: PatternPiece[];
   activePieceId: string;
   snapshot: PatternSnapshot;
   engineBackend: "wasm" | "typescript";
   selectedPointId: string | null;
+  selectedEdgeId: string | null;
+  pieceSelectionActive: boolean;
+  draftContour: DraftContour | null;
+  draftCursor: PatternPoint | null;
+  draftError: string | null;
+  seamIssues: SeamValidationIssue[];
   simulateVersion: number;
   canUndo: boolean;
   canRedo: boolean;
   setEngineSnapshot(snapshot: PatternSnapshot, backend: "wasm" | "typescript"): void;
-  restoreGarment(
-    garment: GarmentDraft,
-    activePieceId: string,
-    backend: "wasm" | "typescript",
-  ): void;
+  restoreGarment(garment: GarmentDraft, activePieceId: string, backend: "wasm" | "typescript"): void;
   loadGarment(garment: GarmentDraft): void;
   selectPiece(pieceId: string): void;
   selectPoint(pointId: string | null): void;
-  beginEdit(label: string): void;
+  selectEdge(edgeId: string | null): void;
+  clearSelection(): void;
+  beginEdit(label: string, type?: DocumentCommandType): void;
   commitEdit(): void;
   cancelEdit(): void;
   movePoint(pointId: string, xMm: number, yMm: number): void;
-  moveHandle(
-    pointId: string,
-    handle: "in" | "out",
-    xMm: number,
-    yMm: number,
-  ): void;
+  moveHandle(pointId: string, handle: "in" | "out", xMm: number, yMm: number): void;
   setSegmentCurve(pointId: string, enabled: boolean): void;
   insertPoint(startPointId: string, t: number): void;
   removePoint(pointId: string): void;
   setSeamAllowance(valueMm: number): void;
-  // seams and guides manipulation
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
-  addGuide(orientation: "horizontal" | "vertical", positionMm: number): void;
+  addGuide(orientation: Guide["orientation"], positionMm: number): void;
   moveGuide(guideId: string, positionMm: number): void;
   removeGuide(guideId: string): void;
   setBodyType(bodyType: BodyType): void;
-  setBodyMeasurement(
-    measurement: keyof BodyMeasurements,
-    valueMm: number,
-  ): void;
+  setBodyMeasurement(measurement: keyof BodyMeasurements, valueMm: number): void;
   addFabric(presetId: FabricPresetId): string;
   updateFabric(fabricId: string, update: Partial<FabricSource>): void;
   applyFabricPreset(fabricId: string, presetId: FabricPresetId): void;
@@ -82,8 +84,15 @@ interface EditorState {
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
   movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
   setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
+  setPieceVisibility(pieceId: string, visible: boolean): void;
+  setPieceLocked(pieceId: string, locked: boolean): void;
   duplicatePiece(pieceId: string, mirrored?: boolean): void;
-  createBlankPiece(name: string): void;
+  startDraft(name: string): void;
+  addDraftPoint(xMm: number, yMm: number): void;
+  updateDraftCursor(xMm: number, yMm: number): void;
+  removeDraftPoint(): void;
+  closeDraft(): void;
+  cancelDraft(): void;
   deletePiece(pieceId: string): void;
   renamePiece(pieceId: string, name: string): void;
   resetPattern(): void;
@@ -93,10 +102,8 @@ interface EditorState {
 }
 
 const initialSnapshot = currentEngine().snapshot();
-const commandHistory = new PatternCommandHistory();
-const workspaceHistory: Array<{ label: string; before: PieceWorkspaceTransform[]; after: PieceWorkspaceTransform[] }> = [];
-const workspaceFuture: Array<{ label: string; before: PieceWorkspaceTransform[]; after: PieceWorkspaceTransform[] }> = [];
-const initialGarment = createLegacyGarment(initialSnapshot.piece);
+const history = new DocumentCommandHistory();
+const initialGarment = ensureWorkspaceState(createLegacyGarment(initialSnapshot.piece));
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   garment: initialGarment,
@@ -105,616 +112,563 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   snapshot: initialSnapshot,
   engineBackend: "typescript",
   selectedPointId: null,
+  selectedEdgeId: null,
+  pieceSelectionActive: false,
+  draftContour: null,
+  draftCursor: null,
+  draftError: null,
+  seamIssues: [],
   simulateVersion: 0,
   canUndo: false,
   canRedo: false,
 
   setEngineSnapshot: (snapshot, backend) => {
-    commandHistory.clear();
-    const currentGarment = get().garment;
-    const sourcePiece =
-      currentGarment.pieces.find((piece) => piece.id === snapshot.piece.id) ??
-      snapshot.piece;
-    const enrichedSnapshot = preservePieceMetadata(snapshot, sourcePiece);
+    history.clear();
+    const garment = ensureWorkspaceState(replacePiece(get().garment, snapshot.piece));
     set({
-      garment: replacePiece(currentGarment, enrichedSnapshot.piece),
-      snapshot: enrichedSnapshot,
+      garment,
+      snapshot: preservePieceMetadata(snapshot, snapshot.piece),
       engineBackend: backend,
-      activePieceId: enrichedSnapshot.piece.id,
+      activePieceId: snapshot.piece.id,
       selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
+      selectedEdgeId: null,
+      pieceSelectionActive: false,
+      ...historyAvailability(),
     });
   },
 
   restoreGarment: (garment, requestedPieceId, backend) => {
-    const normalizedGarment = ensureWorkspaceTransforms(garment);
-    const activePiece =
-      normalizedGarment.pieces.find((piece) => piece.id === requestedPieceId) ??
-      normalizedGarment.pieces[0];
+    history.clear();
+    const normalized = migrateLegacyDocument(garment);
+    const activePiece = normalized.pieces.find((piece) => piece.id === requestedPieceId) ?? normalized.pieces[0];
     if (!activePiece) return;
-    commandHistory.clear();
-    const snapshot = preservePieceMetadata(
-      currentEngine().restorePiece(activePiece),
-      activePiece,
-    );
+    const snapshot = restoreSnapshot(activePiece);
     set({
-      garment: replacePiece(normalizedGarment, snapshot.piece),
-      baselinePieces: clonePieces(garment.pieces),
+      garment: replacePiece(normalized, snapshot.piece),
+      baselinePieces: clonePieces(normalized.pieces),
       activePieceId: activePiece.id,
       snapshot,
       engineBackend: backend,
       selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
+      selectedEdgeId: null,
+      pieceSelectionActive: false,
+      draftContour: null,
+      draftCursor: null,
+      draftError: null,
+      seamIssues: collectSeamIssues(normalized),
+      ...historyAvailability(),
     });
   },
 
   loadGarment: (garment) => {
-    const normalizedGarment = ensureWorkspaceTransforms(garment);
-    const activePiece = normalizedGarment.pieces[0];
+    history.clear();
+    const normalized = migrateLegacyDocument(garment);
+    const activePiece = normalized.pieces[0];
     if (!activePiece) return;
-    commandHistory.clear();
-    const snapshot = preservePieceMetadata(
-      currentEngine().restorePiece(activePiece),
-      activePiece,
-    );
-    set({
-      garment: replacePiece(normalizedGarment, snapshot.piece),
-      baselinePieces: clonePieces(garment.pieces),
-      activePieceId: activePiece.id,
-      snapshot,
-      selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
-    });
+    applyDocumentState(set, get, { garment: normalized, activePieceId: activePiece.id });
+    set({ baselinePieces: clonePieces(normalized.pieces), ...historyAvailability() });
   },
 
   selectPiece: (pieceId) => {
-    if (pieceId === get().activePieceId) return;
     const piece = get().garment.pieces.find((candidate) => candidate.id === pieceId);
     if (!piece) return;
-    commandHistory.clear();
-    const snapshot = preservePieceMetadata(
-      currentEngine().restorePiece(piece),
-      piece,
-    );
     set({
-      garment: replacePiece(get().garment, snapshot.piece),
-      activePieceId: piece.id,
-      snapshot,
+      activePieceId: pieceId,
+      snapshot: restoreSnapshot(piece),
       selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
+      selectedEdgeId: null,
+      pieceSelectionActive: true,
     });
   },
 
-  selectPoint: (selectedPointId) => set({ selectedPointId }),
+  selectPoint: (selectedPointId) => set({
+    selectedPointId,
+    selectedEdgeId: null,
+    pieceSelectionActive: false,
+  }),
+  selectEdge: (selectedEdgeId) => set({
+    selectedEdgeId,
+    selectedPointId: null,
+    pieceSelectionActive: false,
+  }),
+  clearSelection: () => set({
+    selectedPointId: null,
+    selectedEdgeId: null,
+    pieceSelectionActive: false,
+  }),
 
-  beginEdit: (label) => {
-    commandHistory.begin(label, get().snapshot.piece);
+  beginEdit: (label, type = inferCommandType(label)) => {
+    history.begin(type, label, captureDocument(get));
   },
-
   commitEdit: () => {
-    commandHistory.commit(get().snapshot.piece);
+    history.commit(captureDocument(get));
     set(historyAvailability());
   },
-
   cancelEdit: () => {
-    const piece = commandHistory.cancel();
-    if (!piece) return;
-    updateActiveSnapshot(set, get, currentEngine().restorePiece(piece));
+    const document = history.cancel();
+    if (document) applyDocumentState(set, get, document);
   },
 
   movePoint: (pointId, xMm, yMm) => {
-    const before = get().snapshot.piece;
-    const snapshot = currentEngine().movePoint(pointId, xMm, yMm);
-    commandHistory.record("Mover ponto", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot);
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().movePoint(pointId, xMm, yMm));
+    recordIfStandalone(set, get, "geometry", "Mover ponto", before);
   },
-
   moveHandle: (pointId, handle, xMm, yMm) => {
-    const before = get().snapshot.piece;
-    const snapshot = currentEngine().moveHandle(pointId, handle, xMm, yMm);
-    commandHistory.record("Ajustar curva", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot);
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().moveHandle(pointId, handle, xMm, yMm));
+    recordIfStandalone(set, get, "geometry", "Ajustar curva", before);
   },
-
   setSegmentCurve: (pointId, enabled) => {
-    const before = get().snapshot.piece;
-    const snapshot = currentEngine().setSegmentCurve(pointId, enabled);
-    commandHistory.record(
-      enabled ? "Criar curva" : "Converter em linha",
-      before,
-      snapshot.piece,
-    );
-    updateActiveSnapshot(set, get, snapshot);
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().setSegmentCurve(pointId, enabled));
+    recordIfStandalone(set, get, "geometry", enabled ? "Criar curva" : "Converter em linha", before);
   },
-
   insertPoint: (startPointId, t) => {
-    const before = get().snapshot.piece;
-    const insertion = insertPatternPoint(before, startPointId, t);
+    const insertion = insertPatternPoint(get().snapshot.piece, startPointId, t);
     if (!insertion) return;
-    const snapshot = currentEngine().restorePiece(insertion.piece);
-    commandHistory.record("Adicionar ponto", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot, {
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().restorePiece(insertion.piece), {
       selectedPointId: insertion.pointId,
     });
+    recordIfStandalone(set, get, "geometry", "Adicionar ponto", before);
   },
-
   removePoint: (pointId) => {
-    const before = get().snapshot.piece;
-    const piece = removePatternPoint(before, pointId);
+    const piece = removePatternPoint(get().snapshot.piece, pointId);
     if (!piece) return;
-    const snapshot = currentEngine().restorePiece(piece);
-    commandHistory.record("Excluir ponto", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot, { selectedPointId: null });
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().restorePiece(piece), {
+      selectedPointId: null,
+    });
+    recordIfStandalone(set, get, "geometry", "Excluir ponto", before);
   },
-
   setSeamAllowance: (valueMm) => {
-    const before = get().snapshot.piece;
-    const snapshot = currentEngine().setSeamAllowance(valueMm);
-    commandHistory.record("Alterar margem", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot);
+    const before = captureDocument(get);
+    applyGeometrySnapshot(set, get, currentEngine().setSeamAllowance(valueMm));
+    recordIfStandalone(set, get, "seam-allowance", "Alterar margem", before);
   },
 
-  // Seams: create / remove / toggle direction (now stored at garment level)
-  addSeam: (first: EdgeRange, second: EdgeRange, direction: "forward" | "reverse" = "forward") => {
+  addSeam: (first, second, direction = "forward") => {
     const state = get();
-    const beforeGarment = state.garment;
-    const beforeSeams = [...(beforeGarment.seams ?? [])];
-    const id = `${beforeGarment.id}:seam-${beforeSeams.length + 1}`;
-    // map legacy direction to new semantics
-    const dir: any = direction === "reverse" ? "opposite" : "same";
-    const newSeam: Seam = { id, first: { ...first } as any, second: { ...second } as any, direction: dir, easeRatio: 0, type: "standard" } as any;
-    const afterSeams = [...beforeSeams, newSeam];
-
-    // record a synthetic piece change carrying seams so undo/redo can carry them back
-    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
-    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
-    commandHistory.record("Criar costura", beforePiece, afterPiece);
-
-    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
-    updateActiveSnapshot(set, get, snapshot, { selectedPointId: null });
-  },
-
-  removeSeam: (seamId: string) => {
-    const state = get();
-    const beforeGarment = state.garment;
-    const beforeSeams = [...(beforeGarment.seams ?? [])];
-    const afterSeams = beforeSeams.filter((s) => s.id !== seamId);
-
-    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
-    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
-    commandHistory.record("Remover costura", beforePiece, afterPiece);
-
-    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
-    updateActiveSnapshot(set, get, snapshot);
-  },
-
-  toggleSeamDirection: (seamId: string) => {
-    const state = get();
-    const beforeGarment = state.garment;
-    const beforeSeams = [...(beforeGarment.seams ?? [])];
-    const afterSeams = beforeSeams.map((s) =>
-      s.id === seamId ? ({ ...s, direction: s.direction === "same" ? "opposite" : "same" } as Seam) : s,
-    );
-
-    const beforePiece = { ...state.snapshot.piece, seams: beforeSeams } as any;
-    const afterPiece = { ...state.snapshot.piece, seams: afterSeams } as any;
-    commandHistory.record("Alternar direção da costura", beforePiece, afterPiece);
-
-    const snapshot = { ...state.snapshot, piece: afterPiece } as any;
-    updateActiveSnapshot(set, get, snapshot);
-  },
-
-  // Guides: simple create / move / remove
-  addGuide: (orientation: "horizontal" | "vertical", positionMm: number) => {
-    const before = get().snapshot.piece;
-    const nextGuides = [...(before.guides ?? [])];
-    const id = `${before.id}:guide-${nextGuides.length + 1}`;
-    nextGuides.push({ id, orientation, positionMm });
-    const piece = { ...before, guides: nextGuides };
-    commandHistory.record("Adicionar guia", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
-  },
-
-  moveGuide: (guideId: string, positionMm: number) => {
-    const before = get().snapshot.piece;
-    const nextGuides = (before.guides ?? []).map((g) =>
-      g.id === guideId ? { ...g, positionMm } : g,
-    );
-    const piece = { ...before, guides: nextGuides };
-    commandHistory.record("Mover guia", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
-  },
-
-  removeGuide: (guideId: string) => {
-    const before = get().snapshot.piece;
-    const nextGuides = (before.guides ?? []).filter((g) => g.id !== guideId);
-    const piece = { ...before, guides: nextGuides };
-    commandHistory.record("Remover guia", before, piece);
-    updateActiveSnapshot(set, get, { ...get().snapshot, piece } as any);
-  },
-
-  setBodyType: (bodyType) => {
-    set((state) => ({
-      garment: {
-        ...state.garment,
-        bodyType,
-      },
+    const seam: Seam = {
+      id: createDocumentId("seam"),
+      first: { ...first },
+      second: { ...second },
+      direction: direction === "reverse" ? "opposite" : "same",
+      easeRatio: 0,
+      type: "standard",
+    };
+    const issues = validateSeam(seam, state.garment);
+    if (issues.length > 0) {
+      set({ seamIssues: issues });
+      return;
+    }
+    changeDocument(set, get, "seam", "Criar costura", (document) => ({
+      ...document,
+      garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
     }));
   },
+  removeSeam: (seamId) => changeDocument(set, get, "seam", "Remover costura", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      seams: (document.garment.seams ?? []).filter((seam) => seam.id !== seamId),
+    },
+  })),
+  toggleSeamDirection: (seamId) => changeDocument(set, get, "seam", "Inverter costura", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      seams: (document.garment.seams ?? []).map((seam) =>
+        seam.id === seamId
+          ? { ...seam, direction: seam.direction === "same" ? "opposite" : "same" }
+          : seam,
+      ),
+    },
+  })),
 
+  addGuide: (orientation, positionMm) => updateActivePieceDocument(
+    set,
+    get,
+    "metadata",
+    "Adicionar guia",
+    (piece) => ({
+      ...piece,
+      guides: [...(piece.guides ?? []), { id: createDocumentId("guide"), orientation, positionMm }],
+    }),
+  ),
+  moveGuide: (guideId, positionMm) => updateActivePieceDocument(
+    set,
+    get,
+    "metadata",
+    "Mover guia",
+    (piece) => ({
+      ...piece,
+      guides: (piece.guides ?? []).map((guide) =>
+        guide.id === guideId ? { ...guide, positionMm } : guide,
+      ),
+    }),
+  ),
+  removeGuide: (guideId) => updateActivePieceDocument(
+    set,
+    get,
+    "metadata",
+    "Remover guia",
+    (piece) => ({ ...piece, guides: (piece.guides ?? []).filter((guide) => guide.id !== guideId) }),
+  ),
+
+  setBodyType: (bodyType) => changeDocument(set, get, "metadata", "Alterar corpo", (document) => ({
+    ...document,
+    garment: { ...document.garment, bodyType },
+  })),
   setBodyMeasurement: (measurement, valueMm) => {
     if (!Number.isFinite(valueMm) || valueMm <= 0) return;
-    set((state) => ({
+    changeDocument(set, get, "measurement", "Alterar medida corporal", (document) => ({
+      ...document,
       garment: {
-        ...state.garment,
-        measurements: {
-          ...state.garment.measurements,
-          [measurement]: valueMm,
-        },
+        ...document.garment,
+        measurements: { ...document.garment.measurements, [measurement]: valueMm },
       },
     }));
   },
 
   addFabric: (presetId) => {
     const source = createFabricSource(presetId, get().garment.fabrics.length);
-    set((state) => ({
-      garment: {
-        ...state.garment,
-        fabrics: [...state.garment.fabrics, source],
-      },
+    changeDocument(set, get, "metadata", "Adicionar tecido", (document) => ({
+      ...document,
+      garment: { ...document.garment, fabrics: [...document.garment.fabrics, source] },
     }));
     return source.id;
   },
-
-  updateFabric: (fabricId, update) => {
-    set((state) => ({
-      garment: {
-        ...state.garment,
-        fabrics: state.garment.fabrics.map((source) =>
-          source.id === fabricId
-            ? sanitizeFabricUpdate({ ...source, ...update }, source)
-            : source,
-        ),
-      },
-    }));
-  },
-
-  applyFabricPreset: (fabricId, presetId) => {
-    set((state) => ({
-      garment: {
-        ...state.garment,
-        fabrics: state.garment.fabrics.map((source) =>
-          source.id === fabricId
-            ? applyFabricPreset(source, presetId)
-            : source,
-        ),
-      },
-    }));
-  },
-
-  removeFabric: (fabricId) => {
-    const state = get();
-    if (state.garment.fabrics.length <= 1) return;
-    const fabrics = state.garment.fabrics.filter(
-      (source) => source.id !== fabricId,
-    );
-    const fallbackFabricId = fabrics[0].id;
-    const garment = {
-      ...state.garment,
-      fabrics,
-      pieces: state.garment.pieces.map((piece) =>
-        piece.fabricId === fabricId
-          ? { ...piece, fabricId: fallbackFabricId }
-          : piece,
+  updateFabric: (fabricId, update) => changeDocument(set, get, "metadata", "Editar tecido", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      fabrics: document.garment.fabrics.map((fabric) =>
+        fabric.id === fabricId ? sanitizeFabricUpdate({ ...fabric, ...update }, fabric) : fabric,
       ),
-    };
-    const activePiece =
-      garment.pieces.find((piece) => piece.id === state.activePieceId) ??
-      state.snapshot.piece;
-    set({
-      garment,
-      snapshot: {
-        ...state.snapshot,
-        piece: structuredClone(activePiece),
-      },
+    },
+  })),
+  applyFabricPreset: (fabricId, presetId) => changeDocument(set, get, "metadata", "Alterar tecido", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      fabrics: document.garment.fabrics.map((fabric) =>
+        fabric.id === fabricId ? applyFabricPreset(fabric, presetId) : fabric,
+      ),
+    },
+  })),
+  removeFabric: (fabricId) => {
+    if (get().garment.fabrics.length <= 1) return;
+    changeDocument(set, get, "metadata", "Remover tecido", (document) => {
+      const fabrics = document.garment.fabrics.filter((fabric) => fabric.id !== fabricId);
+      const fallbackId = fabrics[0].id;
+      return {
+        ...document,
+        garment: {
+          ...document.garment,
+          fabrics,
+          pieces: document.garment.pieces.map((piece) =>
+            piece.fabricId === fabricId ? { ...piece, fabricId: fallbackId } : piece,
+          ),
+        },
+      };
     });
   },
-
   assignFabricToActivePiece: (fabricId) => {
-    if (!get().garment.fabrics.some((source) => source.id === fabricId)) return;
-    updatePieceMetadata(set, get, { fabricId });
+    if (!get().garment.fabrics.some((fabric) => fabric.id === fabricId)) return;
+    updateActivePieceDocument(set, get, "metadata", "Atribuir tecido", (piece) => ({ ...piece, fabricId }));
   },
-
-  setActivePiecePlacements: (placements) => {
-    if (placements.length === 0) return;
-    updatePieceMetadata(set, get, {
-      previewPlacements: placements.map((placement) => ({ ...placement })),
-    });
-  },
+  setActivePiecePlacements: (placements) => updateActivePieceDocument(
+    set,
+    get,
+    "placement",
+    placements.length > 0 ? "Alterar preparação 3D" : "Remover do corpo",
+    (piece) => ({
+      ...piece,
+      ...(placements.length > 0
+        ? { previewPlacements: structuredClone(placements) }
+        : { previewPlacements: undefined }),
+    }),
+  ),
 
   movePieceInWorkspace: (pieceId, xMm, yMm) => {
-    const state = get();
-    const beforeTransforms = cloneTransforms(state.garment.workspaceTransforms ?? []);
-    const patched = beforeTransforms.some((transform) => transform.pieceId === pieceId)
-      ? beforeTransforms.map((transform) =>
-          transform.pieceId === pieceId
-            ? { ...transform, xMm, yMm }
-            : transform,
-        )
-      : [...beforeTransforms, { pieceId, xMm, yMm, rotationDeg: 0 }];
-
-    if (transformsEqual(beforeTransforms, patched)) return;
-    workspaceHistory.push({ label: "Mover peça", before: beforeTransforms, after: patched });
-    workspaceFuture.length = 0;
-    set({
-      garment: {
-        ...state.garment,
-        workspaceTransforms: patched,
-      },
-      canUndo: true,
-      canRedo: false,
-    });
+    const state = workspaceStateFor(get().garment, pieceId);
+    if (state.locked) return;
+    get().setPieceWorkspaceTransform(pieceId, { ...state.transform, xMm, yMm });
   },
-
   setPieceWorkspaceTransform: (pieceId, transform) => {
-    const state = get();
-    const beforeTransforms = cloneTransforms(state.garment.workspaceTransforms ?? []);
-    const patched = beforeTransforms.some((candidate) => candidate.pieceId === pieceId)
-      ? beforeTransforms.map((candidate) =>
-          candidate.pieceId === pieceId ? { ...candidate, ...transform } : candidate,
-        )
-      : [...beforeTransforms, { ...transform, pieceId }];
-    if (transformsEqual(beforeTransforms, patched)) return;
-    workspaceHistory.push({ label: "Alterar posição da peça", before: beforeTransforms, after: patched });
-    workspaceFuture.length = 0;
-    set({
-      garment: {
-        ...state.garment,
-        workspaceTransforms: patched,
-      },
-      canUndo: true,
-      canRedo: false,
-    });
+    if (workspaceStateFor(get().garment, pieceId).locked) return;
+    const before = captureDocument(get);
+    const garment = patchWorkspaceState(get().garment, pieceId, (state) => ({
+      ...state,
+      transform: { ...transform, pieceId },
+    }));
+    set({ garment });
+    recordIfStandalone(set, get, "workspace", "Mover peça", before);
   },
+  setPieceVisibility: (pieceId, visible) => changeDocument(set, get, "workspace", "Alterar visibilidade", (document) => ({
+    ...document,
+    garment: patchWorkspaceState(document.garment, pieceId, (state) => ({ ...state, visible })),
+  })),
+  setPieceLocked: (pieceId, locked) => changeDocument(set, get, "workspace", "Alterar bloqueio", (document) => ({
+    ...document,
+    garment: patchWorkspaceState(document.garment, pieceId, (state) => ({ ...state, locked })),
+  })),
 
   duplicatePiece: (pieceId, mirrored = false) => {
-    const state = get();
-    const sourcePiece = state.garment.pieces.find((piece) => piece.id === pieceId);
-    if (!sourcePiece) return;
-    const draggedTransform = getTransform(state.garment.workspaceTransforms ?? [], pieceId);
-    const duplicate = duplicatePatternPiece(sourcePiece, {
+    const source = get().garment.pieces.find((piece) => piece.id === pieceId);
+    if (!source) return;
+    const duplicate = duplicatePatternPiece(source, {
       mirrored,
-      newId: `${sourcePiece.id}-copy-${Math.random().toString(36).slice(2, 8)}`,
-      name: `${sourcePiece.name} – cópia`,
+      name: `${source.name} – ${mirrored ? "espelhada" : "cópia"}`,
     });
-    const newTransform: PieceWorkspaceTransform = {
+    const sourceWorkspace = workspaceStateFor(get().garment, source.id);
+    const width = pieceWidth(source);
+    const nextWorkspace: PieceWorkspaceState = {
       pieceId: duplicate.id,
-      xMm: (draggedTransform?.xMm ?? 0) + 140,
-      yMm: (draggedTransform?.yMm ?? 0) + 120,
-      rotationDeg: draggedTransform?.rotationDeg ?? 0,
+      transform: {
+        pieceId: duplicate.id,
+        xMm: sourceWorkspace.transform.xMm + Math.max(140, width + 50),
+        yMm: sourceWorkspace.transform.yMm + 30,
+        rotationDeg: sourceWorkspace.transform.rotationDeg,
+      },
+      visible: true,
+      locked: false,
     };
-    const nextGarment = {
-      ...state.garment,
-      pieces: [...state.garment.pieces, duplicate],
-      workspaceTransforms: [...(state.garment.workspaceTransforms ?? []), newTransform],
-    };
-    const snapshot = currentEngine().restorePiece(duplicate);
-    set({
-      garment: nextGarment,
+    changeDocument(set, get, "piece-duplicate", mirrored ? "Duplicar espelhado" : "Duplicar peça", (document) => ({
       activePieceId: duplicate.id,
-      snapshot,
-      selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
-    });
+      garment: syncLegacyTransforms({
+        ...document.garment,
+        pieces: [...document.garment.pieces, duplicate],
+        workspaceStates: [...(document.garment.workspaceStates ?? []), nextWorkspace],
+      }),
+    }));
   },
 
-  createBlankPiece: (name) => {
-    const state = get();
-    const piece = createBlankPatternPiece(name || "Nova peça");
-    const transform: PieceWorkspaceTransform = {
+  startDraft: (name) => set({
+    draftContour: {
+      id: createDocumentId("piece"),
+      name: name.trim() || "Nova peça",
+      points: [],
+      closed: false,
+    },
+    draftCursor: null,
+    draftError: null,
+    selectedPointId: null,
+    selectedEdgeId: null,
+    pieceSelectionActive: false,
+  }),
+  addDraftPoint: (xMm, yMm) => set((state) => {
+    if (!state.draftContour || state.draftContour.closed) return {};
+    return {
+      draftContour: {
+        ...state.draftContour,
+        points: [
+          ...state.draftContour.points,
+          { id: createDocumentId(`${state.draftContour.id}:point`), xMm, yMm },
+        ],
+      },
+      draftError: null,
+    };
+  }),
+  updateDraftCursor: (xMm, yMm) => set((state) =>
+    state.draftContour
+      ? { draftCursor: { id: "draft-cursor", xMm, yMm } }
+      : {},
+  ),
+  removeDraftPoint: () => set((state) => {
+    if (!state.draftContour) return {};
+    return {
+      draftContour: {
+        ...state.draftContour,
+        points: state.draftContour.points.slice(0, -1),
+      },
+      draftError: null,
+    };
+  }),
+  closeDraft: () => {
+    const draft = get().draftContour;
+    if (!draft) return;
+    if (draft.points.length < 3) {
+      set({ draftError: "Adicione pelo menos três pontos antes de fechar." });
+      return;
+    }
+    const issues = validatePatternContour(draft.points);
+    if (issues.length > 0) {
+      set({ draftError: issues[0] });
+      return;
+    }
+    const minX = Math.min(...draft.points.map((point) => point.xMm));
+    const minY = Math.min(...draft.points.map((point) => point.yMm));
+    const localDraft: DraftContour = {
+      ...draft,
+      closed: true,
+      points: draft.points.map((point) => ({ ...point, xMm: point.xMm - minX, yMm: point.yMm - minY })),
+    };
+    const piece = createPatternPieceFromDraft(localDraft);
+    const workspace: PieceWorkspaceState = {
       pieceId: piece.id,
-      xMm: 220 + 180 * state.garment.pieces.length,
-      yMm: 140,
-      rotationDeg: 0,
+      transform: { pieceId: piece.id, xMm: minX, yMm: minY, rotationDeg: 0 },
+      visible: true,
+      locked: false,
     };
-    const nextGarment = {
-      ...state.garment,
-      pieces: [...state.garment.pieces, piece],
-      workspaceTransforms: [...(state.garment.workspaceTransforms ?? []), transform],
-    };
-    const snapshot = currentEngine().restorePiece(piece);
-    set({
-      garment: nextGarment,
+    changeDocument(set, get, "piece-create", "Criar peça", (document) => ({
       activePieceId: piece.id,
-      snapshot,
-      selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
+      garment: syncLegacyTransforms({
+        ...document.garment,
+        pieces: [...document.garment.pieces, piece],
+        workspaceStates: [...(document.garment.workspaceStates ?? []), workspace],
+      }),
+    }), {
+      draftContour: null,
+      draftCursor: null,
+      draftError: null,
+      pieceSelectionActive: true,
     });
   },
+  cancelDraft: () => set({ draftContour: null, draftCursor: null, draftError: null }),
 
   deletePiece: (pieceId) => {
-    const state = get();
-    const nextPieces = state.garment.pieces.filter((piece) => piece.id !== pieceId);
-    if (nextPieces.length === 0) return;
-    const nextTransforms = (state.garment.workspaceTransforms ?? []).filter((transform) => transform.pieceId !== pieceId);
-    const fallbackPieceId = nextPieces[0].id;
-    const nextGarment = {
-      ...state.garment,
-      pieces: nextPieces,
-      workspaceTransforms: nextTransforms,
-    };
-    const fallbackSnapshot = currentEngine().restorePiece(nextPieces[0]);
-    set({
-      garment: nextGarment,
-      activePieceId: fallbackPieceId,
-      snapshot: fallbackSnapshot,
-      selectedPointId: null,
-      canUndo: false,
-      canRedo: false,
-    });
+    if (get().garment.pieces.length <= 1) return;
+    changeDocument(set, get, "piece-delete", "Excluir peça", (document) => {
+      const pieces = document.garment.pieces.filter((piece) => piece.id !== pieceId);
+      const activePieceId = document.activePieceId === pieceId ? pieces[0].id : document.activePieceId;
+      return {
+        activePieceId,
+        garment: syncLegacyTransforms({
+          ...document.garment,
+          pieces,
+          seams: (document.garment.seams ?? []).filter(
+            (seam) => seam.first.pieceId !== pieceId && seam.second.pieceId !== pieceId,
+          ),
+          workspaceStates: (document.garment.workspaceStates ?? []).filter((state) => state.pieceId !== pieceId),
+        }),
+      };
+    }, { pieceSelectionActive: false });
   },
-
-  renamePiece: (pieceId, name) => {
-    const state = get();
-    const nextPieces = state.garment.pieces.map((piece) =>
-      piece.id === pieceId ? { ...piece, name } : piece,
-    );
-    set({ garment: { ...state.garment, pieces: nextPieces } });
-  },
-
+  renamePiece: (pieceId, name) => changeDocument(set, get, "piece-rename", "Renomear peça", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      pieces: document.garment.pieces.map((piece) =>
+        piece.id === pieceId ? { ...piece, name: name.trim() || piece.name } : piece,
+      ),
+    },
+  })),
   resetPattern: () => {
-    const before = get().snapshot.piece;
-    const original =
-      get().baselinePieces.find((piece) => piece.id === get().activePieceId) ??
-      before;
-    const snapshot = currentEngine().restorePiece(original);
-    commandHistory.record("Restaurar molde", before, snapshot.piece);
-    updateActiveSnapshot(set, get, snapshot, { selectedPointId: null });
+    const original = get().baselinePieces.find((piece) => piece.id === get().activePieceId);
+    if (!original) return;
+    updateActivePieceDocument(set, get, "geometry", "Restaurar molde", () => structuredClone(original));
   },
-
   undo: () => {
-    if (commandHistory.isTransactionActive) {
-      commandHistory.commit(get().snapshot.piece);
-    }
-    if (workspaceHistory.length > 0) {
-      const last = workspaceHistory.pop();
-      if (last) {
-        workspaceFuture.push(last);
-        const state = get();
-        set({
-          garment: {
-            ...state.garment,
-            workspaceTransforms: cloneTransforms(last.before),
-          },
-          canUndo: workspaceHistory.length > 0,
-          canRedo: true,
-        });
-        return;
-      }
-    }
-    const piece = commandHistory.undo();
-    if (!piece) return;
-
-    const snapshot = currentEngine().restorePiece(piece);
-    updateActiveSnapshot(set, get, snapshot, {
-      selectedPointId: keepSelectedPoint(get().selectedPointId, snapshot),
-    });
+    if (history.isTransactionActive) history.commit(captureDocument(get));
+    const document = history.undo();
+    if (document) applyDocumentState(set, get, document);
   },
-
   redo: () => {
-    if (commandHistory.isTransactionActive) {
-      commandHistory.commit(get().snapshot.piece);
-    }
-    if (workspaceFuture.length > 0) {
-      const next = workspaceFuture.pop();
-      if (next) {
-        workspaceHistory.push(next);
-        const state = get();
-        set({
-          garment: {
-            ...state.garment,
-            workspaceTransforms: cloneTransforms(next.after),
-          },
-          canUndo: true,
-          canRedo: workspaceFuture.length > 0,
-        });
-        return;
-      }
-    }
-    const piece = commandHistory.redo();
-    if (!piece) return;
-
-    const snapshot = currentEngine().restorePiece(piece);
-    updateActiveSnapshot(set, get, snapshot, {
-      selectedPointId: keepSelectedPoint(get().selectedPointId, snapshot),
-    });
+    if (history.isTransactionActive) history.commit(captureDocument(get));
+    const document = history.redo();
+    if (document) applyDocumentState(set, get, document);
   },
-
   simulate: () => set((state) => ({ simulateVersion: state.simulateVersion + 1 })),
 }));
 
-type StoreSetter = Parameters<typeof useEditorStore.setState>[0] extends never
-  ? never
-  : (
-      partial:
-        | Partial<EditorState>
-        | ((state: EditorState) => Partial<EditorState>),
-    ) => void;
+type StoreSetter = (
+  partial: Partial<EditorState> | ((state: EditorState) => Partial<EditorState>),
+) => void;
 type StoreGetter = () => EditorState;
 
-function updateActiveSnapshot(
+function captureDocument(get: StoreGetter): EditorDocumentState {
+  const state = get();
+  return { garment: structuredClone(state.garment), activePieceId: state.activePieceId };
+}
+
+function applyDocumentState(
+  set: StoreSetter,
+  get: StoreGetter,
+  document: EditorDocumentState,
+  additional: Partial<EditorState> = {},
+): void {
+  const garment = ensureWorkspaceState(document.garment);
+  const piece = garment.pieces.find((candidate) => candidate.id === document.activePieceId) ?? garment.pieces[0];
+  if (!piece) return;
+  const snapshot = restoreSnapshot(piece);
+  set({
+    garment: replacePiece(garment, snapshot.piece),
+    activePieceId: piece.id,
+    snapshot,
+    selectedPointId: null,
+    selectedEdgeId: null,
+    seamIssues: collectSeamIssues(garment),
+    ...historyAvailability(),
+    ...additional,
+  });
+  void get;
+}
+
+function changeDocument(
+  set: StoreSetter,
+  get: StoreGetter,
+  type: DocumentCommandType,
+  label: string,
+  transform: (document: EditorDocumentState) => EditorDocumentState,
+  additional: Partial<EditorState> = {},
+): void {
+  const before = captureDocument(get);
+  const after = transform(structuredClone(before));
+  history.record(type, label, before, after);
+  applyDocumentState(set, get, after, additional);
+}
+
+function updateActivePieceDocument(
+  set: StoreSetter,
+  get: StoreGetter,
+  type: DocumentCommandType,
+  label: string,
+  transform: (piece: PatternPiece) => PatternPiece,
+): void {
+  changeDocument(set, get, type, label, (document) => ({
+    ...document,
+    garment: replacePiece(
+      document.garment,
+      transform(document.garment.pieces.find((piece) => piece.id === document.activePieceId) ?? get().snapshot.piece),
+    ),
+  }));
+}
+
+function applyGeometrySnapshot(
   set: StoreSetter,
   get: StoreGetter,
   rawSnapshot: PatternSnapshot,
   additional: Partial<EditorState> = {},
 ): void {
-  const sourcePiece =
-    get().garment.pieces.find((piece) => piece.id === get().activePieceId) ??
-    rawSnapshot.piece;
-  const snapshot = preservePieceMetadata(rawSnapshot, sourcePiece);
-
-// if snapshot.piece carries seams (used for undo/redo of seam operations),
-// apply them to the garment-level seams as well
-const currentGarment = get().garment;
-const newGarment = (snapshot.piece as any).seams
-  ? { ...currentGarment, pieces: currentGarment.pieces.map((candidate) => (candidate.id === snapshot.piece.id ? structuredClone(snapshot.piece) : candidate)), seams: structuredClone((snapshot.piece as any).seams) }
-  : replacePiece(currentGarment, snapshot.piece);
-
-set({
-  garment: newGarment,
-  snapshot,
-  ...historyAvailability(),
-  ...additional,
-});
+  const source = get().garment.pieces.find((piece) => piece.id === get().activePieceId) ?? rawSnapshot.piece;
+  const snapshot = preservePieceMetadata(rawSnapshot, source);
+  set({
+    garment: replacePiece(get().garment, snapshot.piece),
+    snapshot,
+    ...additional,
+  });
 }
 
-function historyAvailability() {
-  return {
-    canUndo: commandHistory.canUndo,
-    canRedo: commandHistory.canRedo,
-  };
+function recordIfStandalone(
+  set: StoreSetter,
+  get: StoreGetter,
+  type: DocumentCommandType,
+  label: string,
+  before: EditorDocumentState,
+): void {
+  if (!history.isTransactionActive) history.record(type, label, before, captureDocument(get));
+  set(historyAvailability());
 }
 
-function keepSelectedPoint(
-  selectedPointId: string | null,
-  snapshot: PatternSnapshot,
-): string | null {
-  return snapshot.piece.points.some((point) => point.id === selectedPointId)
-    ? selectedPointId
-    : null;
+function restoreSnapshot(piece: PatternPiece): PatternSnapshot {
+  return preservePieceMetadata(currentEngine().restorePiece(piece), piece);
 }
 
-function preservePieceMetadata(
-  snapshot: PatternSnapshot,
-  source: PatternPiece,
-): PatternSnapshot {
-  return {
-    ...snapshot,
-    piece: {
-      ...snapshot.piece,
-      ...(source.cutQuantity === undefined
-        ? {}
-        : { cutQuantity: source.cutQuantity }),
-      ...(source.cutOnFold === undefined ? {} : { cutOnFold: source.cutOnFold }),
-      ...(source.fabricId === undefined ? {} : { fabricId: source.fabricId }),
-      ...(source.previewPlacements === undefined
-        ? {}
-        : {
-            previewPlacements: source.previewPlacements.map((placement) => ({
-              ...placement,
-            })),
-          }),
-      ...(source.guides === undefined
-        ? {}
-        : { guides: source.guides.map((g) => ({ ...g })) }),
-    },
-  };
+function preservePieceMetadata(snapshot: PatternSnapshot, source: PatternPiece): PatternSnapshot {
+  return { ...snapshot, piece: { ...structuredClone(source), ...snapshot.piece } };
 }
 
 function replacePiece(garment: GarmentDraft, piece: PatternPiece): GarmentDraft {
@@ -726,75 +680,110 @@ function replacePiece(garment: GarmentDraft, piece: PatternPiece): GarmentDraft 
   };
 }
 
+function historyAvailability() {
+  return { canUndo: history.canUndo, canRedo: history.canRedo };
+}
+
+function inferCommandType(label: string): DocumentCommandType {
+  return label.toLowerCase().includes("peça") ? "workspace" : "geometry";
+}
+
+function workspaceStateFor(garment: GarmentDraft, pieceId: string): PieceWorkspaceState {
+  return (
+    garment.workspaceStates?.find((state) => state.pieceId === pieceId) ?? {
+      pieceId,
+      transform:
+        garment.workspaceTransforms?.find((transform) => transform.pieceId === pieceId) ??
+        { pieceId, xMm: 0, yMm: 0, rotationDeg: 0 },
+      visible: true,
+      locked: false,
+    }
+  );
+}
+
+function patchWorkspaceState(
+  garment: GarmentDraft,
+  pieceId: string,
+  patch: (state: PieceWorkspaceState) => PieceWorkspaceState,
+): GarmentDraft {
+  const states = garment.pieces.map((piece) => {
+    const current = workspaceStateFor(garment, piece.id);
+    return piece.id === pieceId ? patch(current) : current;
+  });
+  return syncLegacyTransforms({ ...garment, workspaceStates: states });
+}
+
+function ensureWorkspaceState(garment: GarmentDraft): GarmentDraft {
+  let cursorX = 0;
+  const existing = new Map(garment.workspaceStates?.map((state) => [state.pieceId, state]));
+  const legacy = new Map(garment.workspaceTransforms?.map((transform) => [transform.pieceId, transform]));
+  const workspaceStates = garment.pieces.map((piece) => {
+    const stored = existing.get(piece.id);
+    if (stored) return structuredClone(stored);
+    const transform = legacy.get(piece.id) ?? {
+      pieceId: piece.id,
+      xMm: cursorX,
+      yMm: 0,
+      rotationDeg: 0,
+    };
+    cursorX = Math.max(cursorX, transform.xMm + pieceWidth(piece) + 80);
+    return { pieceId: piece.id, transform: { ...transform }, visible: true, locked: false };
+  });
+  return syncLegacyTransforms({ ...garment, workspaceStates });
+}
+
+function syncLegacyTransforms(garment: GarmentDraft): GarmentDraft {
+  return {
+    ...garment,
+    workspaceTransforms: (garment.workspaceStates ?? []).map((state) => ({ ...state.transform })),
+  };
+}
+
+function migrateLegacyDocument(garment: GarmentDraft): GarmentDraft {
+  const withWorkspace = ensureWorkspaceState(garment);
+  return {
+    ...withWorkspace,
+    pieces: withWorkspace.pieces.map((piece) => {
+      if (piece.previewPlacements?.length) return piece;
+      const name = piece.name.toLowerCase();
+      const region = name.includes("saia") || name.includes("calça") ? "hip" : "torso";
+      const surface = name.includes("costas") ? "back" : "front";
+      return { ...piece, previewPlacements: [createPreviewPlacement(piece.id, { region, surface })] };
+    }),
+  };
+}
+
+function collectSeamIssues(garment: GarmentDraft): SeamValidationIssue[] {
+  return (garment.seams ?? []).flatMap((seam) => validateSeam(seam, garment));
+}
+
 function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {
   return pieces.map((piece) => structuredClone(piece));
 }
 
-function cloneTransforms(transforms: readonly PieceWorkspaceTransform[]): PieceWorkspaceTransform[] {
-  return transforms.map((transform) => ({ ...transform }));
-}
-
-function transformsEqual(left: readonly PieceWorkspaceTransform[], right: readonly PieceWorkspaceTransform[]): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((transform, index) => {
-    const other = right[index];
-    return (
-      transform.pieceId === other?.pieceId &&
-      transform.xMm === other.xMm &&
-      transform.yMm === other.yMm &&
-      transform.rotationDeg === other.rotationDeg
-    );
-  });
-}
-
-function getTransform(
-  transforms: readonly PieceWorkspaceTransform[],
-  pieceId: string,
-): PieceWorkspaceTransform | undefined {
-  return transforms.find((transform) => transform.pieceId === pieceId);
-}
-
-function ensureWorkspaceTransforms(garment: GarmentDraft): GarmentDraft {
-  if (garment.workspaceTransforms && garment.workspaceTransforms.length > 0) {
-    return garment;
-  }
-  const gap = 180;
-  let x = 0;
-  const transforms = garment.pieces.map((piece) => {
-    const transform: PieceWorkspaceTransform = {
-      pieceId: piece.id,
-      xMm: x,
-      yMm: 0,
-      rotationDeg: 0,
-    };
-    x += 240 + gap;
-    return transform;
-  });
-  return {
-    ...garment,
-    workspaceTransforms: transforms,
-  };
+function pieceWidth(piece: PatternPiece): number {
+  const xs = piece.points.map((point) => point.xMm);
+  return xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
 }
 
 function createLegacyGarment(piece: PatternPiece): GarmentDraft {
   const fabric = createDefaultFabricSource();
-  const measurements: BodyMeasurements = {
-    heightMm: 1680,
-    bustMm: 920,
-    waistMm: 760,
-    hipMm: 1000,
-    shoulderWidthMm: 400,
-    torsoLengthMm: 440,
-    armLengthMm: 590,
-    inseamMm: 780,
-  };
   return {
     id: "legacy-skirt",
     templateId: "legacy-skirt",
     name: "Saia base",
     description: "Molde inicial preservado para compatibilidade.",
     bodyType: "feminine",
-    measurements,
+    measurements: {
+      heightMm: 1680,
+      bustMm: 920,
+      waistMm: 760,
+      hipMm: 1000,
+      shoulderWidthMm: 400,
+      torsoLengthMm: 440,
+      armLengthMm: 590,
+      inseamMm: 780,
+    },
     fabrics: [fabric],
     pieces: [
       {
@@ -803,54 +792,21 @@ function createLegacyGarment(piece: PatternPiece): GarmentDraft {
         cutOnFold: true,
         fabricId: fabric.id,
         previewPlacements: [
-          { region: "lower", surface: "front", bodySide: "center" },
-          { region: "lower", surface: "back", bodySide: "center" },
+          createPreviewPlacement(piece.id, { region: "hip", surface: "front" }),
+          createPreviewPlacement(piece.id, { region: "hip", surface: "back" }),
         ],
       },
     ],
   };
 }
 
-function updatePieceMetadata(
-  set: StoreSetter,
-  get: StoreGetter,
-  update: Partial<PatternPiece>,
-): void {
-  const state = get();
-  const piece = {
-    ...state.snapshot.piece,
-    ...update,
-  };
-  set({
-    garment: replacePiece(state.garment, piece),
-    snapshot: {
-      ...state.snapshot,
-      piece: structuredClone(piece),
-    },
-  });
-}
-
-function sanitizeFabricUpdate(
-  candidate: FabricSource,
-  fallback: FabricSource,
-): FabricSource {
+function sanitizeFabricUpdate(candidate: FabricSource, fallback: FabricSource): FabricSource {
   return {
     ...candidate,
     name: candidate.name.trim() || fallback.name,
-    color: /^#[0-9a-f]{6}$/i.test(candidate.color)
-      ? candidate.color
-      : fallback.color,
-    widthMm:
-      Number.isFinite(candidate.widthMm) && candidate.widthMm > 0
-        ? candidate.widthMm
-        : fallback.widthMm,
-    lengthMm:
-      Number.isFinite(candidate.lengthMm) && candidate.lengthMm > 0
-        ? candidate.lengthMm
-        : fallback.lengthMm,
-    quantity:
-      Number.isInteger(candidate.quantity) && candidate.quantity > 0
-        ? candidate.quantity
-        : fallback.quantity,
+    color: /^#[0-9a-f]{6}$/i.test(candidate.color) ? candidate.color : fallback.color,
+    widthMm: Number.isFinite(candidate.widthMm) && candidate.widthMm > 0 ? candidate.widthMm : fallback.widthMm,
+    lengthMm: Number.isFinite(candidate.lengthMm) && candidate.lengthMm > 0 ? candidate.lengthMm : fallback.lengthMm,
+    quantity: Number.isInteger(candidate.quantity) && candidate.quantity > 0 ? candidate.quantity : fallback.quantity,
   };
 }

@@ -8,6 +8,7 @@ import {
   PatternPoint,
   PatternPreviewPlacement,
   PatternSnapshot,
+  createPreviewPlacement,
 } from "../domain/pattern";
 import {
   fabricDrapeFactor,
@@ -160,7 +161,7 @@ export class ThreeViewport {
   updateGarment(
     snapshots: readonly PatternSnapshot[],
     garment: GarmentDraft,
-  ) {
+  ): string[] {
     this.updateBody(garment.bodyType, garment.measurements);
     this.clearGarment();
 
@@ -170,17 +171,17 @@ export class ThreeViewport {
       garment.fabrics.map((source) => [source.id, source]),
     );
     const fallbackFabric = garment.fabrics[0];
+    const warnings: string[] = [];
     snapshots.forEach((snapshot) => {
       const points = samplePatternContour(snapshot.piece.points);
       const triangulation = triangulatePatternContour(points);
-      if (!triangulation.ok) return;
+      if (!triangulation.ok) {
+        warnings.push(`${snapshot.piece.name}: contorno inválido para a prévia 3D.`);
+        return;
+      }
       const placements =
         snapshot.piece.previewPlacements ?? [
-          {
-            region: "torso",
-            surface: "front",
-            bodySide: "center",
-          } satisfies PatternPreviewPlacement,
+          createPreviewPlacement(snapshot.piece.id),
         ];
       const fabric =
         fabricById.get(snapshot.piece.fabricId ?? "") ?? fallbackFabric;
@@ -202,6 +203,7 @@ export class ThreeViewport {
     this.garmentMeshes.forEach(({ mesh }) => this.garmentGroup.add(mesh));
     this.applyDressProgress(1);
     this.requestRender();
+    return warnings;
   }
 
   dress() {
@@ -237,7 +239,6 @@ export class ThreeViewport {
     instanceIndex: number,
   ): GarmentMeshData {
     const bounds = pointBounds(points);
-    const width = Math.max(1, bounds.maxX - bounds.minX) * scale;
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const contourPositions = new Float32Array(points.length * 3);
     points.forEach((point, index) => {
@@ -264,12 +265,10 @@ export class ThreeViewport {
     const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
     const flat = new Float32Array(positions.array.length);
     const dressed = new Float32Array(positions.array.length);
-    const halfWidth = Math.max(width / 2, 0.001);
 
     for (let index = 0; index < positions.count; index += 1) {
       const x = positions.getX(index);
       const localY = positions.getY(index);
-      const normalizedX = THREE.MathUtils.clamp(x / halfWidth, -1, 1);
       const flatColumn = (instanceIndex % 4) - 1.5;
       const flatRow = Math.floor(instanceIndex / 4);
       flat[index * 3] = x + flatColumn * 0.58;
@@ -277,7 +276,7 @@ export class ThreeViewport {
       flat[index * 3 + 2] = 0.82;
 
       const target = dressedPosition(
-        normalizedX,
+        x,
         localY,
         placement,
         this.avatarMetrics,
@@ -580,110 +579,35 @@ function pointBounds(points: readonly PatternPoint[]) {
   return { minX, minY, maxX, maxY };
 }
 
-function dressedPosition(
-  normalizedX: number,
+export function dressedPosition(
+  localX: number,
   localY: number,
   placement: PatternPreviewPlacement,
   metrics: AvatarMetrics,
   fabric: FabricSource,
 ): { x: number; y: number; z: number } {
-  const backRotation = placement.surface === "back" ? Math.PI : 0;
-  const surfaceDirection = placement.surface === "back" ? -1 : 1;
-  const drape = fabricDrapeFactor(fabric);
-  const stretch = THREE.MathUtils.clamp(
-    fabric.physics.stretchWeftPercent / 35,
-    0,
-    1,
-  );
-  const hang = Math.max(0, -localY);
-  const thicknessOffset = Math.max(
-    0.003,
-    fabric.physics.thicknessMm * 0.0022,
-  );
-  const fold =
-    Math.sin(normalizedX * Math.PI * 5 + hang * 8) *
-    drape *
-    (1 - stretch * 0.55) *
-    Math.min(0.026, hang * 0.05);
-  const weightDrop =
-    hang *
-    drape *
-    THREE.MathUtils.clamp(fabric.physics.weightGsm / 420, 0.25, 1.25) *
-    0.018;
-
-  if (placement.region === "leg") {
-    const legCenter =
-      placement.bodySide === "left"
-        ? -metrics.legCenterX
-        : metrics.legCenterX;
-    const angle = backRotation + surfaceDirection * normalizedX * 0.88;
-    const radius = metrics.legRadius + thicknessOffset + fold;
-    return {
-      x: legCenter + Math.sin(angle) * radius,
-      y: metrics.hipY + localY - weightDrop,
-      z: Math.cos(angle) * radius * metrics.depthScale,
-    };
-  }
-
-  if (placement.region === "sleeve") {
-    const armCenter =
-      placement.bodySide === "left"
-        ? -metrics.shoulderHalf
-        : metrics.shoulderHalf;
-    const angle = backRotation + surfaceDirection * normalizedX * 0.95;
-    const radius = metrics.armRadius + thicknessOffset + fold * 0.6;
-    return {
-      x: armCenter + Math.sin(angle) * radius,
-      y: metrics.shoulderY - metrics.armRadius + localY - weightDrop,
-      z: Math.cos(angle) * radius,
-    };
-  }
-
-  const sideCenter =
-    placement.bodySide === "left"
-      ? -0.62
-      : placement.bodySide === "right"
-        ? 0.62
-        : 0;
-  const angularSpan = placement.bodySide === "center" ? 1.18 : 0.62;
-  const angle =
-    backRotation +
-    surfaceDirection * (sideCenter + normalizedX * angularSpan);
-
-  if (placement.region === "lower") {
-    const y = metrics.waistY + localY - weightDrop;
-    const hipProgress = THREE.MathUtils.clamp(
-      (metrics.waistY - y) / Math.max(0.01, metrics.waistY - metrics.hipY),
-      0,
-      1,
-    );
-    const fittedRadius = THREE.MathUtils.lerp(
-      metrics.waistRadius,
-      metrics.hipRadius,
-      hipProgress,
-    );
-    const belowHip = Math.max(0, metrics.hipY - y);
-    const hangingEase =
-      belowHip * (0.018 + drape * 0.025) * (1 - stretch * 0.4);
-    const radius =
-      fittedRadius + hangingEase + thicknessOffset + fold;
-    return {
-      x: Math.sin(angle) * radius,
-      y,
-      z: Math.cos(angle) * radius * metrics.depthScale,
-    };
-  }
-
-  const y = metrics.shoulderY + localY - weightDrop;
-  const radius =
-    bodyRadiusAtY(y, metrics) +
-    thicknessOffset +
-    fold * 0.55 +
-    (1 - stretch) * 0.006;
+  void fabricDrapeFactor(fabric);
+  const scale = Math.max(0.05, placement.scale);
+  const rotation = THREE.MathUtils.degToRad(placement.rotationDeg);
+  const x = (placement.mirrorX ? -localX : localX) * scale;
+  const y = localY * scale;
+  const rotatedX = x * Math.cos(rotation) - y * Math.sin(rotation);
+  const rotatedY = x * Math.sin(rotation) + y * Math.cos(rotation);
+  const sideX = placement.bodySide === "left" ? -1 : placement.bodySide === "right" ? 1 : 0;
+  const anchor = placement.region === "arm"
+    ? { x: sideX * metrics.shoulderHalf, y: metrics.shoulderY, z: 0.08 }
+    : placement.region === "leg"
+      ? { x: (sideX || 1) * metrics.legCenterX, y: metrics.hipY, z: 0.1 }
+      : placement.region === "hip"
+        ? { x: sideX * metrics.hipRadius * 0.55, y: metrics.waistY, z: metrics.hipRadius * 1.04 }
+        : placement.region === "waist"
+          ? { x: sideX * metrics.waistRadius * 0.55, y: metrics.waistY, z: metrics.waistRadius * 1.04 }
+          : { x: sideX * metrics.chestRadius * 0.55, y: metrics.shoulderY, z: metrics.chestRadius * 1.04 };
+  const surfaceSign = placement.surface === "back" ? -1 : 1;
   return {
-    x: Math.sin(angle) * radius,
-    y,
-    z: Math.cos(angle) * radius * metrics.depthScale,
+    x: anchor.x + rotatedX + placement.offsetXMm * 0.001,
+    y: anchor.y + rotatedY + placement.offsetYMm * 0.001,
+    z: surfaceSign * anchor.z + placement.offsetZMm * 0.001,
   };
 }
 

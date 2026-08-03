@@ -13,10 +13,12 @@ import type { EditorTool } from "./editor/PatternCanvas";
 import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
+import { PiecesPanel } from "./components/PiecesPanel";
+import { PreviewPlacementPanel } from "./components/PreviewPlacementPanel";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
-import type { GarmentDraft, PatternPiece } from "./domain/pattern";
+import { createPreviewPlacement, type GarmentDraft, type PreviewRegion } from "./domain/pattern";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -62,7 +64,15 @@ export function App() {
   const removePoint = useEditorStore((state) => state.removePoint);
   const setSeamAllowance = useEditorStore((state) => state.setSeamAllowance);
   const duplicatePiece = useEditorStore((state) => state.duplicatePiece);
-  const createBlankPiece = useEditorStore((state) => state.createBlankPiece);
+  const startDraft = useEditorStore((state) => state.startDraft);
+  const closeDraft = useEditorStore((state) => state.closeDraft);
+  const cancelDraft = useEditorStore((state) => state.cancelDraft);
+  const removeDraftPoint = useEditorStore((state) => state.removeDraftPoint);
+  const draftContour = useEditorStore((state) => state.draftContour);
+  const draftError = useEditorStore((state) => state.draftError);
+  const setPieceVisibility = useEditorStore((state) => state.setPieceVisibility);
+  const setPieceLocked = useEditorStore((state) => state.setPieceLocked);
+  const setActivePiecePlacements = useEditorStore((state) => state.setActivePiecePlacements);
   const deletePiece = useEditorStore((state) => state.deletePiece);
   const renamePiece = useEditorStore((state) => state.renamePiece);
   const resetPattern = useEditorStore((state) => state.resetPattern);
@@ -76,6 +86,7 @@ export function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
+  const [workspaceMode, setWorkspaceMode] = useState<"modeling" | "preparation">("modeling");
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
@@ -113,9 +124,9 @@ export function App() {
   const handleCreateBlankPiece = useCallback(() => {
     const name = window.prompt("Nome da peça", "Nova peça");
     if (name === null) return;
-    createBlankPiece(name.trim() || "Nova peça");
-    setActiveTool("point");
-  }, [createBlankPiece]);
+    startDraft(name.trim() || "Nova peça");
+    setActiveTool("draft");
+  }, [startDraft]);
   const handleDuplicatePiece = useCallback(
     (pieceId: string, mirrored = false) => {
       duplicatePiece(pieceId, mirrored);
@@ -123,6 +134,10 @@ export function App() {
     },
     [duplicatePiece],
   );
+  const handlePieceDrop = useCallback((pieceId: string, region: PreviewRegion) => {
+    selectPiece(pieceId);
+    setActivePiecePlacements([createPreviewPlacement(pieceId, { region })]);
+  }, [selectPiece, setActivePiecePlacements]);
   const handleRenamePiece = useCallback(
     (pieceId: string) => {
       const current = garment.pieces.find((piece) => piece.id === pieceId);
@@ -231,8 +246,24 @@ export function App() {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
+        if (useEditorStore.getState().draftContour) {
+          cancelDraft();
+        }
         setActiveTool("select");
         return;
+      }
+      if (!isEditableTarget(event.target) && useEditorStore.getState().draftContour) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          closeDraft();
+          if (!useEditorStore.getState().draftContour) setActiveTool("select");
+          return;
+        }
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          removeDraftPoint();
+          return;
+        }
       }
       if (
         !(event.ctrlKey || event.metaKey) ||
@@ -260,12 +291,13 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activePieceId, duplicatePiece, redo, undo]);
+  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, redo, removeDraftPoint, undo]);
 
   useEffect(() => {
     const handleDelete = (event: KeyboardEvent) => {
       if (
         isEditableTarget(event.target) ||
+        useEditorStore.getState().draftContour !== null ||
         (event.key !== "Delete" && event.key !== "Backspace")
       ) {
         return;
@@ -278,7 +310,7 @@ export function App() {
         removePoint(currentSelectedPointId);
         return;
       }
-      if (currentPieceId) {
+      if (currentPieceId && useEditorStore.getState().pieceSelectionActive) {
         const piece = useEditorStore.getState().garment.pieces.find((candidate) => candidate.id === currentPieceId);
         if (piece) {
           const confirmed = window.confirm(`Excluir “${piece.name}”?`);
@@ -289,6 +321,10 @@ export function App() {
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
   }, [deletePiece, removePoint]);
+
+  useEffect(() => {
+    if (activeTool === "draft" && draftContour === null) setActiveTool("select");
+  }, [activeTool, draftContour]);
 
   return (
     <div className="app-shell">
@@ -316,7 +352,12 @@ export function App() {
         onSelectTool={setActiveTool}
       />
 
-      <main className="workspace">
+      <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
+        <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => setWorkspaceMode("modeling")}>Modelagem</button>
+        <button type="button" className={workspaceMode === "preparation" ? "active" : ""} onClick={() => { setWorkspaceMode("preparation"); setPreviewRequested(true); }}>Preparação 3D</button>
+      </nav>
+
+      <main className={`workspace mode-${workspaceMode}`}>
         <nav className="mobile-workspace-tabs" aria-label="Painéis do projeto" role="tablist">
           <WorkspaceTab
             id="editor-tab"
@@ -364,34 +405,57 @@ export function App() {
             <span className="hint desktop-hint">Shift + arrastar: mover tela · roda: zoom</span>
             <span className="hint mobile-hint">Arraste pontos · fundo move · pinça aproxima</span>
           </div>
-          <PieceStrip
-            pieces={garment.pieces}
-            activePieceId={activePieceId}
-            onSelect={selectPiece}
-            activeTool={activeTool}
-            onSelectTool={setActiveTool}
-            canRemovePoint={snapshot.piece.points.length > 3 && selectedPoint !== null}
-            onRemovePoint={() => {
-              if (selectedPoint) removePoint(selectedPoint.id);
-            }}
-            onCreateBlank={handleCreateBlankPiece}
-            onDuplicate={handleDuplicatePiece}
-            onDuplicateMirrored={(pieceId) => handleDuplicatePiece(pieceId, true)}
-            onRename={handleRenamePiece}
-            onDelete={handleDeletePiece}
-          />
-          <PatternCanvas
-            key={`${garment.id}:${activePieceId}`}
-            snapshot={snapshot}
-            tool={activeTool}
-            selectedPointId={selectedPointId}
-            onSelectPoint={selectPoint}
-            onEditStart={beginEdit}
-            onEditEnd={commitEdit}
-            onMovePoint={movePoint}
-            onMoveHandle={moveHandle}
-            onInsertPoint={handleInsertPoint}
-          />
+          <div className="editor-body">
+            <PiecesPanel
+              pieces={garment.pieces}
+              workspaceStates={garment.workspaceStates ?? []}
+              activePieceId={activePieceId}
+              onSelect={selectPiece}
+              onCreate={handleCreateBlankPiece}
+              onVisibilityChange={setPieceVisibility}
+              onLockChange={setPieceLocked}
+              onDuplicate={handleDuplicatePiece}
+              onDuplicateMirrored={(pieceId) => handleDuplicatePiece(pieceId, true)}
+              onRename={handleRenamePiece}
+              onDelete={handleDeletePiece}
+            />
+            <div className="canvas-stack">
+              <div className="point-actions" role="group" aria-label="Editar pontos">
+                <button
+                  type="button"
+                  className={activeTool === "point" ? "active" : ""}
+                  disabled={draftContour !== null}
+                  onClick={() => setActiveTool(activeTool === "point" ? "select" : "point")}
+                >
+                  + Ponto
+                </button>
+                <button
+                  type="button"
+                  disabled={snapshot.piece.points.length <= 3 || selectedPoint === null}
+                  onClick={() => selectedPoint && removePoint(selectedPoint.id)}
+                >
+                  − Ponto
+                </button>
+              </div>
+              {draftContour ? (
+                <div className="draft-banner">
+                  Desenhando <strong>{draftContour.name}</strong> · clique no primeiro ponto ou Enter para fechar · Escape cancela
+                </div>
+              ) : null}
+              {draftError ? <div className="draft-error" role="alert">{draftError}</div> : null}
+              <PatternCanvas
+                snapshot={snapshot}
+                tool={activeTool}
+                selectedPointId={selectedPointId}
+                onSelectPoint={selectPoint}
+                onEditStart={beginEdit}
+                onEditEnd={commitEdit}
+                onMovePoint={movePoint}
+                onMoveHandle={moveHandle}
+                onInsertPoint={handleInsertPoint}
+              />
+            </div>
+          </div>
         </section>
 
         <section
@@ -407,6 +471,7 @@ export function App() {
                 simulateVersion={simulateVersion}
                 active={!isMobile || mobileView === "preview"}
                 onBackendChange={setRenderBackend}
+                onPieceDrop={handlePieceDrop}
               />
             </Suspense>
           ) : (
@@ -414,7 +479,7 @@ export function App() {
           )}
         </section>
 
-        <Inspector
+        {workspaceMode === "preparation" ? <PreviewPlacementPanel /> : <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}
@@ -427,7 +492,7 @@ export function App() {
           curveActive={selectedCurveActive}
           onToggleCurve={handleToggleCurve}
           onSeamAllowanceChange={setSeamAllowance}
-        />
+        />}
       </main>
 
       <StatusBar
@@ -456,98 +521,6 @@ export function App() {
           />
         </Suspense>
       ) : null}
-    </div>
-  );
-}
-
-interface PieceStripProps {
-  pieces: PatternPiece[];
-  activePieceId: string;
-  onSelect(pieceId: string): void;
-  activeTool: EditorTool;
-  onSelectTool(tool: EditorTool): void;
-  canRemovePoint: boolean;
-  onRemovePoint(): void;
-  onCreateBlank(): void;
-  onDuplicate(pieceId: string): void;
-  onDuplicateMirrored(pieceId: string): void;
-  onRename(pieceId: string): void;
-  onDelete(pieceId: string): void;
-}
-
-function PieceStrip({
-  pieces,
-  activePieceId,
-  onSelect,
-  activeTool,
-  onSelectTool,
-  canRemovePoint,
-  onRemovePoint,
-  onCreateBlank,
-  onDuplicate,
-  onDuplicateMirrored,
-  onRename,
-  onDelete,
-}: PieceStripProps) {
-  return (
-    <div className="piece-tools-row">
-      <nav className="piece-strip" aria-label="Peças do molde">
-        {pieces.map((piece) => (
-          <div
-            key={piece.id}
-            className={`piece-strip-item${piece.id === activePieceId ? " is-active" : ""}`}
-          >
-            <button
-              type="button"
-              className="piece-strip-main"
-              aria-pressed={piece.id === activePieceId}
-              onClick={() => onSelect(piece.id)}
-            >
-              <span>{piece.name}</span>
-              <small>
-                {piece.cutQuantity ? `${piece.cutQuantity}×` : "1×"}
-                {piece.cutOnFold ? " · dobra" : ""}
-              </small>
-            </button>
-            <div className="piece-strip-actions" role="group" aria-label={`Ações de ${piece.name}`}>
-              <button type="button" title="Duplicar" onClick={(event) => { event.stopPropagation(); onDuplicate(piece.id); }}>
-                ⧉
-              </button>
-              <button type="button" title="Duplicar espelhado" onClick={(event) => { event.stopPropagation(); onDuplicateMirrored(piece.id); }}>
-                ⇄
-              </button>
-              <button type="button" title="Renomear" onClick={(event) => { event.stopPropagation(); onRename(piece.id); }}>
-                ✎
-              </button>
-              <button type="button" title="Excluir" onClick={(event) => { event.stopPropagation(); onDelete(piece.id); }}>
-                🗑
-              </button>
-            </div>
-          </div>
-        ))}
-      </nav>
-      <div className="point-actions" role="group" aria-label="Editar pontos">
-        <button type="button" onClick={onCreateBlank}>
-          + Nova peça
-        </button>
-        <button
-          className={activeTool === "point" ? "active" : ""}
-          type="button"
-          onClick={() =>
-            onSelectTool(activeTool === "point" ? "select" : "point")
-          }
-          aria-pressed={activeTool === "point"}
-        >
-          + Ponto
-        </button>
-        <button
-          type="button"
-          disabled={!canRemovePoint}
-          onClick={onRemovePoint}
-        >
-          Excluir
-        </button>
-      </div>
     </div>
   );
 }

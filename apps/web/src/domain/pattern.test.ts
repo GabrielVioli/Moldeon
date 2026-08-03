@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createBlankPatternPiece,
+  createPatternPieceFromDraft,
   duplicatePatternPiece,
   parseGarmentDraft,
   parsePatternPiece,
@@ -17,6 +17,7 @@ describe("pattern geometry", () => {
     { id: "c", xMm: 100, yMm: 100 },
     { id: "d", xMm: 0, yMm: 100 },
   ];
+  const piece = (name: string, id: string) => createPatternPieceFromDraft({ id, name, points: square, closed: true });
 
   it("calculates polygon area", () => {
     expect(polygonAreaMm2(square)).toBe(10000);
@@ -81,7 +82,7 @@ describe("pattern geometry", () => {
   });
 
   it("duplicates a piece with new point ids while preserving geometry", () => {
-    const source = createBlankPatternPiece("Base", "piece-base");
+    const source = piece("Base", "piece-base");
     const duplicate = duplicatePatternPiece(source, { newId: "piece-copy", name: "Base – cópia" });
 
     expect(duplicate.id).toBe("piece-copy");
@@ -89,6 +90,17 @@ describe("pattern geometry", () => {
     expect(duplicate.points.map((point) => point.id)).not.toContain(source.points[0].id);
     expect(duplicate.points[0].xMm).toBe(source.points[0].xMm);
     expect(duplicate.points[1].yMm).toBe(source.points[1].yMm);
+  });
+
+  it("mirrors asymmetric Bézier geometry without reusing ids or losing metadata", () => {
+    const source = { ...piece("Assimétrica", "piece-curve"), grainline: { start: { xMm: 10, yMm: 5 }, end: { xMm: 10, yMm: 90 } }, annotations: [{ id: "note-1", label: "Pique", xMm: 25, yMm: 40 }] };
+    source.points[0].handleOut = { xMm: 12, yMm: -7 };
+    const mirrored = duplicatePatternPiece(source, { mirrored: true, newId: "piece-mirror" });
+    expect(new Set(mirrored.points.map((point) => point.id)).size).toBe(source.points.length);
+    expect(mirrored.points.every((point) => !source.points.some((original) => original.id === point.id))).toBe(true);
+    expect(mirrored.points.some((point) => point.handleIn || point.handleOut)).toBe(true);
+    expect(mirrored.grainline).toEqual(source.grainline);
+    expect(mirrored.annotations).toEqual(source.annotations);
   });
 
   it("parses workspace transforms for multi-piece drafting layouts", () => {
@@ -110,8 +122,8 @@ describe("pattern geometry", () => {
       },
       fabrics: [createDefaultFabricSource()],
       pieces: [
-        createBlankPatternPiece("P1", "piece-1"),
-        createBlankPatternPiece("P2", "piece-2"),
+        piece("P1", "piece-1"),
+        piece("P2", "piece-2"),
       ],
       workspaceTransforms: [
         { pieceId: "piece-1", xMm: 120, yMm: 60, rotationDeg: 0 },

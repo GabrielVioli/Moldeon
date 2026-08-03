@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { PatternSnapshot } from "../domain/pattern";
+import { edgeRangeLength, type PatternSnapshot } from "../domain/pattern";
+import { useEditorStore } from "../state/editorStore";
 
 interface InspectorProps {
   id: string;
@@ -31,6 +32,10 @@ export const Inspector = memo(function Inspector({
   onSeamAllowanceChange,
 }: InspectorProps) {
   const selectedPoint = snapshot.piece.points.find((point) => point.id === selectedPointId) ?? null;
+  const garment = useEditorStore((state) => state.garment);
+  const seamIssues = useEditorStore((state) => state.seamIssues);
+  const removeSeam = useEditorStore((state) => state.removeSeam);
+  const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
 
   return (
     <aside
@@ -142,6 +147,20 @@ export const Inspector = memo(function Inspector({
           </div>
         ) : (
           <p className="muted">Clique em um ponto do molde.</p>
+        )}
+      </section>
+
+      <section>
+        <div className="section-eyebrow">Costuras</div>
+        {(garment.seams ?? []).length === 0 ? <p className="muted">Selecione duas bordas no modo costura.</p> : (
+          <ul className="seam-list">{(garment.seams ?? []).map((seam) => {
+            const firstPiece = garment.pieces.find((piece) => piece.id === seam.first.pieceId);
+            const secondPiece = garment.pieces.find((piece) => piece.id === seam.second.pieceId);
+            const firstLength = firstPiece ? edgeRangeLength(firstPiece, seam.first) : 0;
+            const secondLength = secondPiece ? edgeRangeLength(secondPiece, seam.second) : 0;
+            const issue = seamIssues.find((item) => item.seamId === seam.id);
+            return <li key={seam.id}><strong>{firstPiece?.name ?? "Peça ausente"} ↔ {secondPiece?.name ?? "Peça ausente"}</strong><small>{firstLength.toFixed(1)} / {secondLength.toFixed(1)} mm · Δ {Math.abs(firstLength - secondLength).toFixed(1)} mm</small>{issue ? <span>{issue.message}</span> : null}<div><button type="button" onClick={() => toggleSeamDirection(seam.id)}>{seam.direction === "same" ? "Mesmo sentido" : "Sentido oposto"}</button><button type="button" onClick={() => removeSeam(seam.id)}>Remover</button></div></li>;
+          })}</ul>
         )}
       </section>
 

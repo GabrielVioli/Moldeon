@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FallbackPatternEngine } from "../core/fallbackPatternEngine";
-import type { GarmentDraft } from "../domain/pattern";
+import { createPreviewPlacement, type GarmentDraft } from "../domain/pattern";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { parseAutosave } from "./opfs";
 
@@ -42,7 +42,7 @@ describe("autosave serialization", () => {
           cutQuantity: 1,
           fabricId: fabric.id,
           previewPlacements: [
-            { region: "lower", surface: "front", bodySide: "center" },
+            createPreviewPlacement(snapshot.piece.id, { region: "hip" }),
           ],
         },
       ],

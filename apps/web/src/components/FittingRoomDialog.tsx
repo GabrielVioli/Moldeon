@@ -4,6 +4,7 @@ import {
   availableFabricAreaMm2,
 } from "../domain/fabric";
 import {
+  createPreviewPlacement,
   polygonAreaMm2,
   type PatternPreviewPlacement,
   type PreviewBodySide,
@@ -22,9 +23,10 @@ interface FittingRoomDialogProps {
 
 const REGION_OPTIONS: readonly { value: PreviewRegion; label: string }[] = [
   { value: "torso", label: "Tronco / blusa" },
-  { value: "lower", label: "Cintura e quadril / saia" },
+  { value: "waist", label: "Cintura" },
+  { value: "hip", label: "Quadril / saia" },
   { value: "leg", label: "Perna / calça" },
-  { value: "sleeve", label: "Braço / manga" },
+  { value: "arm", label: "Braço / manga" },
 ];
 
 export const FittingRoomDialog = memo(function FittingRoomDialog({
@@ -57,11 +59,8 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
   const activeFabric =
     garment.fabrics.find((source) => source.id === activePiece.fabricId) ??
     garment.fabrics[0];
-  const placement = activePiece.previewPlacements?.[0] ?? {
-    region: "torso",
-    surface: "front",
-    bodySide: "center",
-  };
+  const placement: PatternPreviewPlacement =
+    activePiece.previewPlacements?.[0] ?? createPreviewPlacement(activePiece.id);
   const duplicatedOnBothSides =
     (activePiece.previewPlacements?.length ?? 0) > 1;
   const usageByFabric = useMemo(
@@ -96,7 +95,7 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
     const base = { ...placement, ...next };
     if (
       duplicate &&
-      (base.region === "leg" || base.region === "sleeve")
+      (base.region === "leg" || base.region === "arm")
     ) {
       setPlacements([
         { ...base, bodySide: "left", mirrorX: false },
@@ -388,6 +387,7 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
                   >
                     <option value="front">Frente</option>
                     <option value="back">Costas</option>
+                    <option value="side">Lateral</option>
                   </select>
                 </label>
                 <label>
@@ -397,7 +397,7 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
                     disabled={
                       duplicatedOnBothSides &&
                       (placement.region === "leg" ||
-                        placement.region === "sleeve")
+                        placement.region === "arm")
                     }
                     onChange={(event) =>
                       updatePlacement({
@@ -412,13 +412,33 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
                 </label>
               </div>
 
+              <div className="placement-grid placement-adjustments">
+                <PlacementField label="Rotação" value={placement.rotationDeg} onChange={(rotationDeg) => updatePlacement({ rotationDeg })} />
+                <PlacementField label="Deslocamento X" value={placement.offsetXMm} onChange={(offsetXMm) => updatePlacement({ offsetXMm })} />
+                <PlacementField label="Deslocamento Y" value={placement.offsetYMm} onChange={(offsetYMm) => updatePlacement({ offsetYMm })} />
+                <PlacementField label="Afastamento" value={placement.offsetZMm} onChange={(offsetZMm) => updatePlacement({ offsetZMm })} />
+                <label>
+                  Escala
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.05"
+                    value={placement.scale}
+                    onChange={(event) => {
+                      const scale = event.currentTarget.valueAsNumber;
+                      if (Number.isFinite(scale) && scale > 0) updatePlacement({ scale });
+                    }}
+                  />
+                </label>
+              </div>
+
               <label className="duplicate-placement">
                 <input
                   type="checkbox"
                   checked={duplicatedOnBothSides}
                   disabled={
                     placement.region !== "leg" &&
-                    placement.region !== "sleeve"
+                    placement.region !== "arm"
                   }
                   onChange={(event) =>
                     updatePlacement({}, event.currentTarget.checked)
@@ -438,6 +458,13 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
                 , na <strong>{placement.surface === "front" ? "frente" : "parte de trás"}</strong>
                 {duplicatedOnBothSides ? ", dos dois lados" : ""}.
               </div>
+              <button
+                className="secondary-dialog-button"
+                type="button"
+                onClick={() => setPlacements([])}
+              >
+                Remover do corpo
+              </button>
             </section>
           ) : null}
         </div>
@@ -512,6 +539,31 @@ function FabricSizeField({
 function formatArea(areaMm2: number): string {
   if (areaMm2 < 10_000) return `${Math.round(areaMm2 / 100)} cm²`;
   return `${(areaMm2 / 1_000_000).toFixed(2)} m²`;
+}
+
+function PlacementField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange(value: number): void;
+}) {
+  return (
+    <label>
+      {label} (mm/°)
+      <input
+        type="number"
+        step="1"
+        value={value}
+        onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (Number.isFinite(next)) onChange(next);
+        }}
+      />
+    </label>
+  );
 }
 
 function regionLabel(region: PreviewRegion): string {
