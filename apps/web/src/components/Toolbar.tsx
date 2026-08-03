@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { EditorTool } from "../editor/PatternCanvas";
+import type { WorkspaceMode } from "../domain/assembly";
 
 interface ToolbarProps {
   garmentName: string;
@@ -8,6 +9,10 @@ interface ToolbarProps {
   onOpenFitting(): void;
   onPrepareFitting(): void;
   onSimulate(): void;
+  canAssemble3D: boolean;
+  workspaceMode: WorkspaceMode;
+  canDressBody: boolean;
+  onWorkspaceModeChange(mode: WorkspaceMode): void;
   onReset(): void;
   onExportSvg(): void;
   onUndo(): void;
@@ -28,6 +33,10 @@ export const Toolbar = memo(function Toolbar({
   onOpenFitting,
   onPrepareFitting,
   onSimulate,
+  canAssemble3D,
+  workspaceMode,
+  canDressBody,
+  onWorkspaceModeChange,
   onReset,
   onExportSvg,
   onUndo,
@@ -49,6 +58,12 @@ export const Toolbar = memo(function Toolbar({
           <span>{garmentName}</span>
         </div>
       </div>
+
+      <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
+        <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => onWorkspaceModeChange("modeling")}>Modelagem</button>
+        <button type="button" className={workspaceMode === "assembly" ? "active" : ""} onClick={() => onWorkspaceModeChange("assembly")}>Montagem</button>
+        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
+      </nav>
 
       <nav className="tool-buttons" aria-label="Ferramentas">
         <button
@@ -146,7 +161,7 @@ export const Toolbar = memo(function Toolbar({
         >
           Restaurar
         </button>
-        <button className="primary-button" type="button" onClick={onSimulate}>Vestir no 3D</button>
+        <button className="primary-button" type="button" disabled={!canAssemble3D} onClick={onSimulate}>Montar no 3D</button>
       </div>
     </header>
   );

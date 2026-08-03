@@ -38,16 +38,11 @@ button {
 }
 
 .workspace-mode-switch {
-  position: fixed;
-  z-index: 20;
-  top: 15px;
-  left: 50%;
   display: flex;
   gap: 3px;
   padding: 3px;
   background: #292b2f;
   border-radius: 8px;
-  transform: translateX(-50%);
 }
 
 .workspace-mode-switch button {
@@ -63,7 +58,7 @@ button {
 
 .toolbar {
   display: grid;
-  grid-template-columns: 290px 1fr auto;
+  grid-template-columns: minmax(180px, 0.8fr) auto minmax(270px, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 0 16px;
@@ -357,6 +352,14 @@ button {
   cursor: crosshair;
   touch-action: none;
 }
+
+@media (max-width: 1450px) {
+  .toolbar { grid-template-columns: 48px auto minmax(250px, 1fr) auto; gap: 6px; padding-inline: 6px; }
+  .brand div { display: none; }
+  .toolbar-actions, .tool-buttons { gap: 4px; }
+  .tool-button, .secondary-button, .primary-button, .library-button, .fitting-button { padding-inline: 8px; }
+  .workspace-mode-switch button { padding-inline: 8px; }
+}
 .pattern-canvas-hand, .pattern-canvas.is-space-hand { cursor: grab; }
 .pattern-canvas.is-panning { cursor: grabbing; }
 .pattern-canvas.is-dimension-hovered { cursor: text; }
@@ -421,6 +424,63 @@ button {
 .mode-preparation .editor-body { display: block; }
 .mode-preparation .canvas-stack { display: none; }
 .mode-preparation .pieces-panel { height: 100%; }
+
+.workspace.mode-modeling,
+.workspace.mode-assembly {
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(210px, 0.44fr) minmax(0, 0.56fr);
+}
+
+.mode-modeling .editor-panel,
+.mode-assembly .editor-panel {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.mode-modeling .preview-panel,
+.mode-assembly .preview-panel {
+  grid-column: 2;
+  grid-row: 1;
+  border-bottom: 1px solid #b5b1aa;
+}
+
+.mode-modeling .inspector,
+.mode-assembly .assembly-panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.mode-fitting { grid-template-columns: minmax(360px, 0.45fr) minmax(520px, 1fr) 300px; }
+
+.assembly-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  color: #2f312f;
+  background: #f5f3ee;
+}
+
+.assembly-panel header { display: grid; gap: 4px; margin-bottom: 12px; }
+.assembly-panel h3 { margin: 0 0 8px; font-size: 12px; }
+.assembly-panel p { margin: 5px 0; font-size: 11px; line-height: 1.35; }
+.assembly-help { color: #696a66; }
+.assembly-section, .seam-proposal, .assembly-readiness { padding: 11px 0; border-top: 1px solid #d5d1c9; }
+.seam-proposal { display: grid; gap: 7px; padding: 11px; border: 1px solid #c7b772; border-radius: 6px; background: #fffbed; }
+.seam-proposal div, .assembly-row { display: flex; gap: 6px; }
+.assembly-row { margin-bottom: 6px; }
+.assembly-row input, .assembly-row select { min-width: 0; flex: 1; }
+.assembly-panel input, .assembly-panel select, .assembly-panel button { max-width: 100%; font: inherit; }
+.ease-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.ease-grid label { display: grid; gap: 3px; color: #666; font-size: 10px; text-transform: capitalize; }
+.ease-grid input { width: 70px; }
+.assembly-readiness { display: grid; gap: 7px; }
+.assembly-readiness .warning { color: #875b13; }
+.assembly-readiness button { padding: 8px; }
+
+.viewport-inspection { position: absolute; z-index: 4; top: 10px; right: 10px; display: flex; gap: 4px; }
+.viewport-inspection button { padding: 6px 8px; border: 1px solid #74736f; border-radius: 4px; background: rgba(245, 243, 238, 0.9); }
+.viewport-inspection button.active { color: white; background: #343632; }
 
 .viewport-placeholder {
   display: grid;
@@ -1246,7 +1306,7 @@ button {
   }
 
   .toolbar {
-    grid-template-columns: 230px 1fr auto;
+    grid-template-columns: 48px auto 1fr;
   }
 
   .tool-buttons {
@@ -1260,11 +1320,15 @@ button {
   }
 
   .toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
     grid-template-rows: 44px 38px;
     gap: 4px;
     padding: 4px 10px 8px;
   }
+
+  .brand { grid-column: 1; grid-row: 1; }
+  .workspace-mode-switch { grid-column: 2; grid-row: 1; }
+  .toolbar-actions { grid-column: 1 / span 2; grid-row: 2; }
 
   .brand {
     gap: 8px;

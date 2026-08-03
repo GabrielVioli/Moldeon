@@ -21,6 +21,8 @@ import {
 import { disposeObjectTree } from "./disposeObjectTree";
 
 interface GarmentMeshData {
+  key: string;
+  signature: string;
   mesh: THREE.Mesh;
   flat: Float32Array;
   dressed: Float32Array;
@@ -74,6 +76,7 @@ export class ThreeViewport {
   private lastFrameAt = 0;
   private disposed = false;
   private bodySignature = "";
+  private exploded = false;
   private avatarMetrics = createAvatarMetrics("feminine", {
     heightMm: 1680,
     bustMm: 920,
@@ -163,10 +166,10 @@ export class ThreeViewport {
     garment: GarmentDraft,
   ): string[] {
     this.updateBody(garment.bodyType, garment.measurements);
-    this.clearGarment();
 
     const scale = 0.00145;
     const meshes: GarmentMeshData[] = [];
+    const existingMeshes = new Map(this.garmentMeshes.map((item) => [item.key, item]));
     const fabricById = new Map(
       garment.fabrics.map((source) => [source.id, source]),
     );
@@ -180,30 +183,69 @@ export class ThreeViewport {
         return;
       }
       const placements =
-        snapshot.piece.previewPlacements ?? [
-          createPreviewPlacement(snapshot.piece.id),
-        ];
+        garment.assemblyPlacements?.filter((candidate) => candidate.pieceId === snapshot.piece.id).map((candidate, placementIndex): PatternPreviewPlacement => ({
+          id: `assembly-${candidate.pieceId}-${placementIndex}`,
+          pieceId: candidate.pieceId,
+          region: candidate.role === "sleeve" ? "arm" : candidate.role === "leg" ? "leg" : candidate.role === "waist" ? "waist" : "torso",
+          surface: candidate.outwardSide,
+          bodySide: candidate.role === "sleeve" || candidate.role === "leg" ? (placementIndex % 2 ? "left" : "right") : "center",
+          rotationDeg: candidate.rotationDeg[2],
+          offsetXMm: candidate.positionMm[0],
+          offsetYMm: candidate.positionMm[1],
+          offsetZMm: candidate.positionMm[2],
+          scale: 1,
+          mirrorX: candidate.flipped,
+        })) ?? snapshot.piece.previewPlacements ?? [createPreviewPlacement(snapshot.piece.id)];
       const fabric =
         fabricById.get(snapshot.piece.fabricId ?? "") ?? fallbackFabric;
       if (!fabric) return;
       for (const placement of placements) {
-        meshes.push(
-          this.createPanel(
+        const key = `${snapshot.piece.id}/${placement.id}`;
+        const signature = JSON.stringify([points, placement, fabric]);
+        const existing = existingMeshes.get(key);
+        if (existing?.signature === signature) {
+          meshes.push(existing);
+          existingMeshes.delete(key);
+        } else {
+          if (existing) {
+            this.disposeGarmentMesh(existing);
+            existingMeshes.delete(key);
+          }
+          meshes.push({ ...this.createPanel(
             points,
             triangulation.indices,
             scale,
             placement,
             fabric,
             meshes.length,
-          ),
-        );
+          ), key, signature });
+        }
       }
     });
+    existingMeshes.forEach((item) => this.disposeGarmentMesh(item));
     this.garmentMeshes = meshes;
-    this.garmentMeshes.forEach(({ mesh }) => this.garmentGroup.add(mesh));
+    this.garmentMeshes.forEach(({ mesh }) => {
+      if (mesh.parent !== this.garmentGroup) this.garmentGroup.add(mesh);
+    });
     this.applyDressProgress(1);
+    this.setExploded(this.exploded);
     this.requestRender();
     return warnings;
+  }
+
+  setBodyVisible(visible: boolean): void {
+    if (this.mannequinGroup.visible !== visible) this.bodySignature = "";
+    this.mannequinGroup.visible = visible;
+    this.requestRender();
+  }
+
+  setExploded(exploded: boolean): void {
+    this.exploded = exploded;
+    this.garmentGroup.children.forEach((child, index) => {
+      child.position.x = exploded ? ((index % 3) - 1) * 0.38 : 0;
+      child.position.z = exploded ? Math.floor(index / 3) * 0.18 : 0;
+    });
+    this.requestRender();
   }
 
   dress() {
@@ -237,7 +279,7 @@ export class ThreeViewport {
     placement: PatternPreviewPlacement,
     fabric: FabricSource,
     instanceIndex: number,
-  ): GarmentMeshData {
+  ): Omit<GarmentMeshData, "key" | "signature"> {
     const bounds = pointBounds(points);
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const contourPositions = new Float32Array(points.length * 3);
@@ -322,14 +364,16 @@ export class ThreeViewport {
   }
 
   private clearGarment() {
-    for (const { mesh } of this.garmentMeshes) {
-      this.garmentGroup.remove(mesh);
-      mesh.geometry.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) material.forEach((item) => item.dispose());
-      else material.dispose();
-    }
+    for (const item of this.garmentMeshes) this.disposeGarmentMesh(item);
     this.garmentMeshes = [];
+  }
+
+  private disposeGarmentMesh({ mesh }: GarmentMeshData): void {
+    this.garmentGroup.remove(mesh);
+    mesh.geometry.dispose();
+    const material = mesh.material;
+    if (Array.isArray(material)) material.forEach((item) => item.dispose());
+    else material.dispose();
   }
 
   private updateBody(

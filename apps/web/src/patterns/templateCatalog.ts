@@ -7,6 +7,7 @@ import type {
   PatternPreviewPlacement,
 } from "../domain/pattern";
 import { createDefaultFabricSource } from "../domain/fabric";
+import { inferAssemblyPlacement } from "../domain/assembly";
 
 export type PatternTemplateId =
   | "tshirt"
@@ -115,6 +116,8 @@ export function createGarmentFromTemplate(
     measurements: { ...measurements },
     fabrics: [fabric],
     pieces,
+    assemblyPlacements: pieces.map((piece, index) => ({ ...inferAssemblyPlacement(piece, index), source: "template" })),
+    ease: { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 },
   };
 }
 
@@ -599,6 +602,10 @@ function validateMeasurements(
     torsoLengthMm: [320, 650],
     armLengthMm: [430, 850],
     inseamMm: [580, 1100],
+    bicepMm: [180, 650],
+    wristMm: [100, 350],
+    thighMm: [300, 1000],
+    calfMm: [200, 700],
   };
   for (const [key, value] of Object.entries(measurements) as [
     keyof BodyMeasurements,

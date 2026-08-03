@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { GarmentDraft, PatternSnapshot, PreviewRegion } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
@@ -9,6 +9,8 @@ interface GarmentViewportProps {
   active: boolean;
   onBackendChange(backend: "webgpu" | "webgl2"): void;
   onPieceDrop?(pieceId: string, region: PreviewRegion): void;
+  showBody: boolean;
+  connectedPieceIds: string[];
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -18,6 +20,8 @@ export const GarmentViewport = memo(function GarmentViewport({
   active,
   onBackendChange,
   onPieceDrop,
+  showBody,
+  connectedPieceIds,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -25,16 +29,25 @@ export const GarmentViewport = memo(function GarmentViewport({
   const latestGarmentRef = useRef(garment);
   const latestActiveRef = useRef(active);
   const latestSimulateVersionRef = useRef(simulateVersion);
+  const latestShowBodyRef = useRef(showBody);
+  const latestConnectedIdsRef = useRef(new Set(connectedPieceIds));
   const lastDressedVersionRef = useRef(0);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [draggingPiece, setDraggingPiece] = useState(false);
+  const [inspectionMode, setInspectionMode] = useState<"mounted" | "exploded">("mounted");
 
   latestSnapshotsRef.current = snapshots;
   latestGarmentRef.current = garment;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
+  latestShowBodyRef.current = showBody;
+  latestConnectedIdsRef.current = new Set(connectedPieceIds);
+  const connectedSnapshots = useMemo(() => {
+    const connectedIds = new Set(connectedPieceIds);
+    return snapshots.filter((candidate) => connectedIds.has(candidate.piece.id));
+  }, [connectedPieceIds, snapshots]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -52,10 +65,11 @@ export const GarmentViewport = memo(function GarmentViewport({
         }
         viewportRef.current = viewport;
         onBackendChange(viewport.backend);
+        viewport.setBodyVisible(latestShowBodyRef.current);
 
         if (latestActiveRef.current) {
           setWarnings(viewport.updateGarment(
-            latestSnapshotsRef.current,
+            latestSnapshotsRef.current.filter((candidate) => latestConnectedIdsRef.current.has(candidate.piece.id)),
             latestGarmentRef.current,
           ));
         }
@@ -89,17 +103,25 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [onBackendChange]);
 
   useEffect(() => {
+    viewportRef.current?.setBodyVisible(showBody);
+  }, [showBody]);
+
+  useEffect(() => {
+    viewportRef.current?.setExploded(inspectionMode === "exploded");
+  }, [inspectionMode]);
+
+  useEffect(() => {
     if (!active) return;
     if (updateFrameRef.current !== null) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
       const nextWarnings = viewportRef.current?.updateGarment(
-        latestSnapshotsRef.current,
+        connectedSnapshots,
         latestGarmentRef.current,
       );
       if (nextWarnings) setWarnings(nextWarnings);
     });
-  }, [active, garment, snapshots]);
+  }, [active, garment, connectedSnapshots, showBody]);
 
   useEffect(() => {
     if (
@@ -147,6 +169,10 @@ export const GarmentViewport = memo(function GarmentViewport({
           ))}
         </div>
       ) : null}
+      <div className="viewport-inspection" role="group" aria-label="Inspeção da montagem">
+        <button type="button" className={inspectionMode === "mounted" ? "active" : ""} onClick={() => setInspectionMode("mounted")}>Montada</button>
+        <button type="button" className={inspectionMode === "exploded" ? "active" : ""} onClick={() => setInspectionMode("exploded")}>Explodida</button>
+      </div>
       <div className="viewport-label">
         Preview 3D · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
         {garment.fabrics.length > 1

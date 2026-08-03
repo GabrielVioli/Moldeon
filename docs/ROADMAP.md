@@ -24,6 +24,12 @@
 
 ## Atualizações recentes
 
+- Interface reorganizada nos modos Modelagem, Montagem e Prova; o corpo visível ficou restrito à Prova.
+- Elegibilidade pura impede a prévia de uma peça solta e adia o bundle Three.js até pedido explícito.
+- Costuras agora passam por proposta, análise de compatibilidade, direção e tratamento antes da confirmação.
+- Grafo de montagem, placements por peça, folgas e acabamentos foram incorporados ao documento e ao histórico.
+- Corpo anatômico procedural compartilhado ganhou medidas complementares derivadas, landmarks e malha leve validada.
+
 - Implementado snap no editor 2D (pontos, grade, alinhamento horizontal/vertical, pontos médios) com feedback visual.
 - Réguas horizontal/vertical e guias arrastáveis adicionadas ao editor; guias são persistidas no documento.
 - Introduzida semântica de arestas e ranges (`EdgeRange`, `Seam`) e a ferramenta de costura para relacionar duas arestas, visualizar comprimentos e diferença, alternar direção e salvar `seams[]` no projeto.
@@ -35,7 +41,9 @@ Essas mudanças preservam compatibilidade com projetos existentes: campos novos 
 
 - Triangulação de polígonos simples convexos e côncavos. ✅
 - Frente, costas e peças múltiplas. ✅
-- Costuras entre intervalos de borda.
+- Costuras entre intervalos de borda. ✅
+- Montagem progressiva por componentes conectados e atualização incremental das peças afetadas. ✅
+- Inspeção montada/explodida sem reiniciar câmera ou controles. ✅
 - Posicionamento geométrico inicial dos painéis ao redor do avatar. ✅
 - Escolha editável de região, face e lado do corpo por peça. ✅
 - Avatar procedural feminino/masculino guiado por oito medidas reais. ✅

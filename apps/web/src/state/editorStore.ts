@@ -19,8 +19,11 @@ import {
   type PieceWorkspaceState,
   type PieceWorkspaceTransform,
   type Seam,
+  type SeamDirection,
+  type SeamTreatment,
   type SeamValidationIssue,
 } from "../domain/pattern";
+import { analyzeSeamCompatibility, inferAssemblyPlacement, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
 import { validatePatternContour } from "../domain/polygonGeometry";
 import {
   applyFabricPreset,
@@ -49,6 +52,7 @@ export interface EditorState {
   draftCursor: PatternPoint | null;
   draftError: string | null;
   seamIssues: SeamValidationIssue[];
+  seamProposal: { first: EdgeRange; second: EdgeRange; compatibility: SeamCompatibility } | null;
   simulateVersion: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -69,6 +73,10 @@ export interface EditorState {
   removePoint(pointId: string): void;
   setSeamAllowance(valueMm: number): void;
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
+  proposeSeam(first: EdgeRange, second: EdgeRange): void;
+  cancelSeamProposal(): void;
+  confirmSeamProposal(options: { name: string; direction: SeamDirection; treatment: SeamTreatment }): void;
+  updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment }): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
   addGuide(orientation: Guide["orientation"], positionMm: number): void;
@@ -82,6 +90,9 @@ export interface EditorState {
   removeFabric(fabricId: string): void;
   assignFabricToActivePiece(fabricId: string): void;
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
+  setAssemblyPlacement(pieceId: string, placement: Partial<ReturnType<typeof inferAssemblyPlacement>>): void;
+  setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
+  setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
   movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
   setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
   rotatePieceInWorkspace(pieceId: string, deltaDeg: number): void;
@@ -119,6 +130,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   draftCursor: null,
   draftError: null,
   seamIssues: [],
+  seamProposal: null,
   simulateVersion: 0,
   canUndo: false,
   canRedo: false,
@@ -157,6 +169,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       draftCursor: null,
       draftError: null,
       seamIssues: collectSeamIssues(normalized),
+      seamProposal: null,
       ...historyAvailability(),
     });
   },
@@ -258,6 +271,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       direction: direction === "reverse" ? "opposite" : "same",
       easeRatio: 0,
       type: "standard",
+      name: `Costura ${(state.garment.seams?.length ?? 0) + 1}`,
+      treatment: "standard",
     };
     const issues = validateSeam(seam, state.garment);
     if (issues.length > 0) {
@@ -392,6 +407,44 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         : { previewPlacements: undefined }),
     }),
   ),
+  setAssemblyPlacement: (pieceId, update) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    changeDocument(set, get, "placement", "Posicionar peça na montagem", (document) => {
+    const piece = document.garment.pieces.find((candidate) => candidate.id === pieceId)!;
+    const current = document.garment.assemblyPlacements?.find((placement) => placement.pieceId === pieceId)
+      ?? inferAssemblyPlacement(piece, document.garment.assemblyPlacements?.length ?? 0);
+    const placement = { ...current, ...update, pieceId, source: "manual" as const };
+    return {
+      ...document,
+      garment: {
+        ...document.garment,
+        assemblyPlacements: [
+          ...(document.garment.assemblyPlacements ?? []).filter((candidate) => candidate.pieceId !== pieceId),
+          placement,
+        ],
+      },
+    };
+    });
+  },
+  setEdgeFinish: (pieceId, edgeId, finish) => changeDocument(set, get, "metadata", "Alterar acabamento", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      pieces: document.garment.pieces.map((piece) => piece.id === pieceId
+        ? { ...piece, edgeFinishes: { ...(piece.edgeFinishes ?? {}), [edgeId]: finish } }
+        : piece),
+    },
+  })),
+  setGarmentEase: (region, valueMm) => {
+    if (!Number.isFinite(valueMm)) return;
+    changeDocument(set, get, "metadata", "Alterar folga da roupa", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        ease: { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50, ...(document.garment.ease ?? {}), [region]: valueMm },
+      },
+    }));
+  },
 
   movePieceInWorkspace: (pieceId, xMm, yMm) => {
     const state = workspaceStateFor(get().garment, pieceId);
@@ -408,6 +461,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ garment });
     recordIfStandalone(set, get, "workspace", "Mover peça", before);
   },
+  proposeSeam: (first, second) => set((state) => ({
+    seamProposal: {
+      first: { ...first },
+      second: { ...second },
+      compatibility: analyzeSeamCompatibility(state.garment, first, second),
+    },
+    seamIssues: [],
+  })),
+  cancelSeamProposal: () => set({ seamProposal: null }),
+  confirmSeamProposal: (options) => {
+    const state = get();
+    const proposal = state.seamProposal;
+    if (!proposal) return;
+    const seam: Seam = {
+      id: createDocumentId("seam"),
+      name: options.name.trim() || `Costura ${(state.garment.seams?.length ?? 0) + 1}`,
+      first: { ...proposal.first },
+      second: { ...proposal.second },
+      direction: options.direction,
+      treatment: options.treatment,
+      type: options.treatment,
+      easeRatio: proposal.compatibility.differencePercent / 100,
+    };
+    const issues = validateSeamForAssembly(seam, state.garment);
+    if (issues.length > 0) {
+      set({ seamIssues: issues });
+      return;
+    }
+    changeDocument(set, get, "seam", "Confirmar costura", (document) => ({
+      ...document,
+      garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
+    }));
+    set({ seamProposal: null });
+  },
+  updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      seams: (document.garment.seams ?? []).map((seam) => seam.id === seamId
+        ? { ...seam, ...update, ...(update.treatment ? { type: update.treatment } : {}) }
+        : seam),
+    },
+  })),
   rotatePieceInWorkspace: (pieceId, deltaDeg) => {
     const state = workspaceStateFor(get().garment, pieceId);
     if (state.locked) return;
@@ -610,6 +706,7 @@ function applyDocumentState(
     selectedPointId: null,
     selectedEdgeId: null,
     seamIssues: collectSeamIssues(garment),
+    seamProposal: null,
     ...historyAvailability(),
     ...additional,
   });
@@ -768,7 +865,7 @@ function migrateLegacyDocument(garment: GarmentDraft): GarmentDraft {
 }
 
 function collectSeamIssues(garment: GarmentDraft): SeamValidationIssue[] {
-  return (garment.seams ?? []).flatMap((seam) => validateSeam(seam, garment));
+  return (garment.seams ?? []).flatMap((seam) => validateSeamForAssembly(seam, garment));
 }
 
 function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {

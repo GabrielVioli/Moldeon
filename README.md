@@ -20,6 +20,10 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Triangulação explícita de polígonos convexos e côncavos.
 - Fallback em TypeScript, permitindo abrir o projeto mesmo sem compilar Rust.
 - Viewport 3D sob demanda com Three.js, WebGPU e fallback WebGL 2 explícito.
+- Fluxo principal em **Modelagem**, **Montagem** e **Prova**, com a prancheta 2D ocupando 75% da área nos dois primeiros modos.
+- Costuras em duas etapas: seleção das bordas, análise de comprimentos, tratamento e confirmação explícita.
+- Grafo de montagem com componentes conectados, bordas abertas, alertas e elegibilidade determinística para o 3D.
+- Placements estruturais, folgas da roupa e acabamentos de borda persistentes e cobertos por undo/redo.
 - Manequim procedural proporcional às medidas, sem depender de arquivo 3D
   externo pesado.
 - Conversão visual de todas as peças em painéis posicionados ao redor do manequim.
@@ -44,7 +48,7 @@ paramétrica e a edição de múltiplas peças. A base anterior a essas otimiza�
 baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 - Three.js não entra no JavaScript inicial.
-- No celular, o 3D só é baixado depois que a aba **Prévia 3D** é aberta.
+- Em qualquer tela, o 3D só é baixado depois de uma solicitação explícita e quando há ao menos duas peças trianguláveis ligadas por uma costura válida.
 - WebGL 2 e os recursos comuns do Three.js formam o caminho 3D mais leve.
 - O módulo adicional de WebGPU só é baixado quando a API está disponível.
 - O Canvas 2D reutiliza o mesmo `ResizeObserver` e limita atualizações ao frame da tela.
@@ -54,7 +58,7 @@ baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 ## O que ainda não é uma simulação profissional
 
-O botão **Vestir no 3D** desta versão executa uma prévia geométrica animada.
+O botão **Montar no 3D** desta versão executa uma prévia geométrica estrutural; **Vestir no corpo** abre a Prova separadamente.
 Os presets já alteram aderência, volume e ondulação de forma aproximada, mas
 ainda não calculam gravidade, autocolisão, franzido, elástico ou costuras
 complexas. O solver XPBD inicial está isolado para ser desenvolvido e testado
@@ -163,4 +167,4 @@ Leia também:
 
 ## Próxima etapa recomendada
 
-Implementar snap, réguas, guias e relações de costura antes de conectar a física XPBD ao viewport.
+Ampliar a montagem estrutural e sua validação antes de conectar física XPBD, autocolisão ou alegações de caimento físico ao viewport.

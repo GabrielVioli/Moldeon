@@ -15,10 +15,12 @@ import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import { PiecesPanel } from "./components/PiecesPanel";
 import { PreviewPlacementPanel } from "./components/PreviewPlacementPanel";
+import { AssemblyPanel } from "./components/AssemblyPanel";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { createPreviewPlacement, type GarmentDraft, type PreviewRegion } from "./domain/pattern";
+import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -47,6 +49,7 @@ export function App() {
   const engineBackend = useEditorStore((state) => state.engineBackend);
   const selectedPointId = useEditorStore((state) => state.selectedPointId);
   const simulateVersion = useEditorStore((state) => state.simulateVersion);
+  const seamProposal = useEditorStore((state) => state.seamProposal);
   const canUndo = useEditorStore((state) => state.canUndo);
   const canRedo = useEditorStore((state) => state.canRedo);
   const setEngineSnapshot = useEditorStore((state) => state.setEngineSnapshot);
@@ -88,21 +91,27 @@ export function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
-  const [workspaceMode, setWorkspaceMode] = useState<"modeling" | "preparation">("modeling");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("modeling");
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
-  const showViewport =
-    !isMobile || previewRequested || mobileView === "preview";
+  const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
+  const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const garmentSnapshots = useMemo(
     () => (showViewport ? garment.pieces.map(createPatternSnapshot) : []),
     [garment, showViewport],
   );
   const handleSimulate = useCallback(() => {
+    setWorkspaceMode("assembly");
     setPreviewRequested(true);
     if (isMobile) setMobileView("preview");
     simulate();
   }, [isMobile, simulate]);
+  const handleDressBody = useCallback(() => {
+    setWorkspaceMode("fitting");
+    setPreviewRequested(true);
+    if (isMobile) setMobileView("preview");
+  }, [isMobile]);
   const handleExportSvg = useCallback(() => {
     const currentGarment = useEditorStore.getState().garment;
     exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
@@ -336,6 +345,10 @@ export function App() {
     if (activeTool === "draft" && draftContour === null) setActiveTool("select");
   }, [activeTool, draftContour]);
 
+  useEffect(() => {
+    if (seamProposal) setWorkspaceMode("assembly");
+  }, [seamProposal]);
+
   return (
     <div className="app-shell">
       <Toolbar
@@ -349,6 +362,10 @@ export function App() {
           void loadFittingRoom();
         }}
         onSimulate={handleSimulate}
+        canAssemble3D={eligibility.canPreviewGarment}
+        workspaceMode={workspaceMode}
+        canDressBody={eligibility.canDressBody}
+        onWorkspaceModeChange={(mode) => mode === "fitting" ? handleDressBody() : setWorkspaceMode(mode)}
         onReset={resetPattern}
         onExportSvg={handleExportSvg}
         onUndo={undo}
@@ -361,11 +378,6 @@ export function App() {
         activeTool={activeTool}
         onSelectTool={setActiveTool}
       />
-
-      <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
-        <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => setWorkspaceMode("modeling")}>Modelagem</button>
-        <button type="button" className={workspaceMode === "preparation" ? "active" : ""} onClick={() => { setWorkspaceMode("preparation"); setPreviewRequested(true); }}>Preparação 3D</button>
-      </nav>
 
       <main className={`workspace mode-${workspaceMode}`}>
         <nav className="mobile-workspace-tabs" aria-label="Painéis do projeto" role="tablist">
@@ -382,11 +394,10 @@ export function App() {
             panelId="preview-panel"
             active={mobileView === "preview"}
             onPrepare={() => {
-              setPreviewRequested(true);
-              void loadGarmentViewport();
+              if (eligibility.canPreviewGarment) void loadGarmentViewport();
             }}
             onSelect={() => {
-              setPreviewRequested(true);
+              if (eligibility.canPreviewGarment) setPreviewRequested(true);
               setMobileView("preview");
             }}
           >
@@ -398,7 +409,7 @@ export function App() {
             active={mobileView === "inspector"}
             onSelect={() => setMobileView("inspector")}
           >
-            Medidas
+            {workspaceMode === "assembly" ? "Montagem" : "Medidas"}
           </WorkspaceTab>
         </nav>
 
@@ -476,7 +487,7 @@ export function App() {
           aria-labelledby="preview-tab"
         >
           {showViewport ? (
-            <Suspense fallback={<ViewportPlaceholder />}>
+            <Suspense fallback={<ViewportPlaceholder loading />}>
               <LazyGarmentViewport
                 garment={garment}
                 snapshots={garmentSnapshots}
@@ -484,6 +495,8 @@ export function App() {
                 active={!isMobile || mobileView === "preview"}
                 onBackendChange={setRenderBackend}
                 onPieceDrop={handlePieceDrop}
+                showBody={workspaceMode === "fitting"}
+                connectedPieceIds={eligibility.connectedPieceIds}
               />
             </Suspense>
           ) : (
@@ -491,7 +504,12 @@ export function App() {
           )}
         </section>
 
-        {workspaceMode === "preparation" ? <PreviewPlacementPanel /> : <Inspector
+        {workspaceMode === "assembly" ? <AssemblyPanel
+          previewRequested={previewRequested}
+          mobileActive={mobileView === "inspector"}
+          onRequestPreview={handleSimulate}
+          onDressBody={handleDressBody}
+        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel /> : <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}
@@ -582,12 +600,12 @@ function WorkspaceTab({
   );
 }
 
-function ViewportPlaceholder() {
+function ViewportPlaceholder({ loading = false }: { loading?: boolean }) {
   return (
     <div className="viewport-placeholder" role="status">
-      <span className="viewport-spinner" aria-hidden="true" />
-      <strong>Preparando prévia 3D</strong>
-      <span>O editor 2D continua leve enquanto o 3D carrega.</span>
+      {loading ? <span className="viewport-spinner" aria-hidden="true" /> : null}
+      <strong>{loading ? "Preparando prévia 3D" : "Montagem 3D ainda indisponível"}</strong>
+      <span>{loading ? "O editor 2D continua leve enquanto o 3D carrega." : "Conecte duas peças válidas por uma costura e solicite a montagem."}</span>
     </div>
   );
 }

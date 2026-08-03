@@ -35,6 +35,8 @@ Responsabilidades:
 
 ## Viewport 3D
 
+Antes do renderer existe uma camada de montagem pura: `analyzeSeamCompatibility`, `buildAssemblyGraph` e `evaluateGarment3DEligibility`. Ela é testável sem DOM/Three.js e decide quais componentes conectados podem ser exibidos. `AssemblyPlacement` define papel, lado externo, posição e rotação iniciais; templates fornecem valores explícitos e peças livres recebem inferência editável.
+
 Three.js é responsável por:
 
 - Câmera e OrbitControls.
@@ -46,7 +48,7 @@ Three.js é responsável por:
 
 Three.js não deve conter regras de modelagem.
 
-O viewport é carregado por `import()` e, no celular, só é materializado depois da abertura da aba 3D. WebGL 2 é o fallback explícito; o módulo WebGPU é baixado apenas quando `navigator.gpu` existe. A renderização ocorre sob demanda durante redimensionamento, interação, atualização do molde ou animação de vestir.
+O viewport é carregado por `import()` somente após pedido explícito e elegibilidade positiva. Na Montagem, a malha corporal compartilhada funciona como referência de colisão invisível; o corpo visual aparece apenas na Prova. WebGL 2 é o fallback explícito; o módulo WebGPU é baixado apenas quando `navigator.gpu` existe. A renderização ocorre sob demanda e reconcilia painéis por assinatura para preservar câmera e controles quando só uma peça muda.
 
 ## Física
 

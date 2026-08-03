@@ -483,10 +483,17 @@ function PatternCanvasComponent({
   }
 
   function findEdgeRangeAt(clientX: number, clientY: number): EdgeRange | null {
-    const local = screenToActivePieceLocal(clientX, clientY);
-    const piece = snapshotRef.current.piece;
-    const target = findNearestPatternSegment(piece.points, local);
-    if (!target || target.distanceMm > 18 / cameraRef.current.zoom) return null;
+    const world = screenToWorld(clientX, clientY);
+    let nearest: { piece: PatternPiece; target: ReturnType<typeof findNearestPatternSegment> } | null = null;
+    for (const piece of garment.pieces) {
+      if (!getPieceWorkspaceState(garment, piece.id).visible) continue;
+      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, piece.id));
+      const target = findNearestPatternSegment(piece.points, local);
+      if (!target || target.distanceMm > 18 / cameraRef.current.zoom) continue;
+      if (!nearest || target.distanceMm < nearest.target!.distanceMm) nearest = { piece, target };
+    }
+    if (!nearest?.target) return null;
+    const { piece, target } = nearest;
     const startIndex = piece.points.findIndex((point) => point.id === target.startPointId);
     if (startIndex < 0) return null;
     const end = piece.points[(startIndex + 1) % piece.points.length];
@@ -609,7 +616,7 @@ function PatternCanvasComponent({
         if (!selection.second) {
           selection.second = edge;
           try {
-            useEditorStore.getState().addSeam(selection.first!, selection.second!, "forward");
+            useEditorStore.getState().proposeSeam(selection.first!, selection.second!);
           } catch (e) {
             console.warn("Falha ao criar costura", e);
           }
@@ -716,7 +723,7 @@ function PatternCanvasComponent({
       if (!selection.second) {
         selection.second = edge;
         try {
-          useEditorStore.getState().addSeam(selection.first!, selection.second!, "forward");
+          useEditorStore.getState().proposeSeam(selection.first!, selection.second!);
         } catch (e) {
           console.warn("Falha ao criar costura", e);
         }

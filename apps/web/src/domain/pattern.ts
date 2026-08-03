@@ -26,6 +26,10 @@ export interface BodyMeasurements {
   torsoLengthMm: number;
   armLengthMm: number;
   inseamMm: number;
+  bicepMm?: number;
+  wristMm?: number;
+  thighMm?: number;
+  calfMm?: number;
 }
 
 export type BodyType = "feminine" | "masculine";
@@ -56,6 +60,7 @@ export interface EdgeRange {
 }
 
 export type SeamDirection = "same" | "opposite";
+export type SeamTreatment = "standard" | "ease" | "gather" | "stretch" | "intentional-mismatch";
 
 export interface Seam {
   id: string;
@@ -65,7 +70,31 @@ export interface Seam {
   direction: SeamDirection;
   easeRatio: number; // placeholder for future easing
   type: string; // e.g. 'standard'
+  name?: string;
+  treatment?: SeamTreatment;
 }
+
+export type AssemblyPieceRole = "front" | "back" | "sleeve" | "waist" | "leg" | "collar" | "custom";
+export type AssemblyOutwardSide = "front" | "back";
+
+export interface AssemblyPlacement {
+  pieceId: string;
+  role: AssemblyPieceRole;
+  outwardSide: AssemblyOutwardSide;
+  positionMm: [number, number, number];
+  rotationDeg: [number, number, number];
+  flipped: boolean;
+  source: "template" | "inferred" | "manual";
+}
+
+export interface GarmentEase {
+  bustMm: number;
+  waistMm: number;
+  hipMm: number;
+  sleeveMm: number;
+}
+
+export type EdgeFinish = "raw" | "hem" | "binding" | "facing" | "elastic";
 
 export interface Guide {
   id: string;
@@ -88,6 +117,7 @@ export interface PatternPiece {
   cutOnFold?: boolean;
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
+  edgeFinishes?: Record<string, EdgeFinish>;
   points: PatternPoint[];
   grainline?: { start: PatternVector; end: PatternVector };
   annotations?: Array<{
@@ -150,6 +180,8 @@ export interface GarmentDraft {
   // workspace transforms for arranging pieces on the prancheta (visual only)
   workspaceTransforms?: PieceWorkspaceTransform[];
   workspaceStates?: PieceWorkspaceState[];
+  assemblyPlacements?: AssemblyPlacement[];
+  ease?: GarmentEase;
 }
 
 export interface PatternSnapshot {
@@ -283,6 +315,14 @@ export function parsePatternPiece(value: unknown): PatternPiece {
           ...placement,
           pieceId: placement.pieceId === "legacy-piece" ? id : placement.pieceId,
         }));
+  let edgeFinishes: Record<string, EdgeFinish> | undefined;
+  if (value.edgeFinishes !== undefined) {
+    if (!isRecord(value.edgeFinishes)) throw new TypeError("Os acabamentos de borda são inválidos.");
+    edgeFinishes = {};
+    for (const [edgeId, finish] of Object.entries(value.edgeFinishes)) {
+      edgeFinishes[edgeId] = readEnum(finish, ["raw", "hem", "binding", "facing", "elastic"] as const, `O acabamento ${edgeId}`);
+    }
+  }
 
   const grainline = value.grainline === undefined ? undefined : parseGrainline(value.grainline);
   const annotations = value.annotations === undefined ? undefined : parseAnnotations(value.annotations);
@@ -308,6 +348,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(cutOnFold === undefined ? {} : { cutOnFold }),
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
+    ...(edgeFinishes === undefined ? {} : { edgeFinishes }),
     points,
     ...(grainline === undefined ? {} : { grainline }),
     ...(annotations === undefined ? {} : { annotations }),
@@ -378,6 +419,10 @@ export function parseBodyMeasurements(value: unknown): BodyMeasurements {
       heightMm * 0.465,
       "A medida de entreperna",
     ),
+    ...(value.bicepMm === undefined ? {} : { bicepMm: readOptionalPositiveNumber(value.bicepMm, bustMm * 0.33, "A medida de bíceps") }),
+    ...(value.wristMm === undefined ? {} : { wristMm: readOptionalPositiveNumber(value.wristMm, bustMm * 0.18, "A medida de punho") }),
+    ...(value.thighMm === undefined ? {} : { thighMm: readOptionalPositiveNumber(value.thighMm, hipMm * 0.58, "A medida de coxa") }),
+    ...(value.calfMm === undefined ? {} : { calfMm: readOptionalPositiveNumber(value.calfMm, hipMm * 0.38, "A medida de panturrilha") }),
   };
   if (Object.values(measurements).some((measurement) => measurement <= 0)) {
     throw new TypeError("As medidas corporais precisam ser maiores que zero.");
@@ -426,8 +471,12 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const direction = s.direction === undefined ? "same" : readEnum(s.direction, ["same", "opposite"] as const, `A direção da costura ${i + 1}`);
       const easeRatio = s.easeRatio === undefined ? 0 : readFiniteNumber(s.easeRatio, `O easeRatio da costura ${i + 1}`);
       const type = s.type === undefined ? "standard" : readString(s.type, `O tipo da costura ${i + 1}`);
+      const name = s.name === undefined ? `Costura ${i + 1}` : readString(s.name, `O nome da costura ${i + 1}`);
+      const treatment = s.treatment === undefined
+        ? (type === "standard" ? "standard" : "intentional-mismatch")
+        : readEnum(s.treatment, ["standard", "ease", "gather", "stretch", "intentional-mismatch"] as const, `O tratamento da costura ${i + 1}`);
       if (!seamIds.has(id)) {
-        seams.push({ id, first, second, direction, easeRatio, type });
+        seams.push({ id, first, second, direction, easeRatio, type, name, treatment });
         seamIds.add(id);
       }
     }
@@ -523,6 +572,9 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
 
   const transforms = workspaceTransforms ?? [];
 
+  const assemblyPlacements = parseAssemblyPlacements(value.assemblyPlacements, pieceIds);
+  const ease = parseGarmentEase(value.ease);
+
   return {
     id: readString(value.id, "O identificador do projeto"),
     templateId: readString(value.templateId, "O identificador do molde-base"),
@@ -542,6 +594,44 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(seams.length === 0 ? {} : { seams }),
     ...(transforms.length === 0 ? {} : { workspaceTransforms: transforms }),
     ...(workspaceStates === undefined ? {} : { workspaceStates }),
+    ...(assemblyPlacements === undefined ? {} : { assemblyPlacements }),
+    ...(ease === undefined ? {} : { ease }),
+  };
+}
+
+function parseAssemblyPlacements(value: unknown, pieceIds: Set<string>): AssemblyPlacement[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError("As posições de montagem são inválidas.");
+  return value.map((candidate, index) => {
+    if (!isRecord(candidate) || !Array.isArray(candidate.positionMm) || !Array.isArray(candidate.rotationDeg)) {
+      throw new TypeError(`A posição de montagem ${index + 1} é inválida.`);
+    }
+    const pieceId = readString(candidate.pieceId, `A peça da posição ${index + 1}`);
+    if (!pieceIds.has(pieceId)) throw new TypeError(`A posição ${index + 1} referencia uma peça inexistente.`);
+    const tuple = (raw: unknown[], label: string): [number, number, number] => {
+      if (raw.length !== 3) throw new TypeError(`${label} precisa ter três valores.`);
+      return raw.map((item, tupleIndex) => readFiniteNumber(item, `${label}[${tupleIndex}]`)) as [number, number, number];
+    };
+    return {
+      pieceId,
+      role: readEnum(candidate.role, ["front", "back", "sleeve", "waist", "leg", "collar", "custom"] as const, `O papel da posição ${index + 1}`),
+      outwardSide: readEnum(candidate.outwardSide, ["front", "back"] as const, `O lado externo da posição ${index + 1}`),
+      positionMm: tuple(candidate.positionMm, `A posição ${index + 1}`),
+      rotationDeg: tuple(candidate.rotationDeg, `A rotação ${index + 1}`),
+      flipped: readBoolean(candidate.flipped, `O espelhamento da posição ${index + 1}`),
+      source: readEnum(candidate.source, ["template", "inferred", "manual"] as const, `A origem da posição ${index + 1}`),
+    };
+  });
+}
+
+function parseGarmentEase(value: unknown): GarmentEase | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError("As folgas da roupa são inválidas.");
+  return {
+    bustMm: readFiniteNumber(value.bustMm, "A folga de busto"),
+    waistMm: readFiniteNumber(value.waistMm, "A folga de cintura"),
+    hipMm: readFiniteNumber(value.hipMm, "A folga de quadril"),
+    sleeveMm: readFiniteNumber(value.sleeveMm, "A folga de manga"),
   };
 }
 
