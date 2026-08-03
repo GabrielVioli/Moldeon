@@ -90,4 +90,19 @@ describe("garment 3D configuration", () => {
     expect(useEditorStore.getState().garment.workspaceStates?.find((item) => item.pieceId === pieceId)?.transform.rotationDeg).toBe(90);
     expect(useEditorStore.getState().snapshot.piece.previewPlacements).toEqual(placements);
   });
+
+  it("moves several selected pieces in one workspace update", () => {
+    const state = useEditorStore.getState();
+    const transforms = state.garment.workspaceStates!.map((item, index) => ({
+      ...item.transform,
+      xMm: item.transform.xMm + 25 + index,
+      yMm: item.transform.yMm + 40,
+    }));
+
+    state.setPieceWorkspaceTransforms(transforms);
+
+    for (const transform of transforms) {
+      expect(useEditorStore.getState().garment.workspaceStates?.find((item) => item.pieceId === transform.pieceId)?.transform).toMatchObject(transform);
+    }
+  });
 });

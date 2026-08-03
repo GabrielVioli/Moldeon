@@ -123,6 +123,8 @@ function PatternCanvasComponent({
   const drawFrameRef = useRef<number | null>(null);
   const moveFrameRef = useRef<number | null>(null);
   const pendingMoveRef = useRef<PendingGeometryMove | null>(null);
+  const workspaceFrameRef = useRef<number | null>(null);
+  const pendingWorkspaceRef = useRef<PieceWorkspaceTransform[]>([]);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
   const dragRef = useRef<
     | { type: "point"; pointerId: number; pointId: string }
@@ -187,7 +189,7 @@ function PatternCanvasComponent({
   const garmentSeams = garment.seams ?? [];
   const selectPiece = useEditorStore((s) => s.selectPiece);
   const movePieceInWorkspace = useEditorStore((s) => s.movePieceInWorkspace);
-  const setPieceWorkspaceTransform = useEditorStore((s) => s.setPieceWorkspaceTransform);
+  const setPieceWorkspaceTransforms = useEditorStore((s) => s.setPieceWorkspaceTransforms);
   const clearSelection = useEditorStore((s) => s.clearSelection);
   const draftContour = useEditorStore((s) => s.draftContour);
   const draftCursor = useEditorStore((s) => s.draftCursor);
@@ -202,6 +204,9 @@ function PatternCanvasComponent({
   const cutDraft = useEditorStore((s) => s.cutDraft);
   const dartDraft = useEditorStore((s) => s.dartDraft);
   const measureDraft = useEditorStore((s) => s.measureDraft);
+  const garmentRef = useRef(garment);
+  garmentRef.current = garment;
+  const scheduleDrawRef = useRef<() => void>(() => undefined);
   const spacePressedRef = useRef(false);
   const [spaceHandActive, setSpaceHandActive] = useState(false);
   const [cameraZoom, setCameraZoom] = useState(cameraRef.current.zoom);
@@ -287,6 +292,7 @@ function PatternCanvasComponent({
     if (drawFrameRef.current !== null) return;
     drawFrameRef.current = window.requestAnimationFrame(drawLatest);
   }, [drawLatest]);
+  scheduleDrawRef.current = scheduleDraw;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -311,13 +317,13 @@ function PatternCanvasComponent({
       canvasSizeRef.current = { width: rect.width, height: rect.height };
       if (!hasFittedCameraRef.current && rect.width > 0 && rect.height > 0) {
         cameraRef.current = cameraToFitBounds(
-          garmentBounds(garment),
+          garmentBounds(garmentRef.current),
           canvasSizeRef.current,
           rect.width <= 760 ? 34 : 54,
         );
         hasFittedCameraRef.current = true;
       }
-      scheduleDraw();
+      scheduleDrawRef.current();
     };
 
     const observer = new ResizeObserver(resize);
@@ -335,8 +341,12 @@ function PatternCanvasComponent({
         window.cancelAnimationFrame(moveFrameRef.current);
         moveFrameRef.current = null;
       }
+      if (workspaceFrameRef.current !== null) {
+        window.cancelAnimationFrame(workspaceFrameRef.current);
+        workspaceFrameRef.current = null;
+      }
     };
-  }, [scheduleDraw, garment]);
+  }, []);
 
   useEffect(() => {
     scheduleDraw();
@@ -412,6 +422,27 @@ function PatternCanvasComponent({
     const pending = pendingMoveRef.current;
     pendingMoveRef.current = null;
     if (pending) applyGeometryMove(pending);
+  }
+
+  function queueWorkspaceTransforms(transforms: PieceWorkspaceTransform[]) {
+    pendingWorkspaceRef.current = transforms;
+    if (workspaceFrameRef.current !== null) return;
+    workspaceFrameRef.current = window.requestAnimationFrame(() => {
+      workspaceFrameRef.current = null;
+      const pending = pendingWorkspaceRef.current;
+      pendingWorkspaceRef.current = [];
+      setPieceWorkspaceTransforms(pending);
+    });
+  }
+
+  function flushWorkspaceTransforms() {
+    if (workspaceFrameRef.current !== null) {
+      window.cancelAnimationFrame(workspaceFrameRef.current);
+      workspaceFrameRef.current = null;
+    }
+    const pending = pendingWorkspaceRef.current;
+    pendingWorkspaceRef.current = [];
+    setPieceWorkspaceTransforms(pending);
   }
 
   function screenToWorld(clientX: number, clientY: number) {
@@ -952,16 +983,16 @@ function PatternCanvasComponent({
       const nextX = drag.startX + deltaX;
       const nextY = drag.startY + deltaY;
       if (drag.groupStarts && drag.groupStarts.length > 1) {
-        for (const start of drag.groupStarts) setPieceWorkspaceTransform(start.pieceId, { ...start, xMm: start.xMm + deltaX, yMm: start.yMm + deltaY });
+        queueWorkspaceTransforms(drag.groupStarts.map((start) => ({ ...start, xMm: start.xMm + deltaX, yMm: start.yMm + deltaY })));
         return;
       }
       const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
-      setPieceWorkspaceTransform(drag.pieceId, {
+      queueWorkspaceTransforms([{
         pieceId: drag.pieceId,
         xMm: nextX,
         yMm: nextY,
         rotationDeg: current.rotationDeg,
-      });
+      }]);
       return;
     }
 
@@ -983,7 +1014,7 @@ function PatternCanvasComponent({
       const angle = Math.atan2(pointer.yMm - drag.centerWorldY, pointer.xMm - drag.centerWorldX);
       const rotationDeg = rotationFromPointer(drag.startRotationDeg, drag.startPointerAngle, angle, event.shiftKey);
       const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
-      setPieceWorkspaceTransform(drag.pieceId, { ...current, rotationDeg });
+      queueWorkspaceTransforms([{ ...current, rotationDeg }]);
       setRotationFeedback(rotationDeg);
       return;
     }
@@ -1243,6 +1274,7 @@ function PatternCanvasComponent({
       finishedDrag?.type === "piece" &&
       finishedDrag.pointerId === event.pointerId
     ) {
+      flushWorkspaceTransforms();
       onEditEndRef.current();
       const state = useEditorStore.getState();
       const piece = state.garment.pieces.find((candidate) => candidate.id === finishedDrag.pieceId);
@@ -1260,6 +1292,7 @@ function PatternCanvasComponent({
       finishedDrag?.type === "rotate" &&
       finishedDrag.pointerId === event.pointerId
     ) {
+      flushWorkspaceTransforms();
       onEditEndRef.current();
       setRotationFeedback(null);
     }
@@ -1619,18 +1652,19 @@ function draw(
       context.setLineDash([]);
     }
 
-    if (isActivePiece) {
-      for (const seam of seams) {
-        drawSeamInterval(context, piece, seam.first, transform, camera.zoom, "#a23d3d");
-        drawSeamInterval(context, piece, seam.second, transform, camera.zoom, "#3d6aa2");
-      }
+    for (const seam of seams) {
+      drawSeamInterval(context, piece, seam.first, transform, camera.zoom, "#a23d3d");
+      drawSeamInterval(context, piece, seam.second, transform, camera.zoom, "#3d6aa2");
+    }
 
-      if (seamSelection?.first) {
-        drawSeamInterval(context, piece, seamSelection.first, transform, camera.zoom, "rgba(160,160,60,0.9)");
-      }
-      if (seamSelection?.second) {
-        drawSeamInterval(context, piece, seamSelection.second, transform, camera.zoom, "rgba(60,160,60,0.9)");
-      }
+    if (seamSelection?.first) {
+      drawSeamInterval(context, piece, seamSelection.first, transform, camera.zoom, "rgba(160,160,60,0.9)");
+    }
+    if (seamSelection?.second) {
+      drawSeamInterval(context, piece, seamSelection.second, transform, camera.zoom, "rgba(60,160,60,0.9)");
+    }
+
+    if (isActivePiece) {
 
       if (camera.zoom >= 0.32) for (let index = 0; index < transformedPoints.length; index += 1) {
         const point = transformedPoints[index];

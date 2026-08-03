@@ -131,6 +131,7 @@ export interface EditorState {
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
   movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
   setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
+  setPieceWorkspaceTransforms(transforms: PieceWorkspaceTransform[]): void;
   rotatePieceInWorkspace(pieceId: string, deltaDeg: number): void;
   setPieceVisibility(pieceId: string, visible: boolean): void;
   setPieceLocked(pieceId: string, locked: boolean): void;
@@ -556,6 +557,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
     set({ garment });
     recordIfStandalone(set, get, "workspace", "Mover peça", before);
+  },
+  setPieceWorkspaceTransforms: (transforms) => {
+    if (transforms.length === 0) return;
+    const before = captureDocument(get);
+    const locked = new Set((get().garment.workspaceStates ?? []).filter((state) => state.locked).map((state) => state.pieceId));
+    let garment = get().garment;
+    for (const transform of transforms) {
+      if (locked.has(transform.pieceId)) continue;
+      garment = patchWorkspaceState(garment, transform.pieceId, (state) => ({
+        ...state,
+        transform: { ...transform, rotationDeg: normalizeRotation(transform.rotationDeg) },
+      }));
+    }
+    set({ garment });
+    recordIfStandalone(set, get, "workspace", "Mover peças", before);
   },
   proposeSeam: (first, second) => set((state) => ({
     seamProposal: {

@@ -74,6 +74,15 @@ export const Toolbar = memo(function Toolbar({
           Selecionar
         </button>
         <button
+          className={`tool-button seam-tool${activeTool === "seam" ? " active" : ""}${workspaceMode === "assembly" ? " is-essential" : ""}`}
+          type="button"
+          onClick={() => onSelectTool("seam")}
+          aria-pressed={activeTool === "seam"}
+          title="Costurar: clique em uma borda de cada peça"
+        >
+          Costurar
+        </button>
+        <button
           className={`tool-button${activeTool === "draft" ? " active" : ""}`}
           type="button"
           onClick={() => onSelectTool("draft")}
@@ -84,14 +93,6 @@ export const Toolbar = memo(function Toolbar({
         </button>
         <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => onSelectTool("cut")} title="Trace uma linha atravessando a peça">Recortar</button>
         <button className={`tool-button${activeTool === "dart" ? " active" : ""}`} type="button" onClick={() => onSelectTool("dart")} title="Clique na borda e depois no ápice">Pence</button>
-        <button
-          className={`tool-button${activeTool === "seam" ? " active" : ""}`}
-          type="button"
-          onClick={() => onSelectTool("seam")}
-          title="Ferramenta de costura: selecione duas arestas"
-        >
-          Costurar
-        </button>
         <button className={`tool-button${activeTool === "measure" ? " active" : ""}`} type="button" onClick={() => onSelectTool("measure")} title="Clique em dois pontos">Medir</button>
       </nav>
 
