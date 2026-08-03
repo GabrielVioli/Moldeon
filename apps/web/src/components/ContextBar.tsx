@@ -6,6 +6,7 @@ import { useEditorStore } from "../state/editorStore";
 export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void }) {
   const garment = useEditorStore((state) => state.garment);
   const seam = useEditorStore((state) => state.seamProposal);
+  const seamIssues = useEditorStore((state) => state.seamIssues);
   const seamFirstEdge = useEditorStore((state) => state.seamFirstEdge);
   const nearbySeam = useEditorStore((state) => state.nearbySeamSuggestion);
   const cut = useEditorStore((state) => state.cutDraft);
@@ -36,7 +37,13 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     ? garment.pieces.flatMap((piece) => (piece.segments ?? []).map((segment) => ({ piece, segment }))).find(({ segment }) => segment.id === selectedEdgeId)
     : undefined;
   const finish = () => { cancel(); onDone(); };
-  const hasContext = seam || seamFirstEdge || nearbySeam || cut || dart || measure || selectedDart || selectedSegment || selected.length > 1;
+  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || cut || dart || measure || selectedDart || selectedSegment || selected.length > 1;
+
+  const confirmCurrentSeam = () => {
+    if (!seam) return;
+    confirmSeam({ name: "Costura", direction: seam.compatibility.recommendedDirection, treatment: seam.compatibility.recommendedTreatment });
+    if (!useEditorStore.getState().seamProposal && useEditorStore.getState().seamIssues.length === 0) onDone();
+  };
 
   if (!hasContext) {
     const hint = tool === "seam" ? "Clique na primeira borda e depois na segunda." : tool === "cut" ? "Trace uma linha atravessando a peça." : tool === "dart" ? "Clique na borda e depois no ápice da pence." : tool === "measure" ? "Clique em dois pontos para medir." : null;
@@ -50,21 +57,22 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         <button className="primary-button" onClick={() => proposeSeam(nearbySeam.first, nearbySeam.second)}>Costurar</button>
       </> : null}
       {seamFirstEdge && !seam ? <span><strong>Primeira borda escolhida.</strong> Agora escolha a borda correspondente.</span> : null}
+      {seamIssues.length > 0 ? <span className="context-error" role="alert"><strong>Não foi possível concluir:</strong> {seamIssues.map((issue) => issue.message).join(" ")}</span> : null}
       {seam ? <>
         <span><strong>Revisar costura</strong> · {(seam.compatibility.firstLengthMm / 10).toFixed(1)} cm × {(seam.compatibility.secondLengthMm / 10).toFixed(1)} cm · diferença {seam.compatibility.differenceMm.toFixed(1)} mm{seam.compatibility.compatible ? "" : " (confirme apenas se for intencional)"}</span>
         <button onClick={() => proposeSeam(seam.second, seam.first)}>Inverter lado</button>
-        <button className="primary-button" onClick={() => { confirmSeam({ name: "Costura", direction: seam.compatibility.recommendedDirection, treatment: seam.compatibility.recommendedTreatment }); onDone(); }}>Confirmar costura</button>
+        <button className="primary-button" onClick={confirmCurrentSeam}>Confirmar costura</button>
       </> : null}
       {cut ? <>
         <span><strong>Recorte</strong> · {cut.phase === "placing" ? "agora escolha o segundo ponto" : cut.error ?? (cutKind === "valid" ? "pronto para cortar" : "a linha precisa atravessar a peça duas vezes")}</span>
         {cut.phase === "ready" ? <>
-          <button disabled={cutKind !== "valid"} onClick={() => { confirmCut(false); onDone(); }}>Recortar</button>
-          <button className="primary-button" disabled={cutKind !== "valid"} onClick={() => { confirmCut(true); onDone(); }}>Recortar e manter unidas</button>
+          <button disabled={cutKind !== "valid"} onClick={() => { confirmCut(false); if (!useEditorStore.getState().cutDraft) onDone(); }}>Recortar</button>
+          <button className="primary-button" disabled={cutKind !== "valid"} onClick={() => { confirmCut(true); if (!useEditorStore.getState().cutDraft) onDone(); }}>Recortar e manter unidas</button>
         </> : null}
       </> : null}
       {dart ? <>
         <span><strong>Pence</strong> · {dart.phase === "placing" ? "agora escolha o ápice" : `${(Math.hypot(dart.apex.xMm - dart.edgePoint.xMm, dart.apex.yMm - dart.edgePoint.yMm) / 10).toFixed(1)} cm`}</span>
-        {dart.phase === "ready" ? <button className="primary-button" onClick={() => { confirmDart(); onDone(); }}>Criar pence</button> : null}
+        {dart.phase === "ready" ? <button className="primary-button" onClick={() => { confirmDart(); if (!useEditorStore.getState().dartDraft) onDone(); }}>Criar pence</button> : null}
       </> : null}
       {selectedDart ? <>
         <span><strong>Pence selecionada</strong></span>

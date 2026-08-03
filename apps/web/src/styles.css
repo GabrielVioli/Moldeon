@@ -207,6 +207,7 @@ button {
 .context-bar button { min-height: 30px; border: 1px solid #b9b3a8; border-radius: 6px; background: #fff; cursor: pointer; }
 .context-bar button:disabled { opacity: .45; cursor: not-allowed; }
 .context-bar .primary-button { background: #282a2d; color: #fff; }
+.context-bar .context-error { color: #812d2d; }
 .template-card:disabled { cursor: not-allowed; opacity: .62; }
 .template-status { color: #8b3c24; font-weight: 700; }
 .canvas-intent-actions { position: absolute; z-index: 12; display: flex; gap: 6px; padding: 5px; border: 1px solid #c9b27b; border-radius: 8px; background: rgba(255, 252, 244, .98); box-shadow: 0 5px 18px #0002; transform: translate(-50%, -100%); }
@@ -364,7 +365,7 @@ button {
   touch-action: none;
 }
 
-@media (max-width: 1450px) {
+@media (max-width: 1600px) {
   .app-shell { grid-template-rows: 98px minmax(0, 1fr) 28px; }
   .toolbar { grid-template-columns: 48px auto minmax(0, 1fr) auto; grid-template-rows: 52px 38px; gap: 4px 6px; padding: 4px 6px; }
   .brand { grid-column: 1; grid-row: 1; }

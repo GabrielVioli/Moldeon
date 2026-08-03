@@ -608,7 +608,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
     }));
-    set({ seamProposal: null });
+    set({ seamProposal: null, seamIssues: [], nearbySeamSuggestion: null });
   },
   setCutDraft: (cutDraft) => set({ cutDraft: cutDraft ? { ...cutDraft, phase: cutDraft.phase ?? "placing" } : null }),
   freezeCutDraft: () => set((state) => {
@@ -679,7 +679,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ selectedEdgeId: replacement?.id ?? null });
   },
   setMeasureDraft: (measureDraft) => set({ measureDraft }),
-  cancelIntent: () => set({ seamProposal: null, seamFirstEdge: null, nearbySeamSuggestion: null, cutDraft: null, dartDraft: null, measureDraft: null }),
+  cancelIntent: () => set({ seamProposal: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
   updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
     ...document,
     garment: {

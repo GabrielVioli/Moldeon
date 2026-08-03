@@ -122,18 +122,39 @@ export function findNearbySeamCandidates(garment: GarmentDraft, first: EdgeRange
   const firstPiece = garment.pieces.find((piece) => piece.id === first.pieceId); const firstEdge = firstPiece && getEdgeById(firstPiece, first.edgeId);
   if (!firstPiece || !firstEdge) return [];
   const firstTransform = transforms.find((item) => item.pieceId === first.pieceId) ?? { pieceId: first.pieceId, xMm: 0, yMm: 0, rotationDeg: 0 };
-  const firstStart = firstPiece.points.find((point) => point.id === firstEdge.startPointId)!;
-  const firstEnd = firstPiece.points.find((point) => point.id === firstEdge.endPointId)!;
-  const firstMid = transformPoint(lerp(firstStart, firstEnd, 0.5), firstTransform);
-  return garment.pieces.flatMap((piece) => {
+  const firstMid = transformPoint(edgeArcMidpoint(firstPiece, firstEdge.startPointId), firstTransform);
+  const firstLength = edgeRangeLength(firstPiece, first);
+  const candidates = garment.pieces.flatMap((piece) => {
     if (piece.id === first.pieceId) return [];
     const transform = transforms.find((item) => item.pieceId === piece.id) ?? { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 };
     return getPatternEdges(piece).flatMap((edge) => {
-      const start = piece.points.find((point) => point.id === edge.startPointId)!; const end = piece.points.find((point) => point.id === edge.endPointId)!;
-      const mid = transformPoint(lerp(start, end, 0.5), transform);
-      return distance(firstMid, mid) <= thresholdMm ? [{ pieceId: piece.id, edgeId: edge.id, startT: 0, endT: 1 }] : [];
+      const mid = transformPoint(edgeArcMidpoint(piece, edge.startPointId), transform);
+      const midpointDistance = distance(firstMid, mid);
+      if (midpointDistance > thresholdMm) return [];
+      const range = { pieceId: piece.id, edgeId: edge.id, startT: 0, endT: 1 };
+      const lengthDifference = Math.abs(firstLength - edgeRangeLength(piece, range));
+      return [{ range, score: midpointDistance + lengthDifference * 0.25 }];
     });
   });
+  return candidates.sort((left, right) => left.score - right.score).map((candidate) => candidate.range);
+}
+
+function edgeArcMidpoint(piece: PatternPiece, startPointId: string): PatternVector {
+  const startIndex = piece.points.findIndex((point) => point.id === startPointId);
+  if (startIndex < 0) return { xMm: 0, yMm: 0 };
+  const samples = samplePatternSegment(piece.points[startIndex], piece.points[(startIndex + 1) % piece.points.length]);
+  if (samples.length < 2) return samples[0] ?? { xMm: 0, yMm: 0 };
+  const lengths = samples.slice(1).map((point, index) => distance(samples[index], point));
+  const target = lengths.reduce((sum, value) => sum + value, 0) / 2;
+  let walked = 0;
+  for (let index = 0; index < lengths.length; index += 1) {
+    if (walked + lengths[index] >= target) {
+      const t = lengths[index] === 0 ? 0 : (target - walked) / lengths[index];
+      return lerp(samples[index], samples[index + 1], t);
+    }
+    walked += lengths[index];
+  }
+  return samples.at(-1)!;
 }
 
 function createDartFromValues(dart: PatternDart, start: PatternVector, apex: PatternVector, widthMm: number, lengthMm: number, directionDeg: number): PatternDart {

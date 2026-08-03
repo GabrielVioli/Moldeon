@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { makeEdgeId, parsePatternPiece, type PatternPiece } from "./pattern";
-import { calculateCurvedSeamLength, classifyCutIntersections, closeDart, createDart, createPatternPiecesFromSplit, shapeDartCap, splitBezierAtT, splitPatternByLine, updateDart } from "./patternOperations";
+import { makeEdgeId, parsePatternPiece, type GarmentDraft, type PatternPiece } from "./pattern";
+import { calculateCurvedSeamLength, classifyCutIntersections, closeDart, createDart, createPatternPiecesFromSplit, findNearbySeamCandidates, shapeDartCap, splitBezierAtT, splitPatternByLine, updateDart } from "./patternOperations";
 
 const square: PatternPiece = { id: "square", name: "Quadrado", seamAllowanceMm: 10, points: [
   { id: "a", xMm: 0, yMm: 0 }, { id: "b", xMm: 100, yMm: 0 },
@@ -33,6 +33,16 @@ describe("operações puras do molde", () => {
     expect(length).toBeGreaterThan(100);
     const split = splitBezierAtT(curved.points[0], curved.points[1], 0.5);
     expect(split[0]).toMatchObject({ xMm: 0, yMm: 0 }); expect(split[2]).toMatchObject({ xMm: 100, yMm: 0 });
+  });
+
+  it("aproxima costuras curvas pelo meio do arco, não pela corda reta", () => {
+    const curved = { ...square, id: "curved", points: [{ ...square.points[0], id: "ca", handleOut: { xMm: 40, yMm: -50 } }, { ...square.points[1], id: "cb", handleIn: { xMm: -40, yMm: -50 } }, ...square.points.slice(2).map((point) => ({ ...point, id: `c${point.id}` }))] };
+    const straight = { ...square, id: "straight", points: square.points.map((point) => ({ ...point, id: `s${point.id}` })) };
+    const partner = { ...curved, id: "partner", points: curved.points.map((point) => ({ ...point, id: `p${point.id}` })) };
+    const first = { pieceId: curved.id, edgeId: makeEdgeId(curved.id, "ca", "cb"), startT: 0, endT: 1 };
+    const transforms = [curved, straight, partner].map((piece) => ({ pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 }));
+    const candidates = findNearbySeamCandidates({ pieces: [curved, straight, partner], seams: [] } as unknown as GarmentDraft, first, transforms, 50);
+    expect(candidates[0].pieceId).toBe("partner");
   });
 
   it("cria, edita e fecha uma pence persistente", () => {
