@@ -59,4 +59,35 @@ describe("garment 3D configuration", () => {
       useEditorStore.getState().snapshot.piece.previewPlacements,
     ).toMatchObject([{ region: "arm", surface: "back", bodySide: "left" }, { region: "arm", surface: "back", bodySide: "right", mirrorX: true }]);
   });
+
+  it("rotates only the workspace transform and supports undo/redo", () => {
+    const before = useEditorStore.getState();
+    const originalPoints = structuredClone(before.snapshot.piece.points);
+    const originalArea = before.snapshot.areaMm2;
+    const originalPerimeter = before.snapshot.perimeterMm;
+    const pieceId = before.activePieceId;
+
+    useEditorStore.getState().rotatePieceInWorkspace(pieceId, 90);
+    let rotated = useEditorStore.getState();
+    expect(rotated.garment.workspaceStates?.find((state) => state.pieceId === pieceId)?.transform.rotationDeg).toBe(90);
+    expect(rotated.snapshot.piece.points).toEqual(originalPoints);
+    expect(rotated.snapshot.areaMm2).toBe(originalArea);
+    expect(rotated.snapshot.perimeterMm).toBe(originalPerimeter);
+
+    rotated.undo();
+    expect(useEditorStore.getState().garment.workspaceStates?.find((state) => state.pieceId === pieceId)?.transform.rotationDeg).toBe(0);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.workspaceStates?.find((state) => state.pieceId === pieceId)?.transform.rotationDeg).toBe(90);
+  });
+
+  it("normalizes numeric rotations without touching preview placement", () => {
+    const state = useEditorStore.getState();
+    const pieceId = state.activePieceId;
+    const workspace = state.garment.workspaceStates?.find((item) => item.pieceId === pieceId);
+    const placements = structuredClone(state.snapshot.piece.previewPlacements);
+    expect(workspace).toBeDefined();
+    state.setPieceWorkspaceTransform(pieceId, { ...workspace!.transform, rotationDeg: 450 });
+    expect(useEditorStore.getState().garment.workspaceStates?.find((item) => item.pieceId === pieceId)?.transform.rotationDeg).toBe(90);
+    expect(useEditorStore.getState().snapshot.piece.previewPlacements).toEqual(placements);
+  });
 });

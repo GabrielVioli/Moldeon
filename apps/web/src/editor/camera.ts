@@ -16,11 +16,26 @@ export interface WorldBounds {
   maxY: number;
 }
 
-const MIN_ZOOM = 0.15;
-const MAX_ZOOM = 3;
+export const MIN_ZOOM = 0.15;
+export const MAX_ZOOM = 3;
 
 export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+}
+
+export function zoomCameraAtPoint(
+  camera: Camera2D,
+  point: ScreenPoint,
+  nextZoom: number,
+): Camera2D {
+  const zoom = clampZoom(nextZoom);
+  const worldX = (point.x - camera.panX) / camera.zoom;
+  const worldY = (point.y - camera.panY) / camera.zoom;
+  return { zoom, panX: point.x - worldX * zoom, panY: point.y - worldY * zoom };
+}
+
+export function panCamera(camera: Camera2D, deltaX: number, deltaY: number): Camera2D {
+  return { ...camera, panX: camera.panX + deltaX, panY: camera.panY + deltaY };
 }
 
 export function cameraFromGesture(

@@ -32,14 +32,16 @@ import {
   ScreenPoint,
   cameraFromGesture,
   cameraToFitBounds,
-  clampZoom,
+  zoomCameraAtPoint,
 } from "./camera";
 import { useEditorStore } from "../state/editorStore";
 import {
   pieceLocalToWorld,
   pieceWorldToLocal,
   screenToWorld as cameraScreenToWorld,
+  worldToScreen,
 } from "./coordinates";
+import { pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
@@ -56,12 +58,14 @@ interface PatternCanvasProps {
     yMm: number,
   ): void;
   onInsertPoint(startPointId: string, t: number): void;
+  onToolChange(tool: EditorTool): void;
 }
 
-export type EditorTool = "select" | "point" | "seam" | "draft";
+export type EditorTool = "select" | "point" | "seam" | "draft" | "hand";
 
 const POINT_RADIUS_PX = 7;
 const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
+let sessionCamera: Camera2D | null = null;
 const MOBILE_QUERY = "(max-width: 760px)";
 
 interface PointerPosition {
@@ -99,10 +103,11 @@ function PatternCanvasComponent({
   onMovePoint,
   onMoveHandle,
   onInsertPoint,
+  onToolChange,
 }: PatternCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const cameraRef = useRef<Camera2D>(INITIAL_CAMERA);
+  const cameraRef = useRef<Camera2D>(sessionCamera ?? INITIAL_CAMERA);
   const snapshotRef = useRef(snapshot);
   const selectedPointIdRef = useRef(selectedPointId);
   const toolRef = useRef(tool);
@@ -112,7 +117,7 @@ function PatternCanvasComponent({
   const onMoveHandleRef = useRef(onMoveHandle);
   const onInsertPointRef = useRef(onInsertPoint);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
-  const hasFittedCameraRef = useRef(false);
+  const hasFittedCameraRef = useRef(sessionCamera !== null);
   const drawFrameRef = useRef<number | null>(null);
   const moveFrameRef = useRef<number | null>(null);
   const pendingMoveRef = useRef<PendingGeometryMove | null>(null);
@@ -126,6 +131,15 @@ function PatternCanvasComponent({
         handle: "in" | "out";
       }
     | PieceDragState
+    | {
+        type: "rotate";
+        pointerId: number;
+        pieceId: string;
+        centerWorldX: number;
+        centerWorldY: number;
+        startPointerAngle: number;
+        startRotationDeg: number;
+      }
     | {
         type: "pan";
         pointerId: number;
@@ -170,12 +184,23 @@ function PatternCanvasComponent({
   const closeDraft = useEditorStore((s) => s.closeDraft);
   const pieceSelectionActive = useEditorStore((s) => s.pieceSelectionActive);
   const spacePressedRef = useRef(false);
+  const [spaceHandActive, setSpaceHandActive] = useState(false);
+  const [cameraZoom, setCameraZoom] = useState(cameraRef.current.zoom);
+  const [zoomEditing, setZoomEditing] = useState(false);
+  const [zoomValue, setZoomValue] = useState("");
+  const [isPanning, setIsPanning] = useState(false);
+  const [rotationFeedback, setRotationFeedback] = useState<number | null>(null);
+  const [hoveredDimension, setHoveredDimension] = useState<string | null>(null);
+  const [dimensionError, setDimensionError] = useState<string | null>(null);
+  const dimensionFinishingRef = useRef(false);
+  const dimensionCancelRef = useRef(false);
   const [dimensionEditor, setDimensionEditor] = useState<{
     startPointId: string;
     endPointId: string;
     left: number;
     top: number;
     value: string;
+    pieceId: string;
   } | null>(null);
 
   const drawLatest = useCallback(() => {
@@ -199,12 +224,30 @@ function PatternCanvasComponent({
       pieceSelectionActive,
       draftContour,
       draftCursor,
+      hoveredDimension,
+      rotationFeedback,
     );
-  }, [activePieceId, draftContour, draftCursor, garment, garmentSeams, pieceSelectionActive]);
+  }, [activePieceId, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, pieceSelectionActive, rotationFeedback]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (event.code === "Space") spacePressedRef.current = event.type === "keydown";
+      if (event.code === "Space" && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        spacePressedRef.current = event.type === "keydown";
+        setSpaceHandActive(event.type === "keydown");
+      }
+      if (event.type !== "keydown" || isEditableTarget(event.target)) return;
+      if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        fitSelection();
+      }
+      if ((event.key === "[" || event.key === "]") && activePieceId) {
+        event.preventDefault();
+        useEditorStore.getState().rotatePieceInWorkspace(
+          activePieceId,
+          (event.key === "[" ? -1 : 1) * (event.shiftKey ? 90 : 15),
+        );
+      }
     };
     window.addEventListener("keydown", handleKey);
     window.addEventListener("keyup", handleKey);
@@ -212,7 +255,7 @@ function PatternCanvasComponent({
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("keyup", handleKey);
     };
-  }, []);
+  }, [activePieceId, garment]);
 
   const scheduleDraw = useCallback(() => {
     if (drawFrameRef.current !== null) return;
@@ -275,7 +318,37 @@ function PatternCanvasComponent({
 
   function updateCamera(nextCamera: Camera2D) {
     cameraRef.current = nextCamera;
+    sessionCamera = nextCamera;
+    setCameraZoom(nextCamera.zoom);
     scheduleDraw();
+  }
+
+  function fitAll() {
+    updateCamera(cameraToFitBounds(garmentBounds(garment), canvasSizeRef.current, 54));
+  }
+
+  function fitSelection() {
+    const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
+    if (!piece) return;
+    const transform = getPieceWorkspaceTransform(garment, piece.id);
+    const points = samplePatternContour(piece.points).map((point) => pieceLocalToWorld(point, transform));
+    updateCamera(cameraToFitBounds(contourBounds(points), canvasSizeRef.current, 70));
+  }
+
+  function zoomFromCenter(multiplier: number) {
+    const size = canvasSizeRef.current;
+    updateCamera(zoomCameraAtPoint(cameraRef.current, { x: size.width / 2, y: size.height / 2 }, cameraRef.current.zoom * multiplier));
+  }
+
+  function applyZoomPercent() {
+    const percent = Number.parseFloat(zoomValue.replace(",", "."));
+    if (!Number.isFinite(percent)) {
+      setZoomEditing(false);
+      return;
+    }
+    const size = canvasSizeRef.current;
+    updateCamera(zoomCameraAtPoint(cameraRef.current, { x: size.width / 2, y: size.height / 2 }, percent / 100));
+    setZoomEditing(false);
   }
 
   function queueGeometryMove(move: PendingGeometryMove) {
@@ -425,6 +498,45 @@ function PatternCanvasComponent({
     };
   }
 
+  function activePieceLocalBounds() {
+    return contourBounds(samplePatternContour(snapshotRef.current.piece.points));
+  }
+
+  function rotationHandleWorld() {
+    const bounds = activePieceLocalBounds();
+    return pieceLocalToWorld(
+      { xMm: (bounds.minX + bounds.maxX) / 2, yMm: bounds.minY - 36 / cameraRef.current.zoom },
+      activeTransform(),
+    );
+  }
+
+  function isRotationHandleAt(clientX: number, clientY: number): boolean {
+    if (!pieceSelectionActive || getPieceWorkspaceState(garment, activePieceId).locked) return false;
+    const world = screenToWorld(clientX, clientY);
+    const handle = rotationHandleWorld();
+    return Math.hypot(world.xMm - handle.xMm, world.yMm - handle.yMm) <= 12 / cameraRef.current.zoom;
+  }
+
+  function dimensionAt(clientX: number, clientY: number) {
+    const canvas = canvasRef.current;
+    if (!canvas || cameraRef.current.zoom < 0.32) return null;
+    const rect = canvas.getBoundingClientRect();
+    const screen = { x: clientX - rect.left, y: clientY - rect.top };
+    const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
+    if (!piece) return null;
+    const transform = getPieceWorkspaceTransform(garment, piece.id);
+    for (let index = 0; index < piece.points.length; index += 1) {
+      const start = piece.points[index];
+      const end = piece.points[(index + 1) % piece.points.length];
+      const middle = pieceLocalToWorld({ xMm: (start.xMm + end.xMm) / 2, yMm: (start.yMm + end.yMm) / 2 }, transform);
+      const label = worldToScreen(middle, cameraRef.current);
+      if (pointInScreenRect(screen, { left: label.x - 40, top: label.y - 14, width: 80, height: 28 })) {
+        return { piece, start, end, key: `${piece.id}:${start.id}` , label };
+      }
+    }
+    return null;
+  }
+
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -459,12 +571,20 @@ function PatternCanvasComponent({
       if (activePointersRef.current.size >= 2) {
         if (
           dragRef.current?.type === "point" ||
-          dragRef.current?.type === "handle"
+          dragRef.current?.type === "handle" ||
+          dragRef.current?.type === "piece" ||
+          dragRef.current?.type === "rotate"
         ) {
           flushGeometryMove();
           onEditEndRef.current();
         }
         beginPinch();
+        return;
+      }
+
+      if (toolRef.current === "hand" || spacePressedRef.current) {
+        dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
+        setIsPanning(true);
         return;
       }
 
@@ -546,12 +666,32 @@ function PatternCanvasComponent({
       return;
     }
 
-    if (event.button === 1 || event.shiftKey || spacePressedRef.current) {
+    if (event.button === 1 || event.shiftKey || spacePressedRef.current || toolRef.current === "hand") {
       dragRef.current = createPanDrag(
         event.pointerId,
         event.clientX,
         event.clientY,
       );
+      setIsPanning(true);
+      return;
+    }
+
+    if (toolRef.current === "select" && isRotationHandleAt(event.clientX, event.clientY)) {
+      const transform = activeTransform();
+      const bounds = activePieceLocalBounds();
+      const center = pieceLocalToWorld({ xMm: (bounds.minX + bounds.maxX) / 2, yMm: (bounds.minY + bounds.maxY) / 2 }, transform);
+      const pointer = screenToWorld(event.clientX, event.clientY);
+      onEditStartRef.current("Rotacionar peça");
+      dragRef.current = {
+        type: "rotate",
+        pointerId: event.pointerId,
+        pieceId: activePieceId,
+        centerWorldX: center.xMm,
+        centerWorldY: center.yMm,
+        startPointerAngle: Math.atan2(pointer.yMm - center.yMm, pointer.xMm - center.xMm),
+        startRotationDeg: transform.rotationDeg,
+      };
+      setRotationFeedback(transform.rotationDeg);
       return;
     }
 
@@ -649,7 +789,11 @@ function PatternCanvasComponent({
     }
 
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      const dimension = dimensionAt(event.clientX, event.clientY);
+      setHoveredDimension(dimension?.key ?? null);
+      return;
+    }
 
     if (drag.type === "pinch") {
       const [firstId, secondId] = drag.pointerIds;
@@ -693,6 +837,16 @@ function PatternCanvasComponent({
         yMm: nextY,
         rotationDeg: current.rotationDeg,
       });
+      return;
+    }
+
+    if (drag.type === "rotate") {
+      const pointer = screenToWorld(event.clientX, event.clientY);
+      const angle = Math.atan2(pointer.yMm - drag.centerWorldY, pointer.xMm - drag.centerWorldX);
+      const rotationDeg = rotationFromPointer(drag.startRotationDeg, drag.startPointerAngle, angle, event.shiftKey);
+      const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
+      setPieceWorkspaceTransform(drag.pieceId, { ...current, rotationDeg });
+      setRotationFeedback(rotationDeg);
       return;
     }
 
@@ -825,72 +979,57 @@ function PatternCanvasComponent({
     const rect = event.currentTarget.getBoundingClientRect();
     const cursorX = event.clientX - rect.left;
     const cursorY = event.clientY - rect.top;
-    const currentCamera = cameraRef.current;
-    const worldX = (cursorX - currentCamera.panX) / currentCamera.zoom;
-    const worldY = (cursorY - currentCamera.panY) / currentCamera.zoom;
     const factor = event.deltaY < 0 ? 1.1 : 0.9;
-    const nextZoom = clampZoom(currentCamera.zoom * factor);
-
-    updateCamera({
-      zoom: nextZoom,
-      panX: cursorX - worldX * nextZoom,
-      panY: cursorY - worldY * nextZoom,
-    });
+    updateCamera(zoomCameraAtPoint(cameraRef.current, { x: cursorX, y: cursorY }, cameraRef.current.zoom * factor));
   }
 
   function handleDoubleClick(event: MouseEvent<HTMLCanvasElement>) {
     if (toolRef.current !== "select") return;
-    const world = screenToWorld(event.clientX, event.clientY);
-    const piece = findPieceAtWorld(world.xMm, world.yMm);
-    if (!piece) return;
-    selectPiece(piece.id);
-    const local = pieceWorldToLocal(world, getPieceWorkspaceState(garment, piece.id).transform);
-    const nearestSegment = piece.points
-      .map((point, index) => {
-        const next = piece.points[(index + 1) % piece.points.length];
-        const middleX = (point.xMm + next.xMm) / 2;
-        const middleY = (point.yMm + next.yMm) / 2;
-        return {
-          point,
-          next,
-          distanceMm: Math.hypot(middleX - local.xMm, middleY - local.yMm),
-        };
-      })
-      .sort((left, right) => left.distanceMm - right.distanceMm)[0];
-    if (nearestSegment && nearestSegment.distanceMm <= 12 / cameraRef.current.zoom) {
-      if (nearestSegment.point.handleOut || nearestSegment.next.handleIn) {
-        window.alert("A edição exata de comprimento curvo ainda não está disponível");
-        return;
-      }
-      setDimensionEditor({
-        startPointId: nearestSegment.point.id,
-        endPointId: nearestSegment.next.id,
-        left: event.clientX,
-        top: event.clientY,
-        value: distanceMm(nearestSegment.point, nearestSegment.next).toFixed(1),
-      });
+    const dimension = dimensionAt(event.clientX, event.clientY);
+    if (!dimension) return;
+    selectPiece(dimension.piece.id);
+    if (dimension.start.handleOut || dimension.end.handleIn) {
+      setDimensionError("A edição numérica exata de curvas ainda não está disponível.");
+      return;
     }
+    setDimensionError(null);
+    dimensionFinishingRef.current = false;
+    dimensionCancelRef.current = false;
+    setDimensionEditor({
+      pieceId: dimension.piece.id,
+      startPointId: dimension.start.id,
+      endPointId: dimension.end.id,
+      left: event.clientX,
+      top: event.clientY,
+      value: distanceMm(dimension.start, dimension.end).toFixed(1),
+    });
   }
 
   function confirmDimensionEdit() {
     if (!dimensionEditor) return;
-    const desiredLength = Number.parseFloat(dimensionEditor.value);
-    if (!Number.isFinite(desiredLength) || desiredLength <= 0) return;
-    const points = useEditorStore.getState().snapshot.piece.points;
+    if (dimensionCancelRef.current || dimensionFinishingRef.current) return;
+    if (dimensionEditor.value.trim() === "") {
+      setDimensionEditor(null);
+      return;
+    }
+    const desiredLength = parsePositiveLength(dimensionEditor.value);
+    if (desiredLength === null) {
+      setDimensionError("Informe uma medida maior que zero.");
+      return;
+    }
+    const piece = useEditorStore.getState().garment.pieces.find((candidate) => candidate.id === dimensionEditor.pieceId);
+    const points = piece?.points ?? [];
     const start = points.find((point) => point.id === dimensionEditor.startPointId);
     const end = points.find((point) => point.id === dimensionEditor.endPointId);
     if (!start || !end) return;
-    const dx = end.xMm - start.xMm;
-    const dy = end.yMm - start.yMm;
-    const length = Math.hypot(dx, dy);
-    if (length <= 0) return;
+    const next = resizeStraightSegment(start, end, desiredLength);
+    if (!next) return;
+    dimensionFinishingRef.current = true;
+    useEditorStore.getState().selectPiece(dimensionEditor.pieceId);
     useEditorStore.getState().beginEdit("Editar comprimento", "geometry");
-    useEditorStore.getState().movePoint(
-      end.id,
-      start.xMm + (dx / length) * desiredLength,
-      start.yMm + (dy / length) * desiredLength,
-    );
+    useEditorStore.getState().movePoint(end.id, next.xMm, next.yMm);
     useEditorStore.getState().commitEdit();
+    setDimensionError(null);
     setDimensionEditor(null);
   }
 
@@ -958,6 +1097,14 @@ function PatternCanvasComponent({
     ) {
       onEditEndRef.current();
     }
+    if (
+      finishedDrag?.type === "rotate" &&
+      finishedDrag.pointerId === event.pointerId
+    ) {
+      onEditEndRef.current();
+      setRotationFeedback(null);
+    }
+    if (finishedDrag?.type === "pan") setIsPanning(false);
 
     const remaining = [...activePointersRef.current.entries()][0];
     if (remaining) {
@@ -977,9 +1124,17 @@ function PatternCanvasComponent({
 
   return (
     <>
+      <div className="canvas-navigation" role="toolbar" aria-label="Navegação da prancheta">
+        <button type="button" aria-label="Diminuir zoom" onClick={() => zoomFromCenter(0.9)}>−</button>
+        {zoomEditing ? <input aria-label="Zoom em porcentagem" autoFocus value={zoomValue} onChange={(event) => setZoomValue(event.currentTarget.value)} onBlur={applyZoomPercent} onKeyDown={(event) => { if (event.key === "Enter") applyZoomPercent(); if (event.key === "Escape") setZoomEditing(false); }} /> : <button type="button" className="zoom-indicator" onClick={() => { setZoomValue(String(Math.round(cameraZoom * 100))); setZoomEditing(true); }}>{Math.round(cameraZoom * 100)}%</button>}
+        <button type="button" aria-label="Aumentar zoom" onClick={() => zoomFromCenter(1.1)}>+</button>
+        <button type="button" onClick={fitAll}>Enquadrar tudo</button>
+        <button type="button" onClick={fitSelection}>Enquadrar seleção</button>
+        <button type="button" aria-pressed={tool === "hand"} className={tool === "hand" ? "active" : ""} onClick={() => onToolChange(tool === "hand" ? "select" : "hand")}>Mão</button>
+      </div>
       <canvas
         ref={canvasRef}
-        className={`pattern-canvas pattern-canvas-${tool}`}
+        className={`pattern-canvas pattern-canvas-${tool}${spaceHandActive ? " is-space-hand" : ""}${isPanning ? " is-panning" : ""}${hoveredDimension ? " is-dimension-hovered" : ""}`}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -990,26 +1145,14 @@ function PatternCanvasComponent({
         aria-label="Editor de molde 2D"
       />
       {dimensionEditor ? (
-        <input
-          className="dimension-editor"
-          aria-label="Comprimento do segmento em milímetros"
-          autoFocus
-          type="number"
-          min="0.1"
-          step="0.1"
-          value={dimensionEditor.value}
-          style={{ left: dimensionEditor.left, top: dimensionEditor.top }}
-          onChange={(event) =>
-            setDimensionEditor((current) =>
-              current ? { ...current, value: event.currentTarget.value } : null,
-            )
-          }
-          onKeyDown={(event) => {
-            if (event.key === "Enter") confirmDimensionEdit();
-            if (event.key === "Escape") setDimensionEditor(null);
-          }}
-        />
+        <div className="dimension-editor" style={{ left: dimensionEditor.left, top: dimensionEditor.top }}>
+          <span className="dimension-anchor-note">Início fixo</span>
+          <div><input aria-label="Comprimento do segmento em milímetros" autoFocus inputMode="decimal" value={dimensionEditor.value} onFocus={(event) => event.currentTarget.select()} onBlur={confirmDimensionEdit} onChange={(event) => { const value = event.currentTarget.value; setDimensionError(null); setDimensionEditor((current) => current ? { ...current, value } : null); }} onKeyDown={(event) => { if (event.key === "Enter") confirmDimensionEdit(); if (event.key === "Escape") { dimensionCancelRef.current = true; setDimensionEditor(null); } }} /><span>mm</span></div>
+        </div>
       ) : null}
+      {dimensionError ? <div className="dimension-error" role="alert">{dimensionError}</div> : null}
+      {hoveredDimension && !dimensionEditor ? <div className="dimension-tooltip">Duplo clique para editar</div> : null}
+      {rotationFeedback !== null ? <div className="rotation-feedback">{rotationFeedback.toFixed(1)}°</div> : null}
     </>
   );
 }
@@ -1166,6 +1309,8 @@ function draw(
   pieceSelectionActive: boolean,
   draftContour: import("../domain/pattern").DraftContour | null,
   draftCursor: PatternPoint | null,
+  hoveredDimension: string | null,
+  rotationFeedback: number | null,
 ) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#f4f2ed";
@@ -1256,7 +1401,7 @@ function draw(
         drawSeamInterval(context, piece, seamSelection.second, transform, camera.zoom, "rgba(60,160,60,0.9)");
       }
 
-      for (let index = 0; index < transformedPoints.length; index += 1) {
+      if (camera.zoom >= 0.32) for (let index = 0; index < transformedPoints.length; index += 1) {
         const point = transformedPoints[index];
         const next = transformedPoints[(index + 1) % transformedPoints.length];
         const middleX = (point.xMm + next.xMm) / 2;
@@ -1278,8 +1423,9 @@ function draw(
         context.font = "12px system-ui, sans-serif";
         context.textAlign = "center";
         context.textBaseline = "middle";
-        context.fillStyle = "rgba(244, 242, 237, 0.92)";
-        context.fillRect(-34, -10, 68, 20);
+        const dimensionKey = `${piece.id}:${localPoint.id}`;
+        context.fillStyle = dimensionKey === hoveredDimension ? "rgba(232, 212, 147, 0.98)" : "rgba(244, 242, 237, 0.92)";
+        context.fillRect(-40, -14, 80, 28);
         context.fillStyle = "#505258";
         context.fillText(`${length.toFixed(1)} mm`, 0, 0);
         context.restore();
@@ -1310,12 +1456,33 @@ function draw(
     }
 
     if (isActivePiece && pieceSelectionActive) {
-      const bounds = contourBounds(transformedContour);
+      const localBounds = contourBounds(samplePatternContour(piece.points));
+      const corners = [
+        { xMm: localBounds.minX, yMm: localBounds.minY },
+        { xMm: localBounds.maxX, yMm: localBounds.minY },
+        { xMm: localBounds.maxX, yMm: localBounds.maxY },
+        { xMm: localBounds.minX, yMm: localBounds.maxY },
+      ].map((point) => pieceLocalToWorld(point, transform));
       context.strokeStyle = "rgba(17, 18, 20, 0.9)";
       context.lineWidth = 1 / camera.zoom;
       context.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
-      context.strokeRect(bounds.minX, bounds.minY, bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+      context.beginPath();
+      corners.forEach((corner, index) => index === 0 ? context.moveTo(corner.xMm, corner.yMm) : context.lineTo(corner.xMm, corner.yMm));
+      context.closePath();
+      context.stroke();
       context.setLineDash([]);
+      const topCenter = pieceLocalToWorld({ xMm: (localBounds.minX + localBounds.maxX) / 2, yMm: localBounds.minY }, transform);
+      const handle = pieceLocalToWorld({ xMm: (localBounds.minX + localBounds.maxX) / 2, yMm: localBounds.minY - 36 / camera.zoom }, transform);
+      context.beginPath();
+      context.moveTo(topCenter.xMm, topCenter.yMm);
+      context.lineTo(handle.xMm, handle.yMm);
+      context.strokeStyle = "#202124";
+      context.stroke();
+      context.beginPath();
+      context.arc(handle.xMm, handle.yMm, 8 / camera.zoom, 0, Math.PI * 2);
+      context.fillStyle = rotationFeedback === null ? "#fff" : "#d9b866";
+      context.fill();
+      context.stroke();
     }
 
     context.restore();
@@ -1605,4 +1772,8 @@ function drawGrid(
     context.lineTo(width, y);
   }
   context.stroke();
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 }

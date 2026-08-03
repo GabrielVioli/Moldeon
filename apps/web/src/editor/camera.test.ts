@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraFromGesture, cameraToFitBounds, clampZoom } from "./camera";
+import { cameraFromGesture, cameraToFitBounds, clampZoom, panCamera, zoomCameraAtPoint } from "./camera";
 
 describe("camera gestures", () => {
   it("keeps the world point under the gesture center while zooming", () => {
@@ -39,5 +39,18 @@ describe("camera gestures", () => {
     expect(camera.zoom).toBeCloseTo(0.44);
     expect(50 * camera.zoom + camera.panX).toBeGreaterThanOrEqual(40);
     expect(1000 * camera.zoom + camera.panY).toBeLessThanOrEqual(480);
+  });
+
+  it("zooms in and out without moving the world point under the cursor", () => {
+    const camera = { zoom: 1, panX: 20, panY: 30 };
+    const cursor = { x: 220, y: 130 };
+    const zoomed = zoomCameraAtPoint(camera, cursor, 1.5);
+    expect((cursor.x - zoomed.panX) / zoomed.zoom).toBeCloseTo(200);
+    expect((cursor.y - zoomed.panY) / zoomed.zoom).toBeCloseTo(100);
+    expect(zoomCameraAtPoint(zoomed, cursor, 1).panX).toBeCloseTo(20);
+  });
+
+  it("pans by the requested screen delta", () => {
+    expect(panCamera({ zoom: 1, panX: 10, panY: 20 }, 15, -8)).toEqual({ zoom: 1, panX: 25, panY: 12 });
   });
 });

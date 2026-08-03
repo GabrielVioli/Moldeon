@@ -26,4 +26,12 @@ describe("piece workspace coordinates", () => {
     expect(restored.xMm).toBeCloseTo(local.xMm, 10);
     expect(restored.yMm).toBeCloseTo(local.yMm, 10);
   });
+
+  it.each([15, 45, 90, -30])("keeps hit-test coordinates exact at %s degrees", (rotationDeg) => {
+    const rotated = { ...transform, rotationDeg };
+    const screen = pieceLocalToScreen(local, rotated, camera);
+    const restored = screenToPieceLocal(screen, rotated, camera);
+    expect(restored.xMm).toBeCloseTo(local.xMm, 8);
+    expect(restored.yMm).toBeCloseTo(local.yMm, 8);
+  });
 });

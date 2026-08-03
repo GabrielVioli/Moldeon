@@ -208,6 +208,11 @@ button {
 
 .editor-body { display: grid; grid-template-columns: 178px minmax(0, 1fr); min-height: 0; }
 .canvas-stack { position: relative; min-width: 0; min-height: 0; }
+.canvas-navigation { position: absolute; z-index: 8; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 3px; padding: 4px; background: #f8f6f1e8; border: 1px solid #c8c4bc; border-radius: 8px; box-shadow: 0 2px 8px #0002; backdrop-filter: blur(6px); }
+.canvas-navigation button, .canvas-navigation input { height: 29px; padding: 0 8px; color: #555650; background: transparent; border: 0; border-radius: 5px; font-size: 10px; cursor: pointer; }
+.canvas-navigation button:hover, .canvas-navigation button.active { color: #fff; background: #34363a; }
+.canvas-navigation .zoom-indicator, .canvas-navigation input { width: 52px; text-align: center; }
+.canvas-navigation input { background: #fff; border: 1px solid #aaa; }
 .pieces-panel { min-width: 0; overflow: visible; background: #ebe8e1; border-right: 1px solid #cbc8c1; }
 .pieces-panel header { display: flex; align-items: center; justify-content: space-between; height: 42px; padding: 0 10px; font-size: 10px; }
 .pieces-panel header button { width: 26px; height: 26px; border: 1px solid #c2beb6; border-radius: 6px; background: #fff; cursor: pointer; }
@@ -223,7 +228,17 @@ button {
 .pieces-menu > div button { padding: 7px; text-align: left; }
 .draft-banner, .draft-error { position: absolute; z-index: 4; top: 10px; left: 50%; padding: 7px 10px; border-radius: 7px; background: #fffbe9; border: 1px solid #d7c77b; font-size: 11px; transform: translateX(-50%); }
 .draft-error { top: 45px; color: #8a2727; background: #fbe8e6; border-color: #dca8a2; }
-.dimension-editor { position: fixed; z-index: 30; display: flex; gap: 4px; padding: 5px; background: #fff; border: 1px solid #aaa; border-radius: 6px; box-shadow: 0 3px 12px #0003; }
+.dimension-editor { position: fixed; z-index: 30; display: grid; gap: 3px; padding: 6px; background: #fff; border: 1px solid #aaa; border-radius: 6px; box-shadow: 0 3px 12px #0003; transform: translate(-50%, -50%); }
+.dimension-editor > div { display: flex; align-items: center; gap: 4px; }
+.dimension-editor input { width: 78px; padding: 4px; border: 1px solid #aaa; border-radius: 4px; }
+.dimension-anchor-note { color: #777; font-size: 9px; }
+.dimension-error, .dimension-tooltip, .rotation-feedback { position: absolute; z-index: 9; left: 50%; top: 70px; padding: 7px 10px; border-radius: 6px; background: #fff3e6; color: #8a3427; border: 1px solid #dfb18d; font-size: 11px; transform: translateX(-50%); }
+.dimension-tooltip { top: auto; bottom: 52px; color: #555; background: #fff; border-color: #ccc; pointer-events: none; }
+.rotation-feedback { top: 12px; color: #222; background: #fff; border-color: #bbb; font-weight: 800; }
+.piece-properties { display: grid; gap: 10px; margin-top: 10px; }
+.piece-properties > label { display: grid; gap: 5px; color: #696a65; font-size: 11px; }
+.piece-properties > label > input { padding: 8px; border: 1px solid #c6c2ba; border-radius: 6px; }
+.piece-properties .check-field { display: flex; align-items: center; gap: 7px; }
 
 .panel-titlebar {
   display: flex;
@@ -342,6 +357,9 @@ button {
   cursor: crosshair;
   touch-action: none;
 }
+.pattern-canvas-hand, .pattern-canvas.is-space-hand { cursor: grab; }
+.pattern-canvas.is-panning { cursor: grabbing; }
+.pattern-canvas.is-dimension-hovered { cursor: text; }
 
 .pattern-canvas-point {
   cursor: copy;

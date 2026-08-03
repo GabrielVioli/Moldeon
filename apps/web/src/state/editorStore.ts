@@ -84,6 +84,7 @@ export interface EditorState {
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
   movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
   setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
+  rotatePieceInWorkspace(pieceId: string, deltaDeg: number): void;
   setPieceVisibility(pieceId: string, visible: boolean): void;
   setPieceLocked(pieceId: string, locked: boolean): void;
   duplicatePiece(pieceId: string, mirrored?: boolean): void;
@@ -402,10 +403,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const before = captureDocument(get);
     const garment = patchWorkspaceState(get().garment, pieceId, (state) => ({
       ...state,
-      transform: { ...transform, pieceId },
+      transform: { ...transform, pieceId, rotationDeg: normalizeRotation(transform.rotationDeg) },
     }));
     set({ garment });
     recordIfStandalone(set, get, "workspace", "Mover peça", before);
+  },
+  rotatePieceInWorkspace: (pieceId, deltaDeg) => {
+    const state = workspaceStateFor(get().garment, pieceId);
+    if (state.locked) return;
+    get().setPieceWorkspaceTransform(pieceId, {
+      ...state.transform,
+      rotationDeg: state.transform.rotationDeg + deltaDeg,
+    });
   },
   setPieceVisibility: (pieceId, visible) => changeDocument(set, get, "workspace", "Alterar visibilidade", (document) => ({
     ...document,
@@ -737,6 +746,11 @@ function syncLegacyTransforms(garment: GarmentDraft): GarmentDraft {
     ...garment,
     workspaceTransforms: (garment.workspaceStates ?? []).map((state) => ({ ...state.transform })),
   };
+}
+
+function normalizeRotation(rotationDeg: number): number {
+  const normalized = ((rotationDeg + 180) % 360 + 360) % 360 - 180;
+  return Object.is(normalized, -0) ? 0 : normalized;
 }
 
 function migrateLegacyDocument(garment: GarmentDraft): GarmentDraft {

@@ -73,6 +73,8 @@ export function App() {
   const setPieceVisibility = useEditorStore((state) => state.setPieceVisibility);
   const setPieceLocked = useEditorStore((state) => state.setPieceLocked);
   const setActivePiecePlacements = useEditorStore((state) => state.setActivePiecePlacements);
+  const rotatePieceInWorkspace = useEditorStore((state) => state.rotatePieceInWorkspace);
+  const setPieceWorkspaceTransform = useEditorStore((state) => state.setPieceWorkspaceTransform);
   const deletePiece = useEditorStore((state) => state.deletePiece);
   const renamePiece = useEditorStore((state) => state.renamePiece);
   const resetPattern = useEditorStore((state) => state.resetPattern);
@@ -138,6 +140,14 @@ export function App() {
     selectPiece(pieceId);
     setActivePiecePlacements([createPreviewPlacement(pieceId, { region })]);
   }, [selectPiece, setActivePiecePlacements]);
+  const handleRotatePiece = useCallback((pieceId: string, action: "left" | "right" | "reset") => {
+    if (action === "left") rotatePieceInWorkspace(pieceId, -90);
+    else if (action === "right") rotatePieceInWorkspace(pieceId, 90);
+    else {
+      const workspace = useEditorStore.getState().garment.workspaceStates?.find((state) => state.pieceId === pieceId);
+      if (workspace) setPieceWorkspaceTransform(pieceId, { ...workspace.transform, rotationDeg: 0 });
+    }
+  }, [rotatePieceInWorkspace, setPieceWorkspaceTransform]);
   const handleRenamePiece = useCallback(
     (pieceId: string) => {
       const current = garment.pieces.find((piece) => piece.id === pieceId);
@@ -418,6 +428,7 @@ export function App() {
               onDuplicateMirrored={(pieceId) => handleDuplicatePiece(pieceId, true)}
               onRename={handleRenamePiece}
               onDelete={handleDeletePiece}
+              onRotate={handleRotatePiece}
             />
             <div className="canvas-stack">
               <div className="point-actions" role="group" aria-label="Editar pontos">
@@ -453,6 +464,7 @@ export function App() {
                 onMovePoint={movePoint}
                 onMoveHandle={moveHandle}
                 onInsertPoint={handleInsertPoint}
+                onToolChange={setActiveTool}
               />
             </div>
           </div>

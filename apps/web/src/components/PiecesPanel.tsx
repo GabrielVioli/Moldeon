@@ -13,6 +13,7 @@ interface PiecesPanelProps {
   onDuplicateMirrored(pieceId: string): void;
   onRename(pieceId: string): void;
   onDelete(pieceId: string): void;
+  onRotate(pieceId: string, action: "left" | "right" | "reset"): void;
 }
 
 export const PiecesPanel = memo(function PiecesPanel({
@@ -27,6 +28,7 @@ export const PiecesPanel = memo(function PiecesPanel({
   onDuplicateMirrored,
   onRename,
   onDelete,
+  onRotate,
 }: PiecesPanelProps) {
   return (
     <aside className="pieces-panel" aria-label="Peças">
@@ -87,6 +89,9 @@ export const PiecesPanel = memo(function PiecesPanel({
                   <button type="button" onClick={() => onRename(piece.id)}>Renomear</button>
                   <button type="button" onClick={() => onDuplicate(piece.id)}>Duplicar</button>
                   <button type="button" onClick={() => onDuplicateMirrored(piece.id)}>Duplicar espelhado</button>
+                  <button type="button" onClick={() => onRotate(piece.id, "left")}>Girar 90° à esquerda</button>
+                  <button type="button" onClick={() => onRotate(piece.id, "right")}>Girar 90° à direita</button>
+                  <button type="button" onClick={() => onRotate(piece.id, "reset")}>Restaurar rotação</button>
                   <button type="button" onClick={() => onDelete(piece.id)}>Excluir</button>
                 </div>
               </details>

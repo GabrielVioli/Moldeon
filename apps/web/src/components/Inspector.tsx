@@ -36,6 +36,18 @@ export const Inspector = memo(function Inspector({
   const seamIssues = useEditorStore((state) => state.seamIssues);
   const removeSeam = useEditorStore((state) => state.removeSeam);
   const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
+  const activePieceId = useEditorStore((state) => state.activePieceId);
+  const pieceSelectionActive = useEditorStore((state) => state.pieceSelectionActive);
+  const setWorkspaceTransform = useEditorStore((state) => state.setPieceWorkspaceTransform);
+  const setPieceVisibility = useEditorStore((state) => state.setPieceVisibility);
+  const setPieceLocked = useEditorStore((state) => state.setPieceLocked);
+  const renamePiece = useEditorStore((state) => state.renamePiece);
+  const workspace = garment.workspaceStates?.find((state) => state.pieceId === activePieceId) ?? {
+    pieceId: activePieceId,
+    transform: { pieceId: activePieceId, xMm: 0, yMm: 0, rotationDeg: 0 },
+    visible: true,
+    locked: false,
+  };
 
   return (
     <aside
@@ -48,6 +60,20 @@ export const Inspector = memo(function Inspector({
         <h2>{snapshot.piece.name}</h2>
         <p className="muted">Arraste os pontos no editor para alterar o contorno.</p>
       </section>
+
+      {pieceSelectionActive && !selectedPoint ? (
+        <section>
+          <div className="section-eyebrow">Peça selecionada</div>
+          <div className="piece-properties">
+            <label>Nome<input value={snapshot.piece.name} onFocus={() => onEditStart("Renomear peça")} onBlur={onEditEnd} onChange={(event) => renamePiece(activePieceId, event.currentTarget.value)} /></label>
+            <WorkspaceNumber label="Posição X" value={workspace.transform.xMm} unit="mm" onFocus={() => onEditStart("Mover peça")} onBlur={onEditEnd} onChange={(value) => setWorkspaceTransform(activePieceId, { ...workspace.transform, xMm: value })} />
+            <WorkspaceNumber label="Posição Y" value={workspace.transform.yMm} unit="mm" onFocus={() => onEditStart("Mover peça")} onBlur={onEditEnd} onChange={(value) => setWorkspaceTransform(activePieceId, { ...workspace.transform, yMm: value })} />
+            <WorkspaceNumber label="Rotação" value={workspace.transform.rotationDeg} unit="°" onFocus={() => onEditStart("Rotacionar peça")} onBlur={onEditEnd} onChange={(value) => setWorkspaceTransform(activePieceId, { ...workspace.transform, rotationDeg: value })} />
+            <label className="check-field"><input type="checkbox" checked={workspace.visible} onChange={(event) => setPieceVisibility(activePieceId, event.currentTarget.checked)} />Visível</label>
+            <label className="check-field"><input type="checkbox" checked={workspace.locked} onChange={(event) => setPieceLocked(activePieceId, event.currentTarget.checked)} />Bloqueada</label>
+          </div>
+        </section>
+      ) : null}
 
       <section className="metric-grid">
         <Metric label="Área" value={`${(snapshot.areaMm2 / 10000).toFixed(1)} cm²`} />
@@ -185,4 +211,8 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function WorkspaceNumber({ label, value, unit, onFocus, onBlur, onChange }: { label: string; value: number; unit: string; onFocus(): void; onBlur(): void; onChange(value: number): void }) {
+  return <label>{label}<div className="input-with-unit"><input type="number" step="0.1" value={value} onFocus={onFocus} onBlur={onBlur} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { useEditorStore.getState().cancelEdit(); event.currentTarget.blur(); } }} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isFinite(next)) onChange(next); }} /><span>{unit}</span></div></label>;
 }
