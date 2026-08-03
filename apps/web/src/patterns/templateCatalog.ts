@@ -5,9 +5,12 @@ import type {
   PatternPiece,
   PatternPoint,
   PatternPreviewPlacement,
+  SegmentRole,
 } from "../domain/pattern";
+import { migrateLegacyPieceToSegments } from "../domain/pattern";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { inferAssemblyPlacement } from "../domain/assembly";
+import { closeDart, createDart } from "../domain/patternOperations";
 
 export type PatternTemplateId =
   | "tshirt"
@@ -23,6 +26,9 @@ export interface PatternTemplateSummary {
   category: "Parte de cima" | "Parte de baixo" | "Casaco";
   description: string;
   pieces: string;
+  status: "ready" | "development";
+  requiredMeasurements: string[];
+  estimatedMeasurements: string[];
 }
 
 export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
@@ -54,6 +60,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de cima",
     description: "Corpo com folga confortável e manga curta.",
     pieces: "Frente, costas e manga",
+    status: "ready",
+    requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco"],
+    estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps"],
   },
   {
     id: "blouse",
@@ -61,6 +70,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de cima",
     description: "Base solta, decote mais aberto e manga longa.",
     pieces: "Frente, costas e manga",
+    status: "ready",
+    requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco", "braço"],
+    estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps", "punho"],
   },
   {
     id: "straight-skirt",
@@ -68,6 +80,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Base simples da cintura ao joelho.",
     pieces: "Frente e costas",
+    status: "ready",
+    requiredMeasurements: ["cintura", "quadril", "altura"],
+    estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
   {
     id: "mini-skirt",
@@ -75,6 +90,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Base curta com leve abertura na barra.",
     pieces: "Frente e costas",
+    status: "ready",
+    requiredMeasurements: ["cintura", "quadril", "altura"],
+    estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
   {
     id: "straight-pants",
@@ -82,13 +100,19 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Perna reta e gancho simplificado para edição.",
     pieces: "Frente e costas",
+    status: "ready",
+    requiredMeasurements: ["cintura", "quadril", "altura", "entrepernas"],
+    estimatedMeasurements: ["gancho", "coxa", "joelho", "barra"],
   },
   {
     id: "basic-jacket",
     name: "Jaqueta básica",
     category: "Casaco",
-    description: "Base com abertura frontal, costas e manga longa.",
-    pieces: "Frente, costas e manga",
+    description: "Modelagem própria de casaco ainda em validação.",
+    pieces: "Em desenvolvimento",
+    status: "development",
+    requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "braço"],
+    estimatedMeasurements: ["pescoço", "cava", "folga estrutural"],
   },
 ] as const;
 
@@ -101,6 +125,7 @@ export function createGarmentFromTemplate(
   const generator = GENERATORS[templateId];
   const summary = PATTERN_TEMPLATES.find((template) => template.id === templateId);
   if (!summary) throw new RangeError("Molde-base desconhecido.");
+  if (summary.status !== "ready") throw new RangeError(`${summary.name} está em desenvolvimento.`);
 
   const fabric = createDefaultFabricSource();
   const pieces = generator(measurements).map((piece) => ({
@@ -273,6 +298,9 @@ function createBodicePiece(options: BodicePieceOptions): PatternPiece {
       cutQuantity: 1,
       cutOnFold: true,
       previewPlacements: [previewPlacement],
+      segmentRoles: ["neckline", "shoulder", id.endsWith("front") ? "frontArmhole" : "backArmhole", "sideSeam", "hem", "fold"],
+      grainline: { start: { xMm: bodyWidth * 0.42, yMm: armholeDepth + 25 }, end: { xMm: bodyWidth * 0.42, yMm: bodyLength - 35 } },
+      annotations: [{ id: `${id}:fold-note`, label: "Cortar na dobra", xMm: 8, yMm: bodyLength * 0.58 }],
     },
   );
 }
@@ -315,6 +343,8 @@ function createSleevePiece({
         placement("arm", "front", "left"),
         placement("arm", "front", "right", true),
       ],
+      segmentRoles: ["sleeveCapFront", "sleeveCapBack", "sideSeam", "hem", "sideSeam"],
+      grainline: { start: { xMm: half, yMm: capHeight + 25 }, end: { xMm: half, yMm: length - 25 } },
     },
   );
 }
@@ -338,14 +368,19 @@ function createSkirtPieces(
   const createSide = (
     suffix: "front" | "back",
     surface: "front" | "back",
-  ) =>
-    piece(
-      `${options.id}-${suffix}`,
+  ) => {
+    const pieceId = `${options.id}-${suffix}`;
+    const dartWidth = suffix === "front" ? 18 : 28;
+    const dartLength = suffix === "front" ? Math.min(95, hipDepth * 0.52) : Math.min(130, hipDepth * 0.7);
+    const waistCutWidth = waistWidth + dartWidth;
+    const dartCenterX = waistCutWidth * (suffix === "front" ? 0.58 : 0.48);
+    return piece(
+      pieceId,
       suffix === "front" ? "Frente" : "Costas",
       [
         point("center-waist", 0, 0),
-        point("side-waist", waistWidth, 0, {
-          out: { xMm: (hipWidth - waistWidth) * 0.8, yMm: hipDepth * 0.3 },
+        point("side-waist", waistCutWidth, 0, {
+          out: { xMm: (hipWidth - waistCutWidth) * 0.8, yMm: hipDepth * 0.3 },
         }),
         point("side-hip", hipWidth, hipDepth, {
           in: { xMm: -4, yMm: -hipDepth * 0.38 },
@@ -357,8 +392,14 @@ function createSkirtPieces(
         cutQuantity: 1,
         cutOnFold: true,
         previewPlacements: [placement("hip", surface, "center")],
+        segmentRoles: ["waist", "sideSeam", "sideSeam", "hem", "fold"],
+        darts: [closeDart(createDart(pieceId, { xMm: dartCenterX, yMm: 0 }, { xMm: dartCenterX, yMm: dartLength }, dartWidth))],
+        internalLines: [{ id: `${pieceId}:hip-line`, pieceId, curved: false, purpose: "reference", points: [point("hip-a", 0, hipDepth), point("hip-b", hipWidth, hipDepth)] }],
+        grainline: { start: { xMm: hipWidth * 0.5, yMm: hipDepth + 30 }, end: { xMm: hipWidth * 0.5, yMm: options.lengthMm - 35 } },
+        annotations: [{ id: `${pieceId}:hip-label`, label: "Linha do quadril", xMm: 12, yMm: hipDepth - 6 }],
       },
     );
+  };
 
   return [createSide("front", "front"), createSide("back", "back")];
 }
@@ -450,6 +491,13 @@ function createTrouserPiece(options: TrouserPieceOptions): PatternPiece {
         placement("leg", surface, "left"),
         placement("leg", surface, "right", true),
       ],
+      segmentRoles: ["waist", "outseam", "outseam", "hem", "inseam", surface === "front" ? "frontCrotch" : "backCrotch", surface === "front" ? "frontCrotch" : "backCrotch"],
+      ...(surface === "back" ? { darts: [closeDart(createDart(id, { xMm: centerLine + waistQuarter * 0.48, yMm: 5 }, { xMm: centerLine + waistQuarter * 0.48, yMm: 115 }, 24))] } : {}),
+      internalLines: [
+        { id: `${id}:hip-line`, pieceId: id, curved: false, purpose: "reference", points: [point("hip-a", centerLine - crotchExtension * 0.5, rise * 0.62), point("hip-b", outerHipX, rise * 0.62)] },
+        { id: `${id}:knee-line`, pieceId: id, curved: false, purpose: "reference", points: [point("knee-a", legCenter - hemHalfWidth * 1.18, rise + (length - rise) * 0.5), point("knee-b", legCenter + hemHalfWidth * 1.18, rise + (length - rise) * 0.5)] },
+      ],
+      grainline: { start: { xMm: legCenter, yMm: rise + 35 }, end: { xMm: legCenter, yMm: length - 35 } },
     },
   );
 }
@@ -541,6 +589,11 @@ interface PieceOptions {
   cutQuantity: number;
   cutOnFold?: boolean;
   previewPlacements: PatternPreviewPlacement[];
+  segmentRoles?: SegmentRole[];
+  darts?: PatternPiece["darts"];
+  internalLines?: PatternPiece["internalLines"];
+  grainline?: PatternPiece["grainline"];
+  annotations?: PatternPiece["annotations"];
 }
 
 function piece(
@@ -549,7 +602,7 @@ function piece(
   points: PatternPoint[],
   options: PieceOptions,
 ): PatternPiece {
-  return {
+  const migrated = migrateLegacyPieceToSegments({
     id,
     name,
     seamAllowanceMm: 10,
@@ -566,7 +619,15 @@ function piece(
       ...current,
       id: `${id}:${current.id}`,
     })),
-  };
+    ...(options.darts ? { darts: options.darts.map((dart) => ({ ...dart, pieceId: id })) } : {}),
+    ...(options.internalLines ? { internalLines: options.internalLines.map((line) => ({ ...line, pieceId: id })) } : {}),
+    ...(options.grainline ? { grainline: options.grainline } : {}),
+    ...(options.annotations ? { annotations: options.annotations } : {}),
+  });
+  if (options.segmentRoles) {
+    migrated.segments = migrated.segments?.map((segment, index) => ({ ...segment, role: options.segmentRoles?.[index] ?? "other" }));
+  }
+  return migrated;
 }
 
 function placement(

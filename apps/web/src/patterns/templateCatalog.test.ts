@@ -18,7 +18,7 @@ describe("pattern template catalog", () => {
     ]);
   });
 
-  it.each(PATTERN_TEMPLATES)(
+  it.each(PATTERN_TEMPLATES.filter((template) => template.status === "ready"))(
     "generates valid pieces for $name",
     ({ id }) => {
       const garment = createGarmentFromTemplate(id, DEFAULT_BODY_MEASUREMENTS);
@@ -58,7 +58,7 @@ describe("pattern template catalog", () => {
 
   it("stores the selected body type with all avatar measurements", () => {
     const garment = createGarmentFromTemplate(
-      "basic-jacket",
+      "blouse",
       DEFAULT_BODY_MEASUREMENTS,
       "masculine",
     );
@@ -66,6 +66,29 @@ describe("pattern template catalog", () => {
     expect(garment.bodyType).toBe("masculine");
     expect(garment.measurements.shoulderWidthMm).toBeGreaterThan(0);
     expect(garment.measurements.armLengthMm).toBeGreaterThan(0);
+  });
+
+  it("keeps the jacket unavailable until its own block is validated", () => {
+    expect(PATTERN_TEMPLATES.find((template) => template.id === "basic-jacket")?.status).toBe("development");
+    expect(() => createGarmentFromTemplate("basic-jacket", DEFAULT_BODY_MEASUREMENTS)).toThrow(/desenvolvimento/i);
+  });
+
+  it("generates drafting semantics, construction marks and real skirt darts", () => {
+    const top = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS);
+    expect(top.pieces.flatMap((piece) => piece.segments ?? []).some((segment) => segment.role === "frontArmhole")).toBe(true);
+    expect(top.pieces.find((piece) => piece.name === "Manga")?.segments?.map((segment) => segment.role)).toContain("sleeveCapFront");
+    expect(top.pieces.every((piece) => piece.grainline)).toBe(true);
+
+    const skirt = createGarmentFromTemplate("straight-skirt", DEFAULT_BODY_MEASUREMENTS);
+    expect(skirt.pieces.every((piece) => piece.darts?.length === 1)).toBe(true);
+    expect(skirt.pieces.every((piece) => piece.internalLines?.some((line) => line.id.includes("hip-line")))).toBe(true);
+    const front = skirt.pieces.find((piece) => piece.name === "Frente")!;
+    const back = skirt.pieces.find((piece) => piece.name === "Costas")!;
+    expect(back.darts![0].widthMm).toBeGreaterThan(front.darts![0].widthMm);
+
+    const pants = createGarmentFromTemplate("straight-pants", DEFAULT_BODY_MEASUREMENTS);
+    expect(pants.pieces.every((piece) => piece.internalLines?.some((line) => line.id.includes("knee-line")))).toBe(true);
+    expect(pants.pieces.find((piece) => piece.name === "Costas")?.darts).toHaveLength(1);
   });
 
   it("rejects measurements outside the supported drafting range", () => {

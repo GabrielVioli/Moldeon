@@ -108,6 +108,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
               className="template-card"
               key={template.id}
               type="button"
+              disabled={template.status !== "ready"}
               onClick={() => chooseTemplate(template.id)}
             >
               <span className={`template-icon template-icon-${template.id}`} aria-hidden="true" />
@@ -116,6 +117,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                 <strong>{template.name}</strong>
                 <span>{template.description}</span>
                 <small>{template.pieces}</small>
+                <small><strong>Usa:</strong> {template.requiredMeasurements.join(", ")}</small>
+                <small><strong>Estimadas:</strong> {template.estimatedMeasurements.join(", ")}</small>
+                {template.status === "development" ? <small className="template-status">Em desenvolvimento</small> : null}
               </span>
             </button>
           ))}
@@ -123,8 +127,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
 
         {error ? <div className="dialog-error">{error}</div> : null}
         <footer className="dialog-note">
-          Bases simplificadas para criação e testes. Confira o caimento antes de
-          cortar o tecido definitivo.
+          As medidas listadas como estimadas usam proporções antropométricas e devem ser conferidas. Faça um protótipo antes de cortar o tecido definitivo.
         </footer>
       </section>
     </div>

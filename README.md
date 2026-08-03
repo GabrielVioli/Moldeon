@@ -6,7 +6,7 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 
 - Editor 2D em milímetros, com grade, zoom, pan e pontos arrastáveis.
 - Interface móvel com abas, pan por toque e zoom por pinça.
-- Biblioteca paramétrica com camiseta, blusa, saia, minissaia, calça e jaqueta.
+- Biblioteca paramétrica com camiseta, blusa, saia, minissaia e calça; a jaqueta aparece como **Em desenvolvimento** até possuir bloco próprio validado.
 - Geração por altura, busto/tórax, cintura e quadril explícitos.
 - Avatar procedural feminino ou masculino com altura, busto/tórax, cintura,
   quadril, ombros, tronco, braço e entreperna.
@@ -36,6 +36,7 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
 - Undo/redo transacional com limite de memória, atalhos de teclado e um único comando por gesto.
 - Curvas Bézier cúbicas editáveis por alças, preservadas no SVG e amostradas com limite de custo para 3D.
+- Contornos versionados por nós e segmentos persistentes, com seleção de borda, mover, converter reta/curva e dividir sem desconectar os nós vizinhos.
 - Autosave local usando OPFS quando disponível.
 - Cabeçalhos necessários para `SharedArrayBuffer` no Vite e exemplos de deploy.
 - Estrutura inicial para solver XPBD em Web Worker.
@@ -166,7 +167,8 @@ Leia também:
 
 ## Limitações atuais
 
-- Os seis moldes são bases simplificadas; pences de borda estão disponíveis, mas pences internas em losango, transferência de pence, graduação, cós, vistas e aviamentos ainda não foram implementados.
+- Camiseta, blusa, saias e calça são bases paramétricas editáveis com fio, bordas semânticas e linhas construtivas; a jaqueta permanece indisponível enquanto não houver bloco próprio validado.
+- As saias incluem pences persistentes de cintura. Transferência de pence, graduação, cós, vistas e aviamentos ainda não foram implementados.
 - A inserção de ponto acontece em um contorno existente; a criação livre de novas peças e a prancheta multi-peça agora entram como fluxo principal do editor.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.

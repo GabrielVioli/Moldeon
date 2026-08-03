@@ -207,6 +207,11 @@ button {
 .context-bar button { min-height: 30px; border: 1px solid #b9b3a8; border-radius: 6px; background: #fff; cursor: pointer; }
 .context-bar button:disabled { opacity: .45; cursor: not-allowed; }
 .context-bar .primary-button { background: #282a2d; color: #fff; }
+.template-card:disabled { cursor: not-allowed; opacity: .62; }
+.template-status { color: #8b3c24; font-weight: 700; }
+.canvas-intent-actions { position: absolute; z-index: 12; display: flex; gap: 6px; padding: 5px; border: 1px solid #c9b27b; border-radius: 8px; background: rgba(255, 252, 244, .98); box-shadow: 0 5px 18px #0002; transform: translate(-50%, -100%); }
+.canvas-intent-actions button { min-height: 30px; padding: 0 10px; border: 1px solid #b9b3a8; border-radius: 6px; background: #fff; cursor: pointer; white-space: nowrap; }
+.canvas-intent-actions .primary-button { border-color: #282a2d; background: #282a2d; color: #fff; }
 .canvas-navigation { position: absolute; z-index: 8; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 3px; padding: 4px; background: #f8f6f1e8; border: 1px solid #c8c4bc; border-radius: 8px; box-shadow: 0 2px 8px #0002; backdrop-filter: blur(6px); }
 .canvas-navigation button, .canvas-navigation input { height: 29px; padding: 0 8px; color: #555650; background: transparent; border: 0; border-radius: 5px; font-size: 10px; cursor: pointer; }
 .canvas-navigation button:hover, .canvas-navigation button.active { color: #fff; background: #34363a; }
@@ -871,6 +876,7 @@ button {
 .template-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: max-content;
   gap: 9px;
   min-height: 0;
   overflow-y: auto;
@@ -880,7 +886,7 @@ button {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
   gap: 12px;
-  min-height: 128px;
+  min-height: 184px;
   padding: 12px;
   color: #28292b;
   background: #fff;
@@ -1525,7 +1531,7 @@ button {
   }
 
   .template-card {
-    min-height: 108px;
+    min-height: 168px;
   }
 
   .fitting-section-heading,

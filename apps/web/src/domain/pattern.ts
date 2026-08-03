@@ -74,6 +74,31 @@ export interface Seam {
   treatment?: SeamTreatment;
 }
 
+export type SegmentRole =
+  | "shoulder" | "neckline" | "frontArmhole" | "backArmhole" | "sideSeam"
+  | "waist" | "hem" | "sleeveCapFront" | "sleeveCapBack" | "inseam"
+  | "outseam" | "frontCrotch" | "backCrotch" | "dartLeg" | "fold" | "other";
+
+export interface PatternNode extends PatternVector { id: string; }
+
+export interface PatternSegment {
+  id: string;
+  startNodeId: string;
+  endNodeId: string;
+  kind: "line" | "cubic";
+  control1?: PatternVector;
+  control2?: PatternVector;
+  role: SegmentRole;
+  smoothStart?: boolean;
+  smoothEnd?: boolean;
+}
+
+export interface PatternContour {
+  id: string;
+  segmentIds: string[];
+  closed: boolean;
+}
+
 export type InternalLinePurpose = "cut" | "fold" | "dart-center" | "pocket" | "topstitch" | "reference";
 
 export interface PatternInternalLine {
@@ -130,6 +155,7 @@ export interface PatternEdge {
   pieceId: string;
   startPointId: string;
   endPointId: string;
+  role?: SegmentRole;
 }
 
 export interface PatternPiece {
@@ -142,6 +168,10 @@ export interface PatternPiece {
   previewPlacements?: PatternPreviewPlacement[];
   edgeFinishes?: Record<string, EdgeFinish>;
   points: PatternPoint[];
+  formatVersion?: 2;
+  nodes?: PatternNode[];
+  segments?: PatternSegment[];
+  contours?: PatternContour[];
   internalLines?: PatternInternalLine[];
   darts?: PatternDart[];
   grainline?: { start: PatternVector; end: PatternVector };
@@ -236,12 +266,12 @@ export function createPatternPieceFromDraft(draft: DraftContour): PatternPiece {
   if (!draft.closed || draft.points.length < 3) {
     throw new TypeError("O contorno precisa estar fechado e ter pelo menos três pontos.");
   }
-  return {
+  return migrateLegacyPieceToSegments({
     id: draft.id,
     name: draft.name,
     seamAllowanceMm: 10,
     points: draft.points.map((point) => structuredClone(point)),
-  };
+  });
 }
 
 export function duplicatePatternPiece(
@@ -252,9 +282,9 @@ export function duplicatePatternPiece(
   const newId = options.newId ?? createDocumentId("piece");
   const newName = options.name ?? `${piece.name} – cópia`;
   const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
-  const { previewPlacements: _placements, ...copyable } = clone;
+  const { previewPlacements: _placements, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
 
-  return {
+  return migrateLegacyPieceToSegments({
     ...copyable,
     id: newId,
     name: newName,
@@ -264,7 +294,7 @@ export function duplicatePatternPiece(
       handleIn: point.handleIn ? { ...point.handleIn } : undefined,
       handleOut: point.handleOut ? { ...point.handleOut } : undefined,
     })),
-  };
+  });
 }
 
 export function mirrorPatternPoints(points: readonly PatternPoint[]): PatternPoint[] {
@@ -353,6 +383,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
   const annotations = value.annotations === undefined ? undefined : parseAnnotations(value.annotations);
   const internalLines = value.internalLines === undefined ? undefined : parseInternalLines(value.internalLines, id);
   const darts = value.darts === undefined ? undefined : parseDarts(value.darts, id);
+  const segmentModel = parseSegmentModel(value, id, points);
 
   // parse optional guides
   let guides: Guide[] | undefined;
@@ -367,7 +398,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     });
   }
 
-  return {
+  return syncLegacyPointsFromSegments(migrateLegacyPieceToSegments({
     id,
     name,
     seamAllowanceMm,
@@ -382,7 +413,35 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(grainline === undefined ? {} : { grainline }),
     ...(annotations === undefined ? {} : { annotations }),
     ...(guides === undefined ? {} : { guides }),
-  };
+    ...segmentModel,
+  }));
+}
+
+function parseSegmentModel(value: Record<string, unknown>, pieceId: string, points: PatternPoint[]): Partial<PatternPiece> {
+  if (value.formatVersion !== 2 || !Array.isArray(value.nodes) || !Array.isArray(value.segments) || !Array.isArray(value.contours)) return {};
+  const nodes = value.nodes.map((node, index): PatternNode => {
+    if (!isRecord(node)) throw new TypeError(`O nó ${index + 1} é inválido.`);
+    return { id: readString(node.id, "O identificador do nó"), xMm: readFiniteNumber(node.xMm, "O X do nó"), yMm: readFiniteNumber(node.yMm, "O Y do nó") };
+  });
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const roles = ["shoulder", "neckline", "frontArmhole", "backArmhole", "sideSeam", "waist", "hem", "sleeveCapFront", "sleeveCapBack", "inseam", "outseam", "frontCrotch", "backCrotch", "dartLeg", "fold", "other"] as const;
+  const segments = value.segments.map((segment, index): PatternSegment => {
+    if (!isRecord(segment)) throw new TypeError(`O segmento ${index + 1} é inválido.`);
+    const startNodeId = readString(segment.startNodeId, "O início do segmento"); const endNodeId = readString(segment.endNodeId, "O fim do segmento");
+    if (!nodeIds.has(startNodeId) || !nodeIds.has(endNodeId)) throw new TypeError("O segmento aponta para um nó inexistente.");
+    const kind = readEnum(segment.kind, ["line", "cubic"] as const, "O tipo do segmento");
+    return { id: readString(segment.id, "O identificador do segmento"), startNodeId, endNodeId, kind, role: readEnum(segment.role ?? "other", roles, "A função do segmento"), ...(kind === "cubic" ? { control1: parseVector(segment.control1, "O primeiro controle"), control2: parseVector(segment.control2, "O segundo controle") } : {}), ...(segment.smoothStart === true ? { smoothStart: true } : {}), ...(segment.smoothEnd === true ? { smoothEnd: true } : {}) };
+  });
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const contours = value.contours.map((contour, index): PatternContour => {
+    if (!isRecord(contour) || !Array.isArray(contour.segmentIds)) throw new TypeError(`O contorno ${index + 1} é inválido.`);
+    const ids = contour.segmentIds.map((id) => readString(id, "O segmento do contorno"));
+    if (ids.some((id) => !segmentIds.has(id))) throw new TypeError("O contorno aponta para um segmento inexistente.");
+    return { id: readString(contour.id ?? `${pieceId}:contour`, "O identificador do contorno"), segmentIds: ids, closed: readBoolean(contour.closed, "O fechamento do contorno") };
+  });
+  const pointIds = new Set(points.map((point) => point.id));
+  if (nodes.some((node) => !pointIds.has(node.id))) throw new TypeError("Os nós e pontos legados precisam representar o mesmo contorno.");
+  return { formatVersion: 2, nodes, segments, contours };
 }
 
 function parseGrainline(value: unknown): NonNullable<PatternPiece["grainline"]> {
@@ -706,7 +765,42 @@ export function makeEdgeId(pieceId: string, startPointId: string, endPointId: st
   return `${pieceId}:edge:${startPointId}->${endPointId}`;
 }
 
+export function migrateLegacyPieceToSegments(piece: PatternPiece): PatternPiece {
+  if (piece.formatVersion === 2 && piece.nodes?.length && piece.segments?.length && piece.contours?.length) return piece;
+  const nodes = piece.points.map(({ id, xMm, yMm }) => ({ id, xMm, yMm }));
+  const segments = piece.points.map((start, index): PatternSegment => {
+    const end = piece.points[(index + 1) % piece.points.length];
+    const cubic = Boolean(start.handleOut || end.handleIn);
+    return {
+      id: makeEdgeId(piece.id, start.id, end.id), startNodeId: start.id, endNodeId: end.id,
+      kind: cubic ? "cubic" : "line", role: "other",
+      ...(cubic ? {
+        control1: { xMm: start.xMm + (start.handleOut?.xMm ?? 0), yMm: start.yMm + (start.handleOut?.yMm ?? 0) },
+        control2: { xMm: end.xMm + (end.handleIn?.xMm ?? 0), yMm: end.yMm + (end.handleIn?.yMm ?? 0) },
+      } : {}),
+    };
+  });
+  return { ...piece, formatVersion: 2, nodes, segments, contours: [{ id: `${piece.id}:contour`, segmentIds: segments.map((segment) => segment.id), closed: true }] };
+}
+
+export function syncLegacyPointsFromSegments(piece: PatternPiece): PatternPiece {
+  if (!piece.nodes?.length || !piece.segments?.length) return piece;
+  const nodeMap = new Map(piece.nodes.map((node) => [node.id, node]));
+  const ordered = piece.contours?.[0]?.segmentIds.map((id) => piece.segments!.find((segment) => segment.id === id)).filter((segment): segment is PatternSegment => Boolean(segment)) ?? piece.segments;
+  const points = ordered.map((segment) => {
+    const node = nodeMap.get(segment.startNodeId)!;
+    const previous = ordered.find((candidate) => candidate.endNodeId === node.id);
+    return {
+      id: node.id, xMm: node.xMm, yMm: node.yMm,
+      ...(previous?.kind === "cubic" && previous.control2 ? { handleIn: { xMm: previous.control2.xMm - node.xMm, yMm: previous.control2.yMm - node.yMm } } : {}),
+      ...(segment.kind === "cubic" && segment.control1 ? { handleOut: { xMm: segment.control1.xMm - node.xMm, yMm: segment.control1.yMm - node.yMm } } : {}),
+    } satisfies PatternPoint;
+  });
+  return { ...piece, points };
+}
+
 export function getPatternEdges(piece: PatternPiece): PatternEdge[] {
+  if (piece.segments?.length) return piece.segments.map((segment) => ({ id: segment.id, pieceId: piece.id, startPointId: segment.startNodeId, endPointId: segment.endNodeId, role: segment.role }));
   const edges: PatternEdge[] = [];
   const pts = piece.points;
   for (let i = 0; i < pts.length; i += 1) {

@@ -14,6 +14,7 @@ import {
   type GarmentDraft,
   type Guide,
   type PatternPiece,
+  type PatternDart,
   type PatternPoint,
   type PatternVector,
   type PatternPreviewPlacement,
@@ -36,6 +37,8 @@ import {
   type FabricSource,
 } from "../domain/fabric";
 import { insertPatternPoint, removePatternPoint } from "../domain/patternEditing";
+import { convertPatternSegment, movePatternSegment, splitPatternSegment } from "../domain/segmentEditing";
+import { updateDart as updatePatternDart } from "../domain/patternOperations";
 import {
   DocumentCommandHistory,
   type DocumentCommandType,
@@ -57,8 +60,11 @@ export interface EditorState {
   draftError: string | null;
   seamIssues: SeamValidationIssue[];
   seamProposal: { first: EdgeRange; second: EdgeRange; compatibility: SeamCompatibility } | null;
-  cutDraft: { pieceId: string; start: PatternVector; end: PatternVector } | null;
-  dartDraft: { pieceId: string; edgePoint: PatternVector; apex: PatternVector } | null;
+  seamFirstEdge: EdgeRange | null;
+  nearbySeamSuggestion: { first: EdgeRange; second: EdgeRange } | null;
+  cutDraft: { pieceId: string; start: PatternVector; end: PatternVector; phase: "placing" | "ready"; error?: string } | null;
+  dartDraft: { pieceId: string; edgePoint: PatternVector; apex: PatternVector; phase: "placing" | "ready" } | null;
+  selectedDartId: string | null;
   measureDraft: { start: PatternVector; end: PatternVector } | null;
   simulateVersion: number;
   canUndo: boolean;
@@ -87,12 +93,23 @@ export interface EditorState {
   setSeamAllowance(valueMm: number): void;
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
   proposeSeam(first: EdgeRange, second: EdgeRange): void;
+  selectFirstSeamEdge(edge: EdgeRange | null): void;
+  setNearbySeamSuggestion(suggestion: EditorState["nearbySeamSuggestion"]): void;
   cancelSeamProposal(): void;
   confirmSeamProposal(options: { name: string; direction: SeamDirection; treatment: SeamTreatment }): void;
-  setCutDraft(draft: EditorState["cutDraft"]): void;
+  setCutDraft(draft: (Omit<NonNullable<EditorState["cutDraft"]>, "phase"> & { phase?: "placing" | "ready" }) | null): void;
+  freezeCutDraft(): void;
   confirmCut(keepJoined: boolean): void;
-  setDartDraft(draft: EditorState["dartDraft"]): void;
+  setDartDraft(draft: (Omit<NonNullable<EditorState["dartDraft"]>, "phase"> & { phase?: "placing" | "ready" }) | null): void;
+  freezeDartDraft(): void;
   confirmDart(): void;
+  selectDart(dartId: string | null): void;
+  updateDart(dartId: string, update: Partial<Pick<PatternDart, "widthMm" | "lengthMm" | "directionDeg">>): void;
+  removeDart(dartId: string): void;
+  invertDart(dartId: string): void;
+  moveSelectedSegment(dxMm: number, dyMm: number): void;
+  convertSelectedSegment(kind: "line" | "cubic"): void;
+  splitSelectedSegment(): void;
   setMeasureDraft(draft: EditorState["measureDraft"]): void;
   cancelIntent(): void;
   updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment }): void;
@@ -151,8 +168,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   draftError: null,
   seamIssues: [],
   seamProposal: null,
+  seamFirstEdge: null,
+  nearbySeamSuggestion: null,
   cutDraft: null,
   dartDraft: null,
+  selectedDartId: null,
   measureDraft: null,
   simulateVersion: 0,
   canUndo: false,
@@ -195,8 +215,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       draftError: null,
       seamIssues: collectSeamIssues(normalized),
       seamProposal: null,
+      seamFirstEdge: null,
+      nearbySeamSuggestion: null,
       cutDraft: null,
       dartDraft: null,
+      selectedDartId: null,
       measureDraft: null,
       ...historyAvailability(),
     });
@@ -541,8 +564,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       compatibility: analyzeSeamCompatibility(state.garment, first, second),
     },
     seamIssues: [],
+    seamFirstEdge: null,
   })),
-  cancelSeamProposal: () => set({ seamProposal: null }),
+  selectFirstSeamEdge: (seamFirstEdge) => set({ seamFirstEdge, seamProposal: null }),
+  setNearbySeamSuggestion: (nearbySeamSuggestion) => set({ nearbySeamSuggestion }),
+  cancelSeamProposal: () => set({ seamProposal: null, seamFirstEdge: null }),
   confirmSeamProposal: (options) => {
     const state = get();
     const proposal = state.seamProposal;
@@ -568,26 +594,76 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
     set({ seamProposal: null });
   },
-  setCutDraft: (cutDraft) => set({ cutDraft }),
+  setCutDraft: (cutDraft) => set({ cutDraft: cutDraft ? { ...cutDraft, phase: cutDraft.phase ?? "placing" } : null }),
+  freezeCutDraft: () => set((state) => {
+    if (!state.cutDraft) return {};
+    const distance = Math.hypot(state.cutDraft.end.xMm - state.cutDraft.start.xMm, state.cutDraft.end.yMm - state.cutDraft.start.yMm);
+    return { cutDraft: { ...state.cutDraft, phase: "ready", ...(distance < 4 ? { error: "Escolha dois pontos diferentes." } : {}) } };
+  }),
   confirmCut: (keepJoined) => {
     const state = get(); const draft = state.cutDraft;
+    if (draft?.phase !== "ready") return;
     const source = draft && state.garment.pieces.find((piece) => piece.id === draft.pieceId);
     if (!draft || !source) return;
     const split = createPatternPiecesFromSplit(source, extendCutLine(source, [draft.start, draft.end]));
-    if (!split) return;
+    if (!split) { set({ cutDraft: { ...draft, phase: "ready", error: "O corte precisa atravessar o molde." } }); return; }
     const workspace = workspaceStateFor(state.garment, source.id);
     const workspaceStates = split.map((piece) => ({ ...workspace, pieceId: piece.id, transform: { ...workspace.transform, pieceId: piece.id } }));
     const cutSeam: Seam | null = keepJoined ? { id: createDocumentId("seam"), name: "Recorte unido", first: { pieceId: split[0].id, edgeId: makeLastEdgeId(split[0]), startT: 0, endT: 1 }, second: { pieceId: split[1].id, edgeId: makeLastEdgeId(split[1]), startT: 0, endT: 1 }, direction: "opposite", easeRatio: 0, type: "standard", treatment: "standard" } : null;
     changeDocument(set, get, "cut", keepJoined ? "Cortar e manter unidas" : "Cortar peça", (document) => ({ activePieceId: split[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces: document.garment.pieces.flatMap((piece) => piece.id === source.id ? split : [piece]), seams: [...(document.garment.seams ?? []).filter((seam) => seam.first.pieceId !== source.id && seam.second.pieceId !== source.id), ...(cutSeam ? [cutSeam] : [])], workspaceStates: [...(document.garment.workspaceStates ?? []).filter((item) => item.pieceId !== source.id), ...workspaceStates] }) }), { cutDraft: null, selectedPieceIds: [split[0].id], pieceSelectionActive: true });
   },
-  setDartDraft: (dartDraft) => set({ dartDraft }),
+  setDartDraft: (dartDraft) => set({ dartDraft: dartDraft ? { ...dartDraft, phase: dartDraft.phase ?? "placing" } : null }),
+  freezeDartDraft: () => set((state) => state.dartDraft ? { dartDraft: { ...state.dartDraft, phase: "ready" } } : {}),
   confirmDart: () => {
     const draft = get().dartDraft; if (!draft) return;
+    if (draft.phase !== "ready") return;
     const dart = createDart(draft.pieceId, draft.edgePoint, draft.apex);
-    changeDocument(set, get, "dart", "Criar pence", (document) => ({ ...document, garment: { ...document.garment, pieces: document.garment.pieces.map((piece) => piece.id === draft.pieceId ? { ...piece, darts: [...(piece.darts ?? []), closeDart(dart)] } : piece) } }), { dartDraft: null });
+    changeDocument(set, get, "dart", "Criar pence", (document) => ({ ...document, garment: { ...document.garment, pieces: document.garment.pieces.map((piece) => piece.id === draft.pieceId ? { ...piece, darts: [...(piece.darts ?? []), closeDart(dart)] } : piece) } }), { dartDraft: null, selectedDartId: dart.id });
+  },
+  selectDart: (selectedDartId) => set({ selectedDartId, selectedPointId: null, selectedEdgeId: null, pieceSelectionActive: false }),
+  updateDart: (dartId, update) => changeDocument(
+    set,
+    get,
+    "dart",
+    "Editar pence",
+    (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => ({
+          ...piece,
+          darts: (piece.darts ?? []).map((dart) =>
+            dart.id === dartId
+              ? { ...updatePatternDart(dart, update), closed: dart.closed }
+              : dart,
+          ),
+        })),
+      },
+    }),
+    { selectedDartId: dartId },
+  ),
+  removeDart: (dartId) => changeDocument(set, get, "dart", "Excluir pence", (document) => ({ ...document, garment: { ...document.garment, pieces: document.garment.pieces.map((piece) => ({ ...piece, darts: (piece.darts ?? []).filter((dart) => dart.id !== dartId) })) } }), { selectedDartId: null }),
+  invertDart: (dartId) => {
+    const dart = get().garment.pieces.flatMap((piece) => piece.darts ?? []).find((candidate) => candidate.id === dartId); if (!dart) return;
+    get().updateDart(dartId, { directionDeg: dart.directionDeg + 180 });
+  },
+  moveSelectedSegment: (dxMm, dyMm) => {
+    const edgeId = get().selectedEdgeId; if (!edgeId) return;
+    updateActivePieceDocument(set, get, "geometry", "Mover borda", (piece) => movePatternSegment(piece, edgeId, dxMm, dyMm));
+  },
+  convertSelectedSegment: (kind) => {
+    const edgeId = get().selectedEdgeId; if (!edgeId) return;
+    updateActivePieceDocument(set, get, "geometry", kind === "cubic" ? "Converter para curva" : "Converter para reta", (piece) => convertPatternSegment(piece, edgeId, kind));
+  },
+  splitSelectedSegment: () => {
+    const state = get(); const edgeId = state.selectedEdgeId; if (!edgeId) return;
+    const beforeIds = new Set(state.garment.pieces.find((piece) => piece.id === state.activePieceId)?.segments?.map((segment) => segment.id) ?? []);
+    updateActivePieceDocument(set, get, "geometry", "Dividir borda", (piece) => splitPatternSegment(piece, edgeId));
+    const replacement = get().garment.pieces.find((piece) => piece.id === get().activePieceId)?.segments?.find((segment) => !beforeIds.has(segment.id));
+    set({ selectedEdgeId: replacement?.id ?? null });
   },
   setMeasureDraft: (measureDraft) => set({ measureDraft }),
-  cancelIntent: () => set({ seamProposal: null, cutDraft: null, dartDraft: null, measureDraft: null }),
+  cancelIntent: () => set({ seamProposal: null, seamFirstEdge: null, nearbySeamSuggestion: null, cutDraft: null, dartDraft: null, measureDraft: null }),
   updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
     ...document,
     garment: {
@@ -801,11 +877,14 @@ function applyDocumentState(
     selectedEdgeId: null,
     seamIssues: collectSeamIssues(garment),
     seamProposal: null,
+    seamFirstEdge: null,
+    nearbySeamSuggestion: null,
     cutDraft: null,
     dartDraft: null,
     measureDraft: null,
     selectedPieceIds,
     pieceSelectionActive: selectedPieceIds.length > 0,
+    selectedDartId: null,
     ...historyAvailability(),
     ...additional,
   });

@@ -145,6 +145,11 @@ export function App() {
   }, [startDraft]);
   const handleSelectTool = useCallback((tool: EditorTool) => {
     cancelIntent();
+    if (tool !== "select") {
+      const state = useEditorStore.getState();
+      state.clearSelection();
+      state.selectDart(null);
+    }
     if (tool === "draft") handleCreateBlankPiece();
     else setActiveTool(tool);
   }, [cancelIntent, handleCreateBlankPiece]);
@@ -275,10 +280,18 @@ export function App() {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
-        if (useEditorStore.getState().draftContour) {
+        const state = useEditorStore.getState();
+        if (state.draftContour) {
           cancelDraft();
+          setActiveTool("select");
+        } else if (state.selectedPointId || state.selectedEdgeId || state.selectedDartId || state.pieceSelectionActive || state.selectedPieceIds.length > 1) {
+          state.clearSelection();
+          state.selectDart(null);
+          state.selectFirstSeamEdge(null);
+        } else {
+          state.cancelIntent();
+          setActiveTool("select");
         }
-        setActiveTool("select");
         return;
       }
       if (!isEditableTarget(event.target) && useEditorStore.getState().draftContour) {
@@ -291,6 +304,27 @@ export function App() {
         if (event.key === "Backspace") {
           event.preventDefault();
           removeDraftPoint();
+          return;
+          }
+      }
+      if (event.key === "Enter" && !isEditableTarget(event.target)) {
+        const state = useEditorStore.getState();
+        if (state.seamProposal) {
+          event.preventDefault();
+          state.confirmSeamProposal({ name: "Costura", direction: state.seamProposal.compatibility.recommendedDirection, treatment: state.seamProposal.compatibility.recommendedTreatment });
+          setActiveTool("select");
+          return;
+        }
+        if (state.cutDraft?.phase === "ready") {
+          event.preventDefault();
+          state.confirmCut(false);
+          if (!useEditorStore.getState().cutDraft) setActiveTool("select");
+          return;
+        }
+        if (state.dartDraft?.phase === "ready") {
+          event.preventDefault();
+          state.confirmDart();
+          setActiveTool("select");
           return;
         }
       }
@@ -357,16 +391,6 @@ export function App() {
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
   }, [deletePiece, deleteSelectedPieces, removePoint]);
-
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || isEditableTarget(event.target)) return;
-      cancelIntent();
-      setActiveTool("select");
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [cancelIntent]);
 
   useEffect(() => {
     if (activeTool === "draft" && draftContour === null) setActiveTool("select");

@@ -3,6 +3,8 @@ import {
   createDocumentId,
   edgeRangeLength,
   getEdgeById,
+  getPatternEdges,
+  migrateLegacyPieceToSegments,
   type EdgeRange,
   type GarmentDraft,
   type PatternDart,
@@ -86,11 +88,14 @@ export function splitPatternByLine(piece: PatternPiece, cut: [PatternVector, Pat
 export function createPatternPiecesFromSplit(piece: PatternPiece, cut: [PatternVector, PatternVector]): [PatternPiece, PatternPiece] | null {
   const paths = splitPatternByLine(piece, cut);
   if (!paths || paths.some((path) => path.length < 3)) return null;
-  const makePiece = (points: PatternPoint[], index: number): PatternPiece => ({
-    ...structuredClone(piece), id: createDocumentId("piece"), name: `${piece.name} ${index + 1}`,
-    points: points.map((point, pointIndex) => ({ ...point, id: createDocumentId(`cut-${pointIndex + 1}`) })),
-    darts: [], internalLines: [], previewPlacements: undefined, edgeFinishes: {},
-  });
+  const makePiece = (points: PatternPoint[], index: number): PatternPiece => {
+    const { nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...legacy } = structuredClone(piece);
+    return migrateLegacyPieceToSegments({
+      ...legacy, id: createDocumentId("piece"), name: `${piece.name} ${index + 1}`,
+      points: points.map((point, pointIndex) => ({ ...point, id: createDocumentId(`cut-${pointIndex + 1}`) })),
+      darts: [], internalLines: [], previewPlacements: undefined, edgeFinishes: {},
+    });
+  };
   return [makePiece(paths[0], 0), makePiece(paths[1], 1)];
 }
 
@@ -123,9 +128,10 @@ export function findNearbySeamCandidates(garment: GarmentDraft, first: EdgeRange
   return garment.pieces.flatMap((piece) => {
     if (piece.id === first.pieceId) return [];
     const transform = transforms.find((item) => item.pieceId === piece.id) ?? { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 };
-    return piece.points.flatMap((start, index) => {
-      const end = piece.points[(index + 1) % piece.points.length]; const mid = transformPoint(lerp(start, end, 0.5), transform);
-      return distance(firstMid, mid) <= thresholdMm ? [{ pieceId: piece.id, edgeId: `${piece.id}:${start.id}:${end.id}`, startT: 0, endT: 1 }] : [];
+    return getPatternEdges(piece).flatMap((edge) => {
+      const start = piece.points.find((point) => point.id === edge.startPointId)!; const end = piece.points.find((point) => point.id === edge.endPointId)!;
+      const mid = transformPoint(lerp(start, end, 0.5), transform);
+      return distance(firstMid, mid) <= thresholdMm ? [{ pieceId: piece.id, edgeId: edge.id, startT: 0, endT: 1 }] : [];
     });
   });
 }
