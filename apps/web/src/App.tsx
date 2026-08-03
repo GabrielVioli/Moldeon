@@ -16,6 +16,7 @@ import { Toolbar } from "./components/Toolbar";
 import { PiecesPanel } from "./components/PiecesPanel";
 import { PreviewPlacementPanel } from "./components/PreviewPlacementPanel";
 import { AssemblyPanel } from "./components/AssemblyPanel";
+import { ContextBar } from "./components/ContextBar";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
@@ -49,7 +50,11 @@ export function App() {
   const engineBackend = useEditorStore((state) => state.engineBackend);
   const selectedPointId = useEditorStore((state) => state.selectedPointId);
   const simulateVersion = useEditorStore((state) => state.simulateVersion);
-  const seamProposal = useEditorStore((state) => state.seamProposal);
+  const selectedPieceIds = useEditorStore((state) => state.selectedPieceIds);
+  const togglePieceSelection = useEditorStore((state) => state.togglePieceSelection);
+  const selectAllPieces = useEditorStore((state) => state.selectAllPieces);
+  const deleteSelectedPieces = useEditorStore((state) => state.deleteSelectedPieces);
+  const cancelIntent = useEditorStore((state) => state.cancelIntent);
   const canUndo = useEditorStore((state) => state.canUndo);
   const canRedo = useEditorStore((state) => state.canRedo);
   const setEngineSnapshot = useEditorStore((state) => state.setEngineSnapshot);
@@ -138,6 +143,11 @@ export function App() {
     startDraft(name.trim() || "Nova peça");
     setActiveTool("draft");
   }, [startDraft]);
+  const handleSelectTool = useCallback((tool: EditorTool) => {
+    cancelIntent();
+    if (tool === "draft") handleCreateBlankPiece();
+    else setActiveTool(tool);
+  }, [cancelIntent, handleCreateBlankPiece]);
   const handleDuplicatePiece = useCallback(
     (pieceId: string, mirrored = false) => {
       duplicatePiece(pieceId, mirrored);
@@ -293,7 +303,10 @@ export function App() {
       }
 
       const key = event.key.toLowerCase();
-      if (key === "z") {
+      if (key === "a") {
+        event.preventDefault();
+        selectAllPieces();
+      } else if (key === "z") {
         event.preventDefault();
         if (event.shiftKey) redo();
         else undo();
@@ -310,7 +323,7 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, redo, removeDraftPoint, undo]);
+  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, redo, removeDraftPoint, selectAllPieces, undo]);
 
   useEffect(() => {
     const handleDelete = (event: KeyboardEvent) => {
@@ -329,6 +342,10 @@ export function App() {
         removePoint(currentSelectedPointId);
         return;
       }
+      if (useEditorStore.getState().selectedPieceIds.length > 1) {
+        deleteSelectedPieces();
+        return;
+      }
       if (currentPieceId && useEditorStore.getState().pieceSelectionActive) {
         const piece = useEditorStore.getState().garment.pieces.find((candidate) => candidate.id === currentPieceId);
         if (piece) {
@@ -339,15 +356,21 @@ export function App() {
     };
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
-  }, [deletePiece, removePoint]);
+  }, [deletePiece, deleteSelectedPieces, removePoint]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isEditableTarget(event.target)) return;
+      cancelIntent();
+      setActiveTool("select");
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [cancelIntent]);
 
   useEffect(() => {
     if (activeTool === "draft" && draftContour === null) setActiveTool("select");
   }, [activeTool, draftContour]);
-
-  useEffect(() => {
-    if (seamProposal) setWorkspaceMode("assembly");
-  }, [seamProposal]);
 
   return (
     <div className="app-shell">
@@ -376,7 +399,7 @@ export function App() {
         curveActive={selectedCurveActive}
         onToggleCurve={handleToggleCurve}
         activeTool={activeTool}
-        onSelectTool={setActiveTool}
+        onSelectTool={handleSelectTool}
       />
 
       <main className={`workspace mode-${workspaceMode}`}>
@@ -431,7 +454,9 @@ export function App() {
               pieces={garment.pieces}
               workspaceStates={garment.workspaceStates ?? []}
               activePieceId={activePieceId}
+              selectedPieceIds={selectedPieceIds}
               onSelect={selectPiece}
+              onToggleSelect={togglePieceSelection}
               onCreate={handleCreateBlankPiece}
               onVisibilityChange={setPieceVisibility}
               onLockChange={setPieceLocked}
@@ -477,6 +502,7 @@ export function App() {
                 onInsertPoint={handleInsertPoint}
                 onToolChange={setActiveTool}
               />
+              <ContextBar tool={activeTool} onDone={() => setActiveTool("select")} />
             </div>
           </div>
         </section>

@@ -37,8 +37,8 @@ export const AssemblyPanel = memo(function AssemblyPanel({ previewRequested, onR
   return (
     <aside className={`assembly-panel workspace-view${mobileActive ? " is-mobile-active" : ""}`} aria-label="Montagem da roupa">
       <header>
-        <span className="section-eyebrow">Montagem estrutural</span>
-        <strong>{graph.connectedComponents.length} componente(s) · {graph.openEdges.length} borda(s) aberta(s)</strong>
+        <span className="section-eyebrow">Montagem</span>
+        <strong>{graph.connectedComponents.length} grupo(s) · {graph.openEdges.length} borda(s) ainda sem costura</strong>
       </header>
 
       {proposal ? (
@@ -49,7 +49,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({ previewRequested, onR
           onCancel={cancelProposal}
           onConfirm={confirmProposal}
         />
-      ) : <p className="assembly-help">Use a ferramenta Costura e escolha uma borda em cada peça. A união só será criada depois da confirmação.</p>}
+      ) : <p className="assembly-help">Use Costurar e clique em uma borda de cada peça. Você confirma a união na própria prancheta.</p>}
 
       <section className="assembly-section">
         <h3>Costuras</h3>
@@ -63,6 +63,9 @@ export const AssemblyPanel = memo(function AssemblyPanel({ previewRequested, onR
           </div>
         ))}
       </section>
+
+      <details className="assembly-advanced">
+        <summary>Ajustes avançados</summary>
 
       <section className="assembly-section">
         <h3>Posição inicial · {activePiece.name}</h3>
@@ -79,8 +82,8 @@ export const AssemblyPanel = memo(function AssemblyPanel({ previewRequested, onR
         <h3>Folga da roupa</h3>
         <div className="ease-grid">
           {(["bustMm", "waistMm", "hipMm", "sleeveMm"] as const).map((region) => (
-            <label key={region}>{region.replace("Mm", "")}
-              <input type="number" value={garment.ease?.[region] ?? ({ bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 })[region]} onChange={(event) => setGarmentEase(region, event.currentTarget.valueAsNumber)} /> mm
+            <label key={region}>{{ bustMm: "Busto", waistMm: "Cintura", hipMm: "Quadril", sleeveMm: "Manga" }[region]}
+              <input type="number" step="0.1" value={(garment.ease?.[region] ?? ({ bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 })[region]) / 10} onChange={(event) => setGarmentEase(region, event.currentTarget.valueAsNumber * 10)} /> cm
             </label>
           ))}
         </div>
@@ -95,6 +98,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({ previewRequested, onR
           <option value="raw">Sem acabamento</option><option value="hem">Bainha</option><option value="binding">Viés</option><option value="facing">Revel</option><option value="elastic">Elástico</option>
         </select>
       </section>
+      </details>
 
       <section className="assembly-readiness" aria-live="polite">
         <strong>{eligibility.canPreviewGarment ? "Roupa pronta para montagem 3D" : "Complete a estrutura 2D"}</strong>
@@ -121,7 +125,7 @@ function SeamProposalForm({ sequence, compatibility, onCancel, onConfirm }: {
   return (
     <section className="seam-proposal" role="dialog" aria-label="Confirmar proposta de costura">
       <h3>Proposta de costura</h3>
-      <p>{compatibility.firstLengthMm.toFixed(1)} mm ↔ {compatibility.secondLengthMm.toFixed(1)} mm</p>
+      <p>{(compatibility.firstLengthMm / 10).toFixed(1)} cm ↔ {(compatibility.secondLengthMm / 10).toFixed(1)} cm</p>
       <p>{compatibility.message}</p>
       <input aria-label="Nome da nova costura" value={name} onChange={(event) => setName(event.currentTarget.value)} />
       <select aria-label="Direção da costura" value={direction} onChange={(event) => setDirection(event.currentTarget.value as SeamDirection)}>

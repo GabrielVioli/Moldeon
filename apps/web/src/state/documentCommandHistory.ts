@@ -11,6 +11,8 @@ export type DocumentCommandType =
   | "seam-allowance"
   | "placement"
   | "seam"
+  | "cut"
+  | "dart"
   | "metadata";
 
 export interface EditorDocumentState {

@@ -74,36 +74,25 @@ export const Toolbar = memo(function Toolbar({
           Selecionar
         </button>
         <button
-          className={`tool-button${activeTool === "point" ? " active" : ""}`}
+          className={`tool-button${activeTool === "draft" ? " active" : ""}`}
           type="button"
-          onClick={() => onSelectTool("point")}
-          aria-pressed={activeTool === "point"}
-          title="Clique ou toque perto do contorno"
+          onClick={() => onSelectTool("draft")}
+          aria-pressed={activeTool === "draft"}
+          title="Desenhar uma nova peça"
         >
-          + Ponto
+          Desenhar
         </button>
-        <button
-          className={`tool-button${curveActive ? " active" : ""}`}
-          type="button"
-          disabled={!canEditCurve}
-          onClick={onToggleCurve}
-          aria-pressed={curveActive}
-          title={
-            canEditCurve
-              ? "Alternar o segmento seguinte entre linha e curva"
-              : "Selecione um ponto primeiro"
-          }
-        >
-          Curva
-        </button>
+        <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => onSelectTool("cut")} title="Trace uma linha atravessando a peça">Recortar</button>
+        <button className={`tool-button${activeTool === "dart" ? " active" : ""}`} type="button" onClick={() => onSelectTool("dart")} title="Clique na borda e depois no ápice">Pence</button>
         <button
           className={`tool-button${activeTool === "seam" ? " active" : ""}`}
           type="button"
           onClick={() => onSelectTool("seam")}
           title="Ferramenta de costura: selecione duas arestas"
         >
-          Costura
+          Costurar
         </button>
+        <button className={`tool-button${activeTool === "measure" ? " active" : ""}`} type="button" onClick={() => onSelectTool("measure")} title="Clique em dois pontos">Medir</button>
       </nav>
 
       <div className="toolbar-actions">

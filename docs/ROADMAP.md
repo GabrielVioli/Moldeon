@@ -34,6 +34,8 @@
 - Réguas horizontal/vertical e guias arrastáveis adicionadas ao editor; guias são persistidas no documento.
 - Introduzida semântica de arestas e ranges (`EdgeRange`, `Seam`) e a ferramenta de costura para relacionar duas arestas, visualizar comprimentos e diferença, alternar direção e salvar `seams[]` no projeto.
 - A prancheta 2D passou a trabalhar com várias peças ao mesmo tempo, com transformações independentes de posição na mesa de modelagem, seleção de peça, duplicação, espelhamento, criação de peça em branco e edição numérica básica de segmentos retos.
+- A barra principal foi reduzida às seis intenções essenciais e cada fluxo ganhou confirmação contextual na base da prancheta; selecionar, zoom, pan e edição por duplo clique permanecem disponíveis durante ferramentas temporárias.
+- Seleção múltipla, medição em centímetros, recorte reto reversível, linhas internas no domínio e pences de borda persistentes foram incorporados ao documento e ao histórico.
 
 Essas mudanças preservam compatibilidade com projetos existentes: campos novos são opcionais e o autosave e restore continuam funcionando como antes.
 

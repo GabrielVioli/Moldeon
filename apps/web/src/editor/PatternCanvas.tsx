@@ -61,7 +61,7 @@ interface PatternCanvasProps {
   onToolChange(tool: EditorTool): void;
 }
 
-export type EditorTool = "select" | "point" | "seam" | "draft" | "hand";
+export type EditorTool = "select" | "point" | "seam" | "draft" | "cut" | "dart" | "measure" | "hand";
 
 const POINT_RADIUS_PX = 7;
 const INITIAL_CAMERA: Camera2D = { zoom: 0.72, panX: 105, panY: 70 };
@@ -91,6 +91,7 @@ interface PieceDragState {
   startWorldY: number;
   startX: number;
   startY: number;
+  groupStarts?: PieceWorkspaceTransform[];
 }
 
 function PatternCanvasComponent({
@@ -155,6 +156,15 @@ function PatternCanvasComponent({
         startCenter: ScreenPoint;
         startCamera: Camera2D;
       }
+    | {
+        type: "box";
+        pointerId: number;
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
+        additive: boolean;
+      }
     | null
   >(null);
 
@@ -183,6 +193,10 @@ function PatternCanvasComponent({
   const updateDraftCursor = useEditorStore((s) => s.updateDraftCursor);
   const closeDraft = useEditorStore((s) => s.closeDraft);
   const pieceSelectionActive = useEditorStore((s) => s.pieceSelectionActive);
+  const selectedPieceIds = useEditorStore((s) => s.selectedPieceIds);
+  const cutDraft = useEditorStore((s) => s.cutDraft);
+  const dartDraft = useEditorStore((s) => s.dartDraft);
+  const measureDraft = useEditorStore((s) => s.measureDraft);
   const spacePressedRef = useRef(false);
   const [spaceHandActive, setSpaceHandActive] = useState(false);
   const [cameraZoom, setCameraZoom] = useState(cameraRef.current.zoom);
@@ -226,8 +240,13 @@ function PatternCanvasComponent({
       draftCursor,
       hoveredDimension,
       rotationFeedback,
+      dragRef.current?.type === "box" ? dragRef.current : null,
+      selectedPieceIds,
+      cutDraft,
+      dartDraft,
+      measureDraft,
     );
-  }, [activePieceId, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, pieceSelectionActive, rotationFeedback]);
+  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, measureDraft, pieceSelectionActive, rotationFeedback, selectedPieceIds]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -524,6 +543,32 @@ function PatternCanvasComponent({
     return Math.hypot(world.xMm - handle.xMm, world.yMm - handle.yMm) <= 12 / cameraRef.current.zoom;
   }
 
+  function handleIntentClick(clientX: number, clientY: number): boolean {
+    const currentTool = toolRef.current;
+    if (currentTool !== "cut" && currentTool !== "dart" && currentTool !== "measure") return false;
+    const state = useEditorStore.getState();
+    const world = screenToWorld(clientX, clientY);
+    if (currentTool === "measure") {
+      state.setMeasureDraft(state.measureDraft ? { ...state.measureDraft, end: world } : { start: world, end: world });
+      return true;
+    }
+    if (currentTool === "cut" && state.cutDraft) {
+      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.cutDraft.pieceId));
+      state.setCutDraft({ ...state.cutDraft, end: local });
+      return true;
+    }
+    const piece = findPieceAtWorld(world.xMm, world.yMm);
+    if (!piece) return false;
+    if (piece.id !== activePieceId) selectPiece(piece.id);
+    const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, piece.id));
+    if (currentTool === "cut") state.setCutDraft(state.cutDraft?.pieceId === piece.id ? { ...state.cutDraft, end: local } : { pieceId: piece.id, start: local, end: local });
+    else {
+      if (!state.dartDraft && !findEdgeRangeAt(clientX, clientY)) return false;
+      state.setDartDraft(state.dartDraft?.pieceId === piece.id ? { ...state.dartDraft, apex: local } : { pieceId: piece.id, edgePoint: local, apex: local });
+    }
+    return true;
+  }
+
   function dimensionAt(clientX: number, clientY: number) {
     const canvas = canvasRef.current;
     if (!canvas || cameraRef.current.zoom < 0.32) return null;
@@ -601,9 +646,14 @@ function PatternCanvasComponent({
         return;
       }
 
+      if (handleIntentClick(event.clientX, event.clientY)) { dragRef.current = null; return; }
+
       if (toolRef.current === "seam") {
         const edge = findEdgeRangeAt(event.clientX, event.clientY);
         if (!edge) {
+          const world = screenToWorld(event.clientX, event.clientY);
+          const piece = findPieceAtWorld(world.xMm, world.yMm);
+          if (piece) selectPiece(piece.id);
           dragRef.current = null;
           return;
         }
@@ -665,6 +715,9 @@ function PatternCanvasComponent({
           startWorldY: world.yMm,
           startX: workspace.transform.xMm,
           startY: workspace.transform.yMm,
+          groupStarts: useEditorStore.getState().selectedPieceIds.includes(piece.id)
+            ? useEditorStore.getState().selectedPieceIds.map((id) => ({ ...getPieceWorkspaceTransform(garment, id) }))
+            : undefined,
         };
         return;
       }
@@ -673,7 +726,7 @@ function PatternCanvasComponent({
       return;
     }
 
-    if (event.button === 1 || event.shiftKey || spacePressedRef.current || toolRef.current === "hand") {
+    if (event.button === 1 || spacePressedRef.current || toolRef.current === "hand") {
       dragRef.current = createPanDrag(
         event.pointerId,
         event.clientX,
@@ -708,9 +761,14 @@ function PatternCanvasComponent({
       return;
     }
 
+    if (handleIntentClick(event.clientX, event.clientY)) { dragRef.current = null; return; }
+
     if (toolRef.current === "seam") {
       const edge = findEdgeRangeAt(event.clientX, event.clientY);
       if (!edge) {
+        const world = screenToWorld(event.clientX, event.clientY);
+        const piece = findPieceAtWorld(world.xMm, world.yMm);
+        if (piece) event.shiftKey ? useEditorStore.getState().togglePieceSelection(piece.id) : selectPiece(piece.id);
         dragRef.current = null;
         return;
       }
@@ -760,7 +818,8 @@ function PatternCanvasComponent({
     const world = screenToWorld(event.clientX, event.clientY);
     const piece = findPieceAtWorld(world.xMm, world.yMm);
     if (piece) {
-      selectPiece(piece.id);
+      if (event.shiftKey) useEditorStore.getState().togglePieceSelection(piece.id);
+      else selectPiece(piece.id);
       onSelectPoint(null);
       const workspace = getPieceWorkspaceState(garment, piece.id);
       if (workspace.locked) {
@@ -776,10 +835,18 @@ function PatternCanvasComponent({
         startWorldY: world.yMm,
         startX: workspace.transform.xMm,
         startY: workspace.transform.yMm,
+        groupStarts: useEditorStore.getState().selectedPieceIds.includes(piece.id)
+          ? useEditorStore.getState().selectedPieceIds.map((id) => ({ ...getPieceWorkspaceTransform(garment, id) }))
+          : undefined,
       };
       return;
     }
-    clearSelection();
+    if (toolRef.current === "select") {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX - rect.left; const y = event.clientY - rect.top;
+      dragRef.current = { type: "box", pointerId: event.pointerId, startX: x, startY: y, currentX: x, currentY: y, additive: event.shiftKey };
+      scheduleDraw();
+    } else clearSelection();
   }
 
   function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
@@ -797,6 +864,11 @@ function PatternCanvasComponent({
 
     const drag = dragRef.current;
     if (!drag) {
+      const state = useEditorStore.getState();
+      const world = screenToWorld(event.clientX, event.clientY);
+      if (toolRef.current === "cut" && state.cutDraft) state.setCutDraft({ ...state.cutDraft, end: pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.cutDraft.pieceId)) });
+      if (toolRef.current === "dart" && state.dartDraft) state.setDartDraft({ ...state.dartDraft, apex: pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.dartDraft.pieceId)) });
+      if (toolRef.current === "measure" && state.measureDraft) state.setMeasureDraft({ ...state.measureDraft, end: world });
       const dimension = dimensionAt(event.clientX, event.clientY);
       setHoveredDimension(dimension?.key ?? null);
       return;
@@ -835,8 +907,14 @@ function PatternCanvasComponent({
 
     if (drag.type === "piece") {
       const world = screenToWorld(event.clientX, event.clientY);
-      const nextX = drag.startX + (world.xMm - drag.startWorldX);
-      const nextY = drag.startY + (world.yMm - drag.startWorldY);
+      const deltaX = world.xMm - drag.startWorldX;
+      const deltaY = world.yMm - drag.startWorldY;
+      const nextX = drag.startX + deltaX;
+      const nextY = drag.startY + deltaY;
+      if (drag.groupStarts && drag.groupStarts.length > 1) {
+        for (const start of drag.groupStarts) setPieceWorkspaceTransform(start.pieceId, { ...start, xMm: start.xMm + deltaX, yMm: start.yMm + deltaY });
+        return;
+      }
       const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
       setPieceWorkspaceTransform(drag.pieceId, {
         pieceId: drag.pieceId,
@@ -844,6 +922,13 @@ function PatternCanvasComponent({
         yMm: nextY,
         rotationDeg: current.rotationDeg,
       });
+      return;
+    }
+
+    if (drag.type === "box") {
+      const rect = event.currentTarget.getBoundingClientRect();
+      drag.currentX = event.clientX - rect.left; drag.currentY = event.clientY - rect.top;
+      scheduleDraw();
       return;
     }
 
@@ -991,7 +1076,7 @@ function PatternCanvasComponent({
   }
 
   function handleDoubleClick(event: MouseEvent<HTMLCanvasElement>) {
-    if (toolRef.current !== "select") return;
+    useEditorStore.getState().cancelIntent();
     const dimension = dimensionAt(event.clientX, event.clientY);
     if (!dimension) return;
     selectPiece(dimension.piece.id);
@@ -1110,6 +1195,18 @@ function PatternCanvasComponent({
     ) {
       onEditEndRef.current();
       setRotationFeedback(null);
+    }
+    if (finishedDrag?.type === "box" && finishedDrag.pointerId === event.pointerId) {
+      const left = Math.min(finishedDrag.startX, finishedDrag.currentX); const right = Math.max(finishedDrag.startX, finishedDrag.currentX);
+      const top = Math.min(finishedDrag.startY, finishedDrag.currentY); const bottom = Math.max(finishedDrag.startY, finishedDrag.currentY);
+      const hits = garment.pieces.filter((piece) => getPieceWorkspaceState(garment, piece.id).visible).filter((piece) => {
+        const transform = getPieceWorkspaceTransform(garment, piece.id);
+        const points = samplePatternContour(piece.points).map((point) => worldToScreen(pieceLocalToWorld(point, transform), cameraRef.current));
+        const bounds = { left: Math.min(...points.map((point) => point.x)), right: Math.max(...points.map((point) => point.x)), top: Math.min(...points.map((point) => point.y)), bottom: Math.max(...points.map((point) => point.y)) };
+        return bounds.right >= left && bounds.left <= right && bounds.bottom >= top && bounds.top <= bottom;
+      }).map((piece) => piece.id);
+      const previous = useEditorStore.getState().selectedPieceIds;
+      useEditorStore.getState().setPieceSelection(finishedDrag.additive ? [...previous, ...hits] : hits);
     }
     if (finishedDrag?.type === "pan") setIsPanning(false);
 
@@ -1318,6 +1415,11 @@ function draw(
   draftCursor: PatternPoint | null,
   hoveredDimension: string | null,
   rotationFeedback: number | null,
+  selectionBox: { startX: number; startY: number; currentX: number; currentY: number } | null,
+  selectedPieceIds: string[],
+  cutDraft: { pieceId: string; start: import("../domain/pattern").PatternVector; end: import("../domain/pattern").PatternVector } | null,
+  dartDraft: { pieceId: string; edgePoint: import("../domain/pattern").PatternVector; apex: import("../domain/pattern").PatternVector } | null,
+  measureDraft: { start: import("../domain/pattern").PatternVector; end: import("../domain/pattern").PatternVector } | null,
 ) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#f4f2ed";
@@ -1372,6 +1474,7 @@ function draw(
     const transformedPoints = piece.points.map((point) => transformPatternPoint(point, transform));
     const transformedContour = samplePatternContour(piece.points).map((point) => transformPatternPoint(point, transform));
     const isActivePiece = piece.id === activePieceId;
+    const isSelectedPiece = selectedPieceIds.includes(piece.id);
 
     context.save();
     context.globalAlpha = isActivePiece ? 1 : workspace.locked ? 0.35 : 0.55;
@@ -1381,6 +1484,27 @@ function draw(
     context.strokeStyle = isActivePiece ? "#202124" : "#4f5458";
     context.lineWidth = isActivePiece ? 2 / camera.zoom : 1.4 / camera.zoom;
     context.stroke();
+
+    if (isSelectedPiece) {
+      context.setLineDash([6 / camera.zoom, 4 / camera.zoom]);
+      context.strokeStyle = "#9a6b16";
+      context.lineWidth = 3 / camera.zoom;
+      traceContour(context, transformedContour);
+      context.stroke();
+      context.setLineDash([]);
+    }
+
+    for (const line of piece.internalLines ?? []) {
+      const points = line.points.map((point) => pieceLocalToWorld(point, transform));
+      context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
+      context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : [3 / camera.zoom, 3 / camera.zoom]);
+      context.strokeStyle = "#59636c"; context.lineWidth = 1.5 / camera.zoom; context.stroke(); context.setLineDash([]);
+    }
+    for (const dart of piece.darts ?? []) {
+      const legA = pieceLocalToWorld(dart.legA, transform); const apex = pieceLocalToWorld(dart.apex, transform); const legB = pieceLocalToWorld(dart.legB, transform);
+      context.beginPath(); context.moveTo(legA.xMm, legA.yMm); context.lineTo(apex.xMm, apex.yMm); context.lineTo(legB.xMm, legB.yMm);
+      context.strokeStyle = dart.closed ? "#8b3f67" : "#b06084"; context.lineWidth = 2 / camera.zoom; context.stroke();
+    }
 
     const seamPoints = createSeamAllowanceContour(
       transformedContour,
@@ -1518,6 +1642,12 @@ function draw(
     context.restore();
   }
 
+  const cutTransform = cutDraft ? getPieceWorkspaceTransform(garment, cutDraft.pieceId) : null;
+  const dartTransform = dartDraft ? getPieceWorkspaceTransform(garment, dartDraft.pieceId) : null;
+  drawIntentLine(context, cutDraft && cutTransform ? pieceLocalToWorld(cutDraft.start, cutTransform) : undefined, cutDraft && cutTransform ? pieceLocalToWorld(cutDraft.end, cutTransform) : undefined, camera.zoom, "#c7532c");
+  drawIntentLine(context, dartDraft && dartTransform ? pieceLocalToWorld(dartDraft.edgePoint, dartTransform) : undefined, dartDraft && dartTransform ? pieceLocalToWorld(dartDraft.apex, dartTransform) : undefined, camera.zoom, "#8b3f67");
+  drawIntentLine(context, measureDraft?.start, measureDraft?.end, camera.zoom, "#22768a");
+
   // draw snapping feedback if present
   if (snapOverlay) {
     const snapWorld = pieceLocalToWorld(snapOverlay, activeTransform);
@@ -1542,6 +1672,13 @@ function draw(
   }
 
   context.restore();
+
+  if (selectionBox) {
+    const left = Math.min(selectionBox.startX, selectionBox.currentX); const top = Math.min(selectionBox.startY, selectionBox.currentY);
+    const boxWidth = Math.abs(selectionBox.currentX - selectionBox.startX); const boxHeight = Math.abs(selectionBox.currentY - selectionBox.startY);
+    context.save(); context.fillStyle = "rgba(154, 107, 22, .10)"; context.strokeStyle = "#9a6b16"; context.setLineDash([5, 4]);
+    context.fillRect(left, top, boxWidth, boxHeight); context.strokeRect(left, top, boxWidth, boxHeight); context.restore();
+  }
 
   // show seam info overlay in screen space if selection complete
   if (seamSelection?.first && seamSelection?.second) {
@@ -1779,6 +1916,14 @@ function drawGrid(
     context.lineTo(width, y);
   }
   context.stroke();
+}
+
+function drawIntentLine(context: CanvasRenderingContext2D, start: { xMm: number; yMm: number } | undefined, end: { xMm: number; yMm: number } | undefined, zoom: number, color: string) {
+  if (!start || !end) return;
+  context.save(); context.beginPath(); context.moveTo(start.xMm, start.yMm); context.lineTo(end.xMm, end.yMm);
+  context.strokeStyle = color; context.lineWidth = 2 / zoom; context.setLineDash([8 / zoom, 5 / zoom]); context.stroke(); context.setLineDash([]);
+  for (const point of [start, end]) { context.beginPath(); context.arc(point.xMm, point.yMm, 5 / zoom, 0, Math.PI * 2); context.fillStyle = color; context.fill(); }
+  context.restore();
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {

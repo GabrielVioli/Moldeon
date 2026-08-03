@@ -5,7 +5,9 @@ interface PiecesPanelProps {
   pieces: PatternPiece[];
   workspaceStates: PieceWorkspaceState[];
   activePieceId: string;
+  selectedPieceIds: string[];
   onSelect(pieceId: string): void;
+  onToggleSelect(pieceId: string): void;
   onCreate(): void;
   onVisibilityChange(pieceId: string, visible: boolean): void;
   onLockChange(pieceId: string, locked: boolean): void;
@@ -20,7 +22,9 @@ export const PiecesPanel = memo(function PiecesPanel({
   pieces,
   workspaceStates,
   activePieceId,
+  selectedPieceIds,
   onSelect,
+  onToggleSelect,
   onCreate,
   onVisibilityChange,
   onLockChange,
@@ -56,6 +60,7 @@ export const PiecesPanel = memo(function PiecesPanel({
                 event.dataTransfer.effectAllowed = "copy";
               }}
             >
+              <input type="checkbox" checked={selectedPieceIds.includes(piece.id)} onChange={() => onToggleSelect(piece.id)} aria-label={`Selecionar ${piece.name}`} />
               <button
                 type="button"
                 className="pieces-visibility"

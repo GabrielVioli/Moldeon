@@ -48,4 +48,26 @@ describe("assembly document history", () => {
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().garment.ease).toBeUndefined();
   });
+
+  it("records a cut as one undoable command", () => {
+    const state = useEditorStore.getState();
+    state.setCutDraft({ pieceId: "a", start: { xMm: -10, yMm: 50 }, end: { xMm: 110, yMm: 50 } });
+    state.confirmCut(true);
+    expect(useEditorStore.getState().garment.pieces).toHaveLength(3);
+    expect(useEditorStore.getState().garment.seams).toHaveLength(1);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.pieces.map((candidate) => candidate.id)).toEqual(["a", "b"]);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.pieces).toHaveLength(3);
+  });
+
+  it("persists a dart and respects locked pieces during group deletion", () => {
+    let state = useEditorStore.getState();
+    state.setDartDraft({ pieceId: "a", edgePoint: { xMm: 50, yMm: 0 }, apex: { xMm: 50, yMm: 60 } });
+    state.confirmDart();
+    expect(useEditorStore.getState().garment.pieces[0].darts?.[0].closed).toBe(true);
+    useEditorStore.getState().setPieceLocked("a", true);
+    state = useEditorStore.getState(); state.selectAllPieces(); state.deleteSelectedPieces();
+    expect(useEditorStore.getState().garment.pieces.map((candidate) => candidate.id)).toEqual(["a"]);
+  });
 });

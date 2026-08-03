@@ -74,6 +74,29 @@ export interface Seam {
   treatment?: SeamTreatment;
 }
 
+export type InternalLinePurpose = "cut" | "fold" | "dart-center" | "pocket" | "topstitch" | "reference";
+
+export interface PatternInternalLine {
+  id: string;
+  pieceId: string;
+  points: PatternPoint[];
+  curved: boolean;
+  purpose: InternalLinePurpose;
+}
+
+export interface PatternDart {
+  id: string;
+  pieceId: string;
+  apex: PatternVector;
+  legA: PatternVector;
+  legB: PatternVector;
+  centerLine: { start: PatternVector; end: PatternVector };
+  widthMm: number;
+  lengthMm: number;
+  directionDeg: number;
+  closed: boolean;
+}
+
 export type AssemblyPieceRole = "front" | "back" | "sleeve" | "waist" | "leg" | "collar" | "custom";
 export type AssemblyOutwardSide = "front" | "back";
 
@@ -119,6 +142,8 @@ export interface PatternPiece {
   previewPlacements?: PatternPreviewPlacement[];
   edgeFinishes?: Record<string, EdgeFinish>;
   points: PatternPoint[];
+  internalLines?: PatternInternalLine[];
+  darts?: PatternDart[];
   grainline?: { start: PatternVector; end: PatternVector };
   annotations?: Array<{
     id: string;
@@ -326,6 +351,8 @@ export function parsePatternPiece(value: unknown): PatternPiece {
 
   const grainline = value.grainline === undefined ? undefined : parseGrainline(value.grainline);
   const annotations = value.annotations === undefined ? undefined : parseAnnotations(value.annotations);
+  const internalLines = value.internalLines === undefined ? undefined : parseInternalLines(value.internalLines, id);
+  const darts = value.darts === undefined ? undefined : parseDarts(value.darts, id);
 
   // parse optional guides
   let guides: Guide[] | undefined;
@@ -350,6 +377,8 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
     ...(edgeFinishes === undefined ? {} : { edgeFinishes }),
     points,
+    ...(internalLines === undefined ? {} : { internalLines }),
+    ...(darts === undefined ? {} : { darts }),
     ...(grainline === undefined ? {} : { grainline }),
     ...(annotations === undefined ? {} : { annotations }),
     ...(guides === undefined ? {} : { guides }),
@@ -597,6 +626,43 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(assemblyPlacements === undefined ? {} : { assemblyPlacements }),
     ...(ease === undefined ? {} : { ease }),
   };
+}
+
+function parseVector(value: unknown, label: string): PatternVector {
+  if (!isRecord(value)) throw new TypeError(`${label} é inválido.`);
+  return { xMm: readFiniteNumber(value.xMm, `${label}: X`), yMm: readFiniteNumber(value.yMm, `${label}: Y`) };
+}
+
+function parseInternalLines(value: unknown, pieceId: string): PatternInternalLine[] {
+  if (!Array.isArray(value)) throw new TypeError("As linhas internas são inválidas.");
+  return value.map((line, index) => {
+    if (!isRecord(line) || !Array.isArray(line.points) || line.points.length < 2) throw new TypeError(`A linha interna ${index + 1} é inválida.`);
+    return {
+      id: readString(line.id, `O id da linha interna ${index + 1}`),
+      pieceId,
+      points: line.points.map(parsePatternPoint),
+      curved: line.curved === undefined ? false : readBoolean(line.curved, "A curva da linha interna"),
+      purpose: readEnum(line.purpose, ["cut", "fold", "dart-center", "pocket", "topstitch", "reference"] as const, "A finalidade da linha interna"),
+    };
+  });
+}
+
+function parseDarts(value: unknown, pieceId: string): PatternDart[] {
+  if (!Array.isArray(value)) throw new TypeError("As pences são inválidas.");
+  return value.map((dart, index) => {
+    if (!isRecord(dart) || !isRecord(dart.centerLine)) throw new TypeError(`A pence ${index + 1} é inválida.`);
+    return {
+      id: readString(dart.id, `O id da pence ${index + 1}`), pieceId,
+      apex: parseVector(dart.apex, "O ápice da pence"),
+      legA: parseVector(dart.legA, "A primeira perna da pence"),
+      legB: parseVector(dart.legB, "A segunda perna da pence"),
+      centerLine: { start: parseVector(dart.centerLine.start, "O início do centro da pence"), end: parseVector(dart.centerLine.end, "O fim do centro da pence") },
+      widthMm: readFiniteNumber(dart.widthMm, "A largura da pence"),
+      lengthMm: readFiniteNumber(dart.lengthMm, "O comprimento da pence"),
+      directionDeg: readFiniteNumber(dart.directionDeg, "A direção da pence"),
+      closed: readBoolean(dart.closed, "O estado da pence"),
+    };
+  });
 }
 
 function parseAssemblyPlacements(value: unknown, pieceIds: Set<string>): AssemblyPlacement[] | undefined {

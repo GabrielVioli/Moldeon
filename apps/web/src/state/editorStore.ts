@@ -4,6 +4,7 @@ import {
   createDocumentId,
   createPatternPieceFromDraft,
   createPreviewPlacement,
+  makeEdgeId,
   duplicatePatternPiece,
   validateSeam,
   type BodyMeasurements,
@@ -14,6 +15,7 @@ import {
   type Guide,
   type PatternPiece,
   type PatternPoint,
+  type PatternVector,
   type PatternPreviewPlacement,
   type PatternSnapshot,
   type PieceWorkspaceState,
@@ -23,6 +25,7 @@ import {
   type SeamTreatment,
   type SeamValidationIssue,
 } from "../domain/pattern";
+import { closeDart, createDart, createPatternPiecesFromSplit, extendCutLine } from "../domain/patternOperations";
 import { analyzeSeamCompatibility, inferAssemblyPlacement, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
 import { validatePatternContour } from "../domain/polygonGeometry";
 import {
@@ -48,11 +51,15 @@ export interface EditorState {
   selectedPointId: string | null;
   selectedEdgeId: string | null;
   pieceSelectionActive: boolean;
+  selectedPieceIds: string[];
   draftContour: DraftContour | null;
   draftCursor: PatternPoint | null;
   draftError: string | null;
   seamIssues: SeamValidationIssue[];
   seamProposal: { first: EdgeRange; second: EdgeRange; compatibility: SeamCompatibility } | null;
+  cutDraft: { pieceId: string; start: PatternVector; end: PatternVector } | null;
+  dartDraft: { pieceId: string; edgePoint: PatternVector; apex: PatternVector } | null;
+  measureDraft: { start: PatternVector; end: PatternVector } | null;
   simulateVersion: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -60,6 +67,12 @@ export interface EditorState {
   restoreGarment(garment: GarmentDraft, activePieceId: string, backend: "wasm" | "typescript"): void;
   loadGarment(garment: GarmentDraft): void;
   selectPiece(pieceId: string): void;
+  togglePieceSelection(pieceId: string): void;
+  setPieceSelection(pieceIds: string[]): void;
+  selectAllPieces(): void;
+  deleteSelectedPieces(): void;
+  rotateSelectedPieces(deltaDeg: number): void;
+  duplicateSelectedPieces(mirrored?: boolean): void;
   selectPoint(pointId: string | null): void;
   selectEdge(edgeId: string | null): void;
   clearSelection(): void;
@@ -76,6 +89,12 @@ export interface EditorState {
   proposeSeam(first: EdgeRange, second: EdgeRange): void;
   cancelSeamProposal(): void;
   confirmSeamProposal(options: { name: string; direction: SeamDirection; treatment: SeamTreatment }): void;
+  setCutDraft(draft: EditorState["cutDraft"]): void;
+  confirmCut(keepJoined: boolean): void;
+  setDartDraft(draft: EditorState["dartDraft"]): void;
+  confirmDart(): void;
+  setMeasureDraft(draft: EditorState["measureDraft"]): void;
+  cancelIntent(): void;
   updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment }): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
@@ -126,11 +145,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedPointId: null,
   selectedEdgeId: null,
   pieceSelectionActive: false,
+  selectedPieceIds: [],
   draftContour: null,
   draftCursor: null,
   draftError: null,
   seamIssues: [],
   seamProposal: null,
+  cutDraft: null,
+  dartDraft: null,
+  measureDraft: null,
   simulateVersion: 0,
   canUndo: false,
   canRedo: false,
@@ -146,6 +169,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedPointId: null,
       selectedEdgeId: null,
       pieceSelectionActive: false,
+      selectedPieceIds: [],
       ...historyAvailability(),
     });
   },
@@ -165,11 +189,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedPointId: null,
       selectedEdgeId: null,
       pieceSelectionActive: false,
+      selectedPieceIds: [],
       draftContour: null,
       draftCursor: null,
       draftError: null,
       seamIssues: collectSeamIssues(normalized),
       seamProposal: null,
+      cutDraft: null,
+      dartDraft: null,
+      measureDraft: null,
       ...historyAvailability(),
     });
   },
@@ -192,7 +220,51 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedPointId: null,
       selectedEdgeId: null,
       pieceSelectionActive: true,
+      selectedPieceIds: [pieceId],
     });
+  },
+
+  togglePieceSelection: (pieceId) => {
+    const state = get();
+    const piece = state.garment.pieces.find((candidate) => candidate.id === pieceId);
+    if (!piece) return;
+    const selectedPieceIds = state.selectedPieceIds.includes(pieceId)
+      ? state.selectedPieceIds.filter((id) => id !== pieceId)
+      : [...state.selectedPieceIds, pieceId];
+    const activePieceId = selectedPieceIds.includes(pieceId) ? pieceId : (selectedPieceIds.at(-1) ?? state.activePieceId);
+    const activePiece = state.garment.pieces.find((candidate) => candidate.id === activePieceId) ?? piece;
+    set({ selectedPieceIds, activePieceId: activePiece.id, snapshot: restoreSnapshot(activePiece), pieceSelectionActive: selectedPieceIds.length > 0, selectedPointId: null, selectedEdgeId: null });
+  },
+  setPieceSelection: (pieceIds) => {
+    const state = get();
+    const selectedPieceIds = [...new Set(pieceIds)].filter((id) => state.garment.pieces.some((piece) => piece.id === id));
+    const activePieceId = selectedPieceIds.at(-1) ?? state.activePieceId;
+    const piece = state.garment.pieces.find((candidate) => candidate.id === activePieceId);
+    set({ selectedPieceIds, pieceSelectionActive: selectedPieceIds.length > 0, ...(piece ? { activePieceId, snapshot: restoreSnapshot(piece) } : {}), selectedPointId: null, selectedEdgeId: null });
+  },
+  selectAllPieces: () => set((state) => ({ selectedPieceIds: state.garment.pieces.filter((piece) => workspaceStateFor(state.garment, piece.id).visible).map((piece) => piece.id), pieceSelectionActive: true })),
+  deleteSelectedPieces: () => {
+    const state = get();
+    const removable = state.selectedPieceIds.filter((id) => !workspaceStateFor(state.garment, id).locked);
+    if (removable.length === 0 || removable.length >= state.garment.pieces.length) return;
+    changeDocument(set, get, "piece-delete", "Excluir peças selecionadas", (document) => {
+      const pieces = document.garment.pieces.filter((piece) => !removable.includes(piece.id));
+      return { activePieceId: pieces[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces, seams: (document.garment.seams ?? []).filter((seam) => !removable.includes(seam.first.pieceId) && !removable.includes(seam.second.pieceId)), workspaceStates: (document.garment.workspaceStates ?? []).filter((item) => !removable.includes(item.pieceId)) }) };
+    }, { selectedPieceIds: [], pieceSelectionActive: false });
+  },
+  rotateSelectedPieces: (deltaDeg) => {
+    const ids = get().selectedPieceIds;
+    changeDocument(set, get, "workspace", "Girar peças selecionadas", (document) => ({ ...document, garment: ids.reduce((garment, id) => workspaceStateFor(garment, id).locked ? garment : patchWorkspaceState(garment, id, (item) => ({ ...item, transform: { ...item.transform, rotationDeg: normalizeRotation(item.transform.rotationDeg + deltaDeg) } })), document.garment) }));
+  },
+  duplicateSelectedPieces: (mirrored = false) => {
+    const state = get(); const ids = state.selectedPieceIds;
+    const pairs = ids.map((id) => state.garment.pieces.find((piece) => piece.id === id)).filter((piece): piece is PatternPiece => Boolean(piece)).map((piece) => {
+      const duplicate = duplicatePatternPiece(piece, { mirrored, name: `${piece.name} – ${mirrored ? "espelhada" : "cópia"}` });
+      const source = workspaceStateFor(state.garment, piece.id);
+      return { duplicate, workspace: { ...source, pieceId: duplicate.id, locked: false, transform: { ...source.transform, pieceId: duplicate.id, xMm: source.transform.xMm + 40, yMm: source.transform.yMm + 40 } } as PieceWorkspaceState };
+    });
+    if (!pairs.length) return;
+    changeDocument(set, get, "piece-duplicate", mirrored ? "Espelhar seleção" : "Duplicar seleção", (document) => ({ activePieceId: pairs[0].duplicate.id, garment: syncLegacyTransforms({ ...document.garment, pieces: [...document.garment.pieces, ...pairs.map((pair) => pair.duplicate)], workspaceStates: [...(document.garment.workspaceStates ?? []), ...pairs.map((pair) => pair.workspace)] }) }), { selectedPieceIds: pairs.map((pair) => pair.duplicate.id), pieceSelectionActive: true });
   },
 
   selectPoint: (selectedPointId) => set({
@@ -209,6 +281,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     selectedPointId: null,
     selectedEdgeId: null,
     pieceSelectionActive: false,
+    selectedPieceIds: [],
   }),
 
   beginEdit: (label, type = inferCommandType(label)) => {
@@ -495,6 +568,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
     set({ seamProposal: null });
   },
+  setCutDraft: (cutDraft) => set({ cutDraft }),
+  confirmCut: (keepJoined) => {
+    const state = get(); const draft = state.cutDraft;
+    const source = draft && state.garment.pieces.find((piece) => piece.id === draft.pieceId);
+    if (!draft || !source) return;
+    const split = createPatternPiecesFromSplit(source, extendCutLine(source, [draft.start, draft.end]));
+    if (!split) return;
+    const workspace = workspaceStateFor(state.garment, source.id);
+    const workspaceStates = split.map((piece) => ({ ...workspace, pieceId: piece.id, transform: { ...workspace.transform, pieceId: piece.id } }));
+    const cutSeam: Seam | null = keepJoined ? { id: createDocumentId("seam"), name: "Recorte unido", first: { pieceId: split[0].id, edgeId: makeLastEdgeId(split[0]), startT: 0, endT: 1 }, second: { pieceId: split[1].id, edgeId: makeLastEdgeId(split[1]), startT: 0, endT: 1 }, direction: "opposite", easeRatio: 0, type: "standard", treatment: "standard" } : null;
+    changeDocument(set, get, "cut", keepJoined ? "Cortar e manter unidas" : "Cortar peça", (document) => ({ activePieceId: split[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces: document.garment.pieces.flatMap((piece) => piece.id === source.id ? split : [piece]), seams: [...(document.garment.seams ?? []).filter((seam) => seam.first.pieceId !== source.id && seam.second.pieceId !== source.id), ...(cutSeam ? [cutSeam] : [])], workspaceStates: [...(document.garment.workspaceStates ?? []).filter((item) => item.pieceId !== source.id), ...workspaceStates] }) }), { cutDraft: null, selectedPieceIds: [split[0].id], pieceSelectionActive: true });
+  },
+  setDartDraft: (dartDraft) => set({ dartDraft }),
+  confirmDart: () => {
+    const draft = get().dartDraft; if (!draft) return;
+    const dart = createDart(draft.pieceId, draft.edgePoint, draft.apex);
+    changeDocument(set, get, "dart", "Criar pence", (document) => ({ ...document, garment: { ...document.garment, pieces: document.garment.pieces.map((piece) => piece.id === draft.pieceId ? { ...piece, darts: [...(piece.darts ?? []), closeDart(dart)] } : piece) } }), { dartDraft: null });
+  },
+  setMeasureDraft: (measureDraft) => set({ measureDraft }),
+  cancelIntent: () => set({ seamProposal: null, cutDraft: null, dartDraft: null, measureDraft: null }),
   updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
     ...document,
     garment: {
@@ -699,6 +792,7 @@ function applyDocumentState(
   const piece = garment.pieces.find((candidate) => candidate.id === document.activePieceId) ?? garment.pieces[0];
   if (!piece) return;
   const snapshot = restoreSnapshot(piece);
+  const selectedPieceIds = get().selectedPieceIds.filter((id) => garment.pieces.some((candidate) => candidate.id === id));
   set({
     garment: replacePiece(garment, snapshot.piece),
     activePieceId: piece.id,
@@ -707,6 +801,11 @@ function applyDocumentState(
     selectedEdgeId: null,
     seamIssues: collectSeamIssues(garment),
     seamProposal: null,
+    cutDraft: null,
+    dartDraft: null,
+    measureDraft: null,
+    selectedPieceIds,
+    pieceSelectionActive: selectedPieceIds.length > 0,
     ...historyAvailability(),
     ...additional,
   });
@@ -875,6 +974,12 @@ function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {
 function pieceWidth(piece: PatternPiece): number {
   const xs = piece.points.map((point) => point.xMm);
   return xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+}
+
+function makeLastEdgeId(piece: PatternPiece): string {
+  const end = piece.points.at(-1)!;
+  const start = piece.points[0];
+  return makeEdgeId(piece.id, end.id, start.id);
 }
 
 function createLegacyGarment(piece: PatternPiece): GarmentDraft {

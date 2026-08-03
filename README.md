@@ -22,6 +22,9 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Viewport 3D sob demanda com Three.js, WebGPU e fallback WebGL 2 explícito.
 - Fluxo principal em **Modelagem**, **Montagem** e **Prova**, com a prancheta 2D ocupando 75% da área nos dois primeiros modos.
 - Costuras em duas etapas: seleção das bordas, análise de comprimentos, tratamento e confirmação explícita.
+- Barra 2D orientada a intenções com Selecionar, Desenhar, Recortar, Pence, Costurar e Medir; a confirmação acontece junto ao molde, sem troca automática de tela.
+- Seleção múltipla por Shift, `Ctrl+A` ou caixas da lista, com mover, girar, duplicar, espelhar e excluir peças desbloqueadas.
+- Recorte reversível em duas peças, com opção de manter as novas bordas unidas, e pences de borda persistentes no documento.
 - Grafo de montagem com componentes conectados, bordas abertas, alertas e elegibilidade determinística para o 3D.
 - Placements estruturais, folgas da roupa e acabamentos de borda persistentes e cobertos por undo/redo.
 - Manequim procedural proporcional às medidas, sem depender de arquivo 3D
@@ -39,6 +42,15 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Infraestrutura opcional com PostgreSQL, Redis e MinIO.
 - Template de API para Laravel 13.
 - CI para TypeScript, testes, build, Rust, Clippy e rustfmt.
+
+## Fluxo básico
+
+1. Desenhe ou escolha um molde.
+2. Ajuste as medidas.
+3. Use **Recortar** e **Pence** quando necessário.
+4. Aproxime as bordas e clique em **Costurar**.
+5. Veja a roupa em 3D.
+6. Use **Prova** quando quiser vestir no corpo.
 
 ## Desempenho
 
@@ -154,14 +166,14 @@ Leia também:
 
 ## Limitações atuais
 
-- Os seis moldes são bases simplificadas; pences, graduação, cós, vistas e aviamentos ainda não foram implementados.
+- Os seis moldes são bases simplificadas; pences de borda estão disponíveis, mas pences internas em losango, transferência de pence, graduação, cós, vistas e aviamentos ainda não foram implementados.
 - A inserção de ponto acontece em um contorno existente; a criação livre de novas peças e a prancheta multi-peça agora entram como fluxo principal do editor.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
 - O consumo de tecido é uma estimativa por área; ainda não considera encaixe,
   sentido do fio ou aproveitamento automático dos retalhos.
-- Um tecido pode ser atribuído por peça. Patchwork dentro de uma mesma peça
-  dependerá da futura ferramenta de dividir/criar painéis.
+- O recorte atual aceita uma linha reta com exatamente duas interseções. Contornos curvos são amostrados no ponto do corte; operações booleanas curvas de alta precisão continuam planejadas.
+- Um tecido pode ser atribuído por peça. O recorte cria painéis independentes, mas ainda não há encaixe de patchwork ou materiais diferentes dentro da mesma peça.
 - O Worker XPBD ainda não alimenta a malha do Three.js.
 - O backend Laravel continua opcional e não é necessário para usar o editor.
 
