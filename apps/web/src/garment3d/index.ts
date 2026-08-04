@@ -4,5 +4,6 @@ export * from "./StitchConstraintBuilder";
 export * from "./PanelSimulation";
 export * from "./ThreeGeometryBridge";
 export * from "./GarmentAssembly";
+export * from "./PhysicalGarmentAssembly";
 export * from "./GarmentSolver";
 export * from "./GarmentThreeBridge";
