@@ -1,8 +1,9 @@
-import type {
-  EdgeFinish,
-  PatternEdge,
-  PatternPiece,
-  SegmentRole,
+import {
+  getPatternEdges,
+  type EdgeFinish,
+  type PatternEdge,
+  type PatternPiece,
+  type SegmentRole,
 } from "./pattern";
 
 export type EdgeAssemblyClassification =
@@ -51,8 +52,11 @@ export function classifyPatternEdge(
 ): ClassifiedPatternEdge {
   const role = edge.role ?? "other";
   const finish = piece.edgeFinishes?.[edge.id];
+  const inferredFoldEdgeId = piece.cutOnFold
+    ? inferFoldEdgeId(piece)
+    : undefined;
 
-  if (role === "fold" || piece.cutOnFold === true && isLikelyFoldEdge(piece, edge)) {
+  if (role === "fold" || edge.id === inferredFoldEdgeId) {
     return {
       pieceId: piece.id,
       edgeId: edge.id,
@@ -103,6 +107,57 @@ export function classifyPatternEdge(
   };
 }
 
+function inferFoldEdgeId(piece: PatternPiece): string | undefined {
+  const xs = piece.points.map((point) => point.xMm);
+  const ys = piece.points.map((point) => point.yMm);
+
+  if (xs.length === 0 || ys.length === 0) return undefined;
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const tolerance = Math.max(
+    2,
+    Math.min(maxX - minX, maxY - minY) * 0.015,
+  );
+
+  return getPatternEdges(piece)
+    .map((edge) => {
+      const start = piece.points.find((point) => point.id === edge.startPointId);
+      const end = piece.points.find((point) => point.id === edge.endPointId);
+
+      if (!start || !end) return null;
+
+      const vertical = Math.abs(start.xMm - end.xMm) <= tolerance;
+      const horizontal = Math.abs(start.yMm - end.yMm) <= tolerance;
+      const length = Math.hypot(
+        end.xMm - start.xMm,
+        end.yMm - start.yMm,
+      );
+      let peripheral = false;
+
+      if (vertical) {
+        const x = (start.xMm + end.xMm) / 2;
+        peripheral =
+          Math.abs(x - minX) <= tolerance ||
+          Math.abs(x - maxX) <= tolerance;
+      } else if (horizontal) {
+        const y = (start.yMm + end.yMm) / 2;
+        peripheral =
+          Math.abs(y - minY) <= tolerance ||
+          Math.abs(y - maxY) <= tolerance;
+      }
+
+      return peripheral ? { edgeId: edge.id, length } : null;
+    })
+    .filter(
+      (candidate): candidate is { edgeId: string; length: number } =>
+        candidate !== null,
+    )
+    .sort((left, right) => right.length - left.length)[0]?.edgeId;
+}
+
 function finishReason(finish: EdgeFinish): string {
   switch (finish) {
     case "raw":
@@ -129,36 +184,4 @@ function intentionalOpenReason(role: SegmentRole): string {
     default:
       return "Abertura intencional.";
   }
-}
-
-function isLikelyFoldEdge(
-  piece: PatternPiece,
-  edge: PatternEdge,
-): boolean {
-  const start = piece.points.find((point) => point.id === edge.startPointId);
-  const end = piece.points.find((point) => point.id === edge.endPointId);
-
-  if (!start || !end) return false;
-
-  const xs = piece.points.map((point) => point.xMm);
-  const ys = piece.points.map((point) => point.yMm);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const tolerance = Math.max(2, Math.min(maxX - minX, maxY - minY) * 0.015);
-  const vertical = Math.abs(start.xMm - end.xMm) <= tolerance;
-  const horizontal = Math.abs(start.yMm - end.yMm) <= tolerance;
-
-  if (vertical) {
-    const x = (start.xMm + end.xMm) / 2;
-    return Math.abs(x - minX) <= tolerance || Math.abs(x - maxX) <= tolerance;
-  }
-
-  if (horizontal) {
-    const y = (start.yMm + end.yMm) / 2;
-    return Math.abs(y - minY) <= tolerance || Math.abs(y - maxY) <= tolerance;
-  }
-
-  return false;
 }
