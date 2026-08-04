@@ -12,6 +12,10 @@ import {
   buildPanelTopology,
   type PanelTopology,
 } from "./PanelTopology";
+import {
+  recommendedPanelRefinement,
+  refinePanelTopology,
+} from "./PanelRefinement";
 import type { PanelEdgePath } from "./types";
 
 export interface GlobalPointReference {
@@ -33,6 +37,8 @@ export interface AssemblyStitchConstraint {
   b: GlobalPointReference;
   restDistance: number;
   stiffness: number;
+  instanceA?: string;
+  instanceB?: string;
 }
 
 export interface AssemblyAnchorConstraint {
@@ -66,8 +72,8 @@ export interface GarmentAssemblyState {
 }
 
 const METERS_PER_MM = 0.001;
-const SEAM_SAMPLE_SPACING_MM = 18;
-const MAX_SEAM_SAMPLES = 180;
+const SEAM_SAMPLE_SPACING_MM = 14;
+const MAX_SEAM_SAMPLES = 220;
 const DISTANCE_EPSILON = 1e-8;
 
 export function buildGarmentAssembly(
@@ -91,7 +97,11 @@ export function buildGarmentAssembly(
     let topology: PanelTopology;
 
     try {
-      topology = buildPanelTopology(snapshot.piece);
+      const baseTopology = buildPanelTopology(snapshot.piece);
+      topology = refinePanelTopology(
+        baseTopology,
+        recommendedPanelRefinement(baseTopology),
+      );
     } catch (error) {
       warnings.push(
         `${snapshot.piece.name}: ${
@@ -103,9 +113,7 @@ export function buildGarmentAssembly(
       continue;
     }
 
-    const placements = resolvePiecePlacements(snapshot.piece, garment);
-
-    for (const placement of placements) {
+    for (const placement of resolvePiecePlacements(snapshot.piece, garment)) {
       const particleStart = positionValues.length / 3;
       const instance: AssemblyPanelInstance = {
         id: `${snapshot.piece.id}/${placement.id}`,
@@ -126,10 +134,7 @@ export function buildGarmentAssembly(
     }
   }
 
-  const initialPositions = new Float32Array(positionValues);
-  const positions = new Float32Array(initialPositions);
-  const previousPositions = new Float32Array(initialPositions);
-  const inverseMasses = new Float32Array(positions.length / 3).fill(1);
+  const positions = Float32Array.from(positionValues);
   const structuralConstraints = buildStructuralConstraints(instances);
   const stitchConstraints = buildGlobalStitchConstraints(
     instances,
@@ -137,7 +142,17 @@ export function buildGarmentAssembly(
     warnings,
   );
   stitchConstraints.push(...buildDartConstraints(instances));
-  const anchorConstraints = buildSoftAnchors(instances, initialPositions);
+
+  prealignConnectedInstances(positions, instances, stitchConstraints);
+
+  const initialPositions = new Float32Array(positions);
+  const previousPositions = new Float32Array(positions);
+  const inverseMasses = new Float32Array(positions.length / 3).fill(1);
+  const anchorConstraints = buildComponentAnchors(
+    instances,
+    stitchConstraints,
+    initialPositions,
+  );
 
   if (instances.length === 0) {
     warnings.push("Nenhuma peça válida chegou à montagem 3D.");
@@ -172,16 +187,17 @@ function appendInitialPositions(
   const centerX = (topology.boundsMm.minX + topology.boundsMm.maxX) / 2;
   const topY = topology.boundsMm.minY;
   const widthMm = Math.max(topology.boundsMm.width, 1);
-  const scale = Number.isFinite(placement.scale) && placement.scale > 0
-    ? placement.scale
-    : 1;
+  const scale = validScale(placement.scale);
   const rotation = placement.rotationDeg * Math.PI / 180;
   const base = placementBasePosition(placement);
-  const radius = Math.max(widthMm * METERS_PER_MM * scale / (2 * Math.PI), 0.025);
+  const radius = Math.max(
+    widthMm * METERS_PER_MM * scale / (2 * Math.PI),
+    0.025,
+  );
 
-  for (let vertexIndex = 0; vertexIndex < instance.vertexCount; vertexIndex += 1) {
-    const xMm = topology.positions2DMm[vertexIndex * 2];
-    const yMm = topology.positions2DMm[vertexIndex * 2 + 1];
+  for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
+    const xMm = topology.positions2DMm[localIndex * 2];
+    const yMm = topology.positions2DMm[localIndex * 2 + 1];
     const rawX = (xMm - centerX) * METERS_PER_MM;
     const rawY = -(yMm - topY) * METERS_PER_MM;
     const mirroredX = placement.mirrorX ? -rawX : rawX;
@@ -218,21 +234,11 @@ function placementBasePosition(
   let z = 0;
 
   switch (placement.region) {
-    case "torso":
-      y = 1.66;
-      break;
-    case "waist":
-      y = 1.31;
-      break;
-    case "hip":
-      y = 1.18;
-      break;
-    case "arm":
-      y = 1.58;
-      break;
-    case "leg":
-      y = 1.08;
-      break;
+    case "torso": y = 1.66; break;
+    case "waist": y = 1.31; break;
+    case "hip": y = 1.18; break;
+    case "arm": y = 1.58; break;
+    case "leg": y = 1.08; break;
   }
 
   if (placement.bodySide === "left") {
@@ -241,8 +247,8 @@ function placementBasePosition(
     x += placement.region === "arm" ? 0.58 : placement.region === "leg" ? 0.23 : 0.12;
   }
 
-  if (placement.surface === "front") z = 0.13;
-  else if (placement.surface === "back") z = -0.13;
+  if (placement.surface === "front") z = 0.055;
+  else if (placement.surface === "back") z = -0.055;
 
   x += placement.offsetXMm * METERS_PER_MM;
   y -= placement.offsetYMm * METERS_PER_MM;
@@ -260,10 +266,10 @@ function buildStructuralConstraints(
     const seen = new Set<string>();
     const triangles = instance.topology.triangles;
 
-    for (let index = 0; index < triangles.length; index += 3) {
-      addStructuralEdge(instance, triangles[index], triangles[index + 1], seen, result);
-      addStructuralEdge(instance, triangles[index + 1], triangles[index + 2], seen, result);
-      addStructuralEdge(instance, triangles[index + 2], triangles[index], seen, result);
+    for (let offset = 0; offset < triangles.length; offset += 3) {
+      addStructuralEdge(instance, triangles[offset], triangles[offset + 1], seen, result);
+      addStructuralEdge(instance, triangles[offset + 1], triangles[offset + 2], seen, result);
+      addStructuralEdge(instance, triangles[offset + 2], triangles[offset], seen, result);
     }
   }
 
@@ -277,24 +283,19 @@ function addStructuralEdge(
   seen: Set<string>,
   target: AssemblyDistanceConstraint[],
 ): void {
-  const low = Math.min(localA, localB);
-  const high = Math.max(localA, localB);
-  const key = `${low}:${high}`;
+  const key = localA < localB ? `${localA}:${localB}` : `${localB}:${localA}`;
   if (seen.has(key)) return;
   seen.add(key);
 
   const positions = instance.topology.positions2DMm;
   const dx = (positions[localB * 2] - positions[localA * 2]) * METERS_PER_MM;
   const dy = (positions[localB * 2 + 1] - positions[localA * 2 + 1]) * METERS_PER_MM;
-  const scale = Number.isFinite(instance.placement.scale) && instance.placement.scale > 0
-    ? instance.placement.scale
-    : 1;
 
   target.push({
     a: instance.particleStart + localA,
     b: instance.particleStart + localB,
-    restLength: Math.hypot(dx, dy) * scale,
-    stiffness: 0.92,
+    restLength: Math.hypot(dx, dy) * validScale(instance.placement.scale),
+    stiffness: 0.86,
   });
 }
 
@@ -345,7 +346,10 @@ function buildGlobalStitchConstraints(
 
       const sampleCount = Math.min(
         MAX_SEAM_SAMPLES,
-        Math.max(2, Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1),
+        Math.max(
+          2,
+          Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1,
+        ),
       );
       const stiffness = seamStiffness(seam.treatment);
 
@@ -366,6 +370,8 @@ function buildGlobalStitchConstraints(
           b,
           restDistance: 0.0015,
           stiffness,
+          instanceA: firstInstance.id,
+          instanceB: secondInstance.id,
         });
       }
     }
@@ -392,8 +398,171 @@ function buildDartConstraints(
         b: directPoint(instance.particleStart + legB),
         restDistance: 0.001,
         stiffness: dart.dart.closed ? 0.78 : 0.62,
+        instanceA: instance.id,
+        instanceB: instance.id,
       });
     }
+  }
+
+  return result;
+}
+
+function prealignConnectedInstances(
+  positions: Float32Array,
+  instances: readonly AssemblyPanelInstance[],
+  stitches: readonly AssemblyStitchConstraint[],
+): void {
+  const instanceById = new Map(instances.map((instance) => [instance.id, instance]));
+  const constraintsByPair = new Map<string, AssemblyStitchConstraint[]>();
+  const adjacency = new Map<string, Set<string>>(
+    instances.map((instance) => [instance.id, new Set<string>()]),
+  );
+
+  for (const stitch of stitches) {
+    if (!stitch.instanceA || !stitch.instanceB || stitch.instanceA === stitch.instanceB) continue;
+    const key = pairKey(stitch.instanceA, stitch.instanceB);
+    const list = constraintsByPair.get(key) ?? [];
+    list.push(stitch);
+    constraintsByPair.set(key, list);
+    adjacency.get(stitch.instanceA)?.add(stitch.instanceB);
+    adjacency.get(stitch.instanceB)?.add(stitch.instanceA);
+  }
+
+  const visited = new Set<string>();
+
+  for (const root of instances) {
+    if (visited.has(root.id)) continue;
+    visited.add(root.id);
+    const queue = [root.id];
+
+    while (queue.length > 0) {
+      const fixedId = queue.shift()!;
+
+      for (const movingId of adjacency.get(fixedId) ?? []) {
+        if (visited.has(movingId)) continue;
+        const fixed = instanceById.get(fixedId);
+        const moving = instanceById.get(movingId);
+        if (!fixed || !moving) continue;
+
+        const constraints = constraintsByPair.get(pairKey(fixedId, movingId)) ?? [];
+        const translation = averagePairTranslation(
+          positions,
+          constraints,
+          fixedId,
+          movingId,
+        );
+        translateInstance(positions, moving, translation.x, translation.y, translation.z);
+        visited.add(movingId);
+        queue.push(movingId);
+      }
+    }
+  }
+}
+
+function averagePairTranslation(
+  positions: Float32Array,
+  constraints: readonly AssemblyStitchConstraint[],
+  fixedId: string,
+  movingId: string,
+): { x: number; y: number; z: number } {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  let count = 0;
+
+  for (const constraint of constraints) {
+    const a = evaluateReference(positions, constraint.a);
+    const b = evaluateReference(positions, constraint.b);
+
+    if (constraint.instanceA === fixedId && constraint.instanceB === movingId) {
+      x += a.x - b.x;
+      y += a.y - b.y;
+      z += a.z - b.z;
+      count += 1;
+    } else if (constraint.instanceB === fixedId && constraint.instanceA === movingId) {
+      x += b.x - a.x;
+      y += b.y - a.y;
+      z += b.z - a.z;
+      count += 1;
+    }
+  }
+
+  if (count === 0) return { x: 0, y: 0, z: 0 };
+  return {
+    x: clampSigned(x / count, 0.5),
+    y: clampSigned(y / count, 0.5),
+    z: clampSigned(z / count, 0.2),
+  };
+}
+
+function translateInstance(
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+  dx: number,
+  dy: number,
+  dz: number,
+): void {
+  for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
+    const offset = (instance.particleStart + localIndex) * 3;
+    positions[offset] += dx;
+    positions[offset + 1] += dy;
+    positions[offset + 2] += dz;
+  }
+}
+
+function buildComponentAnchors(
+  instances: readonly AssemblyPanelInstance[],
+  stitches: readonly AssemblyStitchConstraint[],
+  positions: Float32Array,
+): AssemblyAnchorConstraint[] {
+  const adjacency = new Map<string, Set<string>>(
+    instances.map((instance) => [instance.id, new Set<string>()]),
+  );
+
+  for (const stitch of stitches) {
+    if (!stitch.instanceA || !stitch.instanceB || stitch.instanceA === stitch.instanceB) continue;
+    adjacency.get(stitch.instanceA)?.add(stitch.instanceB);
+    adjacency.get(stitch.instanceB)?.add(stitch.instanceA);
+  }
+
+  const instanceById = new Map(instances.map((instance) => [instance.id, instance]));
+  const visited = new Set<string>();
+  const result: AssemblyAnchorConstraint[] = [];
+
+  for (const root of instances) {
+    if (visited.has(root.id)) continue;
+    const queue = [root.id];
+    visited.add(root.id);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    const anchorInstance = instanceById.get(root.id);
+    if (!anchorInstance || anchorInstance.vertexCount === 0) continue;
+    const topVertices = [...anchorInstance.topology.boundaryVertices]
+      .sort((left, right) =>
+        anchorInstance.topology.positions2DMm[left * 2 + 1] -
+        anchorInstance.topology.positions2DMm[right * 2 + 1],
+      )
+      .slice(0, 2);
+
+    topVertices.forEach((localIndex, index) => {
+      const particleIndex = anchorInstance.particleStart + localIndex;
+      result.push({
+        particleIndex,
+        targetX: positions[particleIndex * 3],
+        targetY: positions[particleIndex * 3 + 1],
+        targetZ: positions[particleIndex * 3 + 2],
+        stiffness: index === 0 ? 0.004 : 0.002,
+      });
+    });
   }
 
   return result;
@@ -409,39 +578,11 @@ function applyDartDepthBias(
     const apex = nearestLocalVertex(instance.topology, dart.dart.apex.xMm, dart.dart.apex.yMm);
     if (apex < 0) continue;
     const globalIndex = instance.particleStart + apex;
-    positions[globalIndex * 3 + 2] += surfaceSign * Math.min(0.025, Math.max(0.006, dart.dart.widthMm * 0.0004));
+    positions[globalIndex * 3 + 2] += surfaceSign * Math.min(
+      0.025,
+      Math.max(0.006, dart.dart.widthMm * 0.0004),
+    );
   }
-}
-
-function buildSoftAnchors(
-  instances: readonly AssemblyPanelInstance[],
-  positions: Float32Array,
-): AssemblyAnchorConstraint[] {
-  const result: AssemblyAnchorConstraint[] = [];
-
-  for (const instance of instances) {
-    if (instance.vertexCount === 0) continue;
-    const candidates = [...instance.topology.boundaryVertices].sort((left, right) => {
-      const leftY = instance.topology.positions2DMm[left * 2 + 1];
-      const rightY = instance.topology.positions2DMm[right * 2 + 1];
-      return leftY - rightY;
-    });
-    const first = candidates[0] ?? 0;
-    const second = candidates.find((candidate) => candidate !== first) ?? first;
-
-    for (const [localIndex, stiffness] of [[first, 0.025], [second, 0.012]] as const) {
-      const particleIndex = instance.particleStart + localIndex;
-      result.push({
-        particleIndex,
-        targetX: positions[particleIndex * 3],
-        targetY: positions[particleIndex * 3 + 1],
-        targetZ: positions[particleIndex * 3 + 2],
-        stiffness,
-      });
-    }
-  }
-
-  return result;
 }
 
 function pointReference(
@@ -449,8 +590,7 @@ function pointReference(
   path: PanelEdgePath,
   t: number,
 ): GlobalPointReference {
-  const normalized = clamp01(t);
-  const targetDistance = path.lengthMm * normalized;
+  const targetDistance = path.lengthMm * clamp01(t);
   const lastIndex = path.vertexIndices.length - 1;
 
   if (lastIndex <= 0 || targetDistance <= DISTANCE_EPSILON) {
@@ -490,6 +630,25 @@ function pointReference(
   };
 }
 
+function evaluateReference(
+  positions: Float32Array,
+  reference: GlobalPointReference,
+): { x: number; y: number; z: number } {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+
+  for (let index = 0; index < reference.particleIndices.length; index += 1) {
+    const offset = reference.particleIndices[index] * 3;
+    const weight = reference.weights[index];
+    x += positions[offset] * weight;
+    y += positions[offset + 1] * weight;
+    z += positions[offset + 2] * weight;
+  }
+
+  return { x, y, z };
+}
+
 function directPoint(particleIndex: number): GlobalPointReference {
   return { particleIndices: [particleIndex], weights: [1] };
 }
@@ -513,7 +672,10 @@ function pairInstances(
   }
 
   const count = Math.min(sortedFirst.length, sortedSecond.length);
-  return Array.from({ length: count }, (_, index) => [sortedFirst[index], sortedSecond[index]] as const);
+  return Array.from(
+    { length: count },
+    (_, index) => [sortedFirst[index], sortedSecond[index]] as const,
+  );
 }
 
 function resolvePiecePlacements(
@@ -524,11 +686,15 @@ function resolvePiecePlacements(
     return piece.previewPlacements.map((placement) => ({ ...placement }));
   }
 
-  const assembly = garment.assemblyPlacements?.find((candidate) => candidate.pieceId === piece.id);
+  const assembly = garment.assemblyPlacements?.find(
+    (candidate) => candidate.pieceId === piece.id,
+  );
   const resolved = assembly ?? inferPlacement(piece);
   const region = roleToRegion(resolved.role);
   const duplicateSides = resolved.role === "sleeve" || resolved.role === "leg";
-  const sides = duplicateSides ? (["left", "right"] as const) : (["center"] as const);
+  const sides = duplicateSides
+    ? (["left", "right"] as const)
+    : (["center"] as const);
 
   return sides.map((bodySide, index) => ({
     id: `assembly-${piece.id}-${bodySide}`,
@@ -571,7 +737,9 @@ function inferPlacement(piece: PatternPiece): AssemblyPlacement {
   };
 }
 
-function roleToRegion(role: AssemblyPlacement["role"]): PatternPreviewPlacement["region"] {
+function roleToRegion(
+  role: AssemblyPlacement["role"],
+): PatternPreviewPlacement["region"] {
   if (role === "sleeve") return "arm";
   if (role === "leg") return "leg";
   if (role === "waist") return "hip";
@@ -604,22 +772,26 @@ function edgeRangeLength(path: PanelEdgePath, range: EdgeRange): number {
 }
 
 function interpolateRange(range: EdgeRange, progress: number): number {
-  return clamp01(range.startT) + (clamp01(range.endT) - clamp01(range.startT)) * clamp01(progress);
+  return clamp01(range.startT) +
+    (clamp01(range.endT) - clamp01(range.startT)) * clamp01(progress);
 }
 
 function seamStiffness(treatment: SeamTreatment | undefined): number {
   switch (treatment ?? "standard") {
-    case "standard": return 0.92;
-    case "ease": return 0.82;
-    case "gather": return 0.74;
-    case "stretch": return 0.68;
-    case "intentional-mismatch": return 0.55;
+    case "standard": return 0.96;
+    case "ease": return 0.86;
+    case "gather": return 0.78;
+    case "stretch": return 0.72;
+    case "intentional-mismatch": return 0.58;
   }
 }
 
 function pointReferenceKey(reference: GlobalPointReference): string {
   return reference.particleIndices
-    .map((particleIndex, index) => `${particleIndex}:${reference.weights[index].toFixed(7)}`)
+    .map(
+      (particleIndex, index) =>
+        `${particleIndex}:${reference.weights[index].toFixed(7)}`,
+    )
     .join("|");
 }
 
@@ -632,12 +804,24 @@ function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
   );
 }
 
+function pairKey(first: string, second: string): string {
+  return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
 function sideOrder(side: PatternPreviewPlacement["bodySide"]): number {
   if (side === "left") return 0;
   if (side === "center") return 1;
   return 2;
 }
 
+function validScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+function clampSigned(value: number, maximumAbsolute: number): number {
+  return Math.min(maximumAbsolute, Math.max(-maximumAbsolute, value));
 }
