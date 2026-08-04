@@ -1,4 +1,3 @@
-export * from "./types";
 export * from "./PanelTopology";
 export * from "./StitchConstraintBuilder";
 export * from "./PanelSimulation";
