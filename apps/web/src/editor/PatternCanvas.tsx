@@ -43,7 +43,7 @@ import {
   screenToWorld as cameraScreenToWorld,
   worldToScreen,
 } from "./coordinates";
-import { pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
+import { findEditablePatternPoint, pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
@@ -128,7 +128,7 @@ function PatternCanvasComponent({
   const pendingWorkspaceRef = useRef<PieceWorkspaceTransform[]>([]);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
   const dragRef = useRef<
-    | { type: "point"; pointerId: number; pointId: string }
+    | { type: "point"; pointerId: number; pieceId: string; pointId: string }
     | {
         type: "handle";
         pointerId: number;
@@ -466,18 +466,10 @@ function PatternCanvasComponent({
     return getPieceWorkspaceTransform(garment, activePieceId);
   }
 
-  function findPoint(clientX: number, clientY: number): PatternPoint | null {
-    if (getPieceWorkspaceState(garment, activePieceId).locked) return null;
-    const world = screenToActivePieceLocal(clientX, clientY);
+  function findPoint(clientX: number, clientY: number) {
+    const world = screenToWorld(clientX, clientY);
     const maxDistanceMm = (POINT_RADIUS_PX + 5) / cameraRef.current.zoom;
-
-    return (
-      snapshotRef.current.piece.points.find(
-        (point) =>
-          Math.hypot(point.xMm - world.xMm, point.yMm - world.yMm) <=
-          maxDistanceMm,
-      ) ?? null
-    );
+    return findEditablePatternPoint(garmentRef.current, world, maxDistanceMm);
   }
 
   function findPieceAtWorld(xMm: number, yMm: number): PatternPiece | null {
@@ -746,11 +738,12 @@ function PatternCanvasComponent({
         return;
       }
 
-      const point = findPoint(event.clientX, event.clientY);
-      if (point) {
-        onSelectPoint(point.id);
+      const pointHit = findPoint(event.clientX, event.clientY);
+      if (pointHit) {
+        if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
+        onSelectPoint(pointHit.point.id);
         onEditStartRef.current("Mover ponto");
-        dragRef.current = { type: "point", pointerId: event.pointerId, pointId: point.id };
+        dragRef.current = { type: "point", pointerId: event.pointerId, pieceId: pointHit.pieceId, pointId: pointHit.point.id };
         return;
       }
 
@@ -869,14 +862,16 @@ function PatternCanvasComponent({
       return;
     }
 
-    const point = findPoint(event.clientX, event.clientY);
-    if (point) {
-      onSelectPoint(point.id);
+    const pointHit = findPoint(event.clientX, event.clientY);
+    if (pointHit) {
+      if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
+      onSelectPoint(pointHit.point.id);
       onEditStartRef.current("Mover ponto");
       dragRef.current = {
         type: "point",
         pointerId: event.pointerId,
-        pointId: point.id,
+        pieceId: pointHit.pieceId,
+        pointId: pointHit.point.id,
       };
       return;
     }
@@ -1022,14 +1017,20 @@ function PatternCanvasComponent({
       return;
     }
 
-    const world = screenToActivePieceLocal(event.clientX, event.clientY);
     if (drag.type === "point") {
+      const currentGarment = garmentRef.current;
+      const draggedPiece = currentGarment.pieces.find((piece) => piece.id === drag.pieceId);
+      if (!draggedPiece) return;
+      const world = pieceWorldToLocal(
+        screenToWorld(event.clientX, event.clientY),
+        getPieceWorkspaceTransform(currentGarment, drag.pieceId),
+      );
       // snapping logic
       const snapPx = 10; // pixels
       const thresholdMm = snapPx / cameraRef.current.zoom;
       let snapped = null as { xMm: number; yMm: number; type: string } | null;
       // snap to other points
-      for (const other of snapshotRef.current.piece.points) {
+      for (const other of draggedPiece.points) {
         if (other.id === drag.pointId) continue;
         const d = Math.hypot(other.xMm - world.xMm, other.yMm - world.yMm);
         if (d <= thresholdMm) {
@@ -1039,9 +1040,9 @@ function PatternCanvasComponent({
       }
       // snap to midpoint of segments
       if (!snapped) {
-        for (let i = 0; i < snapshotRef.current.piece.points.length; i += 1) {
-          const a = snapshotRef.current.piece.points[i];
-          const b = snapshotRef.current.piece.points[(i + 1) % snapshotRef.current.piece.points.length];
+        for (let i = 0; i < draggedPiece.points.length; i += 1) {
+          const a = draggedPiece.points[i];
+          const b = draggedPiece.points[(i + 1) % draggedPiece.points.length];
           const mx = (a.xMm + b.xMm) / 2;
           const my = (a.yMm + b.yMm) / 2;
           const d = Math.hypot(mx - world.xMm, my - world.yMm);
@@ -1053,7 +1054,7 @@ function PatternCanvasComponent({
       }
       // snap to horizontal/vertical alignment with other points
       if (!snapped) {
-        for (const other of snapshotRef.current.piece.points) {
+        for (const other of draggedPiece.points) {
           if (other.id === drag.pointId) continue;
           if (Math.abs(other.xMm - world.xMm) <= thresholdMm) {
             snapped = { xMm: other.xMm, yMm: world.yMm, type: "hv" };
@@ -1096,6 +1097,7 @@ function PatternCanvasComponent({
       return;
     }
 
+    const world = screenToActivePieceLocal(event.clientX, event.clientY);
     const anchor = snapshotRef.current.piece.points.find(
       (point) => point.id === drag.pointId,
     );
@@ -1719,6 +1721,16 @@ function draw(
         context.fill();
         context.strokeStyle = "#111214";
         context.lineWidth = 2 / camera.zoom;
+        context.stroke();
+      }
+    } else if (!workspace.locked) {
+      for (const point of transformedPoints) {
+        context.beginPath();
+        context.arc(point.xMm, point.yMm, 3.5 / camera.zoom, 0, Math.PI * 2);
+        context.fillStyle = "rgba(255, 255, 255, 0.88)";
+        context.fill();
+        context.strokeStyle = "rgba(79, 84, 88, 0.78)";
+        context.lineWidth = 1.25 / camera.zoom;
         context.stroke();
       }
     }

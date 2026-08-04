@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { GarmentDraft, PatternSnapshot, PreviewRegion } from "../domain/pattern";
 import { ThreeViewport } from "./ThreeViewport";
 
@@ -44,11 +44,6 @@ export const GarmentViewport = memo(function GarmentViewport({
   latestSimulateVersionRef.current = simulateVersion;
   latestShowBodyRef.current = showBody;
   latestConnectedIdsRef.current = new Set(connectedPieceIds);
-  const connectedSnapshots = useMemo(() => {
-    const connectedIds = new Set(connectedPieceIds);
-    return snapshots.filter((candidate) => connectedIds.has(candidate.piece.id));
-  }, [connectedPieceIds, snapshots]);
-
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -115,13 +110,14 @@ export const GarmentViewport = memo(function GarmentViewport({
     if (updateFrameRef.current !== null) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
+      const connectedIds = latestConnectedIdsRef.current;
       const nextWarnings = viewportRef.current?.updateGarment(
-        connectedSnapshots,
+        latestSnapshotsRef.current.filter((candidate) => connectedIds.has(candidate.piece.id)),
         latestGarmentRef.current,
       );
       if (nextWarnings) setWarnings(nextWarnings);
     });
-  }, [active, garment, connectedSnapshots, showBody]);
+  }, [active, garment, snapshots, connectedPieceIds, showBody]);
 
   useEffect(() => {
     if (

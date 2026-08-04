@@ -3,13 +3,14 @@ import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
+  AssemblyPlacement,
   BodyMeasurements,
   BodyType,
   GarmentDraft,
+  PatternPiece,
   PatternPoint,
   PatternPreviewPlacement,
   PatternSnapshot,
-  createPreviewPlacement,
 } from "../domain/pattern";
 import {
   fabricDrapeFactor,
@@ -180,26 +181,13 @@ export class ThreeViewport {
     const fallbackFabric = garment.fabrics[0];
     const warnings: string[] = [];
     snapshots.forEach((snapshot) => {
-      const points = samplePatternContour(snapshot.piece.points);
+      const points = patternPanelContour(snapshot.piece);
       const triangulation = triangulatePatternContour(points);
       if (!triangulation.ok) {
         warnings.push(`${snapshot.piece.name}: contorno inválido para a prévia 3D.`);
         return;
       }
-      const placements =
-        garment.assemblyPlacements?.filter((candidate) => candidate.pieceId === snapshot.piece.id).map((candidate, placementIndex): PatternPreviewPlacement => ({
-          id: `assembly-${candidate.pieceId}-${placementIndex}`,
-          pieceId: candidate.pieceId,
-          region: candidate.role === "sleeve" ? "arm" : candidate.role === "leg" ? "leg" : candidate.role === "waist" ? "waist" : "torso",
-          surface: candidate.outwardSide,
-          bodySide: candidate.role === "sleeve" || candidate.role === "leg" ? (placementIndex % 2 ? "left" : "right") : "center",
-          rotationDeg: candidate.rotationDeg[2],
-          offsetXMm: candidate.positionMm[0],
-          offsetYMm: candidate.positionMm[1],
-          offsetZMm: candidate.positionMm[2],
-          scale: 1,
-          mirrorX: candidate.flipped,
-        })) ?? snapshot.piece.previewPlacements ?? [createPreviewPlacement(snapshot.piece.id)];
+      const placements = resolvePreviewPlacements(snapshot.piece, garment);
       const fabric =
         fabricById.get(snapshot.piece.fabricId ?? "") ?? fallbackFabric;
       if (!fabric) return;
@@ -289,7 +277,7 @@ export class ThreeViewport {
     const contourPositions = new Float32Array(points.length * 3);
     points.forEach((point, index) => {
       const x = (point.xMm - centerX) * scale;
-      contourPositions[index * 3] = placement.mirrorX ? -x : x;
+      contourPositions[index * 3] = x;
       contourPositions[index * 3 + 1] =
         -(point.yMm - bounds.minY) * scale;
       contourPositions[index * 3 + 2] = 0;
@@ -317,7 +305,7 @@ export class ThreeViewport {
       const localY = positions.getY(index);
       const flatColumn = (instanceIndex % 4) - 1.5;
       const flatRow = Math.floor(instanceIndex / 4);
-      flat[index * 3] = x + flatColumn * 0.58;
+      flat[index * 3] = (placement.mirrorX ? -x : x) + flatColumn * 0.58;
       flat[index * 3 + 1] = localY + 1.65 - flatRow * 0.28;
       flat[index * 3 + 2] = 0.82;
 
@@ -754,29 +742,126 @@ export function dressedPosition(
   metrics: AvatarMetrics,
   fabric: FabricSource,
 ): { x: number; y: number; z: number } {
-  void fabricDrapeFactor(fabric);
+  const drape = fabricDrapeFactor(fabric);
   const scale = Math.max(0.05, placement.scale);
   const rotation = THREE.MathUtils.degToRad(placement.rotationDeg);
   const x = (placement.mirrorX ? -localX : localX) * scale;
-  const y = localY * scale;
-  const rotatedX = x * Math.cos(rotation) - y * Math.sin(rotation);
-  const rotatedY = x * Math.sin(rotation) + y * Math.cos(rotation);
+  const scaledY = localY * scale;
+  const rotatedX = x * Math.cos(rotation) - scaledY * Math.sin(rotation);
+  const rotatedY = x * Math.sin(rotation) + scaledY * Math.cos(rotation);
   const sideX = placement.bodySide === "left" ? -1 : placement.bodySide === "right" ? 1 : 0;
-  const anchor = placement.region === "arm"
-    ? { x: sideX * metrics.shoulderHalf, y: metrics.shoulderY, z: 0.08 }
-    : placement.region === "leg"
-      ? { x: (sideX || 1) * metrics.legCenterX, y: metrics.hipY, z: 0.1 }
-      : placement.region === "hip"
-        ? { x: sideX * metrics.hipRadius * 0.55, y: metrics.waistY, z: metrics.hipRadius * 1.04 }
-        : placement.region === "waist"
-          ? { x: sideX * metrics.waistRadius * 0.55, y: metrics.waistY, z: metrics.waistRadius * 1.04 }
-          : { x: sideX * metrics.chestRadius * 0.55, y: metrics.shoulderY, z: metrics.chestRadius * 1.04 };
   const surfaceSign = placement.surface === "back" ? -1 : 1;
+  const offsetX = placement.offsetXMm * 0.001;
+  const offsetY = placement.offsetYMm * 0.001;
+  const offsetZ = placement.offsetZMm * 0.001;
+  const clothGap = 0.008 + drape * 0.012 + offsetZ;
+
+  if (placement.region === "arm" || placement.region === "leg") {
+    const isArm = placement.region === "arm";
+    const radius = isArm ? metrics.armRadius : metrics.legRadius;
+    const centerX = isArm
+      ? (sideX || 1) * metrics.shoulderHalf
+      : (sideX || 1) * metrics.legCenterX;
+    const anchorY = isArm ? metrics.shoulderY : metrics.hipY;
+    const angle = THREE.MathUtils.clamp(rotatedX / Math.max(radius, 0.001), -1.42, 1.42);
+    return {
+      x: centerX + Math.sin(angle) * radius + offsetX,
+      y: anchorY + rotatedY + offsetY,
+      z: surfaceSign * (Math.cos(angle) * radius + clothGap),
+    };
+  }
+
+  const anchorY = placement.region === "torso" ? metrics.shoulderY : metrics.waistY;
+  const y = anchorY + rotatedY + offsetY;
+  const radii = torsoRadiiAtY(y, metrics);
+  const angle = THREE.MathUtils.clamp(rotatedX / Math.max(radii.x, 0.001), -1.48, 1.48);
   return {
-    x: anchor.x + rotatedX + placement.offsetXMm * 0.001,
-    y: anchor.y + rotatedY + placement.offsetYMm * 0.001,
-    z: surfaceSign * anchor.z + placement.offsetZMm * 0.001,
+    x: sideX * radii.x * 0.55 + Math.sin(angle) * radii.x + offsetX,
+    y,
+    z: surfaceSign * (Math.cos(angle) * radii.z + clothGap),
   };
+}
+
+function torsoRadiiAtY(y: number, metrics: AvatarMetrics): { x: number; z: number } {
+  if (y >= metrics.waistY) {
+    const t = THREE.MathUtils.clamp((y - metrics.waistY) / Math.max(metrics.shoulderY - metrics.waistY, 0.001), 0, 1);
+    const x = THREE.MathUtils.lerp(metrics.waistRadius, metrics.chestRadius, t);
+    return { x, z: x * metrics.depthScale };
+  }
+  const t = THREE.MathUtils.clamp((metrics.waistY - y) / Math.max(metrics.waistY - metrics.hipY, 0.001), 0, 1);
+  const x = THREE.MathUtils.lerp(metrics.waistRadius, metrics.hipRadius, t);
+  return { x, z: x * metrics.depthScale };
+}
+
+export function resolvePreviewPlacements(
+  piece: PatternPiece,
+  garment: Pick<GarmentDraft, "assemblyPlacements">,
+): PatternPreviewPlacement[] {
+  const assembly = garment.assemblyPlacements?.find((candidate) => candidate.pieceId === piece.id);
+  const semantic = piece.previewPlacements?.length
+    ? piece.previewPlacements.map((placement) => ({ ...placement }))
+    : createPlacementsFromAssembly(piece.id, assembly);
+
+  if (!assembly || assembly.source !== "manual") return semantic;
+  return semantic.map((placement) => ({
+    ...placement,
+    surface: assembly.outwardSide,
+    rotationDeg: placement.rotationDeg + assembly.rotationDeg[2],
+    offsetXMm: placement.offsetXMm + assembly.positionMm[0],
+    offsetYMm: placement.offsetYMm + assembly.positionMm[1],
+    offsetZMm: placement.offsetZMm + assembly.positionMm[2],
+    mirrorX: Boolean(placement.mirrorX) !== assembly.flipped,
+  }));
+}
+
+function createPlacementsFromAssembly(
+  pieceId: string,
+  assembly: AssemblyPlacement | undefined,
+): PatternPreviewPlacement[] {
+  const role = assembly?.role ?? "front";
+  const region = role === "sleeve" ? "arm" : role === "leg" ? "leg" : role === "waist" ? "hip" : "torso";
+  const surface = assembly?.outwardSide ?? "front";
+  const sides = role === "sleeve" || role === "leg" ? (["left", "right"] as const) : (["center"] as const);
+  return sides.map((bodySide, index) => ({
+    id: `placement-${pieceId}-${surface}-${bodySide}`,
+    pieceId,
+    region,
+    surface,
+    bodySide,
+    rotationDeg: 0,
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 25,
+    scale: 1,
+    ...(index === 1 ? { mirrorX: true } : {}),
+  }));
+}
+
+export function patternPanelContour(piece: PatternPiece): PatternPoint[] {
+  const contour = samplePatternContour(piece.points);
+  if (!piece.cutOnFold || contour.length < 3) return contour;
+  const axisStart = contour[0];
+  const axisEnd = contour.at(-1)!;
+  const axisX = axisEnd.xMm - axisStart.xMm;
+  const axisY = axisEnd.yMm - axisStart.yMm;
+  const axisLengthSquared = axisX * axisX + axisY * axisY;
+  if (axisLengthSquared < 0.0001) return contour;
+  const reflected = contour.slice(1, -1).reverse().map((point, index) => {
+    const relativeX = point.xMm - axisStart.xMm;
+    const relativeY = point.yMm - axisStart.yMm;
+    const t = (relativeX * axisX + relativeY * axisY) / axisLengthSquared;
+    const projectionX = axisStart.xMm + axisX * t;
+    const projectionY = axisStart.yMm + axisY * t;
+    return {
+      ...point,
+      id: `${point.id}::fold-mirror-${index}`,
+      xMm: 2 * projectionX - point.xMm,
+      yMm: 2 * projectionY - point.yMm,
+      handleIn: undefined,
+      handleOut: undefined,
+    };
+  });
+  return [...contour, ...reflected];
 }
 
 function createAvatarMetrics(

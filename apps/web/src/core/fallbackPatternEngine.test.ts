@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { migrateLegacyPieceToSegments } from "../domain/pattern";
 import { FallbackPatternEngine } from "./fallbackPatternEngine";
 
 describe("FallbackPatternEngine", () => {
@@ -59,5 +60,24 @@ describe("FallbackPatternEngine", () => {
     const edited = engine.moveHandle("waist-left", "out", 80, -45);
     expect(edited.piece.points[0].handleOut).toEqual({ xMm: 80, yMm: -45 });
     expect(edited.areaMm2).not.toBeCloseTo(baseline.areaMm2);
+  });
+
+  it("moves canonical nodes used by versioned library patterns", () => {
+    const engine = new FallbackPatternEngine();
+    engine.restorePiece(migrateLegacyPieceToSegments({
+      id: "versioned-piece",
+      name: "Versioned",
+      seamAllowanceMm: 10,
+      points: [
+        { id: "a", xMm: 0, yMm: 0 },
+        { id: "b", xMm: 100, yMm: 0 },
+        { id: "c", xMm: 100, yMm: 100 },
+        { id: "d", xMm: 0, yMm: 100 },
+      ],
+    }));
+
+    const moved = engine.movePoint("b", 140, 20);
+    expect(moved.piece.points.find((point) => point.id === "b")).toMatchObject({ xMm: 140, yMm: 20 });
+    expect(moved.piece.nodes?.find((node) => node.id === "b")).toMatchObject({ xMm: 140, yMm: 20 });
   });
 });

@@ -41,9 +41,25 @@ export class FallbackPatternEngine implements PatternEngineFacade {
     assertFinite(xMm, "A coordenada X");
     assertFinite(yMm, "A coordenada Y");
 
+    const current = this.piece.points.find((point) => point.id === pointId);
+    if (!current) return this.snapshot();
+    const deltaX = xMm - current.xMm;
+    const deltaY = yMm - current.yMm;
     this.piece.points = this.piece.points.map((point) =>
       point.id === pointId ? { ...point, xMm, yMm } : point,
     );
+    this.piece.nodes = this.piece.nodes?.map((node) =>
+      node.id === pointId ? { ...node, xMm, yMm } : node,
+    );
+    this.piece.segments = this.piece.segments?.map((segment) => ({
+      ...segment,
+      ...(segment.startNodeId === pointId && segment.control1
+        ? { control1: { xMm: segment.control1.xMm + deltaX, yMm: segment.control1.yMm + deltaY } }
+        : {}),
+      ...(segment.endNodeId === pointId && segment.control2
+        ? { control2: { xMm: segment.control2.xMm + deltaX, yMm: segment.control2.yMm + deltaY } }
+        : {}),
+    }));
 
     return this.snapshot();
   }
@@ -65,6 +81,19 @@ export class FallbackPatternEngine implements PatternEngineFacade {
           }
         : point,
     );
+    const anchor = this.piece.nodes?.find((node) => node.id === pointId)
+      ?? this.piece.points.find((point) => point.id === pointId);
+    if (anchor) {
+      this.piece.segments = this.piece.segments?.map((segment) => {
+        if (handle === "out" && segment.startNodeId === pointId) {
+          return { ...segment, kind: "cubic", control1: { xMm: anchor.xMm + xMm, yMm: anchor.yMm + yMm } };
+        }
+        if (handle === "in" && segment.endNodeId === pointId) {
+          return { ...segment, kind: "cubic", control2: { xMm: anchor.xMm + xMm, yMm: anchor.yMm + yMm } };
+        }
+        return segment;
+      });
+    }
     return this.snapshot();
   }
 
@@ -94,6 +123,19 @@ export class FallbackPatternEngine implements PatternEngineFacade {
           : rest;
       }
       return point;
+    });
+    this.piece.segments = this.piece.segments?.map((segment) => {
+      if (segment.startNodeId !== pointId) return segment;
+      if (!enabled) {
+        const { control1: _control1, control2: _control2, ...straight } = segment;
+        return { ...straight, kind: "line" };
+      }
+      return {
+        ...segment,
+        kind: "cubic",
+        control1: { xMm: start.xMm + deltaX / 3, yMm: start.yMm + deltaY / 3 },
+        control2: { xMm: end.xMm - deltaX / 3, yMm: end.yMm - deltaY / 3 },
+      };
     });
     return this.snapshot();
   }

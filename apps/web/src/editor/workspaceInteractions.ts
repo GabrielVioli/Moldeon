@@ -1,4 +1,31 @@
-import type { PatternPoint } from "../domain/pattern";
+import type { GarmentDraft, PatternPoint, PatternVector } from "../domain/pattern";
+import { pieceWorldToLocal } from "./coordinates";
+
+export interface EditablePointHit {
+  pieceId: string;
+  point: PatternPoint;
+}
+
+export function findEditablePatternPoint(
+  garment: GarmentDraft,
+  world: PatternVector,
+  maxDistanceMm: number,
+): EditablePointHit | null {
+  for (let index = garment.pieces.length - 1; index >= 0; index -= 1) {
+    const piece = garment.pieces[index];
+    const workspace = garment.workspaceStates?.find((state) => state.pieceId === piece.id);
+    if (workspace?.visible === false || workspace?.locked === true) continue;
+    const transform = workspace?.transform
+      ?? garment.workspaceTransforms?.find((candidate) => candidate.pieceId === piece.id)
+      ?? { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 };
+    const local = pieceWorldToLocal(world, transform);
+    const point = piece.points.find(
+      (candidate) => Math.hypot(candidate.xMm - local.xMm, candidate.yMm - local.yMm) <= maxDistanceMm,
+    );
+    if (point) return { pieceId: piece.id, point };
+  }
+  return null;
+}
 
 export function normalizeRotation(rotationDeg: number): number {
   const normalized = ((rotationDeg + 180) % 360 + 360) % 360 - 180;
