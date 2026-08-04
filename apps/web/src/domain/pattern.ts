@@ -1159,7 +1159,7 @@ export function createPreviewPlacement(
     rotationDeg: 0,
     offsetXMm: 0,
     offsetYMm: 0,
-    offsetZMm: 25,
+    offsetZMm: 0,
     scale: 1,
     ...update,
   };

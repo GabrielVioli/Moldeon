@@ -6,11 +6,14 @@ import {
   AssemblyPlacement,
   BodyMeasurements,
   BodyType,
+  EdgeRange,
   GarmentDraft,
   PatternPiece,
   PatternPoint,
   PatternPreviewPlacement,
   PatternSnapshot,
+  Seam,
+  sampleEdgeRange,
 } from "../domain/pattern";
 import {
   fabricDrapeFactor,
@@ -18,16 +21,27 @@ import {
 } from "../domain/fabric";
 import {
   samplePatternContour,
+  samplePatternSegment,
   triangulatePatternContour,
 } from "../domain/polygonGeometry";
 import { disposeObjectTree } from "./disposeObjectTree";
 
+interface BoundaryPointIndex {
+  x: number;
+  y: number;
+  index: number;
+}
+
 interface GarmentMeshData {
   key: string;
+  pieceId: string;
+  placementId: string;
   signature: string;
   mesh: THREE.Mesh;
   flat: Float32Array;
   dressed: Float32Array;
+  scale: number;
+  boundaryPoints: BoundaryPointIndex[];
 }
 
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
@@ -203,19 +217,26 @@ export class ThreeViewport {
             this.disposeGarmentMesh(existing);
             existingMeshes.delete(key);
           }
-          meshes.push({ ...this.createPanel(
-            points,
-            triangulation.indices,
-            scale,
-            placement,
-            fabric,
-            meshes.length,
-          ), key, signature });
+          meshes.push({
+            pieceId: snapshot.piece.id,
+            placementId: placement.id,
+            ...this.createPanel(
+              points,
+              triangulation.indices,
+              scale,
+              placement,
+              fabric,
+              meshes.length,
+            ),
+            key,
+            signature,
+          });
         }
       }
     });
     existingMeshes.forEach((item) => this.disposeGarmentMesh(item));
     this.garmentMeshes = meshes;
+    this.applySeamStitching(garment, snapshots, meshes);
     this.garmentMeshes.forEach(({ mesh }) => {
       if (mesh.parent !== this.garmentGroup) this.garmentGroup.add(mesh);
     });
@@ -271,7 +292,7 @@ export class ThreeViewport {
     placement: PatternPreviewPlacement,
     fabric: FabricSource,
     instanceIndex: number,
-  ): Omit<GarmentMeshData, "key" | "signature"> {
+  ): Omit<GarmentMeshData, "key" | "signature" | "pieceId" | "placementId"> {
     const bounds = pointBounds(points);
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const contourPositions = new Float32Array(points.length * 3);
@@ -299,6 +320,7 @@ export class ThreeViewport {
     const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
     const flat = new Float32Array(positions.array.length);
     const dressed = new Float32Array(positions.array.length);
+    const boundaryPoints = this.buildBoundaryPoints(points, positions, scale);
 
     for (let index = 0; index < positions.count; index += 1) {
       const x = positions.getX(index);
@@ -336,7 +358,7 @@ export class ThreeViewport {
     mesh.castShadow = this.profile.shadows;
     mesh.receiveShadow = this.profile.shadows;
 
-    return { mesh, flat, dressed };
+    return { mesh, flat, dressed, scale, boundaryPoints };
   }
 
   private applyDressProgress(progress: number) {
@@ -366,6 +388,123 @@ export class ThreeViewport {
     const material = mesh.material;
     if (Array.isArray(material)) material.forEach((item) => item.dispose());
     else material.dispose();
+  }
+
+  private applySeamStitching(
+    garment: GarmentDraft,
+    snapshots: readonly PatternSnapshot[],
+    meshes: GarmentMeshData[],
+  ) {
+    if (!garment.seams?.length) return;
+    const meshByPiece = new Map<string, GarmentMeshData[]>();
+    for (const mesh of meshes) {
+      const list = meshByPiece.get(mesh.pieceId) ?? [];
+      list.push(mesh);
+      meshByPiece.set(mesh.pieceId, list);
+    }
+
+    for (const seam of garment.seams) {
+      const firstPiece = snapshots.find((snapshot) => snapshot.piece.id === seam.first.pieceId)?.piece;
+      const secondPiece = snapshots.find((snapshot) => snapshot.piece.id === seam.second.pieceId)?.piece;
+      if (!firstPiece || !secondPiece) continue;
+
+      const firstMeshes = meshByPiece.get(seam.first.pieceId) ?? [];
+      const secondMeshes = meshByPiece.get(seam.second.pieceId) ?? [];
+      if (firstMeshes.length === 0 || secondMeshes.length === 0) continue;
+      const firstMesh = firstMeshes[0];
+      const secondMesh = secondMeshes[0];
+
+      const firstSamples = sampleEdgeRange(firstPiece, seam.first);
+      const secondSamples = sampleEdgeRange(secondPiece, seam.second);
+      if (firstSamples.length < 2 || secondSamples.length < 2) continue;
+      if (seam.direction === "opposite") secondSamples.reverse();
+
+      const firstIndices = this.findBoundaryVertexIndices(firstPiece, firstMesh, firstSamples);
+      const secondIndices = this.findBoundaryVertexIndices(secondPiece, secondMesh, secondSamples);
+      if (firstIndices.length !== secondIndices.length || firstIndices.length === 0) continue;
+
+      for (let index = 0; index < firstIndices.length; index += 1) {
+        const firstIdx = firstIndices[index];
+        const secondIdx = secondIndices[index];
+        const fpos = new THREE.Vector3(
+          firstMesh.dressed[firstIdx * 3],
+          firstMesh.dressed[firstIdx * 3 + 1],
+          firstMesh.dressed[firstIdx * 3 + 2],
+        );
+        const spos = new THREE.Vector3(
+          secondMesh.dressed[secondIdx * 3],
+          secondMesh.dressed[secondIdx * 3 + 1],
+          secondMesh.dressed[secondIdx * 3 + 2],
+        );
+        const average = fpos.add(spos).multiplyScalar(0.5);
+        firstMesh.dressed[firstIdx * 3] = average.x;
+        firstMesh.dressed[firstIdx * 3 + 1] = average.y;
+        firstMesh.dressed[firstIdx * 3 + 2] = average.z;
+        secondMesh.dressed[secondIdx * 3] = average.x;
+        secondMesh.dressed[secondIdx * 3 + 1] = average.y;
+        secondMesh.dressed[secondIdx * 3 + 2] = average.z;
+      }
+    }
+  }
+
+  private buildBoundaryPoints(
+    points: readonly PatternPoint[],
+    positions: THREE.BufferAttribute,
+    scale: number,
+  ) {
+    const bounds = pointBounds(points);
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const boundaryPoints: BoundaryPointIndex[] = [];
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      const point = points[pointIndex];
+      const x = (point.xMm - centerX) * scale;
+      const y = -(point.yMm - bounds.minY) * scale;
+      const index = this.findNearestIndex(positions, x, y);
+      if (index >= 0) {
+        boundaryPoints.push({ x, y, index });
+      }
+    }
+    return boundaryPoints;
+  }
+
+  private findNearestIndex(
+    positions: THREE.BufferAttribute,
+    x: number,
+    y: number,
+  ) {
+    let bestIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < positions.count; index += 1) {
+      const dx = positions.getX(index) - x;
+      const dy = positions.getY(index) - y;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+    return bestIndex;
+  }
+
+  private findBoundaryVertexIndices(
+    piece: PatternPiece,
+    mesh: GarmentMeshData,
+    samples: PatternPoint[],
+  ): number[] {
+    const points = patternPanelContour(piece);
+    const bounds = pointBounds(points);
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    return samples.map((sample) => {
+      const x = (sample.xMm - centerX) * mesh.scale;
+      const y = -(sample.yMm - bounds.minY) * mesh.scale;
+      const nearest = mesh.boundaryPoints.reduce((best, candidate) => {
+        const dx = candidate.x - x;
+        const dy = candidate.y - y;
+        const distance = dx * dx + dy * dy;
+        return distance < best.distance ? { distance, index: candidate.index } : best;
+      }, { distance: Number.POSITIVE_INFINITY, index: -1 });
+      return nearest.index;
+    }).filter((index) => index >= 0);
   }
 
   private updateBody(
@@ -802,14 +941,20 @@ export function resolvePreviewPlacements(
     ? piece.previewPlacements.map((placement) => ({ ...placement }))
     : createPlacementsFromAssembly(piece.id, assembly);
 
-  if (!assembly || assembly.source !== "manual") return semantic;
+  if (!assembly) return semantic;
   return semantic.map((placement) => ({
     ...placement,
     surface: assembly.outwardSide,
     rotationDeg: placement.rotationDeg + assembly.rotationDeg[2],
-    offsetXMm: placement.offsetXMm + assembly.positionMm[0],
-    offsetYMm: placement.offsetYMm + assembly.positionMm[1],
-    offsetZMm: placement.offsetZMm + assembly.positionMm[2],
+    offsetXMm: piece.previewPlacements?.length
+      ? placement.offsetXMm
+      : placement.offsetXMm + assembly.positionMm[0],
+    offsetYMm: piece.previewPlacements?.length
+      ? placement.offsetYMm
+      : placement.offsetYMm + assembly.positionMm[1],
+    offsetZMm: piece.previewPlacements?.length
+      ? placement.offsetZMm
+      : placement.offsetZMm + assembly.positionMm[2],
     mirrorX: Boolean(placement.mirrorX) !== assembly.flipped,
   }));
 }
@@ -831,7 +976,7 @@ function createPlacementsFromAssembly(
     rotationDeg: 0,
     offsetXMm: 0,
     offsetYMm: 0,
-    offsetZMm: 25,
+    offsetZMm: 0,
     scale: 1,
     ...(index === 1 ? { mirrorX: true } : {}),
   }));
