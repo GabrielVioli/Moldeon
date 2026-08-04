@@ -11,6 +11,10 @@ import {
   type SeamTreatment,
 } from "./pattern";
 import {
+  classifyPatternEdge,
+  type ClassifiedPatternEdge,
+} from "./edgeClassification";
+import {
   samplePatternContour,
   triangulatePatternContour,
 } from "./polygonGeometry";
@@ -28,7 +32,16 @@ export interface SeamCompatibility {
 
 export interface AssemblyGraph {
   connectedComponents: string[][];
+
+  /** Bordas ainda sem costura que, pela função, deveriam ser conectadas. */
   openEdges: Array<{ pieceId: string; edgeId: string }>;
+
+  /** Decotes, barras, cinturas, acabamentos e dobras. */
+  intentionalOpenEdges: ClassifiedPatternEdge[];
+
+  /** Bordas sem função suficiente para decidir automaticamente. */
+  undefinedEdges: ClassifiedPatternEdge[];
+
   issues: string[];
   warnings: string[];
   validSeamIds: string[];
@@ -206,19 +219,41 @@ export function buildAssemblyGraph(
 
   connectedComponents.sort((left, right) => right.length - left.length);
 
-  const openEdges = garment.pieces.flatMap((piece) =>
+  const unusedClassifiedEdges = garment.pieces.flatMap((piece) =>
     getPatternEdges(piece)
       .filter((edge) => !usedEdges.has(`${piece.id}/${edge.id}`))
-      .map((edge) => ({ pieceId: piece.id, edgeId: edge.id })),
+      .map((edge) => classifyPatternEdge(piece, edge)),
   );
 
+  const requiredOpenEdges = unusedClassifiedEdges.filter(
+    (edge) => edge.classification === "must-sew",
+  );
+  const intentionalOpenEdges = unusedClassifiedEdges.filter(
+    (edge) =>
+      edge.classification === "intentional-open" ||
+      edge.classification === "finished-open" ||
+      edge.classification === "fold",
+  );
+  const undefinedEdges = unusedClassifiedEdges.filter(
+    (edge) => edge.classification === "undefined",
+  );
+
+  const openEdges = requiredOpenEdges.map(({ pieceId, edgeId }) => ({
+    pieceId,
+    edgeId,
+  }));
+
   if (openEdges.length > 0) {
-    warnings.push(`${openEdges.length} borda(s) ainda estão abertas.`);
+    warnings.push(
+      `${openEdges.length} borda(s) que deveriam ser costuradas ainda estão abertas.`,
+    );
   }
 
   return {
     connectedComponents,
     openEdges,
+    intentionalOpenEdges,
+    undefinedEdges,
     issues,
     warnings,
     validSeamIds,
@@ -248,6 +283,10 @@ export function evaluateGarment3DEligibility(
   issues.push(...graph.issues);
   warnings.push(...graph.warnings);
 
+  /*
+   * Toda peça válida participa do preview, mesmo que ainda esteja em um
+   * componente desconectado. O nome do campo é mantido por compatibilidade.
+   */
   const connectedPieceIds = garment.pieces
     .filter((piece) => triangulatable.has(piece.id))
     .map((piece) => piece.id);
