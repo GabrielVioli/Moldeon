@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
-import { buildGarmentAssembly } from "../garment3d/GarmentAssembly";
+import { buildPhysicalGarmentAssembly } from "../garment3d/PhysicalGarmentAssembly";
 import { solveGarmentAssembly } from "../garment3d/GarmentSolver";
 import {
   buildGarmentAssemblyMeshes,
@@ -115,11 +115,11 @@ export class ThreeViewport {
   ): string[] {
     this.clearGarment();
 
-    const assembly = buildGarmentAssembly(snapshots, garment);
+    const assembly = buildPhysicalGarmentAssembly(snapshots, garment);
     const report = solveGarmentAssembly(assembly, {
       iterations: this.profile.solverIterations,
       structuralPasses: 2,
-      stitchPasses: 3,
+      stitchPasses: 5,
       anchorPasses: 1,
     });
 
@@ -357,7 +357,7 @@ function getPerformanceProfile(): PerformanceProfile {
       antialias: false,
       maxPixelRatio: 1.25,
       shadows: false,
-      solverIterations: 70,
+      solverIterations: 110,
     };
   }
 
@@ -365,7 +365,7 @@ function getPerformanceProfile(): PerformanceProfile {
     antialias: true,
     maxPixelRatio: 1.75,
     shadows: true,
-    solverIterations: 110,
+    solverIterations: 170,
   };
 }
 
