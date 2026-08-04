@@ -23,12 +23,12 @@ export interface GarmentSolveReport {
 }
 
 export const DEFAULT_GARMENT_SOLVER_OPTIONS: GarmentSolverOptions = {
-  iterations: 90,
+  iterations: 140,
   structuralPasses: 2,
-  stitchPasses: 3,
+  stitchPasses: 5,
   anchorPasses: 1,
-  maximumCorrection: 0.04,
-  convergenceTolerance: 0.0008,
+  maximumCorrection: 0.025,
+  convergenceTolerance: 0.0015,
 };
 
 const LENGTH_EPSILON = 1e-9;
@@ -48,44 +48,66 @@ export function solveGarmentAssembly(
     };
   }
 
-  resetConstraintState(state);
-
-  let maximumError = Number.POSITIVE_INFINITY;
+  state.previousPositions.set(state.positions);
   let completedIterations = 0;
 
   for (let iteration = 0; iteration < options.iterations; iteration += 1) {
-    maximumError = 0;
     const progress = (iteration + 1) / options.iterations;
-    const stitchRamp = smoothstep(Math.min(1, progress * 2.4));
+    const stitchRamp = smoothstep(Math.min(1, progress * 3));
+    const anchorRamp = 0.35 + smoothstep(progress) * 0.65;
 
     for (let pass = 0; pass < options.structuralPasses; pass += 1) {
       for (const constraint of state.structuralConstraints) {
-        maximumError = Math.max(
-          maximumError,
-          solveDistanceConstraint(state, constraint, options.maximumCorrection),
-        );
+        solveDistanceConstraint(state, constraint, options.maximumCorrection);
       }
     }
 
     for (let pass = 0; pass < options.stitchPasses; pass += 1) {
       for (const constraint of state.stitchConstraints) {
-        maximumError = Math.max(
-          maximumError,
-          solveStitchConstraint(
-            state,
-            constraint,
-            stitchRamp,
-            options.maximumCorrection,
-          ),
+        solveStitchConstraint(
+          state,
+          constraint,
+          stitchRamp,
+          options.maximumCorrection,
+        );
+      }
+    }
+
+    /*
+     * A primeira passada estrutural impede colapso. Esta segunda passada
+     * recupera o comprimento do tecido depois que as costuras se movem.
+     */
+    for (const constraint of state.structuralConstraints) {
+      solveDistanceConstraint(
+        state,
+        constraint,
+        options.maximumCorrection * 0.65,
+      );
+    }
+
+    /*
+     * A última operação geométrica da iteração precisa ser a costura.
+     * Assim as restrições estruturais não deixam uma abertura residual
+     * grande entre as bordas.
+     */
+    for (let pass = 0; pass < Math.max(1, Math.floor(options.stitchPasses / 2)); pass += 1) {
+      for (const constraint of state.stitchConstraints) {
+        solveStitchConstraint(
+          state,
+          constraint,
+          stitchRamp,
+          options.maximumCorrection * 0.75,
         );
       }
     }
 
     for (let pass = 0; pass < options.anchorPasses; pass += 1) {
       for (const constraint of state.anchorConstraints) {
-        maximumError = Math.max(
-          maximumError,
-          solveAnchorConstraint(state, constraint, options.maximumCorrection),
+        solveAnchorConstraint(
+          state,
+          constraint,
+          options.maximumCorrection,
+          anchorRamp,
         );
       }
     }
@@ -97,22 +119,22 @@ export function solveGarmentAssembly(
       restoreInitialPositions(state);
       return {
         iterations: completedIterations,
-        maximumError,
+        maximumError: Number.POSITIVE_INFINITY,
         converged: false,
         invalid: true,
       };
     }
 
-    if (
-      iteration >= 12 &&
-      maximumError <= options.convergenceTolerance
-    ) {
-      break;
+    if (iteration >= 20 && iteration % 5 === 0) {
+      const currentError = measureRelevantResidual(state);
+      if (currentError <= options.convergenceTolerance) break;
     }
   }
 
   state.previousPositions.set(state.positions);
   state.invalid = false;
+
+  const maximumError = measureRelevantResidual(state);
 
   return {
     iterations: completedIterations,
@@ -131,7 +153,7 @@ function solveDistanceConstraint(
   state: GarmentAssemblyState,
   constraint: AssemblyDistanceConstraint,
   maximumCorrection: number,
-): number {
+): void {
   const aOffset = constraint.a * 3;
   const bOffset = constraint.b * 3;
   const dx = state.positions[bOffset] - state.positions[aOffset];
@@ -139,21 +161,16 @@ function solveDistanceConstraint(
   const dz = state.positions[bOffset + 2] - state.positions[aOffset + 2];
   const length = Math.hypot(dx, dy, dz);
 
-  if (length <= LENGTH_EPSILON) {
-    return Math.abs(constraint.restLength);
-  }
+  if (length <= LENGTH_EPSILON) return;
 
-  const error = length - constraint.restLength;
   const inverseMassA = state.inverseMasses[constraint.a];
   const inverseMassB = state.inverseMasses[constraint.b];
   const inverseMassTotal = inverseMassA + inverseMassB;
+  if (inverseMassTotal <= LENGTH_EPSILON) return;
 
-  if (inverseMassTotal <= LENGTH_EPSILON) {
-    return Math.abs(error);
-  }
-
+  const error = length - constraint.restLength;
   const correctionMagnitude = clampSigned(
-    (error * constraint.stiffness) / inverseMassTotal,
+    error * constraint.stiffness / inverseMassTotal,
     maximumCorrection,
   );
   const nx = dx / length;
@@ -166,8 +183,6 @@ function solveDistanceConstraint(
   state.positions[bOffset] -= nx * correctionMagnitude * inverseMassB;
   state.positions[bOffset + 1] -= ny * correctionMagnitude * inverseMassB;
   state.positions[bOffset + 2] -= nz * correctionMagnitude * inverseMassB;
-
-  return Math.abs(error);
 }
 
 function solveStitchConstraint(
@@ -175,7 +190,7 @@ function solveStitchConstraint(
   constraint: AssemblyStitchConstraint,
   ramp: number,
   maximumCorrection: number,
-): number {
+): void {
   const pointA = evaluatePoint(state, constraint.a);
   const pointB = evaluatePoint(state, constraint.b);
   const dx = pointB.x - pointA.x;
@@ -183,22 +198,16 @@ function solveStitchConstraint(
   const dz = pointB.z - pointA.z;
   const length = Math.hypot(dx, dy, dz);
 
-  if (length <= LENGTH_EPSILON) {
-    return Math.abs(constraint.restDistance);
-  }
+  if (length <= LENGTH_EPSILON) return;
 
-  const error = length - constraint.restDistance;
   const effectiveMassA = pointEffectiveInverseMass(state, constraint.a);
   const effectiveMassB = pointEffectiveInverseMass(state, constraint.b);
   const effectiveMass = effectiveMassA + effectiveMassB;
+  if (effectiveMass <= LENGTH_EPSILON) return;
 
-  if (effectiveMass <= LENGTH_EPSILON) {
-    return Math.abs(error);
-  }
-
-  const stiffness = constraint.stiffness * ramp;
+  const error = length - constraint.restDistance;
   const correctionMagnitude = clampSigned(
-    (error * stiffness) / effectiveMass,
+    error * constraint.stiffness * ramp / effectiveMass,
     maximumCorrection,
   );
   const nx = dx / length;
@@ -219,41 +228,69 @@ function solveStitchConstraint(
     -ny * correctionMagnitude,
     -nz * correctionMagnitude,
   );
-
-  return Math.abs(error);
 }
 
 function solveAnchorConstraint(
   state: GarmentAssemblyState,
   constraint: AssemblyAnchorConstraint,
   maximumCorrection: number,
-): number {
+  ramp: number,
+): void {
   const offset = constraint.particleIndex * 3;
   const dx = constraint.targetX - state.positions[offset];
   const dy = constraint.targetY - state.positions[offset + 1];
   const dz = constraint.targetZ - state.positions[offset + 2];
   const distance = Math.hypot(dx, dy, dz);
 
-  if (distance <= LENGTH_EPSILON) {
-    return 0;
-  }
-
-  const inverseMass = state.inverseMasses[constraint.particleIndex];
-  if (inverseMass <= LENGTH_EPSILON) {
-    return distance;
-  }
+  if (distance <= LENGTH_EPSILON) return;
+  if (state.inverseMasses[constraint.particleIndex] <= LENGTH_EPSILON) return;
 
   const magnitude = Math.min(
     maximumCorrection,
-    distance * constraint.stiffness,
+    distance * constraint.stiffness * ramp,
   );
   const scale = magnitude / distance;
 
   state.positions[offset] += dx * scale;
   state.positions[offset + 1] += dy * scale;
   state.positions[offset + 2] += dz * scale;
+}
 
-  return distance;
+function measureRelevantResidual(state: GarmentAssemblyState): number {
+  if (state.stitchConstraints.length > 0) {
+    let maximum = 0;
+
+    for (const constraint of state.stitchConstraints) {
+      const pointA = evaluatePoint(state, constraint.a);
+      const pointB = evaluatePoint(state, constraint.b);
+      const distance = Math.hypot(
+        pointB.x - pointA.x,
+        pointB.y - pointA.y,
+        pointB.z - pointA.z,
+      );
+      maximum = Math.max(
+        maximum,
+        Math.abs(distance - constraint.restDistance),
+      );
+    }
+
+    return maximum;
+  }
+
+  let maximum = 0;
+
+  for (const constraint of state.structuralConstraints) {
+    const aOffset = constraint.a * 3;
+    const bOffset = constraint.b * 3;
+    const distance = Math.hypot(
+      state.positions[bOffset] - state.positions[aOffset],
+      state.positions[bOffset + 1] - state.positions[aOffset + 1],
+      state.positions[bOffset + 2] - state.positions[aOffset + 2],
+    );
+    maximum = Math.max(maximum, Math.abs(distance - constraint.restLength));
+  }
+
+  return maximum;
 }
 
 function evaluatePoint(
@@ -318,7 +355,7 @@ function normalizeOptions(
     iterations: clampInteger(
       options.iterations ?? DEFAULT_GARMENT_SOLVER_OPTIONS.iterations,
       1,
-      400,
+      500,
     ),
     structuralPasses: clampInteger(
       options.structuralPasses ?? DEFAULT_GARMENT_SOLVER_OPTIONS.structuralPasses,
@@ -328,7 +365,7 @@ function normalizeOptions(
     stitchPasses: clampInteger(
       options.stitchPasses ?? DEFAULT_GARMENT_SOLVER_OPTIONS.stitchPasses,
       1,
-      12,
+      16,
     ),
     anchorPasses: clampInteger(
       options.anchorPasses ?? DEFAULT_GARMENT_SOLVER_OPTIONS.anchorPasses,
@@ -338,18 +375,14 @@ function normalizeOptions(
     maximumCorrection: clampFinite(
       options.maximumCorrection ?? DEFAULT_GARMENT_SOLVER_OPTIONS.maximumCorrection,
       0.001,
-      0.2,
+      0.15,
     ),
     convergenceTolerance: clampFinite(
       options.convergenceTolerance ?? DEFAULT_GARMENT_SOLVER_OPTIONS.convergenceTolerance,
       0.00001,
-      0.02,
+      0.03,
     ),
   };
-}
-
-function resetConstraintState(state: GarmentAssemblyState): void {
-  state.previousPositions.set(state.positions);
 }
 
 function restoreInitialPositions(state: GarmentAssemblyState): void {
@@ -359,9 +392,7 @@ function restoreInitialPositions(state: GarmentAssemblyState): void {
 
 function positionsAreFinite(positions: Float32Array): boolean {
   for (let index = 0; index < positions.length; index += 1) {
-    if (!Number.isFinite(positions[index])) {
-      return false;
-    }
+    if (!Number.isFinite(positions[index])) return false;
   }
   return true;
 }
