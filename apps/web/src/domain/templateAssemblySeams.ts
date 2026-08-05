@@ -24,9 +24,10 @@ interface SeamDefinition {
 /**
  * Retorna uma versão do documento com as costuras estruturais do molde-base.
  *
- * Costuras personalizadas que não usam bordas reservadas pelo molde-base são
- * preservadas. Costuras manuais que usam ombro, lateral, cava ou manga são
- * substituídas pelo pareamento semântico correto.
+ * Costuras personalizadas nomeadas que não usam bordas reservadas são
+ * preservadas. Costuras genéricas como "Costura" e "Costura 4" são removidas
+ * durante o reparo, pois normalmente são tentativas manuais incompatíveis com
+ * a semântica do molde-base.
  */
 export function resolveTemplateAssemblyGarment(
   garment: GarmentDraft,
@@ -47,6 +48,7 @@ export function resolveTemplateAssemblyGarment(
     (garment.seams ?? []).map((seam) => [seamPairKey(seam), seam]),
   );
   const preservedCustom = (garment.seams ?? []).filter((seam) =>
+    !isGenericSeamName(seam.name) &&
     !reservedEdges.has(edgeReferenceKey(seam.first.pieceId, seam.first.edgeId)) &&
     !reservedEdges.has(edgeReferenceKey(seam.second.pieceId, seam.second.edgeId)),
   );
@@ -285,4 +287,9 @@ function seamPairKey(seam: Seam): string {
   const first = edgeReferenceKey(seam.first.pieceId, seam.first.edgeId);
   const second = edgeReferenceKey(seam.second.pieceId, seam.second.edgeId);
   return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
+function isGenericSeamName(name: string | undefined): boolean {
+  const normalized = (name ?? "").trim().toLocaleLowerCase("pt-BR");
+  return normalized === "" || /^costura(?:\s+\d+)?$/.test(normalized);
 }
