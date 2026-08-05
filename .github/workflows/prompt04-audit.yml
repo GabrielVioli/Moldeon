@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/prompt04-internal-path-audit.mjs
+      - scripts/prompt04-interaction-fix.py
       - .github/workflows/prompt04-audit.yml
 
 permissions:
@@ -29,6 +30,8 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm install
+      - name: Apply interaction correction
+        run: python scripts/prompt04-interaction-fix.py
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -52,8 +55,8 @@ jobs:
           cp -f artifacts/prompt04-internal-paths/* docs/evidence/prompt04/
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add docs/evidence/prompt04
-          git rm -f scripts/prompt04-internal-path-audit.mjs .github/workflows/prompt04-audit.yml
+          git add apps/web/src/editor/PatternCanvas.tsx docs/evidence/prompt04
+          git rm -f scripts/prompt04-internal-path-audit.mjs scripts/prompt04-interaction-fix.py .github/workflows/prompt04-audit.yml
           git commit -m "test: validate curved cuts and structural darts visually"
           git push origin main
       - name: Upload audit artifact
