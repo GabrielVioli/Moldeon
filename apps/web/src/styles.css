@@ -1745,3 +1745,10 @@ button {
     flex: 0 0 auto;
   }
 }
+
+
+/* Prompt 04: caminhos internos */
+.context-bar label { display: inline-flex; align-items: center; gap: 5px; }
+.context-bar select { min-height: 30px; padding: 0 7px; border: 1px solid #b9b3a8; border-radius: 6px; background: #fff; }
+.context-shortcuts { color: #6d675d; font-size: 10px; }
+.context-diagnostic { max-width: 360px; color: #76570f; }

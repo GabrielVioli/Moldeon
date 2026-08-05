@@ -25,6 +25,9 @@ import {
   type PatternPiece,
   type GarmentDraft,
   type PieceWorkspaceTransform,
+  isInternalPath,
+  type InternalPath,
+  type InternalPathNode,
 } from "../domain/pattern";
 import { findNearbySeamCandidates } from "../domain/patternOperations";
 import { buildAssemblyGraph } from "../domain/assembly";
@@ -44,8 +47,9 @@ import {
   cameraToFitBounds,
   zoomCameraAtPoint,
 } from "./camera";
-import { sampleInternalPath } from "../domain/internalPaths";
+import { findNearestInternalPathSegment, sampleInternalPath } from "../domain/internalPaths";
 import { useEditorStore } from "../state/editorStore";
+import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
 import {
   pieceLocalToWorld,
   pieceWorldToLocal,
@@ -154,6 +158,8 @@ function PatternCanvasComponent({
         handle: "in" | "out";
       }
     | PieceDragState
+    | { type: "internal-node"; pointerId: number; nodeId: string }
+    | { type: "internal-handle"; pointerId: number; nodeId: string; handle: "in" | "out" }
     | { type: "segment"; pointerId: number; edgeId: string; lastWorldX: number; lastWorldY: number }
     | {
         type: "rotate";
@@ -224,6 +230,10 @@ function PatternCanvasComponent({
   const cutDraft = useEditorStore((s) => s.cutDraft);
   const dartDraft = useEditorStore((s) => s.dartDraft);
   const measureDraft = useEditorStore((s) => s.measureDraft);
+  const selectedInternalPathId = useInternalPathEditorStore((s) => s.selectedPathId);
+  const selectedInternalPathNodeId = useInternalPathEditorStore((s) => s.selectedNodeId);
+  const draftInternalPathId = useInternalPathEditorStore((s) => s.draftPathId);
+  const internalPathAnalysis = useInternalPathEditorStore((s) => s.analysis);
   const garmentRef = useRef(garment);
   garmentRef.current = garment;
   const scheduleDrawRef = useRef<() => void>(() => undefined);
@@ -279,7 +289,7 @@ function PatternCanvasComponent({
       dartDraft,
       measureDraft,
     );
-  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, measureDraft, pieceSelectionActive, rotationFeedback, seamFirstEdge, selectedDartId, selectedEdgeId, selectedPieceIds, selectedSeamId]);
+  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, internalPathAnalysis, measureDraft, pieceSelectionActive, rotationFeedback, seamFirstEdge, selectedDartId, selectedEdgeId, selectedInternalPathId, selectedInternalPathNodeId, selectedPieceIds, selectedSeamId, draftInternalPathId]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -535,6 +545,89 @@ function PatternCanvasComponent({
     return null;
   }
 
+  function internalPathsForActivePiece(): InternalPath[] {
+    const piece = garmentRef.current.pieces.find((candidate) => candidate.id === activePieceId);
+    return (piece?.internalLines ?? []).filter(isInternalPath);
+  }
+
+  function findInternalPathNodeAt(clientX: number, clientY: number): { path: InternalPath; node: InternalPathNode } | null {
+    const local = screenToActivePieceLocal(clientX, clientY);
+    const threshold = (POINT_RADIUS_PX + 6) / cameraRef.current.zoom;
+    for (const path of [...internalPathsForActivePiece()].reverse()) {
+      if (!path.visible) continue;
+      for (const node of path.nodes) {
+        if (Math.hypot(node.xMm - local.xMm, node.yMm - local.yMm) <= threshold) return { path, node };
+      }
+    }
+    return null;
+  }
+
+  function findInternalPathHandleAt(clientX: number, clientY: number): { path: InternalPath; node: InternalPathNode; handle: "in" | "out" } | null {
+    const state = useInternalPathEditorStore.getState();
+    const path = internalPathsForActivePiece().find((candidate) => candidate.id === state.selectedPathId);
+    const node = path?.nodes.find((candidate) => candidate.id === state.selectedNodeId);
+    if (!path || !node || path.locked) return null;
+    const local = screenToActivePieceLocal(clientX, clientY);
+    const threshold = (POINT_RADIUS_PX + 6) / cameraRef.current.zoom;
+    for (const handle of ["in", "out"] as const) {
+      const vector = handle === "in" ? node.handleIn : node.handleOut;
+      if (vector && Math.hypot(node.xMm + vector.xMm - local.xMm, node.yMm + vector.yMm - local.yMm) <= threshold) {
+        return { path, node, handle };
+      }
+    }
+    return null;
+  }
+
+  function findInternalPathSegmentAt(clientX: number, clientY: number): { path: InternalPath; segmentId: string } | null {
+    const local = screenToActivePieceLocal(clientX, clientY);
+    const threshold = 14 / cameraRef.current.zoom;
+    let best: { path: InternalPath; segmentId: string; distanceMm: number } | null = null;
+    for (const path of internalPathsForActivePiece()) {
+      if (!path.visible) continue;
+      const hit = findNearestInternalPathSegment(path, local);
+      if (hit && hit.distanceMm <= threshold && (!best || hit.distanceMm < best.distanceMm)) {
+        best = { path, segmentId: hit.segmentId, distanceMm: hit.distanceMm };
+      }
+    }
+    return best ? { path: best.path, segmentId: best.segmentId } : null;
+  }
+
+  function handleInternalPathPointerDown(event: PointerEvent<HTMLCanvasElement>): boolean {
+    if (event.button === 1 || spacePressedRef.current || toolRef.current === "hand") return false;
+    const session = useInternalPathEditorStore.getState();
+    const handleHit = findInternalPathHandleAt(event.clientX, event.clientY);
+    if (handleHit) {
+      session.selectPath(handleHit.path.id);
+      session.selectNode(handleHit.node.id);
+      session.beginGeometryEdit("Ajustar curva interna");
+      dragRef.current = { type: "internal-handle", pointerId: event.pointerId, nodeId: handleHit.node.id, handle: handleHit.handle };
+      return true;
+    }
+    const nodeHit = findInternalPathNodeAt(event.clientX, event.clientY);
+    if (nodeHit && !nodeHit.path.locked) {
+      session.selectPath(nodeHit.path.id);
+      session.selectNode(nodeHit.node.id);
+      session.beginGeometryEdit("Mover nó interno");
+      dragRef.current = { type: "internal-node", pointerId: event.pointerId, nodeId: nodeHit.node.id };
+      return true;
+    }
+    const segmentHit = findInternalPathSegmentAt(event.clientX, event.clientY);
+    if (segmentHit && !session.draftPathId) {
+      session.selectPath(segmentHit.path.id, segmentHit.segmentId);
+      dragRef.current = null;
+      return true;
+    }
+    if (toolRef.current === "cut" || toolRef.current === "dart") {
+      const local = screenToActivePieceLocal(event.clientX, event.clientY);
+      if (session.draftPathId) session.appendDraftPoint(local);
+      else session.startPath(activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
+      dragRef.current = null;
+      scheduleDraw();
+      return true;
+    }
+    return false;
+  }
+
   function insertPointNear(clientX: number, clientY: number): boolean {
     if (getPieceWorkspaceState(garment, activePieceId).locked) return false;
     const world = screenToActivePieceLocal(clientX, clientY);
@@ -710,7 +803,11 @@ function PatternCanvasComponent({
         return;
       }
 
-      if (handleIntentClick(event.clientX, event.clientY)) {
+      if (handleInternalPathPointerDown(event)) return;
+
+      if (handleInternalPathPointerDown(event)) return;
+
+    if (handleIntentClick(event.clientX, event.clientY)) {
         const state = useEditorStore.getState();
         if (state.cutDraft?.phase === "placing" || state.dartDraft?.phase === "placing") intentPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
         dragRef.current = null; return;
@@ -849,6 +946,8 @@ function PatternCanvasComponent({
       if (dartId) { useEditorStore.getState().selectDart(dartId); dragRef.current = null; return; }
     }
 
+    if (handleInternalPathPointerDown(event)) return;
+
     if (handleIntentClick(event.clientX, event.clientY)) {
       const state = useEditorStore.getState();
       if (state.cutDraft?.phase === "placing" || state.dartDraft?.phase === "placing") intentPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
@@ -976,6 +1075,10 @@ function PatternCanvasComponent({
     }
 
     const drag = dragRef.current;
+    if (!drag && useInternalPathEditorStore.getState().draftPathId) {
+      useInternalPathEditorStore.getState().updateDraftCursor(screenToActivePieceLocal(event.clientX, event.clientY));
+      scheduleDraw();
+    }
     if (!drag) {
       const state = useEditorStore.getState();
       const world = screenToWorld(event.clientX, event.clientY);
@@ -1015,6 +1118,22 @@ function PatternCanvasComponent({
         panX: drag.panX + event.clientX - drag.startX,
         panY: drag.panY + event.clientY - drag.startY,
       });
+      return;
+    }
+
+    if (drag.type === "internal-node") {
+      useInternalPathEditorStore.getState().moveSelectedNode(screenToActivePieceLocal(event.clientX, event.clientY));
+      scheduleDraw();
+      return;
+    }
+
+    if (drag.type === "internal-handle") {
+      const local = screenToActivePieceLocal(event.clientX, event.clientY);
+      const state = useInternalPathEditorStore.getState();
+      const path = internalPathsForActivePiece().find((candidate) => candidate.id === state.selectedPathId);
+      const node = path?.nodes.find((candidate) => candidate.id === drag.nodeId);
+      if (node) state.moveSelectedHandle(drag.handle, { xMm: local.xMm - node.xMm, yMm: local.yMm - node.yMm });
+      scheduleDraw();
       return;
     }
 
@@ -1328,6 +1447,9 @@ function PatternCanvasComponent({
       return;
     }
 
+    if ((finishedDrag?.type === "internal-node" || finishedDrag?.type === "internal-handle") && finishedDrag.pointerId === event.pointerId) {
+      useInternalPathEditorStore.getState().commitGeometryEdit();
+    }
     if (
       finishedDrag?.type === "point" &&
       finishedDrag.pointerId === event.pointerId
@@ -1706,10 +1828,35 @@ function draw(
     if (isActivePiece && selectedEdgeId) drawSeamInterval(context, piece, { pieceId: piece.id, edgeId: selectedEdgeId, startT: 0, endT: 1 }, transform, camera.zoom, "#d06b22");
 
     for (const line of piece.internalLines ?? []) {
+      const richPath = isInternalPath(line) ? line : null;
+      if (richPath?.visible === false) continue;
       const points = ("points" in line ? line.points : sampleInternalPath(line)).map((point) => pieceLocalToWorld(point, transform));
+      if (points.length < 2) continue;
       context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
-      context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : [3 / camera.zoom, 3 / camera.zoom]);
-      context.strokeStyle = "#59636c"; context.lineWidth = 1.5 / camera.zoom; context.stroke(); context.setLineDash([]);
+      context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : line.purpose === "reference" ? [3 / camera.zoom, 3 / camera.zoom] : []);
+      const selectedPath = richPath?.id === useInternalPathEditorStore.getState().selectedPathId;
+      context.strokeStyle = line.purpose === "dart" ? "#b06084" : line.purpose === "cut" || line.purpose === "cut-and-sew" ? "#b3442e" : "#59636c";
+      context.lineWidth = (selectedPath ? 3 : 1.5) / camera.zoom; context.stroke(); context.setLineDash([]);
+      if (selectedPath && richPath) {
+        const selectedNodeId = useInternalPathEditorStore.getState().selectedNodeId;
+        for (const node of richPath.nodes) {
+          const point = pieceLocalToWorld(node, transform);
+          const selectedNode = node.id === selectedNodeId;
+          context.beginPath(); context.arc(point.xMm, point.yMm, (selectedNode ? 7 : 5) / camera.zoom, 0, Math.PI * 2);
+          context.fillStyle = selectedNode ? "#fff" : "#f6d8cc"; context.fill(); context.strokeStyle = "#b3442e"; context.lineWidth = 2 / camera.zoom; context.stroke();
+          if (selectedNode) for (const handle of ["in", "out"] as const) {
+            const vector = handle === "in" ? node.handleIn : node.handleOut;
+            if (!vector) continue;
+            const endpoint = pieceLocalToWorld({ xMm: node.xMm + vector.xMm, yMm: node.yMm + vector.yMm }, transform);
+            context.beginPath(); context.moveTo(point.xMm, point.yMm); context.lineTo(endpoint.xMm, endpoint.yMm); context.strokeStyle = "#8a6d63"; context.lineWidth = 1 / camera.zoom; context.stroke();
+            context.beginPath(); context.arc(endpoint.xMm, endpoint.yMm, 4 / camera.zoom, 0, Math.PI * 2); context.fillStyle = "#fff"; context.fill(); context.strokeStyle = "#8a6d63"; context.stroke();
+          }
+        }
+        for (const hit of useInternalPathEditorStore.getState().analysis?.intersections ?? []) {
+          const point = pieceLocalToWorld(hit, transform);
+          context.beginPath(); context.arc(point.xMm, point.yMm, 6 / camera.zoom, 0, Math.PI * 2); context.fillStyle = hit.tangent ? "#d9a400" : "#b51f1f"; context.fill();
+        }
+      }
     }
     for (const dart of piece.darts ?? []) {
       const legA = pieceLocalToWorld(dart.legA, transform); const apex = pieceLocalToWorld(dart.apex, transform); const legB = pieceLocalToWorld(dart.legB, transform);

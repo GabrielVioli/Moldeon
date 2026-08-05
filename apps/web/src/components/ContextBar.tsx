@@ -52,15 +52,14 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const togglePathLocked = useInternalPathEditorStore((state) => state.toggleLocked);
   const deletePath = useInternalPathEditorStore((state) => state.deleteSelectedPath);
 
+  const internalPaths = garment.pieces
+    .flatMap((piece) => piece.internalLines ?? [])
+    .filter(isInternalPath);
   const selectedPath = selectedPathId
-    ? garment.pieces
-        .flatMap((piece) => piece.internalLines ?? [])
-        .find((line) => line.id === selectedPathId && isInternalPath(line))
+    ? internalPaths.find((line) => line.id === selectedPathId)
     : undefined;
   const draftPath = draftPathId
-    ? garment.pieces
-        .flatMap((piece) => piece.internalLines ?? [])
-        .find((line) => line.id === draftPathId && isInternalPath(line))
+    ? internalPaths.find((line) => line.id === draftPathId)
     : undefined;
   const selectedPathSegment = selectedPath?.segments.find((segment) => segment.id === selectedPathSegmentId)
     ?? selectedPath?.segments[0];

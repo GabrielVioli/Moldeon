@@ -20,6 +20,7 @@ import { ContextBar } from "./components/ContextBar";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
+import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import { createPreviewPlacement, type GarmentDraft, type PreviewRegion } from "./domain/pattern";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 
@@ -280,6 +281,12 @@ export function App() {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
+        const pathState = useInternalPathEditorStore.getState();
+        if (pathState.draftPathId) {
+          pathState.cancelDraft();
+          setActiveTool("select");
+          return;
+        }
         const state = useEditorStore.getState();
         if (state.draftContour) {
           cancelDraft();
@@ -293,6 +300,19 @@ export function App() {
           setActiveTool("select");
         }
         return;
+      }
+      if (!isEditableTarget(event.target) && useInternalPathEditorStore.getState().draftPathId) {
+        const pathState = useInternalPathEditorStore.getState();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (pathState.confirmDraft()) setActiveTool("select");
+          return;
+        }
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          pathState.removeLastDraftPoint();
+          return;
+        }
       }
       if (!isEditableTarget(event.target) && useEditorStore.getState().draftContour) {
         if (event.key === "Enter") {
