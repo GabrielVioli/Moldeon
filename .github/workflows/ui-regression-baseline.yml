@@ -1,0 +1,52 @@
+name: UI Regression Baseline
+
+on:
+  push:
+    paths:
+      - scripts/ui-regression-baseline.mjs
+      - .github/workflows/ui-regression-baseline.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-regression-baseline-main
+  cancel-in-progress: true
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      UI_REGRESSION_ARTIFACT_DIR: artifacts/ui-regression-baseline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: npm install
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Reproduce regressions
+        run: |
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 5186 --strictPort > /tmp/moldeon-ui-baseline.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for attempt in $(seq 1 120); do
+            curl --fail --silent http://127.0.0.1:5186/ >/dev/null && break
+            sleep 0.5
+          done
+          UI_REGRESSION_BASE_URL=http://127.0.0.1:5186 node scripts/ui-regression-baseline.mjs
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-regression-baseline-${{ github.sha }}
+          path: artifacts/ui-regression-baseline
+          retention-days: 21
+          if-no-files-found: warn
