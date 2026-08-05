@@ -39,6 +39,7 @@ jobs:
           base64 -d /tmp/prompt04-domain.b64 | gzip -d > /tmp/prompt04-domain-apply.mjs
           node /tmp/prompt04-domain-apply.mjs
           python scripts/prompt04-domain/fix.py
+          python scripts/prompt04-domain/renderer.py
 
       - name: Typecheck
         run: npm run typecheck
