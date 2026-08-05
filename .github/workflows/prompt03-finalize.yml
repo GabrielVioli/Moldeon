@@ -64,11 +64,21 @@ jobs:
       - name: Publish progress and screenshots
         run: node scripts/prompt03-write-progress.mjs
 
+      - name: Remove one-off Prompt 03 runners
+        run: |
+          rm -f scripts/prompt03-apply.mjs
+          rm -f scripts/prompt03-polish.mjs
+          rm -f scripts/prompt03-finalize.mjs
+          rm -f scripts/prompt03-write-progress.mjs
+          rm -f .github/workflows/prompt03-apply.yml
+          rm -f .github/workflows/prompt03-polish.yml
+          rm -f .github/workflows/prompt03-finalize.yml
+
       - name: Commit final implementation
         run: |
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add apps/web/src/editor/PatternCanvas.tsx apps/web/src/styles.css scripts/prompt03-interaction-audit.mjs README.md docs/progress/PROMPT_03_EDITOR.md docs/evidence/prompt03
+          git add -A apps/web/src/editor/PatternCanvas.tsx apps/web/src/components/AssemblyPanel.tsx apps/web/src/styles.css scripts/prompt03-interaction-audit.mjs scripts/prompt03-apply.mjs scripts/prompt03-polish.mjs scripts/prompt03-finalize.mjs scripts/prompt03-write-progress.mjs .github/workflows/prompt03-apply.yml .github/workflows/prompt03-polish.yml .github/workflows/prompt03-finalize.yml README.md docs/progress/PROMPT_03_EDITOR.md docs/evidence/prompt03
           git commit -m "fix: complete reliable 2D editor interactions"
           git push origin main
 
