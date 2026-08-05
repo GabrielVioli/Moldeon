@@ -45,7 +45,8 @@ function serveGeneratedWasmPackage(): Plugin {
     apply: "serve",
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
-        const pathname = request.url?.split("?", 1)[0] ?? "";
+        const requestUrl = (request as unknown as { url?: string }).url;
+        const pathname = requestUrl?.split("?", 1)[0] ?? "";
         if (!pathname.startsWith("/wasm/")) {
           next();
           return;
