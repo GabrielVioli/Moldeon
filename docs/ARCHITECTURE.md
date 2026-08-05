@@ -63,6 +63,46 @@ O editor usa Canvas 2D para interação imediata. Toda geometria é armazenada e
 
 Durante a compatibilidade temporária, o editor ainda trabalha com `PatternPiece`. O adaptador V3 preserva pontos, nós, segmentos, contornos, curvas, linhas internas, pences, guias e transforms da bancada.
 
+## Operações geométricas de caminhos internos
+
+`InternalPath` é a representação canônica de linhas internas editáveis. Um caminho possui nós em milímetros, segmentos retos ou cúbicos, finalidade, visibilidade, bloqueio e metadados. A finalidade pode ser alterada sem reconstruir a geometria.
+
+A fronteira da operação é:
+
+```text
+Ferramenta Canvas / sessão Zustand
+    ↓ comando transacional
+InternalPath autoritativo em PatternPiece / PatternDocumentV3
+    ↓ análise pura
+interseções + regiões + costuras afetadas + diagnósticos
+    ↓ aplicação atômica
+novos contornos, pence estrutural ou SeamGroup
+```
+
+Responsabilidades:
+
+- `state/internalPathEditorStore.ts` guarda somente a sessão da ferramenta, seleção e transação atual.
+- `domain/internalPaths.ts` analisa e aplica corte, corte com costura e fechamento estrutural de pence sem depender de React, Canvas ou Three.js.
+- `PatternCanvas.tsx` faz hit testing, desenho de nós/alças e encaminha gestos. Ele não decide validade geométrica.
+- `PatternDocumentV3` continua sendo o formato persistido. Caminhos, pences e grupos de costura são projetados sem perda nos recursos suportados.
+- A aplicação retorna um novo documento completo ou falha sem alterar o documento anterior. Não existe estado intermediário de “meio corte”.
+
+O fallback geométrico desta fase está em TypeScript e possui testes determinísticos. Essa escolha é explícita porque o núcleo Rust atual ainda recebe `PatternPiece` e não implementa o schema raiz V3 nem grupos de costura multifaixa. A migração para Rust/WASM deve preservar os mesmos contratos, diagnósticos e fixtures antes de substituir o fallback.
+
+Tolerâncias atuais:
+
+- interseção e deduplicação: `0,08 mm`;
+- área mínima de uma região resultante: `4 mm²`;
+- curvas são divididas com De Casteljau e amostradas somente para análise e hit testing;
+- o contorno persistido continua usando segmentos cúbicos quando a curva original ou o caminho de corte é cúbico.
+
+Limites geométricos deliberados:
+
+- um corte aberto deve atravessar o contorno exatamente duas vezes;
+- tangências, sobreposição com a borda, mais de duas interseções e regiões degeneradas são rejeitadas;
+- a fase não oferece operações booleanas universais, ilhas internas, bolsos funcionais ou autointerseções arbitrárias;
+- costuras afetadas são remapeadas quando a referência continua inequívoca e invalidadas com diagnóstico quando não pode ser preservada com segurança.
+
 ## Núcleo Rust
 
 Responsabilidades pretendidas:
