@@ -144,6 +144,7 @@ export function buildAssemblyGraph(
   const validSeamIds: string[] = [];
 
   for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
     if (rangesAreIdentical(seam.first, seam.second)) {
       issues.push(
         `${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`,

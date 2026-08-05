@@ -93,6 +93,7 @@ export function buildSelfSeamConstraints(
   const constraintKeys = new Set<string>();
 
   for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
     if (
       seam.first.pieceId !==
       seam.second.pieceId

@@ -284,7 +284,7 @@ export function App() {
         if (state.draftContour) {
           cancelDraft();
           setActiveTool("select");
-        } else if (state.selectedPointId || state.selectedEdgeId || state.selectedDartId || state.pieceSelectionActive || state.selectedPieceIds.length > 1) {
+        } else if (state.selectedPointId || state.selectedEdgeId || state.selectedSeamId || state.selectedDartId || state.pieceSelectionActive || state.selectedPieceIds.length > 1) {
           state.clearSelection();
           state.selectDart(null);
           state.selectFirstSeamEdge(null);
@@ -368,10 +368,14 @@ export function App() {
       ) {
         return;
       }
-      const currentSelectedPointId =
-        useEditorStore.getState().selectedPointId;
-      const currentPieceId = useEditorStore.getState().activePieceId;
+      const currentState = useEditorStore.getState();
+      const currentSelectedPointId = currentState.selectedPointId;
+      const currentPieceId = currentState.activePieceId;
       event.preventDefault();
+      if (currentState.selectedSeamId) {
+        currentState.removeSeam(currentState.selectedSeamId);
+        return;
+      }
       if (currentSelectedPointId) {
         removePoint(currentSelectedPointId);
         return;
@@ -479,6 +483,7 @@ export function App() {
               workspaceStates={garment.workspaceStates ?? []}
               activePieceId={activePieceId}
               selectedPieceIds={selectedPieceIds}
+              dismissKey={activeTool + ":" + mobileView + ":" + workspaceMode}
               onSelect={selectPiece}
               onToggleSelect={togglePieceSelection}
               onCreate={handleCreateBlankPiece}

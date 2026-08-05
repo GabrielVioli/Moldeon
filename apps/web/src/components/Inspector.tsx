@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { edgeRangeLength, type PatternSnapshot } from "../domain/pattern";
+import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
 import { useEditorStore } from "../state/editorStore";
 
 interface InspectorProps {
@@ -36,6 +37,11 @@ export const Inspector = memo(function Inspector({
   const seamIssues = useEditorStore((state) => state.seamIssues);
   const removeSeam = useEditorStore((state) => state.removeSeam);
   const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
+  const toggleSeamActive = useEditorStore((state) => state.toggleSeamActive);
+  const selectedSeamId = useEditorStore((state) => state.selectedSeamId);
+  const selectSeam = useEditorStore((state) => state.selectSeam);
+  const setBodyType = useEditorStore((state) => state.setBodyType);
+  const setBodyMeasurement = useEditorStore((state) => state.setBodyMeasurement);
   const activePieceId = useEditorStore((state) => state.activePieceId);
   const pieceSelectionActive = useEditorStore((state) => state.pieceSelectionActive);
   const setWorkspaceTransform = useEditorStore((state) => state.setPieceWorkspaceTransform);
@@ -114,6 +120,22 @@ export const Inspector = memo(function Inspector({
         </div>
       </section>
 
+      <section className="measurement-panel-section">
+        <details>
+          <summary>Medidas corporais</summary>
+          <BodyMeasurementsForm
+            compact
+            bodyType={garment.bodyType}
+            measurements={garment.measurements}
+            onBodyTypeChange={setBodyType}
+            onMeasurementChange={setBodyMeasurement}
+            onEditStart={() => onEditStart("Alterar medidas")}
+            onEditEnd={onEditEnd}
+            onEditCancel={onEditCancel}
+          />
+        </details>
+      </section>
+
       <section>
         <div className="section-eyebrow">Ponto selecionado</div>
         {selectedPoint ? (
@@ -185,7 +207,7 @@ export const Inspector = memo(function Inspector({
             const firstLength = firstPiece ? edgeRangeLength(firstPiece, seam.first) : 0;
             const secondLength = secondPiece ? edgeRangeLength(secondPiece, seam.second) : 0;
             const issue = seamIssues.find((item) => item.seamId === seam.id);
-            return <li key={seam.id}><strong>{firstPiece?.name ?? "Peça ausente"} ↔ {secondPiece?.name ?? "Peça ausente"}</strong><small>{firstLength.toFixed(1)} / {secondLength.toFixed(1)} mm · Δ {Math.abs(firstLength - secondLength).toFixed(1)} mm</small>{issue ? <span>{issue.message}</span> : null}<div><button type="button" onClick={() => toggleSeamDirection(seam.id)}>{seam.direction === "same" ? "Mesmo sentido" : "Sentido oposto"}</button><button type="button" onClick={() => removeSeam(seam.id)}>Remover</button></div></li>;
+            return <li key={seam.id} className={`${selectedSeamId === seam.id ? "is-selected " : ""}${seam.active === false ? "is-inactive" : ""}`} onClick={() => selectSeam(seam.id)}><strong>{seam.name ?? ((firstPiece?.name ?? "Peça ausente") + " ↔ " + (secondPiece?.name ?? "Peça ausente"))}</strong><small>{firstPiece?.name ?? "Peça ausente"} ↔ {secondPiece?.name ?? "Peça ausente"} · {firstLength.toFixed(1)} / {secondLength.toFixed(1)} mm · Δ {Math.abs(firstLength - secondLength).toFixed(1)} mm</small>{issue ? <span>{issue.message}</span> : null}<div><button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamActive(seam.id); }}>{seam.active === false ? "Reativar" : "Desativar"}</button><button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamDirection(seam.id); }}>{seam.direction === "same" ? "Mesmo sentido" : "Sentido oposto"}</button><button type="button" onClick={(event) => { event.stopPropagation(); removeSeam(seam.id); }}>Remover</button></div></li>;
           })}</ul>
         )}
       </section>

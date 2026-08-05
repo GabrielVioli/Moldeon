@@ -42,6 +42,10 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const confirmProposal = useEditorStore((state) => state.confirmSeamProposal);
   const updateSeam = useEditorStore((state) => state.updateSeam);
   const removeSeam = useEditorStore((state) => state.removeSeam);
+  const selectedSeamId = useEditorStore((state) => state.selectedSeamId);
+  const selectSeam = useEditorStore((state) => state.selectSeam);
+  const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
+  const toggleSeamActive = useEditorStore((state) => state.toggleSeamActive);
   const setAssemblyPlacement = useEditorStore(
     (state) => state.setAssemblyPlacement,
   );
@@ -139,10 +143,11 @@ export const AssemblyPanel = memo(function AssemblyPanel({
           <p>Nenhuma costura confirmada.</p>
         ) : (
           (garment.seams ?? []).map((seam) => (
-            <div className="assembly-row" key={seam.id}>
+            <div className={`assembly-row seam-editor-row${selectedSeamId === seam.id ? " is-selected" : ""}${seam.active === false ? " is-inactive" : ""}`} key={seam.id} onClick={() => selectSeam(seam.id)}>
               <input
                 aria-label="Nome da costura"
                 value={seam.name ?? seam.id}
+                onClick={(event) => event.stopPropagation()}
                 onChange={(event) =>
                   updateSeam(seam.id, { name: event.currentTarget.value })
                 }
@@ -162,7 +167,13 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={() => removeSeam(seam.id)}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamActive(seam.id); }}>
+                {seam.active === false ? "Reativar" : "Desativar"}
+              </button>
+              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamDirection(seam.id); }}>
+                Inverter
+              </button>
+              <button type="button" onClick={(event) => { event.stopPropagation(); removeSeam(seam.id); }}>
                 Excluir
               </button>
             </div>

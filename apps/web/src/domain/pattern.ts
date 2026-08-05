@@ -72,6 +72,7 @@ export interface Seam {
   type: string; // e.g. 'standard'
   name?: string;
   treatment?: SeamTreatment;
+  active?: boolean;
 }
 
 export type SegmentRole =
@@ -563,8 +564,11 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const treatment = s.treatment === undefined
         ? (type === "standard" ? "standard" : "intentional-mismatch")
         : readEnum(s.treatment, ["standard", "ease", "gather", "stretch", "intentional-mismatch"] as const, `O tratamento da costura ${i + 1}`);
+      const active = s.active === undefined
+        ? true
+        : readBoolean(s.active, `O estado da costura ${i + 1}`);
       if (!seamIds.has(id)) {
-        seams.push({ id, first, second, direction, easeRatio, type, name, treatment });
+        seams.push({ id, first, second, direction, easeRatio, type, name, treatment, active });
         seamIds.add(id);
       }
     }
@@ -649,7 +653,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         const first = parseLegacyRange(legacy.first);
         const second = parseLegacyRange(legacy.second);
         const direction = legacy.direction === "reverse" ? "opposite" : "same";
-        seams.push({ id, first, second, direction, easeRatio: 0, type: "standard" });
+        seams.push({ id, first, second, direction, easeRatio: 0, type: "standard", active: true });
         seamIds.add(id);
       } catch (e) {
         // skip invalid legacy seam but keep project loadable

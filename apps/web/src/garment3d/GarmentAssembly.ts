@@ -87,6 +87,7 @@ export function buildGarmentAssembly(
     (garment.seams ?? [])
       .filter(
         (seam) =>
+          seam.active !== false &&
           seam.first.pieceId === seam.second.pieceId &&
           !rangesAreIdentical(seam.first, seam.second),
       )
@@ -314,6 +315,7 @@ function buildGlobalStitchConstraints(
   }
 
   for (const seam of seams) {
+    if (seam.active === false) continue;
     if (rangesAreIdentical(seam.first, seam.second)) {
       warnings.push(`${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`);
       continue;

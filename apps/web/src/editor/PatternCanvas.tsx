@@ -30,6 +30,14 @@ import { findNearbySeamCandidates } from "../domain/patternOperations";
 import { buildAssemblyGraph } from "../domain/assembly";
 import { findNearestPatternSegment } from "../domain/patternEditing";
 import {
+  createGestureOrigin,
+  finishGesture,
+  shouldInsertPointFromTap,
+  shouldStartBoxSelection,
+  type GestureOrigin,
+} from "./canvasGestures";
+import { findNearestEdgeHit, findNearestSeamHit } from "./canvasHitTesting";
+import {
   Camera2D,
   ScreenPoint,
   cameraFromGesture,
@@ -127,6 +135,15 @@ function PatternCanvasComponent({
   const workspaceFrameRef = useRef<number | null>(null);
   const pendingWorkspaceRef = useRef<PieceWorkspaceTransform[]>([]);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
+  const pointTapRef = useRef<GestureOrigin | null>(null);
+  const touchPieceCandidateRef = useRef<(GestureOrigin & {
+    pieceId: string;
+    startWorldX: number;
+    startWorldY: number;
+    startX: number;
+    startY: number;
+    groupStarts: PieceWorkspaceTransform[];
+  }) | null>(null);
   const dragRef = useRef<
     | { type: "point"; pointerId: number; pieceId: string; pointId: string }
     | {
@@ -199,6 +216,7 @@ function PatternCanvasComponent({
   const closeDraft = useEditorStore((s) => s.closeDraft);
   const pieceSelectionActive = useEditorStore((s) => s.pieceSelectionActive);
   const selectedEdgeId = useEditorStore((s) => s.selectedEdgeId);
+  const selectedSeamId = useEditorStore((s) => s.selectedSeamId);
   const selectedDartId = useEditorStore((s) => s.selectedDartId);
   const seamFirstEdge = useEditorStore((s) => s.seamFirstEdge);
   const selectedPieceIds = useEditorStore((s) => s.selectedPieceIds);
@@ -253,13 +271,14 @@ function PatternCanvasComponent({
       rotationFeedback,
       dragRef.current?.type === "box" ? dragRef.current : null,
       selectedEdgeId,
+      selectedSeamId,
       selectedDartId,
       selectedPieceIds,
       cutDraft,
       dartDraft,
       measureDraft,
     );
-  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, measureDraft, pieceSelectionActive, rotationFeedback, seamFirstEdge, selectedDartId, selectedEdgeId, selectedPieceIds]);
+  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, measureDraft, pieceSelectionActive, rotationFeedback, seamFirstEdge, selectedDartId, selectedEdgeId, selectedPieceIds, selectedSeamId]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -519,7 +538,7 @@ function PatternCanvasComponent({
     if (getPieceWorkspaceState(garment, activePieceId).locked) return false;
     const world = screenToActivePieceLocal(clientX, clientY);
     const target = findNearestPatternSegment(
-      snapshotRef.current.piece.points,
+      snapshotRef.current.piece,
       world,
     );
     if (
@@ -533,28 +552,11 @@ function PatternCanvasComponent({
   }
 
   function findEdgeRangeAt(clientX: number, clientY: number): EdgeRange | null {
-    const world = screenToWorld(clientX, clientY);
-    let nearest: { piece: PatternPiece; target: ReturnType<typeof findNearestPatternSegment> } | null = null;
-    for (const piece of garment.pieces) {
-      if (!getPieceWorkspaceState(garment, piece.id).visible) continue;
-      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, piece.id));
-      const target = findNearestPatternSegment(piece.points, local);
-      if (!target || target.distanceMm > 18 / cameraRef.current.zoom) continue;
-      if (!nearest || target.distanceMm < nearest.target!.distanceMm) nearest = { piece, target };
-    }
-    if (!nearest?.target) return null;
-    const { piece, target } = nearest;
-    const startIndex = piece.points.findIndex((point) => point.id === target.startPointId);
-    if (startIndex < 0) return null;
-    const end = piece.points[(startIndex + 1) % piece.points.length];
-    const persistentEdge = getPatternEdges(piece).find((edge) => edge.startPointId === target.startPointId && edge.endPointId === end.id);
-    if (!persistentEdge) return null;
-    return {
-      pieceId: piece.id,
-      edgeId: persistentEdge.id,
-      startT: 0,
-      endT: 1,
-    };
+    return findNearestEdgeHit(
+      garment,
+      screenToWorld(clientX, clientY),
+      18 / cameraRef.current.zoom,
+    )?.range ?? null;
   }
 
   function activePieceLocalBounds() {
@@ -645,6 +647,7 @@ function PatternCanvasComponent({
   }
 
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
 
     if (
@@ -696,7 +699,12 @@ function PatternCanvasComponent({
       }
 
       if (toolRef.current === "point") {
-        insertPointNear(event.clientX, event.clientY);
+        pointTapRef.current = createGestureOrigin(
+          event.pointerId,
+          event.pointerType,
+          event.clientX,
+          event.clientY,
+        );
         dragRef.current = null;
         return;
       }
@@ -767,10 +775,8 @@ function PatternCanvasComponent({
           dragRef.current = null;
           return;
         }
-        onEditStartRef.current("Mover peça");
-        dragRef.current = {
-          type: "piece",
-          pointerId: event.pointerId,
+        touchPieceCandidateRef.current = {
+          ...createGestureOrigin(event.pointerId, event.pointerType, event.clientX, event.clientY),
           pieceId: piece.id,
           startWorldX: world.xMm,
           startWorldY: world.yMm,
@@ -778,6 +784,7 @@ function PatternCanvasComponent({
           startY: workspace.transform.yMm,
           groupStarts: piecesMovingWith(piece.id).map((id) => ({ ...getPieceWorkspaceTransform(garment, id) })),
         };
+        dragRef.current = null;
         return;
       }
 
@@ -815,12 +822,28 @@ function PatternCanvasComponent({
     }
 
     if (toolRef.current === "point") {
-      insertPointNear(event.clientX, event.clientY);
+      pointTapRef.current = createGestureOrigin(
+        event.pointerId,
+        event.pointerType,
+        event.clientX,
+        event.clientY,
+      );
       dragRef.current = null;
       return;
     }
 
     if (toolRef.current === "select") {
+      const seamHit = findNearestSeamHit(
+        garment,
+        screenToWorld(event.clientX, event.clientY),
+        12 / cameraRef.current.zoom,
+      );
+      if (seamHit) {
+        useEditorStore.getState().selectSeam(seamHit.seam.id);
+        dragRef.current = null;
+        scheduleDraw();
+        return;
+      }
       const dartId = findDartAt(event.clientX, event.clientY);
       if (dartId) { useEditorStore.getState().selectDart(dartId); dragRef.current = null; return; }
     }
@@ -929,6 +952,26 @@ function PatternCanvasComponent({
         clientX: event.clientX,
         clientY: event.clientY,
       });
+    }
+
+    const touchCandidate = touchPieceCandidateRef.current;
+    if (
+      !dragRef.current &&
+      touchCandidate?.pointerId === event.pointerId &&
+      !finishGesture(touchCandidate, event.clientX, event.clientY).isClick
+    ) {
+      onEditStartRef.current("Mover peça");
+      dragRef.current = {
+        type: "piece",
+        pointerId: event.pointerId,
+        pieceId: touchCandidate.pieceId,
+        startWorldX: touchCandidate.startWorldX,
+        startWorldY: touchCandidate.startWorldY,
+        startX: touchCandidate.startX,
+        startY: touchCandidate.startY,
+        groupStarts: touchCandidate.groupStarts,
+      };
+      touchPieceCandidateRef.current = null;
     }
 
     const drag = dragRef.current;
@@ -1223,6 +1266,8 @@ function PatternCanvasComponent({
   }
 
   function beginPinch() {
+    pointTapRef.current = null;
+    touchPieceCandidateRef.current = null;
     const canvas = canvasRef.current;
     const pointers = [...activePointersRef.current.entries()];
     if (!canvas || pointers.length < 2) return;
@@ -1240,6 +1285,28 @@ function PatternCanvasComponent({
 
   function finishPointer(event: PointerEvent<HTMLCanvasElement>) {
     const finishedDrag = dragRef.current;
+    const pointerCountBeforeRelease = Math.max(1, activePointersRef.current.size);
+    const pendingPointTap = pointTapRef.current;
+    if (pendingPointTap?.pointerId === event.pointerId) {
+      const finish = finishGesture(
+        pendingPointTap,
+        event.clientX,
+        event.clientY,
+      );
+      pointTapRef.current = null;
+      if (
+        shouldInsertPointFromTap(
+          pendingPointTap,
+          finish,
+          pointerCountBeforeRelease,
+        )
+      ) {
+        insertPointNear(event.clientX, event.clientY);
+      }
+    }
+    if (touchPieceCandidateRef.current?.pointerId === event.pointerId) {
+      touchPieceCandidateRef.current = null;
+    }
     const intentPointer = intentPointerRef.current;
     if (intentPointer?.pointerId === event.pointerId) {
       const moved = Math.hypot(event.clientX - intentPointer.startX, event.clientY - intentPointer.startY);
@@ -1303,7 +1370,7 @@ function PatternCanvasComponent({
     }
     if (finishedDrag?.type === "box" && finishedDrag.pointerId === event.pointerId) {
       const moved = Math.hypot(finishedDrag.currentX - finishedDrag.startX, finishedDrag.currentY - finishedDrag.startY);
-      if (moved < 4) {
+      if (!shouldStartBoxSelection(moved)) {
         clearSelection();
         useEditorStore.getState().selectDart(null);
         useEditorStore.getState().setNearbySeamSuggestion(null);
@@ -1361,6 +1428,7 @@ function PatternCanvasComponent({
       </div>
       <canvas
         ref={canvasRef}
+        tabIndex={0}
         className={`pattern-canvas pattern-canvas-${tool}${spaceHandActive ? " is-space-hand" : ""}${isPanning ? " is-panning" : ""}${hoveredDimension ? " is-dimension-hovered" : ""}`}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDown={handlePointerDown}
@@ -1371,6 +1439,11 @@ function PatternCanvasComponent({
         onWheel={handleWheel}
         aria-label="Editor de molde 2D"
       />
+      {selectedSeamId ? (
+        <div className="canvas-seam-label" role="status">
+          {garmentSeams.find((seam) => seam.id === selectedSeamId)?.name ?? "Costura selecionada"}
+        </div>
+      ) : null}
       {readyIntent && intentPosition ? (
         <div className="canvas-intent-actions" style={intentPosition} role="toolbar" aria-label={readyIntent.kind === "cut" ? "Confirmar recorte" : "Confirmar pence"}>
           <button className="primary-button" type="button" onClick={() => {
@@ -1551,6 +1624,7 @@ function draw(
   rotationFeedback: number | null,
   selectionBox: { startX: number; startY: number; currentX: number; currentY: number } | null,
   selectedEdgeId: string | null,
+  selectedSeamId: string | null,
   selectedDartId: string | null,
   selectedPieceIds: string[],
   cutDraft: { pieceId: string; start: import("../domain/pattern").PatternVector; end: import("../domain/pattern").PatternVector } | null,
@@ -1658,8 +1732,12 @@ function draw(
     }
 
     for (const seam of seams) {
-      drawSeamInterval(context, piece, seam.first, transform, camera.zoom, "#a23d3d");
-      drawSeamInterval(context, piece, seam.second, transform, camera.zoom, "#3d6aa2");
+      const selected = seam.id === selectedSeamId;
+      const inactive = seam.active === false;
+      if (inactive) context.setLineDash([5 / camera.zoom, 5 / camera.zoom]);
+      drawSeamInterval(context, piece, seam.first, transform, camera.zoom, selected ? "#ff7a00" : inactive ? "#9b7d7d" : "#a23d3d", selected ? 5 : 3);
+      drawSeamInterval(context, piece, seam.second, transform, camera.zoom, selected ? "#ffb000" : inactive ? "#7d899b" : "#3d6aa2", selected ? 5 : 3);
+      if (inactive) context.setLineDash([]);
     }
 
     if (seamSelection?.first) {
@@ -1933,6 +2011,7 @@ function drawSeamInterval(
   transform: PieceWorkspaceTransform,
   zoom: number,
   color: string,
+  widthPx = 3,
 ) {
   if (range.pieceId !== piece.id) return;
   const edge = getEdgeById(piece, range.edgeId);
@@ -1954,7 +2033,7 @@ function drawSeamInterval(
     context.lineTo(point.xMm, point.yMm);
   }
   context.strokeStyle = color;
-  context.lineWidth = 3 / zoom;
+  context.lineWidth = widthPx / zoom;
   context.stroke();
 }
 

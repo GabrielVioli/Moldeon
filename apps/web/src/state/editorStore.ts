@@ -36,7 +36,11 @@ import {
   type FabricPresetId,
   type FabricSource,
 } from "../domain/fabric";
-import { insertPatternPoint, removePatternPoint } from "../domain/patternEditing";
+import {
+  insertPatternPoint,
+  remapSeamsAfterSegmentSplit,
+  removePatternPoint,
+} from "../domain/patternEditing";
 import { convertPatternSegment, movePatternSegment, splitPatternSegment } from "../domain/segmentEditing";
 import { updateDart as updatePatternDart } from "../domain/patternOperations";
 import {
@@ -53,6 +57,7 @@ export interface EditorState {
   engineBackend: "wasm" | "typescript";
   selectedPointId: string | null;
   selectedEdgeId: string | null;
+  selectedSeamId: string | null;
   pieceSelectionActive: boolean;
   selectedPieceIds: string[];
   draftContour: DraftContour | null;
@@ -81,6 +86,7 @@ export interface EditorState {
   duplicateSelectedPieces(mirrored?: boolean): void;
   selectPoint(pointId: string | null): void;
   selectEdge(edgeId: string | null): void;
+  selectSeam(seamId: string | null): void;
   clearSelection(): void;
   beginEdit(label: string, type?: DocumentCommandType): void;
   commitEdit(): void;
@@ -112,9 +118,10 @@ export interface EditorState {
   splitSelectedSegment(): void;
   setMeasureDraft(draft: EditorState["measureDraft"]): void;
   cancelIntent(): void;
-  updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment }): void;
+  updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment; active?: boolean }): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
+  toggleSeamActive(seamId: string): void;
   addGuide(orientation: Guide["orientation"], positionMm: number): void;
   moveGuide(guideId: string, positionMm: number): void;
   removeGuide(guideId: string): void;
@@ -162,6 +169,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   engineBackend: "typescript",
   selectedPointId: null,
   selectedEdgeId: null,
+  selectedSeamId: null,
   pieceSelectionActive: false,
   selectedPieceIds: [],
   draftContour: null,
@@ -189,6 +197,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activePieceId: snapshot.piece.id,
       selectedPointId: null,
       selectedEdgeId: null,
+      selectedSeamId: null,
       pieceSelectionActive: false,
       selectedPieceIds: [],
       ...historyAvailability(),
@@ -209,6 +218,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       engineBackend: backend,
       selectedPointId: null,
       selectedEdgeId: null,
+      selectedSeamId: null,
       pieceSelectionActive: false,
       selectedPieceIds: [],
       draftContour: null,
@@ -243,6 +253,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       snapshot: restoreSnapshot(piece),
       selectedPointId: null,
       selectedEdgeId: null,
+      selectedSeamId: null,
       pieceSelectionActive: true,
       selectedPieceIds: [pieceId],
     });
@@ -294,16 +305,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectPoint: (selectedPointId) => set({
     selectedPointId,
     selectedEdgeId: null,
+    selectedSeamId: null,
     pieceSelectionActive: false,
   }),
   selectEdge: (selectedEdgeId) => set({
     selectedEdgeId,
     selectedPointId: null,
+    selectedSeamId: null,
     pieceSelectionActive: false,
+  }),
+  selectSeam: (selectedSeamId) => set({
+    selectedSeamId,
+    selectedPointId: null,
+    selectedEdgeId: null,
+    selectedDartId: null,
+    pieceSelectionActive: false,
+    selectedPieceIds: [],
   }),
   clearSelection: () => set({
     selectedPointId: null,
     selectedEdgeId: null,
+    selectedSeamId: null,
     pieceSelectionActive: false,
     selectedPieceIds: [],
   }),
@@ -336,11 +358,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     recordIfStandalone(set, get, "geometry", enabled ? "Criar curva" : "Converter em linha", before);
   },
   insertPoint: (startPointId, t) => {
-    const insertion = insertPatternPoint(get().snapshot.piece, startPointId, t);
+    const state = get();
+    const insertion = insertPatternPoint(state.snapshot.piece, startPointId, t);
     if (!insertion) return;
     const before = captureDocument(get);
-    applyGeometrySnapshot(set, get, currentEngine().restorePiece(insertion.piece), {
+    const rawSnapshot = currentEngine().restorePiece(insertion.piece);
+    const snapshot = preservePieceMetadata(rawSnapshot, insertion.piece);
+    const garment = replacePiece(
+      {
+        ...state.garment,
+        seams: remapSeamsAfterSegmentSplit(
+          state.garment.seams ?? [],
+          insertion.split,
+        ),
+      },
+      snapshot.piece,
+    );
+    set({
+      garment,
+      snapshot,
       selectedPointId: insertion.pointId,
+      selectedEdgeId: null,
+      selectedSeamId: null,
     });
     recordIfStandalone(set, get, "geometry", "Adicionar ponto", before);
   },
@@ -387,7 +426,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document.garment,
       seams: (document.garment.seams ?? []).filter((seam) => seam.id !== seamId),
     },
-  })),
+  }), { selectedSeamId: null }),
   toggleSeamDirection: (seamId) => changeDocument(set, get, "seam", "Inverter costura", (document) => ({
     ...document,
     garment: {
@@ -398,7 +437,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           : seam,
       ),
     },
-  })),
+  }), { selectedSeamId: seamId }),
+  toggleSeamActive: (seamId) => changeDocument(set, get, "seam", "Alterar estado da costura", (document) => ({
+    ...document,
+    garment: {
+      ...document.garment,
+      seams: (document.garment.seams ?? []).map((seam) =>
+        seam.id === seamId ? { ...seam, active: seam.active === false } : seam,
+      ),
+    },
+  }), { selectedSeamId: seamId }),
 
   addGuide: (orientation, positionMm) => updateActivePieceDocument(
     set,
@@ -636,7 +684,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const dart = createDart(draft.pieceId, draft.edgePoint, draft.apex);
     changeDocument(set, get, "dart", "Criar pence", (document) => ({ ...document, garment: { ...document.garment, pieces: document.garment.pieces.map((piece) => piece.id === draft.pieceId ? { ...piece, darts: [...(piece.darts ?? []), closeDart(dart)] } : piece) } }), { dartDraft: null, selectedDartId: dart.id });
   },
-  selectDart: (selectedDartId) => set({ selectedDartId, selectedPointId: null, selectedEdgeId: null, pieceSelectionActive: false }),
+  selectDart: (selectedDartId) => set({ selectedDartId, selectedPointId: null, selectedEdgeId: null, selectedSeamId: null, pieceSelectionActive: false }),
   updateDart: (dartId, update) => changeDocument(
     set,
     get,
@@ -891,6 +939,7 @@ function applyDocumentState(
     snapshot,
     selectedPointId: null,
     selectedEdgeId: null,
+    selectedSeamId: null,
     seamIssues: collectSeamIssues(garment),
     seamProposal: null,
     seamFirstEdge: null,
