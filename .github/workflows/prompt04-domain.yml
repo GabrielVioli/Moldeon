@@ -35,7 +35,15 @@ jobs:
 
       - name: Apply internal path domain patch
         run: |
-          cat scripts/prompt04-domain/chunk-*.txt > /tmp/prompt04-domain.b64
+          cat \
+            scripts/prompt04-domain/chunk-00a.txt \
+            scripts/prompt04-domain/chunk-00b.txt \
+            scripts/prompt04-domain/chunk-01.txt \
+            scripts/prompt04-domain/chunk-02.txt \
+            scripts/prompt04-domain/chunk-03.txt \
+            scripts/prompt04-domain/chunk-04.txt \
+            scripts/prompt04-domain/chunk-05.txt \
+            > /tmp/prompt04-domain.b64
           base64 -d /tmp/prompt04-domain.b64 | gzip -d > /tmp/prompt04-domain-apply.mjs
           node /tmp/prompt04-domain-apply.mjs
 
