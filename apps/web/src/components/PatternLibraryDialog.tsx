@@ -4,6 +4,7 @@ import type {
   BodyType,
   GarmentDraft,
 } from "../domain/pattern";
+import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import {
   DEFAULT_BODY_MEASUREMENTS,
   DEFAULT_MASCULINE_BODY_MEASUREMENTS,
@@ -39,7 +40,12 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
   const chooseTemplate = (templateId: PatternTemplateId) => {
     try {
       setError(null);
-      onChoose(createGarmentFromTemplate(templateId, measurements, bodyType));
+      const generated = createGarmentFromTemplate(
+        templateId,
+        measurements,
+        bodyType,
+      );
+      onChoose(resolveTemplateAssemblyGarment(generated));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -111,15 +117,24 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
               disabled={template.status !== "ready"}
               onClick={() => chooseTemplate(template.id)}
             >
-              <span className={`template-icon template-icon-${template.id}`} aria-hidden="true" />
+              <span
+                className={`template-icon template-icon-${template.id}`}
+                aria-hidden="true"
+              />
               <span className="template-card-copy">
                 <span className="template-category">{template.category}</span>
                 <strong>{template.name}</strong>
                 <span>{template.description}</span>
                 <small>{template.pieces}</small>
-                <small><strong>Usa:</strong> {template.requiredMeasurements.join(", ")}</small>
-                <small><strong>Estimadas:</strong> {template.estimatedMeasurements.join(", ")}</small>
-                {template.status === "development" ? <small className="template-status">Em desenvolvimento</small> : null}
+                <small>
+                  <strong>Usa:</strong> {template.requiredMeasurements.join(", ")}
+                </small>
+                <small>
+                  <strong>Estimadas:</strong> {template.estimatedMeasurements.join(", ")}
+                </small>
+                {template.status === "development" ? (
+                  <small className="template-status">Em desenvolvimento</small>
+                ) : null}
               </span>
             </button>
           ))}
@@ -127,7 +142,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
 
         {error ? <div className="dialog-error">{error}</div> : null}
         <footer className="dialog-note">
-          As medidas listadas como estimadas usam proporções antropométricas e devem ser conferidas. Faça um protótipo antes de cortar o tecido definitivo.
+          As medidas listadas como estimadas usam proporções antropométricas e
+          devem ser conferidas. Faça um protótipo antes de cortar o tecido
+          definitivo.
         </footer>
       </section>
     </div>
