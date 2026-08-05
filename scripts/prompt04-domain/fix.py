@@ -83,16 +83,3 @@ function nearestSampleIndex''','nearest contour')
 p.write_text(s)
 
 pd=Path('apps/web/src/domain/patternDocumentV3.ts'); d=pd.read_text().replace('possui lados com quantidades diferentes de intervalos.','possui múltiplos intervalos com quantidades diferentes entre os lados.'); pd.write_text(d)
-
-pc=Path('apps/web/src/editor/PatternCanvas.tsx'); c=pc.read_text()
-c=sub(c,r'    for \(const line of piece\.internalLines \?\? \[\]\) \{\n        const points = line\.points\.map.*?\n      \}', '''    for (const line of piece.internalLines ?? []) {
-        const internal = line as unknown as { purpose:string; visible?:boolean; points?:Array<{xMm:number;yMm:number}>; nodes?:Array<{id:string;xMm:number;yMm:number;handleIn?:{xMm:number;yMm:number};handleOut?:{xMm:number;yMm:number}}>; segments?:Array<{kind:"line"|"cubic";startNodeId:string;endNodeId:string}> };
-        if (internal.visible === false) continue;
-        const byId=new Map((internal.nodes??[]).map((node)=>[node.id,node]));
-        const local=internal.points??(internal.segments??[]).flatMap((segment,si)=>{const a=byId.get(segment.startNodeId),b=byId.get(segment.endNodeId);if(!a||!b)return[];const steps=segment.kind==="cubic"?16:1;const sampled=Array.from({length:steps+1},(_,i)=>{const t=i/steps;if(segment.kind==="line")return{xMm:a.xMm+(b.xMm-a.xMm)*t,yMm:a.yMm+(b.yMm-a.yMm)*t};const c1=a.handleOut?{xMm:a.xMm+a.handleOut.xMm,yMm:a.yMm+a.handleOut.yMm}:a,c2=b.handleIn?{xMm:b.xMm+b.handleIn.xMm,yMm:b.yMm+b.handleIn.yMm}:b,u=1-t;return{xMm:u*u*u*a.xMm+3*u*u*t*c1.xMm+3*u*t*t*c2.xMm+t*t*t*b.xMm,yMm:u*u*u*a.yMm+3*u*u*t*c1.yMm+3*u*t*t*c2.yMm+t*t*t*b.yMm}});return si===0?sampled:sampled.slice(1)});
-        const points=local.map((point)=>pieceLocalToWorld(point,transform));if(points.length<2)continue;
-        context.beginPath();points.forEach((point,index)=>index?context.lineTo(point.xMm,point.yMm):context.moveTo(point.xMm,point.yMm));
-        context.setLineDash(internal.purpose==="fold"?[8/camera.zoom,5/camera.zoom]:internal.purpose==="reference"?[3/camera.zoom,3/camera.zoom]:[]);
-        context.strokeStyle=internal.purpose==="dart"?"#b06084":internal.purpose==="cut"||internal.purpose==="cut-and-sew"?"#b3442e":"#59636c";context.lineWidth=1.5/camera.zoom;context.stroke();context.setLineDash([]);
-      }''','canvas')
-pc.write_text(c)
