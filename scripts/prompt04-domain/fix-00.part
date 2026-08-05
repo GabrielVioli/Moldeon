@@ -1,0 +1,113 @@
+from pathlib import Path
+import re
+
+
+def replace_required(source: str, before: str, after: str, label: str) -> str:
+    count = source.count(before)
+    if count != 1:
+        raise SystemExit(f"{label}: expected 1 occurrence, found {count}")
+    return source.replace(before, after)
+
+
+path = Path("apps/web/src/domain/internalPaths.ts")
+source = path.read_text(encoding="utf-8")
+source = replace_required(source, '''function samplePathWithMetadata(path: InternalPath): SampledPathPoint[] {
+  const nodes = new Map(path.nodes.map((node) => [node.id, node]));
+  const result: SampledPathPoint[] = [];
+  let walked = 0;
+  for (const segment of path.segments) {
+    const start = nodes.get(segment.startNodeId);
+    const end = nodes.get(segment.endNodeId);
+    if (!start || !end) continue;
+    const steps = segment.kind === "cubic" ? PATH_CURVE_STEPS : 1;
+    let previous: PatternVector | null = null;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const point = pointOnInternalSegment(segment, start, end, t);
+      if (previous) walked += distance(previous, point);
+      if (result.length === 0 || distance(result.at(-1)!, point) > 1e-8) {
+        result.push({ ...point, segmentId: segment.id, segmentT: t, distanceMm: walked });
+      } else {
+        result[result.length - 1] = { ...point, segmentId: segment.id, segmentT: t, distanceMm: walked };
+      }
+      previous = point;
+    }
+  }
+  return result;
+}''', '''function samplePathWithMetadata(path: InternalPath): SampledPathPoint[] {
+  const nodes = new Map(path.nodes.map((node) => [node.id, node]));
+  const result: SampledPathPoint[] = [];
+  let walked = 0;
+  for (const segment of path.segments) {
+    const start = nodes.get(segment.startNodeId);
+    const end = nodes.get(segment.endNodeId);
+    if (!start || !end) continue;
+    const steps = segment.kind === "cubic" ? PATH_CURVE_STEPS : 1;
+    let previous: PatternVector | null = null;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const point = pointOnInternalSegment(segment, start, end, t);
+      if (previous) walked += distance(previous, point);
+      result.push({ ...point, segmentId: segment.id, segmentT: t, distanceMm: walked });
+      previous = point;
+    }
+  }
+  return result;
+}''', "path metadata sampling")
+
+source = replace_required(source, '''function sampleContourWithMetadata(pieceValue: PatternPiece): SampledContourPoint[] {
+  const piece = migrateLegacyPieceToSegments(structuredClone(pieceValue));
+  const nodes = new Map((piece.nodes ?? []).map((node) => [node.id, node]));
+  const segments = new Map((piece.segments ?? []).map((segment) => [segment.id, segment]));
+  const ordered = piece.contours?.find((contour) => contour.closed)?.segmentIds ?? [];
+  const result: SampledContourPoint[] = [];
+  let walked = 0;
+  for (const id of ordered) {
+    const segment = segments.get(id);
+    const start = segment && nodes.get(segment.startNodeId);
+    const end = segment && nodes.get(segment.endNodeId);
+    if (!segment || !start || !end) continue;
+    const steps = segment.kind === "cubic" ? CONTOUR_CURVE_STEPS : 1;
+    let previous: PatternVector | null = null;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const point = pointOnPatternSegment(segment, start, end, t);
+      if (previous) walked += distance(previous, point);
+      if (result.length === 0 || distance(result.at(-1)!, point) > 1e-8) {
+        result.push({ ...point, edgeId: segment.id, edgeT: t, distanceMm: walked });
+      } else {
+        result[result.length - 1] = { ...point, edgeId: segment.id, edgeT: t, distanceMm: walked };
+      }
+      previous = point;
+    }
+  }
+  if (result.length > 0 && distance(result[0], result.at(-1)!) > 1e-8) {
+    const first = result[0];
+    walked += distance(result.at(-1)!, first);
+    result.push({ ...first, distanceMm: walked });
+  }
+  return result;
+}''', '''function sampleContourWithMetadata(pieceValue: PatternPiece): SampledContourPoint[] {
+  const piece = migrateLegacyPieceToSegments(structuredClone(pieceValue));
+  const nodes = new Map((piece.nodes ?? []).map((node) => [node.id, node]));
+  const segments = new Map((piece.segments ?? []).map((segment) => [segment.id, segment]));
+  const ordered = piece.contours?.find((contour) => contour.closed)?.segmentIds ?? [];
+  const result: SampledContourPoint[] = [];
+  let walked = 0;
+  for (const id of ordered) {
+    const segment = segments.get(id);
+    const start = segment && nodes.get(segment.startNodeId);
+    const end = segment && nodes.get(segment.endNodeId);
+    if (!segment || !start || !end) continue;
+    const steps = segment.kind === "cubic" ? CONTOUR_CURVE_STEPS : 1;
+    let previous: PatternVector | null = null;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const point = pointOnPatternSegment(segment, start, end, t);
+      if (previous) walked += distance(previous, point);
+      result.push({ ...point, edgeId: segment.id, edgeT: t, distanceMm: walked });
+      previous = point;
+    }
+  }
+  return result;
+}''', "contour metadata sampling")
