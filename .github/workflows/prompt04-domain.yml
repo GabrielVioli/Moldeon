@@ -47,6 +47,67 @@ jobs:
           base64 -d /tmp/prompt04-domain.b64 | gzip -d > /tmp/prompt04-domain-apply.mjs
           node /tmp/prompt04-domain-apply.mjs
 
+      - name: Adapt canvas internal path renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/web/src/editor/PatternCanvas.tsx")
+          source = path.read_text(encoding="utf-8")
+          old = '''    for (const line of piece.internalLines ?? []) {
+                const points = line.points.map((point) => pieceLocalToWorld(point, transform));
+                context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
+                context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : [3 / camera.zoom, 3 / camera.zoom]);
+                context.strokeStyle = "#59636c"; context.lineWidth = 1.5 / camera.zoom; context.stroke(); context.setLineDash([]);
+              }'''
+          new = '''    for (const line of piece.internalLines ?? []) {
+                const internal = line as unknown as {
+                  purpose: string;
+                  visible?: boolean;
+                  points?: Array<{ xMm: number; yMm: number }>;
+                  nodes?: Array<{ id: string; xMm: number; yMm: number }>;
+                  segments?: Array<{
+                    kind: "line" | "cubic";
+                    startNodeId: string;
+                    endNodeId: string;
+                    control1?: { xMm: number; yMm: number };
+                    control2?: { xMm: number; yMm: number };
+                  }>;
+                };
+                if (internal.visible === false) continue;
+                const nodeById = new Map((internal.nodes ?? []).map((node) => [node.id, node]));
+                const localPoints = internal.points ?? (internal.segments ?? []).flatMap((segment, segmentIndex) => {
+                  const start = nodeById.get(segment.startNodeId);
+                  const end = nodeById.get(segment.endNodeId);
+                  if (!start || !end) return [];
+                  const steps = segment.kind === "cubic" ? 16 : 1;
+                  const sampled = Array.from({ length: steps + 1 }, (_, index) => {
+                    const t = index / steps;
+                    if (segment.kind === "line") {
+                      return { xMm: start.xMm + (end.xMm - start.xMm) * t, yMm: start.yMm + (end.yMm - start.yMm) * t };
+                    }
+                    const c1 = segment.control1 ?? start;
+                    const c2 = segment.control2 ?? end;
+                    const u = 1 - t;
+                    return {
+                      xMm: u * u * u * start.xMm + 3 * u * u * t * c1.xMm + 3 * u * t * t * c2.xMm + t * t * t * end.xMm,
+                      yMm: u * u * u * start.yMm + 3 * u * u * t * c1.yMm + 3 * u * t * t * c2.yMm + t * t * t * end.yMm,
+                    };
+                  });
+                  return segmentIndex === 0 ? sampled : sampled.slice(1);
+                });
+                const points = localPoints.map((point) => pieceLocalToWorld(point, transform));
+                if (points.length < 2) continue;
+                context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
+                context.setLineDash(internal.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : internal.purpose === "reference" ? [3 / camera.zoom, 3 / camera.zoom] : []);
+                context.strokeStyle = internal.purpose === "dart" ? "#b06084" : internal.purpose === "cut" || internal.purpose === "cut-and-sew" ? "#b3442e" : "#59636c";
+                context.lineWidth = 1.5 / camera.zoom; context.stroke(); context.setLineDash([]);
+              }'''
+          if source.count(old) != 1:
+              raise SystemExit(f"internal line renderer not found exactly once: {source.count(old)}")
+          path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -60,7 +121,7 @@ jobs:
         run: |
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add apps/web/src/domain/internalPaths.ts apps/web/src/domain/internalPaths.test.ts apps/web/src/domain/pattern.ts apps/web/src/domain/patternDocumentV3.ts
+          git add apps/web/src/domain/internalPaths.ts apps/web/src/domain/internalPaths.test.ts apps/web/src/domain/pattern.ts apps/web/src/domain/patternDocumentV3.ts apps/web/src/editor/PatternCanvas.tsx
           git rm -r scripts/prompt04-domain .github/workflows/prompt04-domain.yml
           git commit -m "feat: add canonical internal path geometry operations"
           git push origin main
