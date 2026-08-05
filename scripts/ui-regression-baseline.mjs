@@ -89,7 +89,7 @@ const mobilePage = await mobileContext.newPage();
 await mobilePage.goto(baseUrl, { waitUntil: "networkidle" });
 await mobilePage.waitForFunction(() => Boolean(window.__moldeonPhase0));
 await mobilePage.evaluate(() => window.__moldeonPhase0.loadFixture("free-simple-piece"));
-await mobilePage.getByRole("button", { name: "Prévia 3D", exact: true }).click();
+await mobilePage.getByRole("tab", { name: "Prévia 3D", exact: true }).click();
 await mobilePage.waitForTimeout(120);
 await mobilePage.screenshot({ path: resolve(outputDirectory, "mobile-preview-no-explicit-back-control.png"), fullPage: false });
 const mobileBackControl = await mobilePage.getByRole("button", { name: /voltar à bancada|fechar painel|recolher painel/i }).count();
