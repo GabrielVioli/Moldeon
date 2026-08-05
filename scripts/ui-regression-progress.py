@@ -82,7 +82,7 @@ Pan primário começa em região vazia. `Shift + arrastar` em região vazia mant
 - arraste individual e múltiplo com undo/redo: aprovados;
 - pan vazio e ferramenta Mão: aprovados;
 - perfis de wheel de mouse e trackpad: aprovados em Chromium;
-- pinch touch: aprovado por eventos touch nativos do Chromium;
+- pinch touch: aprovado por uma sequência determinística de `PointerEvent` com `pointerType: touch` no Canvas;
 - toggle repetido do painel: aprovado sem múltiplos canvases;
 - layouts 1366×768, 1920×1080, 390×844 e 844×390: aprovados.
 
@@ -110,7 +110,7 @@ As capturas e relatórios estão em `docs/evidence/ui-regression-fix/`:
 
 **Trackpad físico não foi validado neste executor.** A auditoria reproduziu sequências de `WheelEvent` do Chromium com `deltaMode`, deltas pequenos, grandes, diagonais e modificadores, mas isso não substitui um notebook real. Portanto, esta entrega não afirma inspeção física de trackpad.
 
-A inspeção mobile foi executada em Chromium automatizado nos viewports solicitados, incluindo eventos touch e pinch nativos. Não houve teste em iPhone, Safari ou aparelho físico nesta execução.
+A inspeção mobile foi executada em Chromium automatizado nos viewports solicitados. O pinch foi exercitado pela mesma rota de `PointerEvent` usada pelo Canvas, com `pointerType: touch`, mas não em um aparelho físico. Não houve teste em iPhone, Safari ou hardware móvel nesta execução.
 
 Nenhuma atividade do Prompt 5 foi iniciada.
 '''
