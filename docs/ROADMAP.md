@@ -1,68 +1,91 @@
 # Roadmap
 
-## Marco 1: fundação entregue
+## Fase 0: baseline técnico concluído
 
-- Editor 2D funcional.
-- Viewport 3D.
-- Rust/WASM com fallback.
-- Preview de vestir.
-- SVG e autosave.
+- Ambiente e comandos registrados em `docs/BASELINE_2026.md`. ✅
+- Fixtures determinísticas para templates, curvas, pences, costuras, tecidos e legado. ✅
+- Auditoria de Chromium desktop e mobile. ✅
+- Bundle fallback e WASM medido. ✅
+- Problemas do editor, 3D, lifecycle e responsividade reproduzidos sem correções fora de escopo. ✅
 
-## Marco 2: CAD 2D útil
+## Fase 1: domínio e formato de projeto
 
-- Inserção e remoção de pontos no contorno. ✅
+- `PatternDocumentV3` como formato raiz versionado. ✅
+- Milímetros como unidade autoritativa. ✅
+- Separação entre `PatternDefinitionV3` e `PanelInstanceV3`. ✅
+- Instâncias determinísticas por quantidade de corte. ✅
+- Conectores semânticos por intervalos de borda. ✅
+- `SeamGroupV3` com múltiplos intervalos, direção, tratamento, distribuição, proporção, slack e estado ativo. ✅
+- Migrações sequenciais legado → V2 → V3. ✅
+- Backup recuperável antes da migração de autosave. ✅
+- Importação e exportação portátil V3 no domínio. ✅
+- Projeção temporária para `GarmentDraft` com rejeição de perda. ✅
+- Round trip de curvas, costuras parciais, pences, linhas internas, tecidos, medidas e bancada. ✅
+- Documento de contrato em `docs/PATTERN_DOCUMENT_V3.md`. ✅
+
+Compatibilidades temporárias ainda ativas:
+
+- `GarmentDraft` continua sendo o estado consumido pela interface.
+- `PatternPiece.points` continua sincronizado com nós e segmentos.
+- `Seam` simples continua sendo consumido pela montagem atual.
+- `previewPlacements` e `AssemblyPlacement` continuam projetados a partir de instâncias.
+- O Rust/WASM ainda recebe `PatternPiece`, não o documento raiz V3.
+
+## Próxima fase: núcleo geométrico e editor confiável
+
+Prioridades permitidas após a estabilização do V3:
+
+- Fazer Zustand e comandos operarem sobre o documento canônico.
+- Remover inferências semânticas por nome nos consumidores restantes.
+- Corrigir criação e inserção de pontos com IDs topológicos estáveis.
+- Separar câmera, hit testing, ferramentas e renderização do `PatternCanvas` monolítico.
+- Fazer transformações da bancada usarem somente `workspace.patterns`.
+- Preservar conectores e intervalos durante divisão, corte e edição de segmentos.
+
+A próxima fase não deve introduzir física antes de a edição 2D preservar corretamente as referências topológicas.
+
+## Marco: CAD 2D útil
+
+- Inserção e remoção de pontos no contorno.
 - Criação livre de linhas e peças.
 - Curvas Bézier cúbicas em segmentos existentes. ✅
-- Réguas e guias.
-- Snap e restrições geométricas.
-- Pence.
-- Espelhamento.
+- Réguas e guias. ✅
+- Snap e restrições geométricas. ✅
+- Pence persistente. ✅
+- Espelhamento. ✅
 - Margem de costura básica com offset e exportação SVG. ✅
-- Piques e fio do tecido.
-- Undo/redo por Command Pattern. ✅
+- Piques e landmarks semânticos.
+- Undo/redo por comandos transacionais. ✅
 - PDF A4 em escala 1:1.
+- Importação e exportação visual de arquivos `.moldeon`.
 
-## Atualizações recentes
-
-- Interface reorganizada nos modos Modelagem, Montagem e Prova; o corpo visível ficou restrito à Prova.
-- Elegibilidade pura impede a prévia de uma peça solta e adia o bundle Three.js até pedido explícito.
-- Costuras agora passam por proposta, análise de compatibilidade, direção e tratamento antes da confirmação.
-- Grafo de montagem, placements por peça, folgas e acabamentos foram incorporados ao documento e ao histórico.
-- Corpo anatômico procedural compartilhado ganhou medidas complementares derivadas, landmarks e malha leve validada.
-
-- Implementado snap no editor 2D (pontos, grade, alinhamento horizontal/vertical, pontos médios) com feedback visual.
-- Réguas horizontal/vertical e guias arrastáveis adicionadas ao editor; guias são persistidas no documento.
-- Introduzida semântica de arestas e ranges (`EdgeRange`, `Seam`) e a ferramenta de costura para relacionar duas arestas, visualizar comprimentos e diferença, alternar direção e salvar `seams[]` no projeto.
-- A prancheta 2D passou a trabalhar com várias peças ao mesmo tempo, com transformações independentes de posição na mesa de modelagem, seleção de peça, duplicação, espelhamento, criação de peça em branco e edição numérica básica de segmentos retos.
-- A barra principal foi reduzida às seis intenções essenciais e cada fluxo ganhou confirmação contextual na base da prancheta; selecionar, zoom, pan e edição por duplo clique permanecem disponíveis durante ferramentas temporárias.
-- Seleção múltipla, medição em centímetros, recorte reto reversível, linhas internas no domínio e pences de borda persistentes foram incorporados ao documento e ao histórico.
-
-Essas mudanças preservam compatibilidade com projetos existentes: campos novos são opcionais e o autosave e restore continuam funcionando como antes.
-
-## Marco 3: preparação 3D
+## Marco: preparação 3D
 
 - Triangulação de polígonos simples convexos e côncavos. ✅
 - Frente, costas e peças múltiplas. ✅
-- Costuras entre intervalos de borda. ✅
-- Montagem progressiva por componentes conectados e atualização incremental das peças afetadas. ✅
-- Inspeção montada/explodida sem reiniciar câmera ou controles. ✅
-- Posicionamento geométrico inicial dos painéis ao redor do avatar. ✅
-- Escolha editável de região, face e lado do corpo por peça. ✅
-- Avatar procedural feminino/masculino guiado por oito medidas reais. ✅
-- Fontes de tecido múltiplas e atribuição por peça para upcycling. ✅
+- PatternDefinition separado de instância física. ✅
+- Costuras entre múltiplos intervalos representadas no domínio. ✅
+- Montagem progressiva por componentes conectados.
+- Inspeção montada e explodida sem reiniciar câmera ou controles.
+- Posicionamento inicial por `PanelInstanceV3.arrangementAnchor`.
+- Avatar procedural feminino e masculino guiado por medidas reais.
+- Fontes de tecido múltiplas e atribuição por instância. ✅ no domínio
 - Avatar GLB com morph targets.
+- Duas definições de calça gerando quatro instâncias físicas. ✅ no domínio
+- Uma definição de manga gerando instâncias esquerda e direita. ✅ no domínio
 
-## Marco 4: XPBD utilizável
+## Marco: XPBD utilizável
 
 - Gravidade e integração.
 - Alongamento warp/weft.
 - Cisalhamento.
 - Flexão.
-- Costuras.
+- `SeamGroupV3` convertido em constraints.
 - Colisão com avatar.
 - Visualização de tensão.
+- Worker alimentando buffers da malha sem React por partícula.
 
-## Marco 5: física avançada
+## Marco: física avançada
 
 - Autocolisão.
 - Espessura.
@@ -73,14 +96,25 @@ Essas mudanças preservam compatibilidade com projetos existentes: campos novos 
 - Botões e pontos de fixação.
 - Compute shaders WebGPU.
 
-## Marco 6: produto
+## Marco: produto
 
 - Laravel + Sanctum.
 - Versionamento na nuvem.
 - Compartilhamento.
-- Biblioteca paramétrica dos seis moldes essenciais. ✅
-- Biblioteca inicial de tecidos, cores e inventário de retalhos. ✅
+- Biblioteca paramétrica dos moldes essenciais.
 - Biblioteca ampliada e importação de tecidos medidos.
 - Assinaturas.
 - DXF e glTF.
 - Render de alta qualidade em serviço GPU opcional.
+
+## Regra de avanço
+
+Cada fase deve terminar com:
+
+- testes unitários e de migração;
+- typecheck;
+- build fallback e WASM;
+- Rust, rustfmt e Clippy;
+- inspeção funcional e visual;
+- documento de progresso;
+- compatibilidades temporárias listadas objetivamente.
