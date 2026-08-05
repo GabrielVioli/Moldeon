@@ -1,6 +1,4 @@
-import type {
-  BaselineFixtureId,
-} from "../testFixtures/baselineGarments";
+import type { BaselineFixtureId } from "../testFixtures/baselineGarments";
 
 export interface Phase0AuditState {
   garmentId: string;
@@ -28,10 +26,31 @@ export interface Phase0AuditState {
   }>;
 }
 
+export interface Phase0AssemblySummary {
+  invalid: boolean;
+  warningCount: number;
+  warnings: string[];
+  particleCount: number;
+  instanceCount: number;
+  triangleCount: number;
+  structuralConstraintCount: number;
+  stitchConstraintCount: number;
+  anchorConstraintCount: number;
+  instances: Array<{
+    id: string;
+    pieceId: string;
+    bodySide: string;
+    surface: string;
+    vertexCount: number;
+    triangleCount: number;
+  }>;
+}
+
 export interface Phase0AuditBridge {
   fixtureIds: readonly BaselineFixtureId[];
   loadFixture(id: BaselineFixtureId): Phase0AuditState;
   state(): Phase0AuditState;
+  assembly(): Phase0AssemblySummary;
   movePiece(pieceId: string, xMm: number, yMm: number): Phase0AuditState;
   resetSelection(): Phase0AuditState;
 }
@@ -45,9 +64,11 @@ declare global {
 export async function installPhase0AuditBridge(): Promise<void> {
   if (!import.meta.env.DEV || window.__moldeonPhase0) return;
 
-  const [{ useEditorStore }, fixtures] = await Promise.all([
+  const [{ useEditorStore }, fixtures, engine, assemblyModule] = await Promise.all([
     import("../state/editorStore"),
     import("../testFixtures/baselineGarments"),
+    import("../core/fallbackPatternEngine"),
+    import("../garment3d/ResolvedGarmentAssembly"),
   ]);
 
   const state = (): Phase0AuditState => {
@@ -94,6 +115,38 @@ export async function installPhase0AuditBridge(): Promise<void> {
     };
   };
 
+  const assembly = (): Phase0AssemblySummary => {
+    const current = useEditorStore.getState();
+    const snapshots = current.garment.pieces.map(engine.createPatternSnapshot);
+    const built = assemblyModule.buildResolvedGarmentAssembly(
+      snapshots,
+      current.garment,
+    );
+
+    return {
+      invalid: built.invalid,
+      warningCount: built.warnings.length,
+      warnings: [...built.warnings],
+      particleCount: built.positions.length / 3,
+      instanceCount: built.instances.length,
+      triangleCount: built.instances.reduce(
+        (total, instance) => total + instance.topology.triangles.length / 3,
+        0,
+      ),
+      structuralConstraintCount: built.structuralConstraints.length,
+      stitchConstraintCount: built.stitchConstraints.length,
+      anchorConstraintCount: built.anchorConstraints.length,
+      instances: built.instances.map((instance) => ({
+        id: instance.id,
+        pieceId: instance.pieceId,
+        bodySide: instance.placement.bodySide,
+        surface: instance.placement.surface,
+        vertexCount: instance.vertexCount,
+        triangleCount: instance.topology.triangles.length / 3,
+      })),
+    };
+  };
+
   window.__moldeonPhase0 = {
     fixtureIds: fixtures.BASELINE_FIXTURE_IDS,
     loadFixture(id) {
@@ -101,6 +154,7 @@ export async function installPhase0AuditBridge(): Promise<void> {
       return state();
     },
     state,
+    assembly,
     movePiece(pieceId, xMm, yMm) {
       useEditorStore.getState().movePieceInWorkspace(pieceId, xMm, yMm);
       return state();
