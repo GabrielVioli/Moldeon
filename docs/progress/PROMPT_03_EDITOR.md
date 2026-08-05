@@ -90,7 +90,8 @@ Atalhos ignoram inputs, textareas, selects e conteúdo editável.
 
 Execução final:
 
-- commit de disparo: `2b4d9454c011b38f284378f2e3bfba9b426591bf`;
+- commit de implementação: `7a65907f23526b6eb186aee8a1a8bf8658c86046`;
+- commit de disparo da auditoria: `2b4d9454c011b38f284378f2e3bfba9b426591bf`;
 - workflow run: `31048790852`;
 - navegador: Chromium 140.0.7339.16;
 - cenários funcionais e visuais: 13/13 aprovados.
