@@ -1,0 +1,52 @@
+name: Prompt 03 Audit
+
+on:
+  push:
+    paths:
+      - scripts/prompt03-interaction-audit.mjs
+      - .github/workflows/prompt03-audit.yml
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      PROMPT03_ARTIFACT_DIR: artifacts/prompt03-editor
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start fallback server and audit
+        run: |
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 5184 --strictPort > /tmp/moldeon-prompt03.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for attempt in $(seq 1 120); do
+            curl --fail --silent http://127.0.0.1:5184/ >/dev/null && break
+            sleep 0.5
+          done
+          PROMPT03_BASE_URL=http://127.0.0.1:5184 PROMPT03_LABEL=fallback node scripts/prompt03-interaction-audit.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt03-audit-${{ github.sha }}
+          path: artifacts/prompt03-editor
+          retention-days: 21
+          if-no-files-found: error
