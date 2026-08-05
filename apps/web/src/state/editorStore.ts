@@ -268,16 +268,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       : [...state.selectedPieceIds, pieceId];
     const activePieceId = selectedPieceIds.includes(pieceId) ? pieceId : (selectedPieceIds.at(-1) ?? state.activePieceId);
     const activePiece = state.garment.pieces.find((candidate) => candidate.id === activePieceId) ?? piece;
-    set({ selectedPieceIds, activePieceId: activePiece.id, snapshot: restoreSnapshot(activePiece), pieceSelectionActive: selectedPieceIds.length > 0, selectedPointId: null, selectedEdgeId: null });
+    set({ selectedPieceIds, activePieceId: activePiece.id, snapshot: restoreSnapshot(activePiece), pieceSelectionActive: selectedPieceIds.length > 0, selectedPointId: null, selectedEdgeId: null, selectedSeamId: null });
   },
   setPieceSelection: (pieceIds) => {
     const state = get();
     const selectedPieceIds = [...new Set(pieceIds)].filter((id) => state.garment.pieces.some((piece) => piece.id === id));
     const activePieceId = selectedPieceIds.at(-1) ?? state.activePieceId;
     const piece = state.garment.pieces.find((candidate) => candidate.id === activePieceId);
-    set({ selectedPieceIds, pieceSelectionActive: selectedPieceIds.length > 0, ...(piece ? { activePieceId, snapshot: restoreSnapshot(piece) } : {}), selectedPointId: null, selectedEdgeId: null });
+    set({ selectedPieceIds, pieceSelectionActive: selectedPieceIds.length > 0, ...(piece ? { activePieceId, snapshot: restoreSnapshot(piece) } : {}), selectedPointId: null, selectedEdgeId: null, selectedSeamId: null });
   },
-  selectAllPieces: () => set((state) => ({ selectedPieceIds: state.garment.pieces.filter((piece) => workspaceStateFor(state.garment, piece.id).visible).map((piece) => piece.id), pieceSelectionActive: true })),
+  selectAllPieces: () => set((state) => ({ selectedPieceIds: state.garment.pieces.filter((piece) => workspaceStateFor(state.garment, piece.id).visible).map((piece) => piece.id), pieceSelectionActive: true, selectedPointId: null, selectedEdgeId: null, selectedSeamId: null })),
   deleteSelectedPieces: () => {
     const state = get();
     const removable = state.selectedPieceIds.filter((id) => !workspaceStateFor(state.garment, id).locked);

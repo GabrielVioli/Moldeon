@@ -203,6 +203,16 @@ describe("PatternDocumentV3", () => {
     );
   });
 
+  it("round trips inactive seams without discarding their state", () => {
+    const garment = createBaselineFixture("equal-length-seam");
+    garment.seams = garment.seams?.map((seam) => ({ ...seam, active: false }));
+    const document = garmentDraftToPatternDocumentV3(garment);
+
+    expect(document.seamGroups[0].active).toBe(false);
+    const restored = patternDocumentV3ToGarmentDraft(document);
+    expect(restored.seams?.[0].active).toBe(false);
+  });
+
   it("keeps the projected PatternPiece accepted by the fallback engine", () => {
     const document = garmentDraftToPatternDocumentV3(
       createBaselineFixture("bezier-piece"),

@@ -314,7 +314,6 @@ export function patternDocumentV3ToGarmentDraft(
     definitionToPatternPiece(definition, document.panelInstances),
   );
   const seams = document.seamGroups
-    .filter((group) => group.active)
     .map((group) => ({
       id: group.id,
       name: group.name,
@@ -326,6 +325,7 @@ export function patternDocumentV3ToGarmentDraft(
         Math.abs(group.targetRatio - 1),
       type: group.compatibility?.legacyType ?? group.treatment,
       treatment: legacyTreatment(group),
+      active: group.active,
     }));
 
   const workspaceStates = document.workspace.patterns.map((entry) => ({
@@ -718,7 +718,7 @@ function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): Se
     distribution: treatment === "ease" || treatment === "gather" ? "proportional" : "uniform",
     targetRatio: Math.max(0.000001, 1 + seam.easeRatio),
     slackMm: 0,
-    active: true,
+    active: seam.active !== false,
     compatibility: {
       legacyEaseRatio: seam.easeRatio,
       legacyType: seam.type,
@@ -904,12 +904,6 @@ function assemblyRoleFromRegion(
 
 function ensureLegacyRuntimeCompatibility(document: PatternDocumentV3): void {
   for (const group of document.seamGroups) {
-    if (!group.active) {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} está desativada e o runtime legado não preserva esse estado.`,
-        group.id,
-      );
-    }
     if (group.first.length !== 1 || group.second.length !== 1) {
       throw new PatternDocumentCompatibilityError(
         `A costura ${group.id} possui múltiplos intervalos e não pode ser projetada no runtime legado sem perda.`,
