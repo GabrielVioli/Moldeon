@@ -1,0 +1,132 @@
+name: Prompt 02 Domain
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/prompt02-domain.yml"
+      - "apps/web/src/domain/patternDocumentV3*"
+      - "apps/web/src/storage/opfs*"
+      - "apps/web/src/storage/patternProjectIO*"
+      - "apps/web/src/testFixtures/patternDocumentFixtures.ts"
+      - "docs/PATTERN_DOCUMENT_V3.md"
+      - "docs/ARCHITECTURE.md"
+      - "docs/ROADMAP.md"
+      - "docs/progress/PROMPT_02_DOMAIN.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt02-domain-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHASE0_ARTIFACT_DIR: artifacts/prompt02-domain
+
+jobs:
+  validate:
+    name: Domain, migration and visual validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record commit and environment
+        shell: bash
+        run: |
+          mkdir -p "$PHASE0_ARTIFACT_DIR/environment"
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "node=$(node --version)"
+            echo "npm=$(npm --version)"
+            echo "rustc=$(rustc --version)"
+            echo "cargo=$(cargo --version)"
+            echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "status_begin"
+            git status --short
+            echo "status_end"
+          } | tee "$PHASE0_ARTIFACT_DIR/environment/environment.txt"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test TypeScript domain and application
+        run: npm test
+
+      - name: Build fallback application
+        run: npm run build
+
+      - name: Install wasm-pack
+        shell: bash
+        run: |
+          if ! command -v wasm-pack >/dev/null 2>&1; then
+            cargo install wasm-pack --version 0.13.1 --locked
+          fi
+          wasm-pack --version
+
+      - name: Build WASM application
+        run: npm run build:wasm
+
+      - name: Test Rust workspace
+        run: cargo test --workspace
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy with warnings denied
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Install Chromium audit tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Inspect fallback application
+        run: node scripts/phase0-run-browser-server.mjs fallback prompt02-fallback 5182
+
+      - name: Inspect WASM application
+        run: node scripts/phase0-run-browser-server.mjs wasm prompt02-wasm 5183
+
+      - name: Record final repository state
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "status_begin"
+            git status --short
+            echo "status_end"
+          } | tee "$PHASE0_ARTIFACT_DIR/environment/final-state.txt"
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt02-domain-${{ github.sha }}
+          path: artifacts/prompt02-domain
+          retention-days: 21
+          if-no-files-found: error
