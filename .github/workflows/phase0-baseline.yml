@@ -1,0 +1,194 @@
+name: Phase 0 Baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/phase0-baseline.yml"
+      - "scripts/phase0-*"
+      - "apps/web/src/testFixtures/**"
+      - "docs/BASELINE_2026.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase0-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHASE0_ARTIFACT_DIR: artifacts/baseline
+
+jobs:
+  audit:
+    name: Reproducible technical baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record environment and repository state
+        shell: bash
+        run: |
+          mkdir -p "$PHASE0_ARTIFACT_DIR/environment"
+          {
+            echo "audit_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "branch=$(git branch --show-current)"
+            echo "status_begin"
+            git status --short
+            echo "status_end"
+            echo "node=$(node --version)"
+            echo "npm=$(npm --version)"
+            echo "rustc=$(rustc --version)"
+            echo "cargo=$(cargo --version)"
+            echo "rustup=$(rustup --version | head -n 1)"
+            echo "kernel=$(uname -a)"
+            echo "cpu_begin"
+            lscpu
+            echo "cpu_end"
+            echo "memory_begin"
+            free -h
+            echo "memory_end"
+          } | tee "$PHASE0_ARTIFACT_DIR/environment/environment.txt"
+
+      - name: Install project dependencies with npm install
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs npm-install npm install
+
+      - name: Typecheck
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs typecheck npm run typecheck
+
+      - name: Frontend tests
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs test npm test
+
+      - name: Fallback production build
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs build-fallback npm run build
+
+      - name: Measure fallback bundle
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs bundle-fallback node scripts/phase0-bundle-report.mjs apps/web/dist fallback
+
+      - name: Rust tests
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs cargo-test cargo test --workspace
+
+      - name: Rust formatting
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs cargo-fmt cargo fmt --all -- --check
+
+      - name: Rust Clippy
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs cargo-clippy cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Install wasm-pack
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs wasm-pack-install cargo install wasm-pack --version 0.13.1 --locked
+
+      - name: WASM production build
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs build-wasm npm run build:wasm
+
+      - name: Measure WASM bundle
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs bundle-wasm node scripts/phase0-bundle-report.mjs apps/web/dist wasm
+
+      - name: Install Chromium audit tooling
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs playwright-install bash -lc "npm install --no-save playwright@1.55.0 && npx playwright install --with-deps chromium"
+
+      - name: Run fallback server and browser audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          node scripts/phase0-run-command.mjs dev-fallback-browser bash -lc '
+            npm run dev:fallback > "$PHASE0_ARTIFACT_DIR/server-fallback.log" 2>&1 &
+            server_pid=$!
+            trap "kill $server_pid 2>/dev/null || true; wait $server_pid 2>/dev/null || true" EXIT
+            ready=0
+            for attempt in $(seq 1 90); do
+              if curl --silent --fail http://127.0.0.1:5173/ >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" -eq 1
+            PHASE0_BASE_URL=http://127.0.0.1:5173 PHASE0_BROWSER_LABEL=fallback node scripts/phase0-browser-audit.mjs
+          '
+
+      - name: Run WASM server and browser audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          node scripts/phase0-run-command.mjs dev-wasm-browser bash -lc '
+            npm run dev > "$PHASE0_ARTIFACT_DIR/server-wasm.log" 2>&1 &
+            server_pid=$!
+            trap "kill $server_pid 2>/dev/null || true; wait $server_pid 2>/dev/null || true" EXIT
+            ready=0
+            for attempt in $(seq 1 180); do
+              if curl --silent --fail http://127.0.0.1:5173/ >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" -eq 1
+            PHASE0_BASE_URL=http://127.0.0.1:5173 PHASE0_BROWSER_LABEL=wasm node scripts/phase0-browser-audit.mjs
+          '
+
+      - name: Record final repository state
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "audit_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "status_begin"
+            git status --short
+            echo "status_end"
+          } | tee "$PHASE0_ARTIFACT_DIR/environment/final-state.txt"
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase0-baseline-${{ github.sha }}
+          path: artifacts/baseline
+          retention-days: 21
+          if-no-files-found: error
+
+      - name: Assert mandatory baseline commands
+        if: always()
+        run: >-
+          node scripts/phase0-assert-results.mjs
+          npm-install
+          typecheck
+          test
+          build-fallback
+          bundle-fallback
+          cargo-test
+          cargo-fmt
+          cargo-clippy
+          wasm-pack-install
+          build-wasm
+          bundle-wasm
+          playwright-install
+          dev-fallback-browser
+          dev-wasm-browser
