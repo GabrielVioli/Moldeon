@@ -7,6 +7,8 @@ on:
     paths:
       - ".github/workflows/phase0-baseline.yml"
       - "scripts/phase0-*"
+      - "apps/web/vite.config.ts"
+      - "apps/web/src/node-config-shims.d.ts"
       - "apps/web/src/testFixtures/**"
       - "apps/web/src/dev/**"
       - "apps/web/src/main.tsx"
