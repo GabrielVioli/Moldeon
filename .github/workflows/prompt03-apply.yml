@@ -63,11 +63,51 @@ jobs:
               1,
           )
 
+          assembly_entry = '  "apps/web/src/garment3d/GarmentAssembly.ts",\n'
+          if assembly_entry not in source:
+              raise SystemExit("GarmentAssembly patch entry not found")
+          source = source.replace(assembly_entry, "", 1)
+
           path.write_text(source, encoding="utf-8")
           PY
 
       - name: Apply verified patch
         run: node scripts/prompt03-apply.mjs
+
+      - name: Apply inactive seam behavior to garment assembly
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/web/src/garment3d/GarmentAssembly.ts")
+          source = path.read_text(encoding="utf-8")
+
+          old_predicate = '''        (seam) =>
+                    seam.first.pieceId === seam.second.pieceId &&
+                    !rangesAreIdentical(seam.first, seam.second),
+          '''
+          new_predicate = '''        (seam) =>
+                    seam.active !== false &&
+                    seam.first.pieceId === seam.second.pieceId &&
+                    !rangesAreIdentical(seam.first, seam.second),
+          '''
+          if old_predicate not in source:
+              raise SystemExit("Self-seam predicate not found")
+          source = source.replace(old_predicate, new_predicate, 1)
+
+          old_loop = '''  for (const seam of seams) {
+              if (rangesAreIdentical(seam.first, seam.second)) {
+          '''
+          new_loop = '''  for (const seam of seams) {
+              if (seam.active === false) continue;
+              if (rangesAreIdentical(seam.first, seam.second)) {
+          '''
+          if old_loop not in source:
+              raise SystemExit("Global stitch loop not found")
+          source = source.replace(old_loop, new_loop, 1)
+
+          path.write_text(source, encoding="utf-8")
+          PY
 
       - name: Typecheck
         run: npm run typecheck
