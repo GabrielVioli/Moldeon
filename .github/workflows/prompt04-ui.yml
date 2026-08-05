@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/prompt04-ui.py
+      - scripts/prompt04-context-fix.py
       - apps/web/src/state/internalPathEditorStore.ts
       - apps/web/src/components/ContextBar.tsx
       - .github/workflows/prompt04-ui.yml
@@ -33,6 +34,7 @@ jobs:
         run: |
           sed -i "s/'mouse internal path dispatch', count=1)/'mouse internal path dispatch', count=2)/" scripts/prompt04-ui.py
           python scripts/prompt04-ui.py
+          python scripts/prompt04-context-fix.py
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -40,7 +42,7 @@ jobs:
         run: |
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add apps/web/src/editor/PatternCanvas.tsx apps/web/src/App.tsx apps/web/src/styles.css
-          git rm scripts/prompt04-ui.py .github/workflows/prompt04-ui.yml
+          git add apps/web/src/editor/PatternCanvas.tsx apps/web/src/App.tsx apps/web/src/styles.css apps/web/src/components/ContextBar.tsx
+          git rm scripts/prompt04-ui.py scripts/prompt04-context-fix.py .github/workflows/prompt04-ui.yml
           git commit -m "feat: edit and apply internal paths in the canvas"
           git push origin main
