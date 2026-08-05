@@ -50,13 +50,14 @@ jobs:
       - name: Record environment and repository state
         shell: bash
         run: |
+          status_before="$(git status --short)"
           mkdir -p "$PHASE0_ARTIFACT_DIR/environment"
           {
             echo "audit_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "commit=$(git rev-parse HEAD)"
             echo "branch=$(git branch --show-current)"
             echo "status_begin"
-            git status --short
+            printf '%s\n' "$status_before"
             echo "status_end"
             echo "node=$(node --version)"
             echo "npm=$(npm --version)"
@@ -122,37 +123,17 @@ jobs:
 
       - name: Run fallback server and browser audit
         continue-on-error: true
-        shell: bash
-        run: |
-          node scripts/phase0-run-command.mjs dev-fallback-browser bash -lc '
-            npm run dev:fallback > "$PHASE0_ARTIFACT_DIR/server-fallback.log" 2>&1 &
-            server_pid=$!
-            trap "kill $server_pid 2>/dev/null || true; wait $server_pid 2>/dev/null || true" EXIT
-            ready=0
-            for attempt in $(seq 1 90); do
-              if curl --silent --fail http://127.0.0.1:5173/ >/dev/null; then ready=1; break; fi
-              sleep 1
-            done
-            test "$ready" -eq 1
-            PHASE0_BASE_URL=http://127.0.0.1:5173 PHASE0_BROWSER_LABEL=fallback node scripts/phase0-browser-audit.mjs
-          '
+        run: >-
+          node scripts/phase0-run-command.mjs
+          dev-fallback-browser
+          node scripts/phase0-run-browser-server.mjs fallback fallback 5173
 
       - name: Run WASM server and browser audit
         continue-on-error: true
-        shell: bash
-        run: |
-          node scripts/phase0-run-command.mjs dev-wasm-browser bash -lc '
-            npm run dev > "$PHASE0_ARTIFACT_DIR/server-wasm.log" 2>&1 &
-            server_pid=$!
-            trap "kill $server_pid 2>/dev/null || true; wait $server_pid 2>/dev/null || true" EXIT
-            ready=0
-            for attempt in $(seq 1 180); do
-              if curl --silent --fail http://127.0.0.1:5173/ >/dev/null; then ready=1; break; fi
-              sleep 1
-            done
-            test "$ready" -eq 1
-            PHASE0_BASE_URL=http://127.0.0.1:5173 PHASE0_BROWSER_LABEL=wasm node scripts/phase0-browser-audit.mjs
-          '
+        run: >-
+          node scripts/phase0-run-command.mjs
+          dev-wasm-browser
+          node scripts/phase0-run-browser-server.mjs wasm wasm 5174
 
       - name: Record final repository state
         if: always()
