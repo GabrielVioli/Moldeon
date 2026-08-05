@@ -34,6 +34,9 @@ export const GarmentViewport = memo(function GarmentViewport({
   const latestSimulateVersionRef = useRef(simulateVersion);
   const latestShowBodyRef = useRef(showBody);
   const lastDressedVersionRef = useRef(0);
+  const lastAppliedGarmentRef = useRef<GarmentDraft | null>(null);
+  const lastAppliedSnapshotsRef = useRef<PatternSnapshot[] | null>(null);
+  const lastAppliedShowBodyRef = useRef<boolean | null>(null);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -74,6 +77,9 @@ export const GarmentViewport = memo(function GarmentViewport({
               latestGarmentRef.current,
             ),
           );
+          lastAppliedGarmentRef.current = latestGarmentRef.current;
+          lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
+          lastAppliedShowBodyRef.current = latestShowBodyRef.current;
         }
 
         if (
@@ -115,6 +121,7 @@ export const GarmentViewport = memo(function GarmentViewport({
 
   useEffect(() => {
     if (!active || updateFrameRef.current !== null) return;
+    if (lastAppliedGarmentRef.current === garment && lastAppliedSnapshotsRef.current === snapshots && lastAppliedShowBodyRef.current === showBody) return;
 
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
@@ -127,6 +134,9 @@ export const GarmentViewport = memo(function GarmentViewport({
           latestGarmentRef.current,
         ),
       );
+      lastAppliedGarmentRef.current = latestGarmentRef.current;
+      lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
+      lastAppliedShowBodyRef.current = latestShowBodyRef.current;
     });
 
     return () => {

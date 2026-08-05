@@ -94,6 +94,7 @@ export function App() {
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
@@ -110,13 +111,23 @@ export function App() {
   const handleSimulate = useCallback(() => {
     setWorkspaceMode("assembly");
     setPreviewRequested(true);
+    setIsRightPanelOpen(true);
     if (isMobile) setMobileView("preview");
     simulate();
   }, [isMobile, simulate]);
   const handleDressBody = useCallback(() => {
     setWorkspaceMode("fitting");
     setPreviewRequested(true);
+    setIsRightPanelOpen(true);
     if (isMobile) setMobileView("preview");
+  }, [isMobile]);
+  const closeRightPanel = useCallback(() => {
+    setIsRightPanelOpen(false);
+    if (isMobile) setMobileView("editor");
+  }, [isMobile]);
+  const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
+    setIsRightPanelOpen(true);
+    if (isMobile) setMobileView(view);
   }, [isMobile]);
   const handleExportSvg = useCallback(() => {
     const currentGarment = useEditorStore.getState().garment;
@@ -450,7 +461,7 @@ export function App() {
         onSelectTool={handleSelectTool}
       />
 
-      <main className={`workspace mode-${workspaceMode}`}>
+      <main className={`workspace mode-${workspaceMode}${isRightPanelOpen ? "" : " is-right-panel-closed"}`}>
         <nav className="mobile-workspace-tabs" aria-label="Painéis do projeto" role="tablist">
           <WorkspaceTab
             id="editor-tab"
@@ -469,7 +480,7 @@ export function App() {
             }}
             onSelect={() => {
               if (eligibility.canPreviewGarment) setPreviewRequested(true);
-              setMobileView("preview");
+              openRightPanel("preview");
             }}
           >
             Prévia 3D
@@ -478,7 +489,7 @@ export function App() {
             id="inspector-tab"
             panelId="inspector-panel"
             active={mobileView === "inspector"}
-            onSelect={() => setMobileView("inspector")}
+            onSelect={() => openRightPanel("inspector")}
           >
             {workspaceMode === "assembly" ? "Montagem" : "Medidas"}
           </WorkspaceTab>
@@ -494,8 +505,21 @@ export function App() {
               <span className="section-eyebrow">Molde 2D</span>
               <strong>{snapshot.piece.name} · milímetros</strong>
             </div>
-            <span className="hint desktop-hint">Shift + arrastar: mover tela · roda: zoom</span>
-            <span className="hint mobile-hint">Arraste pontos · fundo move · pinça aproxima</span>
+            <div className="panel-title-actions">
+              <span className="hint desktop-hint">Fundo: pan · Shift + arrastar: selecionar · roda/trackpad: navegar</span>
+              <span className="hint mobile-hint">Arraste pontos · fundo move · pinça aproxima</span>
+              <button
+                type="button"
+                className="right-panel-toggle"
+                aria-expanded={isRightPanelOpen}
+                aria-controls="workspace-right-panel"
+                title={isRightPanelOpen ? "Recolher painel direito" : "Mostrar painel direito"}
+                onClick={() => isRightPanelOpen ? closeRightPanel() : openRightPanel("preview")}
+              >
+                <span aria-hidden="true">{isRightPanelOpen ? "›" : "‹"}</span>
+                <span>{isRightPanelOpen ? "Recolher painel" : "Mostrar painel"}</span>
+              </button>
+            </div>
           </div>
           <div className="editor-body">
             <PiecesPanel
@@ -556,18 +580,30 @@ export function App() {
           </div>
         </section>
 
+        <div id="workspace-right-panel" className="workspace-right-panel" hidden={!isRightPanelOpen} aria-hidden={!isRightPanelOpen}>
         <section
           className={`preview-panel workspace-view${mobileView === "preview" ? " is-mobile-active" : ""}`}
           id="preview-panel"
           aria-labelledby="preview-tab"
         >
+          <button
+            type="button"
+            className="right-panel-close"
+            aria-expanded={isRightPanelOpen}
+            aria-controls="workspace-right-panel"
+            title={isMobile ? "Voltar à bancada 2D" : "Recolher painel direito"}
+            onClick={closeRightPanel}
+          >
+            <span aria-hidden="true">×</span>
+            <span>{isMobile ? "Voltar à bancada" : "Recolher"}</span>
+          </button>
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder loading />}>
               <LazyGarmentViewport
                 garment={garment}
                 snapshots={garmentSnapshots}
                 simulateVersion={simulateVersion}
-                active={!isMobile || mobileView === "preview"}
+                active={isRightPanelOpen && (!isMobile || mobileView === "preview")}
                 onBackendChange={setRenderBackend}
                 onPieceDrop={handlePieceDrop}
                 showBody={workspaceMode === "fitting"}
@@ -598,6 +634,7 @@ export function App() {
           onToggleCurve={handleToggleCurve}
           onSeamAllowanceChange={setSeamAllowance}
         />}
+        </div>
       </main>
 
       <StatusBar

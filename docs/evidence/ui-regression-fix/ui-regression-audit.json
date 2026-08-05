@@ -1,0 +1,52 @@
+{
+  "browserVersion": "140.0.7339.16",
+  "physicalTrackpadValidated": false,
+  "scenarios": [
+    {
+      "name": "single-piece-ownership",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "multi-selection-drag",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "empty-and-hand-pan",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "wheel-trackpad-data",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "right-panel-lifecycle",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "desktop-1920-layout",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "mobile-portrait-panel-and-pinch",
+      "status": "passed",
+      "diagnostics": []
+    },
+    {
+      "name": "mobile-landscape-layout",
+      "status": "passed",
+      "diagnostics": []
+    }
+  ],
+  "viewports": [
+    "1366x768",
+    "1920x1080",
+    "390x844",
+    "844x390"
+  ]
+}

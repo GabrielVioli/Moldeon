@@ -1752,3 +1752,67 @@ button {
 .context-bar select { min-height: 30px; padding: 0 7px; border: 1px solid #b9b3a8; border-radius: 6px; background: #fff; }
 .context-shortcuts { color: #6d675d; font-size: 10px; }
 .context-diagnostic { max-width: 360px; color: #76570f; }
+
+
+/* Post Prompt 04: explicit gesture and right-panel ownership */
+.workspace-right-panel { display: contents; }
+.workspace-right-panel[hidden] { display: none !important; }
+.preview-panel { position: relative; }
+.panel-title-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+.right-panel-toggle,
+.right-panel-close {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #bdb8ae;
+  border-radius: 7px;
+  color: #4f514d;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+.right-panel-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.right-panel-toggle > span:first-child { font-size: 20px; line-height: 1; }
+.right-panel-close { position: absolute; z-index: 14; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 6px; }
+.right-panel-close > span:first-child { font-size: 18px; line-height: 1; }
+.right-panel-toggle:hover,
+.right-panel-close:hover { background: #fff; border-color: #77746d; }
+.right-panel-toggle:focus-visible,
+.right-panel-close:focus-visible { outline: 3px solid #9a6b16; outline-offset: 2px; }
+.preview-panel .viewport-inspection { top: 52px; }
+.workspace.is-right-panel-closed.mode-modeling,
+.workspace.is-right-panel-closed.mode-assembly,
+.workspace.is-right-panel-closed.mode-fitting,
+.workspace.is-right-panel-closed.mode-preparation {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.workspace.is-right-panel-closed .editor-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+@media (max-width: 760px) {
+  .panel-title-actions { gap: 5px; }
+  .right-panel-toggle { min-width: 38px; padding: 0 7px; }
+  .right-panel-toggle > span:last-child { display: none; }
+  .right-panel-close {
+    top: calc(8px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    min-height: 40px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.96);
+  }
+  .preview-panel .viewport-inspection { top: calc(58px + env(safe-area-inset-top)); }
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+  .workspace.is-right-panel-closed .editor-panel {
+    grid-row: 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}

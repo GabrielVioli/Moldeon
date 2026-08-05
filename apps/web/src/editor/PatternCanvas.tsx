@@ -6,7 +6,6 @@ import {
   useState,
   type MouseEvent,
   type PointerEvent,
-  type WheelEvent,
 } from "react";
 import {
   createSeamAllowanceContour,
@@ -30,14 +29,17 @@ import {
   type InternalPathNode,
 } from "../domain/pattern";
 import { findNearbySeamCandidates } from "../domain/patternOperations";
-import { buildAssemblyGraph } from "../domain/assembly";
 import { findNearestPatternSegment } from "../domain/patternEditing";
 import {
+  claimGesture,
   createGestureOrigin,
   finishGesture,
+  isInteractiveGestureOwner,
   shouldInsertPointFromTap,
   shouldStartBoxSelection,
+  shouldStartDrag,
   type GestureOrigin,
+  type GestureOwnership,
 } from "./canvasGestures";
 import { findNearestEdgeHit, findNearestSeamHit } from "./canvasHitTesting";
 import {
@@ -47,6 +49,7 @@ import {
   cameraToFitBounds,
   zoomCameraAtPoint,
 } from "./camera";
+import { applyWheelNavigation, mergeWheelNavigation, normalizeWheelNavigation, type NormalizedWheelNavigation } from "./canvasWheelNavigation";
 import { findNearestInternalPathSegment, sampleInternalPath } from "../domain/internalPaths";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
@@ -141,6 +144,11 @@ function PatternCanvasComponent({
   const pendingWorkspaceRef = useRef<PieceWorkspaceTransform[]>([]);
   const activePointersRef = useRef(new Map<number, PointerPosition>());
   const pointTapRef = useRef<GestureOrigin | null>(null);
+  const gestureOwnershipRef = useRef<GestureOwnership | null>(null);
+  const dragOriginRef = useRef<GestureOrigin | null>(null);
+  const dragStartedRef = useRef(false);
+  const wheelFrameRef = useRef<number | null>(null);
+  const pendingWheelRef = useRef<{ navigation: NormalizedWheelNavigation; cursor: ScreenPoint } | null>(null);
   const touchPieceCandidateRef = useRef<(GestureOrigin & {
     pieceId: string;
     startWorldX: number;
@@ -332,6 +340,8 @@ function PatternCanvasComponent({
     const context = canvas.getContext("2d");
     if (!context) return;
     contextRef.current = context;
+    const nativeWheel = (event: globalThis.WheelEvent) => handleWheel(event);
+    canvas.addEventListener("wheel", nativeWheel, { passive: false });
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -363,6 +373,7 @@ function PatternCanvasComponent({
 
     return () => {
       observer.disconnect();
+      canvas.removeEventListener("wheel", nativeWheel);
       contextRef.current = null;
       if (drawFrameRef.current !== null) {
         window.cancelAnimationFrame(drawFrameRef.current);
@@ -376,12 +387,20 @@ function PatternCanvasComponent({
         window.cancelAnimationFrame(workspaceFrameRef.current);
         workspaceFrameRef.current = null;
       }
+      if (wheelFrameRef.current !== null) {
+        window.cancelAnimationFrame(wheelFrameRef.current);
+        wheelFrameRef.current = null;
+      }
     };
   }, []);
 
   useEffect(() => {
     scheduleDraw();
   }, [snapshot, selectedPointId, scheduleDraw]);
+
+  function ownGesture(pointerId: number, owner: GestureOwnership["owner"]) {
+    gestureOwnershipRef.current = claimGesture(gestureOwnershipRef.current, pointerId, owner);
+  }
 
   function updateCamera(nextCamera: Camera2D) {
     cameraRef.current = nextCamera;
@@ -599,6 +618,7 @@ function PatternCanvasComponent({
       session.appendDraftPoint(screenToActivePieceLocal(event.clientX, event.clientY));
       dragRef.current = null;
       scheduleDraw();
+      ownGesture(event.pointerId, "internal-path");
       return true;
     }
     const handleHit = findInternalPathHandleAt(event.clientX, event.clientY);
@@ -607,6 +627,7 @@ function PatternCanvasComponent({
       session.selectNode(handleHit.node.id);
       session.beginGeometryEdit("Ajustar curva interna");
       dragRef.current = { type: "internal-handle", pointerId: event.pointerId, nodeId: handleHit.node.id, handle: handleHit.handle };
+      ownGesture(event.pointerId, "internal-path");
       return true;
     }
     const nodeHit = findInternalPathNodeAt(event.clientX, event.clientY);
@@ -615,12 +636,14 @@ function PatternCanvasComponent({
       session.selectNode(nodeHit.node.id);
       session.beginGeometryEdit("Mover nó interno");
       dragRef.current = { type: "internal-node", pointerId: event.pointerId, nodeId: nodeHit.node.id };
+      ownGesture(event.pointerId, "internal-path");
       return true;
     }
     const segmentHit = findInternalPathSegmentAt(event.clientX, event.clientY);
     if (segmentHit && !session.draftPathId) {
       session.selectPath(segmentHit.path.id, segmentHit.segmentId);
       dragRef.current = null;
+      ownGesture(event.pointerId, "internal-path");
       return true;
     }
     if (toolRef.current === "cut" || toolRef.current === "dart") {
@@ -628,6 +651,7 @@ function PatternCanvasComponent({
       session.startPath(activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
       dragRef.current = null;
       scheduleDraw();
+      ownGesture(event.pointerId, "internal-path");
       return true;
     }
     return false;
@@ -672,8 +696,13 @@ function PatternCanvasComponent({
 
   function piecesMovingWith(pieceId: string): string[] {
     const state = useEditorStore.getState();
-    const stitched = buildAssemblyGraph(state.garment).connectedComponents.find((component) => component.includes(pieceId)) ?? [pieceId];
-    return [...new Set([...stitched, ...(state.selectedPieceIds.includes(pieceId) ? state.selectedPieceIds : [])])];
+    if (!state.selectedPieceIds.includes(pieceId) || state.selectedPieceIds.length <= 1) {
+      return [pieceId];
+    }
+    return state.selectedPieceIds.filter((id) => {
+      const workspace = getPieceWorkspaceState(state.garment, id);
+      return workspace.visible && !workspace.locked;
+    });
   }
 
   function isRotationHandleAt(clientX: number, clientY: number): boolean {
@@ -746,8 +775,13 @@ function PatternCanvasComponent({
   }
 
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    event.stopPropagation();
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
+    gestureOwnershipRef.current = null;
+    ownGesture(event.pointerId, "empty");
+    dragOriginRef.current = createGestureOrigin(event.pointerId, event.pointerType, event.clientX, event.clientY);
+    dragStartedRef.current = false;
 
     if (
       draftContour &&
@@ -793,6 +827,7 @@ function PatternCanvasComponent({
 
       if (toolRef.current === "hand" || spacePressedRef.current) {
         dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
+        dragStartedRef.current = true;
         setIsPanning(true);
         return;
       }
@@ -807,8 +842,6 @@ function PatternCanvasComponent({
         dragRef.current = null;
         return;
       }
-
-      if (handleInternalPathPointerDown(event)) return;
 
       if (handleInternalPathPointerDown(event)) return;
 
@@ -841,6 +874,7 @@ function PatternCanvasComponent({
       const controlHandle = findHandle(event.clientX, event.clientY);
       if (controlHandle) {
         onEditStartRef.current("Ajustar curva");
+        ownGesture(event.pointerId, "handle");
         dragRef.current = {
           type: "handle",
           pointerId: event.pointerId,
@@ -854,6 +888,7 @@ function PatternCanvasComponent({
         if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
         onSelectPoint(pointHit.point.id);
         onEditStartRef.current("Mover ponto");
+        ownGesture(event.pointerId, "point");
         dragRef.current = { type: "point", pointerId: event.pointerId, pieceId: pointHit.pieceId, pointId: pointHit.point.id };
         return;
       }
@@ -863,7 +898,9 @@ function PatternCanvasComponent({
         if (edge) {
           selectPiece(edge.pieceId); onSelectPoint(null); useEditorStore.getState().selectEdge(edge.edgeId);
           const world = screenToWorld(event.clientX, event.clientY); onEditStartRef.current("Mover borda");
-          dragRef.current = { type: "segment", pointerId: event.pointerId, edgeId: edge.edgeId, lastWorldX: world.xMm, lastWorldY: world.yMm };
+          ownGesture(event.pointerId, "segment");
+          ownGesture(event.pointerId, "segment");
+        dragRef.current = { type: "segment", pointerId: event.pointerId, edgeId: edge.edgeId, lastWorldX: world.xMm, lastWorldY: world.yMm };
           return;
         }
       }
@@ -871,13 +908,15 @@ function PatternCanvasComponent({
       const world = screenToWorld(event.clientX, event.clientY);
       const piece = findPieceAtWorld(world.xMm, world.yMm);
       if (piece) {
-        selectPiece(piece.id);
+        const selectedPieceIds = useEditorStore.getState().selectedPieceIds;
+        if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);
         onSelectPoint(null);
         const workspace = getPieceWorkspaceState(garment, piece.id);
         if (workspace.locked) {
           dragRef.current = null;
           return;
         }
+        ownGesture(event.pointerId, "piece");
         touchPieceCandidateRef.current = {
           ...createGestureOrigin(event.pointerId, event.pointerType, event.clientX, event.clientY),
           pieceId: piece.id,
@@ -901,6 +940,7 @@ function PatternCanvasComponent({
         event.clientX,
         event.clientY,
       );
+      dragStartedRef.current = true;
       setIsPanning(true);
       return;
     }
@@ -911,6 +951,7 @@ function PatternCanvasComponent({
       const center = pieceLocalToWorld({ xMm: (bounds.minX + bounds.maxX) / 2, yMm: (bounds.minY + bounds.maxY) / 2 }, transform);
       const pointer = screenToWorld(event.clientX, event.clientY);
       onEditStartRef.current("Rotacionar peça");
+      ownGesture(event.pointerId, "rotation");
       dragRef.current = {
         type: "rotate",
         pointerId: event.pointerId,
@@ -982,6 +1023,7 @@ function PatternCanvasComponent({
     const controlHandle = findHandle(event.clientX, event.clientY);
     if (controlHandle) {
       onEditStartRef.current("Ajustar curva");
+      ownGesture(event.pointerId, "handle");
       dragRef.current = {
         type: "handle",
         pointerId: event.pointerId,
@@ -995,6 +1037,7 @@ function PatternCanvasComponent({
       if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
       onSelectPoint(pointHit.point.id);
       onEditStartRef.current("Mover ponto");
+      ownGesture(event.pointerId, "point");
       dragRef.current = {
         type: "point",
         pointerId: event.pointerId,
@@ -1009,6 +1052,7 @@ function PatternCanvasComponent({
       if (edge) {
         selectPiece(edge.pieceId); onSelectPoint(null); useEditorStore.getState().selectEdge(edge.edgeId);
         const world = screenToWorld(event.clientX, event.clientY); onEditStartRef.current("Mover borda");
+        ownGesture(event.pointerId, "segment");
         dragRef.current = { type: "segment", pointerId: event.pointerId, edgeId: edge.edgeId, lastWorldX: world.xMm, lastWorldY: world.yMm };
         return;
       }
@@ -1017,8 +1061,9 @@ function PatternCanvasComponent({
     const world = screenToWorld(event.clientX, event.clientY);
     const piece = findPieceAtWorld(world.xMm, world.yMm);
     if (piece) {
+      const selectedPieceIds = useEditorStore.getState().selectedPieceIds;
       if (event.shiftKey) useEditorStore.getState().togglePieceSelection(piece.id);
-      else selectPiece(piece.id);
+      else if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);
       onSelectPoint(null);
       const workspace = getPieceWorkspaceState(garment, piece.id);
       if (workspace.locked) {
@@ -1026,6 +1071,7 @@ function PatternCanvasComponent({
         return;
       }
       onEditStartRef.current("Mover peça");
+      ownGesture(event.pointerId, "piece");
       dragRef.current = {
         type: "piece",
         pointerId: event.pointerId,
@@ -1038,11 +1084,13 @@ function PatternCanvasComponent({
       };
       return;
     }
-    if (toolRef.current === "select") {
+    if (toolRef.current === "select" && event.shiftKey) {
       const rect = event.currentTarget.getBoundingClientRect();
       const x = event.clientX - rect.left; const y = event.clientY - rect.top;
-      dragRef.current = { type: "box", pointerId: event.pointerId, startX: x, startY: y, currentX: x, currentY: y, additive: event.shiftKey };
-      scheduleDraw();
+      ownGesture(event.pointerId, "box");
+      dragRef.current = { type: "box", pointerId: event.pointerId, startX: x, startY: y, currentX: x, currentY: y, additive: true };
+    } else if (toolRef.current === "select") {
+      dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
     } else clearSelection();
   }
 
@@ -1066,6 +1114,8 @@ function PatternCanvasComponent({
       !finishGesture(touchCandidate, event.clientX, event.clientY).isClick
     ) {
       onEditStartRef.current("Mover peça");
+      ownGesture(event.pointerId, "piece");
+      dragStartedRef.current = true;
       dragRef.current = {
         type: "piece",
         pointerId: event.pointerId,
@@ -1116,6 +1166,13 @@ function PatternCanvasComponent({
     }
 
     if (drag.pointerId !== event.pointerId) return;
+
+    const thresholdIntent = drag.type === "piece" ? "piece" : drag.type === "point" ? "point" : drag.type === "handle" ? "handle" : drag.type === "pan" ? "pan" : drag.type === "box" ? "box" : null;
+    if (!dragStartedRef.current && thresholdIntent && dragOriginRef.current) {
+      if (!shouldStartDrag(dragOriginRef.current, event.clientX, event.clientY, thresholdIntent)) return;
+      dragStartedRef.current = true;
+      if (drag.type === "pan") setIsPanning(true);
+    }
 
     if (drag.type === "pan") {
       updateCamera({
@@ -1316,12 +1373,38 @@ function PatternCanvasComponent({
     });
   }
 
-  function handleWheel(event: WheelEvent<HTMLCanvasElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const cursorX = event.clientX - rect.left;
-    const cursorY = event.clientY - rect.top;
-    const factor = event.deltaY < 0 ? 1.1 : 0.9;
-    updateCamera(zoomCameraAtPoint(cameraRef.current, { x: cursorX, y: cursorY }, cameraRef.current.zoom * factor));
+  function handleWheel(event: globalThis.WheelEvent) {
+    const owner = gestureOwnershipRef.current?.owner ?? "empty";
+    if (isInteractiveGestureOwner(owner)) {
+      event.preventDefault();
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const navigation = normalizeWheelNavigation({
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+      deltaMode: event.deltaMode,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      viewportHeight: rect.height,
+    });
+    event.preventDefault();
+    pendingWheelRef.current = {
+      navigation: mergeWheelNavigation(pendingWheelRef.current?.navigation ?? null, navigation),
+      cursor,
+    };
+    if (wheelFrameRef.current !== null) return;
+    wheelFrameRef.current = window.requestAnimationFrame(() => {
+      wheelFrameRef.current = null;
+      const pending = pendingWheelRef.current;
+      pendingWheelRef.current = null;
+      if (pending) updateCamera(applyWheelNavigation(cameraRef.current, pending.navigation, pending.cursor));
+    });
   }
 
   function handleDoubleClick(event: MouseEvent<HTMLCanvasElement>) {
@@ -1379,6 +1462,7 @@ function PatternCanvasComponent({
     clientX: number,
     clientY: number,
   ) {
+    ownGesture(pointerId, "pan");
     return {
       type: "pan" as const,
       pointerId,
@@ -1398,6 +1482,8 @@ function PatternCanvasComponent({
 
     const [[firstId, first], [secondId, second]] = pointers;
     const rect = canvas.getBoundingClientRect();
+    gestureOwnershipRef.current = { pointerId: firstId, owner: "pinch" };
+    dragStartedRef.current = true;
     dragRef.current = {
       type: "pinch",
       pointerIds: [firstId, secondId],
@@ -1471,7 +1557,8 @@ function PatternCanvasComponent({
     }
     if (
       finishedDrag?.type === "piece" &&
-      finishedDrag.pointerId === event.pointerId
+      finishedDrag.pointerId === event.pointerId &&
+      dragStartedRef.current
     ) {
       flushWorkspaceTransforms();
       onEditEndRef.current();
@@ -1497,7 +1584,7 @@ function PatternCanvasComponent({
     }
     if (finishedDrag?.type === "box" && finishedDrag.pointerId === event.pointerId) {
       const moved = Math.hypot(finishedDrag.currentX - finishedDrag.startX, finishedDrag.currentY - finishedDrag.startY);
-      if (!shouldStartBoxSelection(moved)) {
+      if (!shouldStartBoxSelection(moved, dragOriginRef.current?.pointerType ?? "mouse")) {
         clearSelection();
         useEditorStore.getState().selectDart(null);
         useEditorStore.getState().setNearbySeamSuggestion(null);
@@ -1514,7 +1601,13 @@ function PatternCanvasComponent({
       useEditorStore.getState().setPieceSelection(finishedDrag.additive ? [...previous, ...hits] : hits);
       }
     }
-    if (finishedDrag?.type === "pan") setIsPanning(false);
+    if (finishedDrag?.type === "pan") {
+      if (!dragStartedRef.current && toolRef.current === "select") {
+        clearSelection();
+        useEditorStore.getState().selectDart(null);
+      }
+      setIsPanning(false);
+    }
 
     const remaining = [...activePointersRef.current.entries()][0];
     if (remaining) {
@@ -1530,6 +1623,9 @@ function PatternCanvasComponent({
     snapRef.current = null;
     scheduleDraw();
     dragRef.current = null;
+    dragOriginRef.current = null;
+    dragStartedRef.current = false;
+    if (gestureOwnershipRef.current?.pointerId === event.pointerId) gestureOwnershipRef.current = null;
   }
 
   const readyIntent = cutDraft?.phase === "ready"
@@ -1563,8 +1659,7 @@ function PatternCanvasComponent({
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
         onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}
-        aria-label="Editor de molde 2D"
+          aria-label="Editor de molde 2D"
       />
       {selectedSeamId ? (
         <div className="canvas-seam-label" role="status">
