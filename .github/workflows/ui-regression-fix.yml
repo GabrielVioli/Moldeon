@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/ui-regression-fix.py
+      - scripts/ui-regression-followup.py
       - scripts/ui-regression-audit.mjs
       - scripts/ui-regression-progress.py
       - .github/workflows/ui-regression-fix.yml
@@ -31,7 +32,9 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - name: Apply source correction
-        run: python scripts/ui-regression-fix.py
+        run: |
+          python scripts/ui-regression-fix.py
+          python scripts/ui-regression-followup.py
       - name: Install dependencies
         run: npm install
       - name: Typecheck
@@ -70,6 +73,7 @@ jobs:
           git rm -f \
             scripts/ui-regression-baseline.mjs \
             scripts/ui-regression-fix.py \
+            scripts/ui-regression-followup.py \
             scripts/ui-regression-audit.mjs \
             scripts/ui-regression-progress.py \
             .github/workflows/ui-regression-baseline.yml \
