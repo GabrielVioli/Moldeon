@@ -1,42 +1,76 @@
-import type { PatternPiece, PatternPoint } from "./pattern";
+import {
+  migrateLegacyPieceToSegments,
+  syncLegacyPointsFromSegments,
+  type EdgeRange,
+  type PatternNode,
+  type PatternPiece,
+  type PatternPoint,
+  type PatternSegment,
+  type PatternVector,
+  type Seam,
+} from "./pattern";
 
 export interface SegmentInsertionTarget {
   startPointId: string;
+  segmentId: string;
   t: number;
   distanceMm: number;
+}
+
+export interface SegmentSplitMapping {
+  pieceId: string;
+  originalEdgeId: string;
+  firstEdgeId: string;
+  secondEdgeId: string;
+  splitT: number;
 }
 
 export interface InsertedPatternPoint {
   piece: PatternPiece;
   pointId: string;
+  split: SegmentSplitMapping;
 }
 
-const CURVE_HIT_STEPS = 20;
+const CURVE_HIT_STEPS = 32;
+const MIN_SPLIT_T = 0.02;
+const MAX_SPLIT_T = 0.98;
+const EPSILON = 1e-7;
 
 export function findNearestPatternSegment(
-  points: readonly PatternPoint[],
-  target: { xMm: number; yMm: number },
+  source: PatternPiece | readonly PatternPoint[],
+  target: PatternVector,
 ): SegmentInsertionTarget | null {
-  if (points.length < 2) return null;
+  const piece = Array.isArray(source)
+    ? migrateLegacyPieceToSegments({
+        id: "hit-test-piece",
+        name: "Hit test",
+        seamAllowanceMm: 0,
+        points: source.map(clonePoint),
+      })
+    : migrateLegacyPieceToSegments(structuredClone(source as PatternPiece));
 
+  if (!piece.nodes?.length || !piece.segments?.length) return null;
+  const nodes = new Map(piece.nodes.map((node) => [node.id, node]));
   let nearest: SegmentInsertionTarget | null = null;
-  for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
-    const start = points[pointIndex];
-    const end = points[(pointIndex + 1) % points.length];
-    const curved = Boolean(start.handleOut || end.handleIn);
-    const steps = curved ? CURVE_HIT_STEPS : 1;
+
+  for (const segment of orderedSegments(piece)) {
+    const start = nodes.get(segment.startNodeId);
+    const end = nodes.get(segment.endNodeId);
+    if (!start || !end) continue;
+    const steps = segment.kind === "cubic" ? CURVE_HIT_STEPS : 1;
 
     for (let step = 0; step < steps; step += 1) {
       const startT = step / steps;
       const endT = (step + 1) / steps;
-      const sampleStart = segmentPoint(start, end, startT);
-      const sampleEnd = segmentPoint(start, end, endT);
+      const sampleStart = segmentPoint(segment, start, end, startT);
+      const sampleEnd = segmentPoint(segment, start, end, endT);
       const projection = projectPointOnLine(target, sampleStart, sampleEnd);
       const t = startT + (endT - startT) * projection.t;
 
       if (!nearest || projection.distanceMm < nearest.distanceMm) {
         nearest = {
-          startPointId: start.id,
+          startPointId: segment.startNodeId,
+          segmentId: segment.id,
           t,
           distanceMm: projection.distanceMm,
         };
@@ -52,27 +86,77 @@ export function insertPatternPoint(
   startPointId: string,
   rawT: number,
 ): InsertedPatternPoint | null {
-  const startIndex = piece.points.findIndex(
-    (point) => point.id === startPointId,
+  const model = migrateLegacyPieceToSegments(structuredClone(piece));
+  const segment = orderedSegments(model).find(
+    (candidate) => candidate.startNodeId === startPointId,
   );
-  if (startIndex < 0) return null;
+  if (!segment) return null;
+  return splitPatternSegmentAt(model, segment.id, rawT);
+}
 
-  const endIndex = (startIndex + 1) % piece.points.length;
-  const points = piece.points.map(clonePoint);
-  const start = points[startIndex];
-  const end = points[endIndex];
-  const t = Math.min(0.95, Math.max(0.05, rawT));
-  const pointId = nextInsertedPointId(piece);
-  const inserted = splitSegment(start, end, pointId, t);
+export function splitPatternSegmentAt(
+  piece: PatternPiece,
+  segmentId: string,
+  rawT: number,
+): InsertedPatternPoint | null {
+  const model = migrateLegacyPieceToSegments(structuredClone(piece));
+  if (!model.nodes || !model.segments || !model.contours) return null;
 
-  points[startIndex] = inserted.start;
-  points[endIndex] = inserted.end;
-  points.splice(startIndex + 1, 0, inserted.point);
+  const segmentIndex = model.segments.findIndex(
+    (candidate) => candidate.id === segmentId,
+  );
+  if (segmentIndex < 0) return null;
 
+  const sourceSegment = model.segments[segmentIndex];
+  const start = model.nodes.find(
+    (node) => node.id === sourceSegment.startNodeId,
+  );
+  const end = model.nodes.find((node) => node.id === sourceSegment.endNodeId);
+  if (!start || !end) return null;
+
+  const t = clamp(rawT, MIN_SPLIT_T, MAX_SPLIT_T);
+  const pointId = nextInsertedPointId(model);
+  const secondSegmentId = nextSplitSegmentId(model, sourceSegment.id);
+  const split = splitSegmentGeometry(sourceSegment, start, end, pointId, t);
+
+  model.nodes.push(split.node);
+  model.segments.splice(segmentIndex, 1, split.first, {
+    ...split.second,
+    id: secondSegmentId,
+  });
+  model.contours = model.contours.map((contour) => ({
+    ...contour,
+    segmentIds: contour.segmentIds.flatMap((id) =>
+      id === sourceSegment.id ? [sourceSegment.id, secondSegmentId] : [id],
+    ),
+  }));
+
+  if (model.edgeFinishes?.[sourceSegment.id]) {
+    model.edgeFinishes = {
+      ...model.edgeFinishes,
+      [secondSegmentId]: model.edgeFinishes[sourceSegment.id],
+    };
+  }
+
+  const synchronized = syncLegacyPointsFromSegments(model);
   return {
-    piece: { ...piece, points },
+    piece: synchronized,
     pointId,
+    split: {
+      pieceId: piece.id,
+      originalEdgeId: sourceSegment.id,
+      firstEdgeId: sourceSegment.id,
+      secondEdgeId: secondSegmentId,
+      splitT: t,
+    },
   };
+}
+
+export function remapSeamsAfterSegmentSplit(
+  seams: readonly Seam[],
+  split: SegmentSplitMapping,
+): Seam[] {
+  return seams.flatMap((seam) => splitSeamAtEdgeParameter(seam, split));
 }
 
 export function removePatternPoint(
@@ -90,95 +174,217 @@ export function removePatternPoint(
   const nextIndex = index % points.length;
   delete points[previousIndex].handleOut;
   delete points[nextIndex].handleIn;
-  return { ...piece, points };
+  return migrateLegacyPieceToSegments({
+    ...piece,
+    formatVersion: undefined,
+    nodes: undefined,
+    segments: undefined,
+    contours: undefined,
+    points,
+  });
 }
 
-function splitSegment(
-  sourceStart: PatternPoint,
-  sourceEnd: PatternPoint,
-  pointId: string,
+function splitSegmentGeometry(
+  segment: PatternSegment,
+  start: PatternNode,
+  end: PatternNode,
+  nodeId: string,
   t: number,
-): { start: PatternPoint; point: PatternPoint; end: PatternPoint } {
-  const start = clonePoint(sourceStart);
-  const end = clonePoint(sourceEnd);
-  if (!start.handleOut && !end.handleIn) {
+): { node: PatternNode; first: PatternSegment; second: PatternSegment } {
+  const p0 = vector(start);
+  const p3 = vector(end);
+
+  if (segment.kind === "line") {
+    const middle = interpolate(p0, p3, t);
     return {
-      start,
-      point: {
-        id: pointId,
-        xMm: roundMm(lerp(start.xMm, end.xMm, t)),
-        yMm: roundMm(lerp(start.yMm, end.yMm, t)),
+      node: { id: nodeId, ...roundVector(middle) },
+      first: {
+        ...segment,
+        endNodeId: nodeId,
       },
-      end,
+      second: {
+        ...segment,
+        startNodeId: nodeId,
+      },
     };
   }
 
-  const p0 = { xMm: start.xMm, yMm: start.yMm };
-  const p1 = {
-    xMm: start.xMm + (start.handleOut?.xMm ?? 0),
-    yMm: start.yMm + (start.handleOut?.yMm ?? 0),
-  };
-  const p2 = {
-    xMm: end.xMm + (end.handleIn?.xMm ?? 0),
-    yMm: end.yMm + (end.handleIn?.yMm ?? 0),
-  };
-  const p3 = { xMm: end.xMm, yMm: end.yMm };
-  const a = lerpPoint(p0, p1, t);
-  const b = lerpPoint(p1, p2, t);
-  const c = lerpPoint(p2, p3, t);
-  const d = lerpPoint(a, b, t);
-  const e = lerpPoint(b, c, t);
-  const split = lerpPoint(d, e, t);
+  const p1 = segment.control1 ?? interpolate(p0, p3, 1 / 3);
+  const p2 = segment.control2 ?? interpolate(p0, p3, 2 / 3);
+  const a = interpolate(p0, p1, t);
+  const b = interpolate(p1, p2, t);
+  const c = interpolate(p2, p3, t);
+  const d = interpolate(a, b, t);
+  const e = interpolate(b, c, t);
+  const middle = interpolate(d, e, t);
 
-  start.handleOut = vectorBetween(p0, a);
-  end.handleIn = vectorBetween(p3, c);
   return {
-    start,
-    point: {
-      id: pointId,
-      xMm: roundMm(split.xMm),
-      yMm: roundMm(split.yMm),
-      handleIn: vectorBetween(split, d),
-      handleOut: vectorBetween(split, e),
+    node: { id: nodeId, ...roundVector(middle) },
+    first: {
+      ...segment,
+      endNodeId: nodeId,
+      control1: roundVector(a),
+      control2: roundVector(d),
+      smoothEnd: true,
     },
-    end,
+    second: {
+      ...segment,
+      startNodeId: nodeId,
+      control1: roundVector(e),
+      control2: roundVector(c),
+      smoothStart: true,
+    },
   };
+}
+
+function splitSeamAtEdgeParameter(
+  seam: Seam,
+  split: SegmentSplitMapping,
+): Seam[] {
+  const cutParameters = [0, 1];
+  const firstCut = traversalParameterForSplit(
+    seam.first,
+    split,
+    false,
+  );
+  const secondCut = traversalParameterForSplit(
+    seam.second,
+    split,
+    seam.direction === "opposite",
+  );
+  if (firstCut !== null) cutParameters.push(firstCut);
+  if (secondCut !== null) cutParameters.push(secondCut);
+
+  const cuts = [...new Set(cutParameters.map((value) => round(value, 8)))]
+    .filter((value) => value >= 0 && value <= 1)
+    .sort((left, right) => left - right);
+
+  const parts: Seam[] = [];
+  for (let index = 0; index < cuts.length - 1; index += 1) {
+    const startU = cuts[index];
+    const endU = cuts[index + 1];
+    if (endU - startU <= EPSILON) continue;
+    const first = mapTraversalInterval(
+      seam.first,
+      split,
+      startU,
+      endU,
+      false,
+    );
+    const second = mapTraversalInterval(
+      seam.second,
+      split,
+      startU,
+      endU,
+      seam.direction === "opposite",
+    );
+    parts.push({
+      ...seam,
+      id: cuts.length > 2 && index > 0 ? `${seam.id}:split-${index + 1}` : seam.id,
+      first,
+      second,
+    });
+  }
+  return parts.length > 0 ? parts : [structuredClone(seam)];
+}
+
+function traversalParameterForSplit(
+  range: EdgeRange,
+  split: SegmentSplitMapping,
+  reverseTraversal: boolean,
+): number | null {
+  if (
+    range.pieceId !== split.pieceId ||
+    range.edgeId !== split.originalEdgeId ||
+    split.splitT <= range.startT + EPSILON ||
+    split.splitT >= range.endT - EPSILON
+  ) {
+    return null;
+  }
+  const normalized =
+    (split.splitT - range.startT) / (range.endT - range.startT);
+  return reverseTraversal ? 1 - normalized : normalized;
+}
+
+function mapTraversalInterval(
+  range: EdgeRange,
+  split: SegmentSplitMapping,
+  startU: number,
+  endU: number,
+  reverseTraversal: boolean,
+): EdgeRange {
+  const parameterAt = (u: number) =>
+    reverseTraversal
+      ? range.endT - u * (range.endT - range.startT)
+      : range.startT + u * (range.endT - range.startT);
+  const p0 = parameterAt(startU);
+  const p1 = parameterAt(endU);
+
+  if (
+    range.pieceId !== split.pieceId ||
+    range.edgeId !== split.originalEdgeId
+  ) {
+    return {
+      ...range,
+      startT: Math.min(p0, p1),
+      endT: Math.max(p0, p1),
+    };
+  }
+
+  const middle = parameterAt((startU + endU) / 2);
+  const useFirst = middle <= split.splitT;
+  const denominator = useFirst ? split.splitT : 1 - split.splitT;
+  const mapParameter = (parameter: number) =>
+    useFirst
+      ? clamp(parameter / denominator, 0, 1)
+      : clamp((parameter - split.splitT) / denominator, 0, 1);
+  const mapped0 = mapParameter(p0);
+  const mapped1 = mapParameter(p1);
+  return {
+    pieceId: range.pieceId,
+    edgeId: useFirst ? split.firstEdgeId : split.secondEdgeId,
+    startT: round(Math.min(mapped0, mapped1), 8),
+    endT: round(Math.max(mapped0, mapped1), 8),
+  };
+}
+
+function orderedSegments(piece: PatternPiece): PatternSegment[] {
+  const byId = new Map((piece.segments ?? []).map((segment) => [segment.id, segment]));
+  const contour = piece.contours?.find((candidate) => candidate.closed) ?? piece.contours?.[0];
+  if (!contour) return piece.segments ?? [];
+  return contour.segmentIds
+    .map((id) => byId.get(id))
+    .filter((segment): segment is PatternSegment => Boolean(segment));
 }
 
 function segmentPoint(
-  start: PatternPoint,
-  end: PatternPoint,
+  segment: PatternSegment,
+  start: PatternVector,
+  end: PatternVector,
   t: number,
-): { xMm: number; yMm: number } {
-  if (!start.handleOut && !end.handleIn) {
-    return {
-      xMm: lerp(start.xMm, end.xMm, t),
-      yMm: lerp(start.yMm, end.yMm, t),
-    };
-  }
+): PatternVector {
+  if (segment.kind === "line") return interpolate(start, end, t);
+  const p1 = segment.control1 ?? interpolate(start, end, 1 / 3);
+  const p2 = segment.control2 ?? interpolate(start, end, 2 / 3);
   const oneMinusT = 1 - t;
-  const control1X = start.xMm + (start.handleOut?.xMm ?? 0);
-  const control1Y = start.yMm + (start.handleOut?.yMm ?? 0);
-  const control2X = end.xMm + (end.handleIn?.xMm ?? 0);
-  const control2Y = end.yMm + (end.handleIn?.yMm ?? 0);
   return {
     xMm:
       oneMinusT ** 3 * start.xMm +
-      3 * oneMinusT ** 2 * t * control1X +
-      3 * oneMinusT * t ** 2 * control2X +
+      3 * oneMinusT ** 2 * t * p1.xMm +
+      3 * oneMinusT * t ** 2 * p2.xMm +
       t ** 3 * end.xMm,
     yMm:
       oneMinusT ** 3 * start.yMm +
-      3 * oneMinusT ** 2 * t * control1Y +
-      3 * oneMinusT * t ** 2 * control2Y +
+      3 * oneMinusT ** 2 * t * p1.yMm +
+      3 * oneMinusT * t ** 2 * p2.yMm +
       t ** 3 * end.yMm,
   };
 }
 
 function projectPointOnLine(
-  target: { xMm: number; yMm: number },
-  start: { xMm: number; yMm: number },
-  end: { xMm: number; yMm: number },
+  target: PatternVector,
+  start: PatternVector,
+  end: PatternVector,
 ) {
   const deltaX = end.xMm - start.xMm;
   const deltaY = end.yMm - start.yMm;
@@ -189,9 +395,9 @@ function projectPointOnLine(
       : ((target.xMm - start.xMm) * deltaX +
           (target.yMm - start.yMm) * deltaY) /
         lengthSquared;
-  const t = Math.min(1, Math.max(0, rawT));
-  const xMm = lerp(start.xMm, end.xMm, t);
-  const yMm = lerp(start.yMm, end.yMm, t);
+  const t = clamp(rawT, 0, 1);
+  const xMm = start.xMm + deltaX * t;
+  const yMm = start.yMm + deltaY * t;
   return {
     t,
     distanceMm: Math.hypot(target.xMm - xMm, target.yMm - yMm),
@@ -199,10 +405,20 @@ function projectPointOnLine(
 }
 
 function nextInsertedPointId(piece: PatternPiece): string {
-  const existing = new Set(piece.points.map((point) => point.id));
+  const existing = new Set([
+    ...piece.points.map((point) => point.id),
+    ...(piece.nodes ?? []).map((node) => node.id),
+  ]);
   let sequence = 1;
   while (existing.has(`${piece.id}:insert-${sequence}`)) sequence += 1;
   return `${piece.id}:insert-${sequence}`;
+}
+
+function nextSplitSegmentId(piece: PatternPiece, sourceId: string): string {
+  const existing = new Set((piece.segments ?? []).map((segment) => segment.id));
+  let sequence = 2;
+  while (existing.has(`${sourceId}:part-${sequence}`)) sequence += 1;
+  return `${sourceId}:part-${sequence}`;
 }
 
 function clonePoint(point: PatternPoint): PatternPoint {
@@ -213,31 +429,30 @@ function clonePoint(point: PatternPoint): PatternPoint {
   };
 }
 
-function lerp(start: number, end: number, t: number): number {
-  return start + (end - start) * t;
+function vector(point: PatternVector): PatternVector {
+  return { xMm: point.xMm, yMm: point.yMm };
 }
 
-function lerpPoint(
-  start: { xMm: number; yMm: number },
-  end: { xMm: number; yMm: number },
+function interpolate(
+  start: PatternVector,
+  end: PatternVector,
   t: number,
-) {
+): PatternVector {
   return {
-    xMm: lerp(start.xMm, end.xMm, t),
-    yMm: lerp(start.yMm, end.yMm, t),
+    xMm: start.xMm + (end.xMm - start.xMm) * t,
+    yMm: start.yMm + (end.yMm - start.yMm) * t,
   };
 }
 
-function vectorBetween(
-  start: { xMm: number; yMm: number },
-  end: { xMm: number; yMm: number },
-) {
-  return {
-    xMm: roundMm(end.xMm - start.xMm),
-    yMm: roundMm(end.yMm - start.yMm),
-  };
+function roundVector(point: PatternVector): PatternVector {
+  return { xMm: round(point.xMm, 6), yMm: round(point.yMm, 6) };
 }
 
-function roundMm(value: number): number {
-  return Math.round(value * 10) / 10;
+function round(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
 }
