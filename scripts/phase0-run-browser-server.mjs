@@ -35,6 +35,17 @@ try {
     PHASE0_BASE_URL: `http://127.0.0.1:${port}`,
     PHASE0_BROWSER_LABEL: requestedLabel,
   });
+
+  if (requestedMode === "fallback") {
+    await runForeground(
+      process.execPath,
+      ["scripts/phase0-interaction-audit.mjs"],
+      {
+        PHASE0_BASE_URL: `http://127.0.0.1:${port}`,
+        PHASE0_INTERACTION_LABEL: requestedLabel,
+      },
+    );
+  }
 } finally {
   await stopProcessTree(serverProcess);
   await writeFile(serverLogPath, serverLog, "utf8");
