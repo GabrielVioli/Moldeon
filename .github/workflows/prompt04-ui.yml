@@ -30,7 +30,9 @@ jobs:
           cache: npm
       - run: npm install
       - name: Apply canvas and keyboard integration
-        run: python scripts/prompt04-ui.py
+        run: |
+          sed -i "s/'mouse internal path dispatch', count=1)/'mouse internal path dispatch', count=2)/" scripts/prompt04-ui.py
+          python scripts/prompt04-ui.py
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
