@@ -1,23 +1,13 @@
-from pathlib import Path
-import json
-import os
-
-audit = json.loads(Path("artifacts/ui-regression-fix/ui-regression-audit.json").read_text(encoding="utf-8"))
-scenarios = "\n".join(
-    f"| `{item['name']}` | {item['status']} | {len(item.get('diagnostics', []))} |"
-    for item in audit["scenarios"]
-)
-implementation = os.environ["IMPLEMENTATION_COMMIT"]
-content = f'''# Correção de regressões de UI após o Prompt 4
+# Correção de regressões de UI após o Prompt 4
 
 ## Estado
 
 Correção implementada e auditada em `main` em 5 de agosto de 2026.
 
 - commit inicial funcional: `f02fe4c395e223d6276343e58baf9fc18cabd94f`;
-- commit da implementação auditada: `{implementation}`;
-- workflow de auditoria: `{os.environ.get("GITHUB_RUN_ID", "indisponível")}`;
-- navegador automatizado: Chromium `{audit["browserVersion"]}`.
+- commit da implementação auditada: `46da1a47083450782ee28237c1050be2be109137`;
+- workflow de auditoria: `31057836251`;
+- navegador automatizado: Chromium `140.0.7339.16`.
 
 A tarefa ficou restrita à interface, aos controladores de gesto, à navegação da câmera 2D e ao layout do painel direito. Domínio V3, persistência, migrações, geometria de corte, caminhos internos, pences, moldes-base, montagem semântica e física não foram alterados.
 
@@ -88,7 +78,14 @@ Pan primário começa em região vazia. `Shift + arrastar` em região vazia mant
 
 | Cenário | Resultado | Erros de console |
 |---|---|---:|
-{scenarios}
+| `single-piece-ownership` | passed | 0 |
+| `multi-selection-drag` | passed | 0 |
+| `empty-and-hand-pan` | passed | 0 |
+| `wheel-trackpad-data` | passed | 0 |
+| `right-panel-lifecycle` | passed | 0 |
+| `desktop-1920-layout` | passed | 0 |
+| `mobile-portrait-panel-and-pinch` | passed | 0 |
+| `mobile-landscape-layout` | passed | 0 |
 
 ## Evidências
 
@@ -113,5 +110,3 @@ As capturas e relatórios estão em `docs/evidence/ui-regression-fix/`:
 A inspeção mobile foi executada em Chromium automatizado nos viewports solicitados. O pinch foi exercitado pela mesma rota de `PointerEvent` usada pelo Canvas, com `pointerType: touch`, mas não em um aparelho físico. Não houve teste em iPhone, Safari ou hardware móvel nesta execução.
 
 Nenhuma atividade do Prompt 5 foi iniciada.
-'''
-Path("docs/progress/UI_REGRESSION_FIX_POST_PROMPT_04.md").write_text(content, encoding="utf-8")
