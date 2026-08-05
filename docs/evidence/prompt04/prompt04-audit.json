@@ -1,0 +1,43 @@
+{
+  "baseUrl": "http://127.0.0.1:5184",
+  "generatedAt": "2026-08-05T23:02:34.362Z",
+  "browserVersion": "140.0.7339.16",
+  "scenarios": [
+    {
+      "name": "curved-cut-and-sew",
+      "status": "passed",
+      "result": {
+        "before": 1,
+        "after": 2,
+        "seamCount": 1,
+        "undoPieces": 1,
+        "redoPieces": 2
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "structural-dart",
+      "status": "passed",
+      "result": {
+        "dartCount": 1,
+        "undoRedo": true
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "internal-path-mobile",
+      "status": "passed",
+      "result": {
+        "draftVisible": true,
+        "cancelWorked": true
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    }
+  ]
+}

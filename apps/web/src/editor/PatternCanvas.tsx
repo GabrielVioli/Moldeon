@@ -595,6 +595,12 @@ function PatternCanvasComponent({
   function handleInternalPathPointerDown(event: PointerEvent<HTMLCanvasElement>): boolean {
     if (event.button === 1 || spacePressedRef.current || toolRef.current === "hand") return false;
     const session = useInternalPathEditorStore.getState();
+    if ((toolRef.current === "cut" || toolRef.current === "dart") && session.draftPathId) {
+      session.appendDraftPoint(screenToActivePieceLocal(event.clientX, event.clientY));
+      dragRef.current = null;
+      scheduleDraw();
+      return true;
+    }
     const handleHit = findInternalPathHandleAt(event.clientX, event.clientY);
     if (handleHit) {
       session.selectPath(handleHit.path.id);
@@ -619,8 +625,7 @@ function PatternCanvasComponent({
     }
     if (toolRef.current === "cut" || toolRef.current === "dart") {
       const local = screenToActivePieceLocal(event.clientX, event.clientY);
-      if (session.draftPathId) session.appendDraftPoint(local);
-      else session.startPath(activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
+      session.startPath(activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
       dragRef.current = null;
       scheduleDraw();
       return true;
