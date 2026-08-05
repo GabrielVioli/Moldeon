@@ -64,6 +64,8 @@ export type SeamTreatment = "standard" | "ease" | "gather" | "stretch" | "intent
 
 export interface Seam {
   id: string;
+  /** Identificador estável do SeamGroup V3 quando a costura usa vários intervalos. */
+  groupId?: string;
   first: EdgeRange;
   second: EdgeRange;
   // direction: whether second is stitched in parametric same/opposite direction
@@ -101,8 +103,30 @@ export interface PatternContour {
 }
 
 export type InternalLinePurpose = "cut" | "fold" | "dart-center" | "pocket" | "topstitch" | "reference";
+export type InternalPathPurpose = "cut" | "cut-and-sew" | "dart" | "fold" | "reference" | "marking";
 
-export interface PatternInternalLine {
+export interface InternalPathNode extends PatternPoint {}
+
+export interface InternalPathSegment {
+  id: string;
+  startNodeId: string;
+  endNodeId: string;
+  kind: "line" | "cubic";
+}
+
+export interface InternalPath {
+  id: string;
+  pieceId: string;
+  name: string;
+  nodes: InternalPathNode[];
+  segments: InternalPathSegment[];
+  purpose: InternalPathPurpose;
+  visible: boolean;
+  locked: boolean;
+  metadata: Record<string, string | number | boolean>;
+}
+
+export interface LegacyPatternInternalLine {
   id: string;
   pieceId: string;
   points: PatternPoint[];
@@ -110,9 +134,42 @@ export interface PatternInternalLine {
   purpose: InternalLinePurpose;
 }
 
+export type PatternInternalLine = InternalPath | LegacyPatternInternalLine;
+
+export interface InternalPathDiagnostic {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  point?: PatternVector;
+  edgeIds?: string[];
+  seamIds?: string[];
+  pathId?: string;
+}
+
+export interface InternalPathIntersection extends PatternVector {
+  pathSegmentId: string;
+  pathT: number;
+  pathDistanceMm: number;
+  edgeId: string;
+  edgeT: number;
+  tangent: boolean;
+}
+
+export function isInternalPath(line: PatternInternalLine): line is InternalPath {
+  return "nodes" in line && Array.isArray(line.nodes) && "segments" in line && Array.isArray(line.segments);
+}
+
 export interface PatternDart {
   id: string;
   pieceId: string;
+  pathId?: string;
+  legSegmentIds?: [string, string];
+  closure?: {
+    kind: "paired-legs";
+    targetDistanceMm: number;
+    state: "open" | "closed";
+    topologyVersion: 1;
+  };
   apex: PatternVector;
   legA: PatternVector;
   legB: PatternVector;
@@ -567,8 +624,9 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const active = s.active === undefined
         ? true
         : readBoolean(s.active, `O estado da costura ${i + 1}`);
+      const groupId = s.groupId === undefined ? undefined : readString(s.groupId, `O grupo da costura ${i + 1}`);
       if (!seamIds.has(id)) {
-        seams.push({ id, first, second, direction, easeRatio, type, name, treatment, active });
+        seams.push({ id, ...(groupId === undefined ? {} : { groupId }), first, second, direction, easeRatio, type, name, treatment, active });
         seamIds.add(id);
       }
     }
@@ -699,9 +757,48 @@ function parseVector(value: unknown, label: string): PatternVector {
 function parseInternalLines(value: unknown, pieceId: string): PatternInternalLine[] {
   if (!Array.isArray(value)) throw new TypeError("As linhas internas são inválidas.");
   return value.map((line, index) => {
-    if (!isRecord(line) || !Array.isArray(line.points) || line.points.length < 2) throw new TypeError(`A linha interna ${index + 1} é inválida.`);
+    if (!isRecord(line)) throw new TypeError(`A linha interna ${index + 1} é inválida.`);
+    const id = readString(line.id, `O id da linha interna ${index + 1}`);
+    if (Array.isArray(line.nodes) && Array.isArray(line.segments)) {
+      if (line.nodes.length < 2 || line.segments.length < 1) throw new TypeError(`O caminho interno ${index + 1} precisa de pelo menos dois nós.`);
+      const nodes = line.nodes.map(parsePatternPoint);
+      const nodeIds = new Set(nodes.map((node) => node.id));
+      if (nodeIds.size !== nodes.length) throw new TypeError(`O caminho interno ${id} possui nós duplicados.`);
+      const segments = line.segments.map((segment, segmentIndex) => {
+        if (!isRecord(segment)) throw new TypeError(`O segmento interno ${segmentIndex + 1} é inválido.`);
+        const startNodeId = readString(segment.startNodeId, "O início do segmento interno");
+        const endNodeId = readString(segment.endNodeId, "O fim do segmento interno");
+        if (!nodeIds.has(startNodeId) || !nodeIds.has(endNodeId)) throw new TypeError(`O caminho interno ${id} referencia um nó inexistente.`);
+        return {
+          id: readString(segment.id, "O id do segmento interno"),
+          startNodeId,
+          endNodeId,
+          kind: readEnum(segment.kind, ["line", "cubic"] as const, "O tipo do segmento interno"),
+        };
+      });
+      const metadata: Record<string, string | number | boolean> = {};
+      if (line.metadata !== undefined) {
+        if (!isRecord(line.metadata)) throw new TypeError(`Os metadados do caminho ${id} são inválidos.`);
+        for (const [key, entry] of Object.entries(line.metadata)) {
+          if (typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") throw new TypeError(`O metadado ${key} do caminho ${id} não é primitivo.`);
+          metadata[key] = entry;
+        }
+      }
+      return {
+        id,
+        pieceId,
+        name: line.name === undefined ? `Caminho ${index + 1}` : readString(line.name, "O nome do caminho interno"),
+        nodes,
+        segments,
+        purpose: readEnum(line.purpose, ["cut", "cut-and-sew", "dart", "fold", "reference", "marking"] as const, "A finalidade do caminho interno"),
+        visible: line.visible === undefined ? true : readBoolean(line.visible, "A visibilidade do caminho interno"),
+        locked: line.locked === undefined ? false : readBoolean(line.locked, "O bloqueio do caminho interno"),
+        metadata,
+      };
+    }
+    if (!Array.isArray(line.points) || line.points.length < 2) throw new TypeError(`A linha interna ${index + 1} é inválida.`);
     return {
-      id: readString(line.id, `O id da linha interna ${index + 1}`),
+      id,
       pieceId,
       points: line.points.map(parsePatternPoint),
       curved: line.curved === undefined ? false : readBoolean(line.curved, "A curva da linha interna"),
@@ -716,6 +813,9 @@ function parseDarts(value: unknown, pieceId: string): PatternDart[] {
     if (!isRecord(dart) || !isRecord(dart.centerLine)) throw new TypeError(`A pence ${index + 1} é inválida.`);
     return {
       id: readString(dart.id, `O id da pence ${index + 1}`), pieceId,
+      ...(dart.pathId === undefined ? {} : { pathId: readString(dart.pathId, "O caminho da pence") }),
+      ...(Array.isArray(dart.legSegmentIds) && dart.legSegmentIds.length === 2 ? { legSegmentIds: [readString(dart.legSegmentIds[0], "A primeira perna topológica"), readString(dart.legSegmentIds[1], "A segunda perna topológica")] as [string, string] } : {}),
+      ...(isRecord(dart.closure) ? { closure: { kind: readEnum(dart.closure.kind, ["paired-legs"] as const, "A relação de fechamento"), targetDistanceMm: readFiniteNumber(dart.closure.targetDistanceMm, "A distância alvo da pence"), state: readEnum(dart.closure.state, ["open", "closed"] as const, "O estado estrutural da pence"), topologyVersion: 1 as const } } : {}),
       apex: parseVector(dart.apex, "O ápice da pence"),
       legA: parseVector(dart.legA, "A primeira perna da pence"),
       legB: parseVector(dart.legB, "A segunda perna da pence"),

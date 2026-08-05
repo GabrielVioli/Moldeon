@@ -44,6 +44,7 @@ import {
   cameraToFitBounds,
   zoomCameraAtPoint,
 } from "./camera";
+import { sampleInternalPath } from "../domain/internalPaths";
 import { useEditorStore } from "../state/editorStore";
 import {
   pieceLocalToWorld,
@@ -1705,7 +1706,7 @@ function draw(
     if (isActivePiece && selectedEdgeId) drawSeamInterval(context, piece, { pieceId: piece.id, edgeId: selectedEdgeId, startT: 0, endT: 1 }, transform, camera.zoom, "#d06b22");
 
     for (const line of piece.internalLines ?? []) {
-      const points = line.points.map((point) => pieceLocalToWorld(point, transform));
+      const points = ("points" in line ? line.points : sampleInternalPath(line)).map((point) => pieceLocalToWorld(point, transform));
       context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
       context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : [3 / camera.zoom, 3 / camera.zoom]);
       context.strokeStyle = "#59636c"; context.lineWidth = 1.5 / camera.zoom; context.stroke(); context.setLineDash([]);

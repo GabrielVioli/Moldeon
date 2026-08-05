@@ -263,7 +263,7 @@ export function garmentDraftToPatternDocumentV3(
     patternPieceToDefinition(piece, garment, warnings),
   );
   const panelInstances = derivePanelInstances(patternDefinitions, garment);
-  const seamGroups = (garment.seams ?? []).map(legacySeamToGroup);
+  const seamGroups = legacySeamsToGroups(garment.seams ?? []);
   const workspace = createWorkspaceState(
     garment,
     options.activePatternId,
@@ -313,20 +313,7 @@ export function patternDocumentV3ToGarmentDraft(
   const pieces = document.patternDefinitions.map((definition) =>
     definitionToPatternPiece(definition, document.panelInstances),
   );
-  const seams = document.seamGroups
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      first: structuredClone(group.first[0]),
-      second: structuredClone(group.second[0]),
-      direction: group.direction,
-      easeRatio:
-        group.compatibility?.legacyEaseRatio ??
-        Math.abs(group.targetRatio - 1),
-      type: group.compatibility?.legacyType ?? group.treatment,
-      treatment: legacyTreatment(group),
-      active: group.active,
-    }));
+  const seams = document.seamGroups.flatMap(groupToLegacySeams);
 
   const workspaceStates = document.workspace.patterns.map((entry) => ({
     pieceId: entry.patternId,
@@ -706,6 +693,46 @@ function mirrorRuleForPiece(piece: PatternPiece): PatternMirrorRuleV3 {
   return "none";
 }
 
+function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGroupV3[] {
+  const grouped = new Map<string, NonNullable<GarmentDraft["seams"]>>();
+  for (const seam of seams) {
+    const id = seam.groupId ?? seam.id;
+    const current = grouped.get(id) ?? [];
+    current.push(seam);
+    grouped.set(id, current);
+  }
+  return [...grouped.entries()].map(([groupId, parts]) => {
+    const first = parts[0];
+    const base = legacySeamToGroup(first);
+    return {
+      ...base,
+      id: groupId,
+      name: first.name ?? groupId,
+      first: parts.map((part) => structuredClone(part.first)),
+      second: parts.map((part) => structuredClone(part.second)),
+      active: parts.every((part) => part.active !== false),
+    };
+  });
+}
+
+function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams"]> {
+  if (group.first.length !== group.second.length) {
+    throw new PatternDocumentCompatibilityError("A costura " + group.id + " possui múltiplos intervalos com quantidades diferentes entre os lados.", group.id);
+  }
+  return group.first.map((first, index) => ({
+    id: group.first.length === 1 ? group.id : group.id + ":part:" + (index + 1),
+    groupId: group.id,
+    name: group.name,
+    first: structuredClone(first),
+    second: structuredClone(group.second[index]),
+    direction: group.direction,
+    easeRatio: group.compatibility?.legacyEaseRatio ?? Math.abs(group.targetRatio - 1),
+    type: group.compatibility?.legacyType ?? group.treatment,
+    treatment: legacyTreatment(group),
+    active: group.active,
+  }));
+}
+
 function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): SeamGroupV3 {
   const treatment = legacyTreatmentToV3(seam.treatment, seam.type);
   return {
@@ -904,9 +931,9 @@ function assemblyRoleFromRegion(
 
 function ensureLegacyRuntimeCompatibility(document: PatternDocumentV3): void {
   for (const group of document.seamGroups) {
-    if (group.first.length !== 1 || group.second.length !== 1) {
+    if (group.first.length !== group.second.length) {
       throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} possui múltiplos intervalos e não pode ser projetada no runtime legado sem perda.`,
+        `A costura ${group.id} possui múltiplos intervalos com quantidades diferentes entre os lados.`,
         group.id,
       );
     }
