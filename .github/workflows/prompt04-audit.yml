@@ -31,7 +31,18 @@ jobs:
           cache: npm
       - run: npm install
       - name: Apply interaction correction
-        run: python scripts/prompt04-interaction-fix.py
+        run: |
+          python scripts/prompt04-interaction-fix.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/prompt04-internal-path-audit.mjs")
+          source = path.read_text(encoding="utf-8")
+          old = "const zoom = Math.min(3, Math.max(0.15, Math.min((box.width - padding * 2) / widthMm, (box.height - padding * 2) / heightMm)));"
+          new = "const zoom = Math.min(3, Math.max(0.15, Math.min((box.width - padding * 2) / (widthMm + 20), (box.height - padding * 2) / (heightMm + 20))));"
+          if source.count(old) != 1:
+              raise SystemExit(f"fixture coordinate mapping occurrence count: {source.count(old)}")
+          path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
