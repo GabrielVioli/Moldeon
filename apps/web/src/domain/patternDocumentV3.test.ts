@@ -1,0 +1,349 @@
+import { describe, expect, it } from "vitest";
+import { FallbackPatternEngine } from "../core/fallbackPatternEngine";
+import { createBaselineFixture } from "../testFixtures/baselineGarments";
+import { fabricPreset, type FabricSource } from "./fabric";
+import {
+  getPatternEdges,
+  migrateLegacyPieceToSegments,
+  type GarmentDraft,
+  type PatternDart,
+  type PatternInternalLine,
+} from "./pattern";
+import {
+  PatternDocumentCompatibilityError,
+  garmentDraftToPatternDocumentV3,
+  migratePatternProject,
+  parsePatternDocumentV3,
+  patternDocumentV3ToGarmentDraft,
+  serializePatternDocumentV3,
+  validatePatternDocumentV3,
+} from "./patternDocumentV3";
+
+describe("PatternDocumentV3", () => {
+  it("round trips curves, partial seams, darts, lines, fabrics and workspace", () => {
+    const garment = richGarment();
+    const document = garmentDraftToPatternDocumentV3(garment, {
+      activePatternId: garment.pieces[0].id,
+    });
+    const parsed = parsePatternDocumentV3(
+      JSON.parse(serializePatternDocumentV3(document)),
+    );
+    const restored = patternDocumentV3ToGarmentDraft(parsed);
+
+    expect(parsed).toEqual(document);
+    expect(parsed).toMatchObject({ formatVersion: 3, units: "mm" });
+    expect(parsed.fabrics).toHaveLength(2);
+    expect(parsed.seamGroups[0]).toMatchObject({
+      first: [{ startT: 0.15, endT: 0.85 }],
+      second: [{ startT: 0.1, endT: 0.9 }],
+      active: true,
+      targetRatio: 1,
+      slackMm: 0,
+    });
+    expect(restored.pieces[0].segments).toEqual(garment.pieces[0].segments);
+    expect(restored.pieces[0].points).toEqual(garment.pieces[0].points);
+    expect(restored.pieces[0].darts).toEqual(garment.pieces[0].darts);
+    expect(restored.pieces[0].internalLines).toEqual(
+      garment.pieces[0].internalLines,
+    );
+    expect(restored.workspaceStates).toEqual(garment.workspaceStates);
+    expect(restored.seams?.[0]).toMatchObject({
+      first: { startT: 0.15, endT: 0.85 },
+      second: { startT: 0.1, endT: 0.9 },
+    });
+  });
+
+  it("migrates legacy, V2 and native V3 documents sequentially", () => {
+    const legacy = migratePatternProject(
+      createBaselineFixture("legacy-valid"),
+    );
+    const v2 = migratePatternProject({
+      formatVersion: 2,
+      garment: createBaselineFixture("bezier-piece"),
+      activePieceId: "bezier-piece",
+    });
+    const v3 = migratePatternProject(v2.document);
+
+    expect(legacy.sourceVersion).toBe("legacy");
+    expect(legacy.document.patternDefinitions[0].geometry.segments).toHaveLength(4);
+    expect(v2.sourceVersion).toBe(2);
+    expect(v2.document.patternDefinitions[0].geometry.segments[0].kind).toBe(
+      "cubic",
+    );
+    expect(v3.sourceVersion).toBe(3);
+    expect(v3.document).toEqual(v2.document);
+  });
+
+  it("expands two pants definitions into four deterministic instances", () => {
+    const document = garmentDraftToPatternDocumentV3(
+      createBaselineFixture("straight-pants-standard"),
+    );
+    const pantsDefinitions = document.patternDefinitions.filter((definition) =>
+      definition.connectors.some(
+        (connector) =>
+          connector.role === "front-rise" || connector.role === "back-rise",
+      ),
+    );
+
+    expect(pantsDefinitions).toHaveLength(2);
+    expect(document.panelInstances).toHaveLength(4);
+    for (const definition of pantsDefinitions) {
+      const instances = document.panelInstances
+        .filter((instance) => instance.sourcePatternId === definition.id)
+        .sort((left, right) => left.copyIndex - right.copyIndex);
+      expect(definition.cutQuantity).toBe(2);
+      expect(instances.map((instance) => instance.id)).toEqual([
+        `${definition.id}:panel:1`,
+        `${definition.id}:panel:2`,
+      ]);
+      expect(instances.map((instance) => instance.bodySide)).toEqual([
+        "left",
+        "right",
+      ]);
+      expect(instances.map((instance) => instance.mirrored)).toEqual([
+        false,
+        true,
+      ]);
+    }
+  });
+
+  it("expands one sleeve definition into left and right instances", () => {
+    const document = garmentDraftToPatternDocumentV3(
+      createBaselineFixture("sleeve-with-body"),
+    );
+    const sleeve = document.patternDefinitions.find((definition) =>
+      definition.connectors.some(
+        (connector) => connector.role === "sleeve-cap-front",
+      ),
+    );
+    expect(sleeve).toBeDefined();
+    if (!sleeve) return;
+    const instances = document.panelInstances
+      .filter((instance) => instance.sourcePatternId === sleeve.id)
+      .sort((left, right) => left.copyIndex - right.copyIndex);
+
+    expect(instances.map((instance) => instance.bodySide)).toEqual([
+      "left",
+      "right",
+    ]);
+    expect(instances.map((instance) => instance.mirrored)).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it("creates connectors from segment roles rather than template names", () => {
+    const garment = createBaselineFixture("sleeve-with-body");
+    garment.name = "projeto sem nome semântico";
+    garment.templateId = "custom";
+    garment.pieces = garment.pieces.map((piece, index) => ({
+      ...piece,
+      name: `definição-${index + 1}`,
+    }));
+    const document = garmentDraftToPatternDocumentV3(garment);
+    const roles = new Set(
+      document.patternDefinitions.flatMap((definition) =>
+        definition.connectors.map((connector) => connector.role),
+      ),
+    );
+
+    expect(roles).toEqual(
+      expect.objectContaining({
+        has: expect.any(Function),
+      }),
+    );
+    expect(roles.has("front-armhole")).toBe(true);
+    expect(roles.has("back-armhole")).toBe(true);
+    expect(roles.has("sleeve-cap-front")).toBe(true);
+    expect(roles.has("sleeve-cap-back")).toBe(true);
+  });
+
+  it("rejects broken references, reversed ranges and degenerate self seams", () => {
+    const valid = garmentDraftToPatternDocumentV3(
+      createBaselineFixture("equal-length-seam"),
+    );
+    const missingEdge = structuredClone(valid);
+    missingEdge.seamGroups[0].first[0].edgeId = "missing-edge";
+    expect(() => parsePatternDocumentV3(missingEdge)).toThrow(
+      "borda inexistente",
+    );
+
+    const reversed = structuredClone(valid);
+    reversed.seamGroups[0].first[0].startT = 0.8;
+    reversed.seamGroups[0].first[0].endT = 0.2;
+    expect(() => parsePatternDocumentV3(reversed)).toThrow(
+      "intervalo inválido",
+    );
+
+    const self = structuredClone(valid);
+    self.seamGroups[0].second = structuredClone(self.seamGroups[0].first);
+    expect(
+      validatePatternDocumentV3(self).some(
+        (issue) => issue.code === "degenerate-self-seam",
+      ),
+    ).toBe(true);
+    expect(() => parsePatternDocumentV3(self)).toThrow("mesmos intervalos");
+  });
+
+  it("refuses lossy projection of advanced SeamGroup data", () => {
+    const document = garmentDraftToPatternDocumentV3(
+      createBaselineFixture("equal-length-seam"),
+    );
+    document.seamGroups[0].first.push({
+      ...document.seamGroups[0].first[0],
+      startT: 0,
+      endT: 0.25,
+    });
+
+    expect(() => patternDocumentV3ToGarmentDraft(document)).toThrow(
+      PatternDocumentCompatibilityError,
+    );
+    expect(() => patternDocumentV3ToGarmentDraft(document)).toThrow(
+      "múltiplos intervalos",
+    );
+  });
+
+  it("keeps the projected PatternPiece accepted by the fallback engine", () => {
+    const document = garmentDraftToPatternDocumentV3(
+      createBaselineFixture("bezier-piece"),
+    );
+    const restored = patternDocumentV3ToGarmentDraft(document);
+    const snapshot = new FallbackPatternEngine().restorePiece(
+      restored.pieces[0],
+    );
+
+    expect(snapshot.piece).toEqual(restored.pieces[0]);
+    expect(snapshot.issues).toEqual([]);
+  });
+});
+
+function richGarment(): GarmentDraft {
+  const base = createBaselineFixture("equal-length-seam");
+  const first = migrateLegacyPieceToSegments(structuredClone(base.pieces[0]));
+  const second = migrateLegacyPieceToSegments(structuredClone(base.pieces[1]));
+  if (!first.nodes || !first.segments) throw new Error("Topologia V2 ausente.");
+  const segment = first.segments[0];
+  const start = first.nodes.find((node) => node.id === segment.startNodeId)!;
+  const end = first.nodes.find((node) => node.id === segment.endNodeId)!;
+  segment.kind = "cubic";
+  segment.control1 = { xMm: start.xMm + 45, yMm: start.yMm - 30 };
+  segment.control2 = { xMm: end.xMm - 45, yMm: end.yMm - 30 };
+  first.points = first.points.map((point) =>
+    point.id === start.id
+      ? { ...point, handleOut: { xMm: 45, yMm: -30 } }
+      : point.id === end.id
+        ? { ...point, handleIn: { xMm: -45, yMm: -30 } }
+        : point,
+  );
+  const internalLine: PatternInternalLine = {
+    id: `${first.id}:reference`,
+    pieceId: first.id,
+    curved: true,
+    purpose: "reference",
+    points: [
+      { id: `${first.id}:line-a`, xMm: 45, yMm: 70 },
+      {
+        id: `${first.id}:line-b`,
+        xMm: 130,
+        yMm: 150,
+        handleIn: { xMm: -20, yMm: -10 },
+      },
+    ],
+  };
+  const dart: PatternDart = {
+    id: `${first.id}:dart`,
+    pieceId: first.id,
+    apex: { xMm: 90, yMm: 120 },
+    legA: { xMm: 72, yMm: 0 },
+    legB: { xMm: 108, yMm: 0 },
+    centerLine: {
+      start: { xMm: 90, yMm: 0 },
+      end: { xMm: 90, yMm: 120 },
+    },
+    widthMm: 36,
+    lengthMm: 120,
+    directionDeg: 90,
+    closed: true,
+  };
+  first.internalLines = [internalLine];
+  first.darts = [dart];
+
+  const cotton = fabric("round-trip-cotton", "cotton");
+  const denim = fabric("round-trip-denim", "denim");
+  first.fabricId = cotton.id;
+  second.fabricId = denim.id;
+  const firstEdge = getPatternEdges(first).find(
+    (edge) => edge.role === "sideSeam",
+  )!;
+  const secondEdge = getPatternEdges(second).find(
+    (edge) => edge.role === "sideSeam",
+  )!;
+
+  return {
+    ...base,
+    id: "fixture-v3-round-trip",
+    templateId: "custom",
+    fabrics: [cotton, denim],
+    pieces: [first, second],
+    seams: [
+      {
+        id: "round-trip-partial-seam",
+        name: "Costura parcial",
+        first: {
+          pieceId: first.id,
+          edgeId: firstEdge.id,
+          startT: 0.15,
+          endT: 0.85,
+        },
+        second: {
+          pieceId: second.id,
+          edgeId: secondEdge.id,
+          startT: 0.1,
+          endT: 0.9,
+        },
+        direction: "opposite",
+        easeRatio: 0,
+        type: "standard",
+        treatment: "standard",
+      },
+    ],
+    workspaceStates: [
+      workspace(first.id, 125, -80, 12, true, false),
+      workspace(second.id, 510, 40, -8, false, true),
+    ],
+    workspaceTransforms: undefined,
+  };
+}
+
+function workspace(
+  pieceId: string,
+  xMm: number,
+  yMm: number,
+  rotationDeg: number,
+  visible: boolean,
+  locked: boolean,
+) {
+  return {
+    pieceId,
+    transform: { pieceId, xMm, yMm, rotationDeg },
+    visible,
+    locked,
+  };
+}
+
+function fabric(
+  id: string,
+  presetId: "cotton" | "denim",
+): FabricSource {
+  const preset = fabricPreset(presetId);
+  return {
+    id,
+    name: preset.name,
+    presetId,
+    color: preset.color,
+    widthMm: 1400,
+    lengthMm: 1800,
+    quantity: 2,
+    physics: { ...preset.physics },
+  };
+}
