@@ -16,23 +16,98 @@ function draft(): GarmentDraft {
   return { id: "history", templateId: "test", name: "History", description: "", bodyType: "feminine", measurements: { heightMm: 1680, bustMm: 920, waistMm: 760, hipMm: 1000, shoulderWidthMm: 400, torsoLengthMm: 440, armLengthMm: 590, inseamMm: 780 }, fabrics: [fabric], pieces };
 }
 
+function createSeam(name = "Lateral") {
+  const state = useEditorStore.getState();
+  const first = getPatternEdges(state.garment.pieces[0])[0];
+  const second = getPatternEdges(state.garment.pieces[1])[0];
+  state.proposeSeam(
+    { pieceId: "a", edgeId: first.id, startT: 0, endT: 1 },
+    { pieceId: "b", edgeId: second.id, startT: 0, endT: 1 },
+  );
+  useEditorStore.getState().confirmSeamProposal({
+    name,
+    direction: "opposite",
+    treatment: "standard",
+  });
+  return useEditorStore.getState().garment.seams![0].id;
+}
+
 describe("assembly document history", () => {
   beforeEach(() => useEditorStore.getState().loadGarment(draft()));
 
   it("undoes and redoes confirmed seam metadata", () => {
-    const state = useEditorStore.getState();
-    const first = getPatternEdges(state.garment.pieces[0])[0];
-    const second = getPatternEdges(state.garment.pieces[1])[0];
-    state.proposeSeam(
-      { pieceId: "a", edgeId: first.id, startT: 0, endT: 1 },
-      { pieceId: "b", edgeId: second.id, startT: 0, endT: 1 },
-    );
-    useEditorStore.getState().confirmSeamProposal({ name: "Lateral", direction: "opposite", treatment: "standard" });
+    createSeam();
     expect(useEditorStore.getState().garment.seams?.[0].name).toBe("Lateral");
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().garment.seams).toBeUndefined();
     useEditorStore.getState().redo();
     expect(useEditorStore.getState().garment.seams?.[0]).toMatchObject({ name: "Lateral", direction: "opposite", treatment: "standard" });
+  });
+
+  it("removes, disables, reactivates and reverses a selected seam with undo and redo", () => {
+    const seamId = createSeam("Costura lateral");
+    let state = useEditorStore.getState();
+    state.selectSeam(seamId);
+    expect(useEditorStore.getState().selectedSeamId).toBe(seamId);
+
+    state.toggleSeamActive(seamId);
+    expect(useEditorStore.getState().garment.seams?.[0].active).toBe(false);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams?.[0].active).not.toBe(false);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.seams?.[0].active).toBe(false);
+
+    state = useEditorStore.getState();
+    state.toggleSeamActive(seamId);
+    expect(useEditorStore.getState().garment.seams?.[0].active).toBe(true);
+    state.toggleSeamDirection(seamId);
+    expect(useEditorStore.getState().garment.seams?.[0].direction).toBe("same");
+
+    useEditorStore.getState().removeSeam(seamId);
+    expect(useEditorStore.getState().garment.seams).toEqual([]);
+    expect(useEditorStore.getState().selectedSeamId).toBeNull();
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams?.[0]).toMatchObject({
+      id: seamId,
+      name: "Costura lateral",
+      active: true,
+      direction: "same",
+    });
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.seams).toEqual([]);
+  });
+
+  it("records canonical point insertion as one undoable command", () => {
+    const initial = useEditorStore.getState().snapshot.piece;
+    const firstEdge = getPatternEdges(initial)[0];
+    expect(initial.points).toHaveLength(4);
+
+    useEditorStore.getState().insertPoint(firstEdge.startPointId, 0.5);
+    let state = useEditorStore.getState();
+    expect(state.snapshot.piece.points).toHaveLength(5);
+    expect(state.snapshot.piece.nodes).toHaveLength(5);
+    expect(state.snapshot.piece.segments).toHaveLength(5);
+
+    state.undo();
+    expect(useEditorStore.getState().snapshot.piece.points).toHaveLength(4);
+    state = useEditorStore.getState();
+    state.redo();
+    expect(useEditorStore.getState().snapshot.piece.points).toHaveLength(5);
+  });
+
+  it("groups continuous measurement input into one transaction", () => {
+    const state = useEditorStore.getState();
+    state.beginEdit("Alterar medidas", "measurement");
+    state.setBodyMeasurement("waistMm", 770);
+    state.setBodyMeasurement("waistMm", 780);
+    state.setBodyMeasurement("waistMm", 790);
+    state.commitEdit();
+    expect(useEditorStore.getState().garment.measurements.waistMm).toBe(790);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.measurements.waistMm).toBe(760);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.measurements.waistMm).toBe(790);
   });
 
   it("tracks placement, edge finish and garment ease", () => {
