@@ -35,7 +35,7 @@ function draft(): GarmentDraft {
     id: "internal-path-history",
     templateId: "custom",
     name: "Internal Path History",
-    description: "",
+    description: "Fixture de histórico para caminhos internos.",
     bodyType: "feminine",
     measurements: {
       heightMm: 1700,
