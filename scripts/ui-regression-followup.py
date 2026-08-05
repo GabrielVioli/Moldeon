@@ -22,8 +22,8 @@ replace_canvas_once(
     "    canvas.addEventListener(\"wheel\", nativeWheel, { passive: false });\n",
 )
 replace_canvas_once(
-    "      resizeObserver.disconnect();\n",
-    "      resizeObserver.disconnect();\n"
+    "      observer.disconnect();\n",
+    "      observer.disconnect();\n"
     "      canvas.removeEventListener(\"wheel\", nativeWheel);\n",
 )
 replace_canvas_once(
