@@ -1,8 +1,5 @@
 import type { GarmentDraft } from "../domain/pattern";
-import {
-  garmentDraftToPatternDocumentV3,
-  type PatternDocumentMigrationResult,
-} from "../domain/patternDocumentV3";
+import { garmentDraftToPatternDocumentV3 } from "../domain/patternDocumentV3";
 import type {
   PatternDocumentV3,
   PatternProjectV2,
@@ -35,10 +32,4 @@ export function createPatternDocumentV3Fixture(): PatternDocumentV3 {
   return garmentDraftToPatternDocumentV3(garment, {
     activePatternId: garment.pieces[0].id,
   });
-}
-
-export function cloneMigrationResult(
-  result: PatternDocumentMigrationResult,
-): PatternDocumentMigrationResult {
-  return structuredClone(result);
 }
