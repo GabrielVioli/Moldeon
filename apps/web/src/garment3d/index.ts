@@ -5,5 +5,6 @@ export * from "./PanelSimulation";
 export * from "./ThreeGeometryBridge";
 export * from "./GarmentAssembly";
 export * from "./PhysicalGarmentAssembly";
+export * from "./ResolvedGarmentAssembly";
 export * from "./GarmentSolver";
 export * from "./GarmentThreeBridge";
