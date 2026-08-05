@@ -8,6 +8,8 @@ on:
       - ".github/workflows/phase0-baseline.yml"
       - "scripts/phase0-*"
       - "apps/web/src/testFixtures/**"
+      - "apps/web/src/dev/**"
+      - "apps/web/src/main.tsx"
       - "docs/BASELINE_2026.md"
 
 permissions:
@@ -72,6 +74,10 @@ jobs:
             free -h
             echo "memory_end"
           } | tee "$PHASE0_ARTIFACT_DIR/environment/environment.txt"
+
+      - name: Inventory source architecture
+        continue-on-error: true
+        run: node scripts/phase0-run-command.mjs source-inventory node scripts/phase0-source-inventory.mjs
 
       - name: Install project dependencies with npm install
         continue-on-error: true
@@ -159,6 +165,7 @@ jobs:
         if: always()
         run: >-
           node scripts/phase0-assert-results.mjs
+          source-inventory
           npm-install
           typecheck
           test
