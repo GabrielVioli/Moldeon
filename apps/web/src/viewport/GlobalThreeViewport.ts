@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
-import { buildPhysicalGarmentAssembly } from "../garment3d/PhysicalGarmentAssembly";
+import { buildResolvedGarmentAssembly } from "../garment3d/ResolvedGarmentAssembly";
 import { solveGarmentAssembly } from "../garment3d/GarmentSolver";
 import {
   buildGarmentAssemblyMeshes,
@@ -115,7 +115,7 @@ export class ThreeViewport {
   ): string[] {
     this.clearGarment();
 
-    const assembly = buildPhysicalGarmentAssembly(snapshots, garment);
+    const assembly = buildResolvedGarmentAssembly(snapshots, garment);
     const report = solveGarmentAssembly(assembly, {
       iterations: this.profile.solverIterations,
       structuralPasses: 2,
