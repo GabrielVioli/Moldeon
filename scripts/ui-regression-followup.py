@@ -39,6 +39,26 @@ replace_canvas_once(
     "    const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };\n",
 )
 replace_canvas_once("      onWheel={handleWheel}\n", "")
+replace_canvas_once(
+    "      if (piece) {\n"
+    "        selectPiece(piece.id);\n"
+    "        onSelectPoint(null);\n",
+    "      if (piece) {\n"
+    "        const selectedPieceIds = useEditorStore.getState().selectedPieceIds;\n"
+    "        if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);\n"
+    "        onSelectPoint(null);\n",
+)
+replace_canvas_once(
+    "    if (piece) {\n"
+    "      if (event.shiftKey) useEditorStore.getState().togglePieceSelection(piece.id);\n"
+    "      else selectPiece(piece.id);\n"
+    "      onSelectPoint(null);\n",
+    "    if (piece) {\n"
+    "      const selectedPieceIds = useEditorStore.getState().selectedPieceIds;\n"
+    "      if (event.shiftKey) useEditorStore.getState().togglePieceSelection(piece.id);\n"
+    "      else if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);\n"
+    "      onSelectPoint(null);\n",
+)
 canvas_path.write_text(canvas_source, encoding="utf-8")
 
 
@@ -158,4 +178,4 @@ replace_audit_once(
 )
 audit_path.write_text(audit_source, encoding="utf-8")
 
-print("Non-passive wheel listener and deterministic audit patch applied")
+print("Non-passive wheel listener, multi-selection ownership and deterministic audit patch applied")
