@@ -24,7 +24,11 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Costuras em duas etapas: seleção das bordas, análise de comprimentos, tratamento e confirmação explícita.
 - Barra 2D orientada a intenções com Selecionar, Desenhar, Recortar, Pence, Costurar e Medir; a confirmação acontece junto ao molde, sem troca automática de tela.
 - Seleção múltipla por Shift, `Ctrl+A` ou caixas da lista, com mover, girar, duplicar, espelhar e excluir peças desbloqueadas.
-- Recorte reversível em duas peças, com opção de manter as novas bordas unidas, e pences de borda persistentes no documento.
+- Caminhos internos editáveis com vários nós, segmentos retos ou cúbicos e finalidades de referência, dobra, marcação, corte, corte com costura ou pence.
+- Corte reto ou curvo reversível em duas peças, preservando curvas externas, fio, anotações, tecido e transforms.
+- Corte e manter costurado com um `SeamGroup` multifaixa e correspondência ordenada por arco.
+- Pences estruturais persistentes com pernas, ápice, centro, largura, comprimento e relação de fechamento.
+- Diagnósticos de tangência, excesso de interseções, regiões degeneradas e costuras afetadas antes de aplicar operações.
 - Grafo de montagem com componentes conectados, bordas abertas, alertas e elegibilidade determinística para o 3D.
 - Placements estruturais, folgas da roupa e acabamentos de borda persistentes e cobertos por undo/redo.
 - Manequim procedural proporcional às medidas, sem depender de arquivo 3D
@@ -48,10 +52,11 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 
 1. Desenhe ou escolha um molde.
 2. Ajuste as medidas.
-3. Use **Recortar** e **Pence** quando necessário.
-4. Aproxime as bordas e clique em **Costurar**.
-5. Veja a roupa em 3D.
-6. Use **Prova** quando quiser vestir no corpo.
+3. Desenhe caminhos internos e escolha sua finalidade.
+4. Aplique corte, corte e costura ou fechamento de pence quando necessário.
+5. Aproxime outras bordas e clique em **Costurar**.
+6. Veja a roupa em 3D.
+7. Use **Prova** quando quiser vestir no corpo.
 
 ## Atalhos do editor
 
@@ -60,7 +65,8 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - `Shift` mantém a seleção múltipla e permite seleção aditiva por caixa.
 - Espaço pressionado ou a ferramenta **Mão** move a câmera; a roda aplica zoom no cursor e a pinça controla zoom e pan no touch.
 - `F` enquadra a seleção. `[` e `]` giram a peça ativa em 15°; com `Shift`, em 90°.
-- `Escape` cancela a intenção atual, limpa a seleção quando aplicável e fecha menus ou popovers ativos.
+- Ao desenhar um caminho interno, `Enter` confirma, `Backspace` remove o último nó fixo e `Escape` cancela toda a transação.
+- `Escape` também cancela a intenção atual, limpa a seleção quando aplicável e fecha menus ou popovers ativos.
 - Atalhos de edição não são capturados enquanto o foco está em campos de texto, número ou seleção.
 
 ## Desempenho
@@ -86,6 +92,8 @@ Os presets já alteram aderência, volume e ondulação de forma aproximada, mas
 ainda não calculam gravidade, autocolisão, franzido, elástico ou costuras
 complexas. O solver XPBD inicial está isolado para ser desenvolvido e testado
 sem contaminar o editor.
+
+O fechamento da pence já é estrutural no documento, mas seu volume ainda não é simulado no avatar.
 
 Isso é intencional: primeiro validamos editor, dados, triangulação, interação e pipeline 2D → 3D. Depois conectamos o solver físico.
 
@@ -184,7 +192,8 @@ Leia também:
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
 - O consumo de tecido é uma estimativa por área; ainda não considera encaixe,
   sentido do fio ou aproveitamento automático dos retalhos.
-- O recorte atual aceita uma linha reta com exatamente duas interseções. Contornos curvos são amostrados no ponto do corte; operações booleanas curvas de alta precisão continuam planejadas.
+- Um corte aberto deve atravessar o contorno exatamente duas vezes. Tangências, sobreposição com a borda, mais de duas interseções, ilhas e autointerseções arbitrárias são rejeitadas com diagnóstico.
+- O fallback geométrico dos caminhos internos está em TypeScript. A futura migração para Rust/WASM deve preservar os mesmos contratos, tolerâncias e fixtures antes de substituir essa implementação.
 - Um tecido pode ser atribuído por peça. O recorte cria painéis independentes, mas ainda não há encaixe de patchwork ou materiais diferentes dentro da mesma peça.
 - O Worker XPBD ainda não alimenta a malha do Three.js.
 - O backend Laravel continua opcional e não é necessário para usar o editor.
