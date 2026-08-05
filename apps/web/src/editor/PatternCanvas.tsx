@@ -1192,7 +1192,6 @@ function PatternCanvasComponent({
   }
 
   function handleWheel(event: WheelEvent<HTMLCanvasElement>) {
-    event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     const cursorX = event.clientX - rect.left;
     const cursorY = event.clientY - rect.top;

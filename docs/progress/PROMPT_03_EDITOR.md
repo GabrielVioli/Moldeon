@@ -1,61 +1,16 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
-const artifactRoot = resolve(
-  process.env.PROMPT03_ARTIFACT_DIR ?? "artifacts/prompt03-editor",
-  "interactions",
-  process.env.PROMPT03_LABEL ?? "fallback",
-);
-const evidenceRoot = resolve("docs/evidence/prompt03");
-const report = JSON.parse(
-  await readFile(resolve(artifactRoot, "prompt03-audit.json"), "utf8"),
-);
-const failed = report.scenarios.filter((scenario) => scenario.status !== "passed");
-if (failed.length > 0) {
-  throw new Error(`A auditoria ainda possui ${failed.length} cenário(s) com falha.`);
-}
-
-await mkdir(evidenceRoot, { recursive: true });
-const evidenceFiles = [
-  "point-curve-mouse.png",
-  "point-straight-touch.png",
-  "selection-and-shortcuts.png",
-  "piece-popover-dismissal.png",
-  "seam-lifecycle.png",
-  "measurements-desktop-1366.png",
-  "measurements-desktop-1920.png",
-  "measurements-mobile-360.png",
-  "measurements-mobile-390.png",
-  "prompt03-audit.json",
-  "prompt03-audit.md",
-];
-await Promise.all(
-  evidenceFiles.map((file) =>
-    copyFile(resolve(artifactRoot, file), resolve(evidenceRoot, file)),
-  ),
-);
-
-const rows = report.scenarios
-  .map(
-    (scenario) =>
-      `| ${scenario.name} | ${scenario.status === "passed" ? "aprovado" : "falhou"} | ${scenario.consoleMessages.length + scenario.pageErrors.length} |`,
-  )
-  .join("\n");
-const runId = process.env.GITHUB_RUN_ID ?? "execução local";
-const commit = process.env.GITHUB_SHA ?? "main";
-const markdown = `# PROMPT 03: editor 2D confiável e interações refatoradas
+# PROMPT 03: editor 2D confiável e interações refatoradas
 
 ## Estado
 
-Concluído em \`main\` em 5 de agosto de 2026.
+Concluído em `main` em 5 de agosto de 2026.
 
 A etapa restaurou a inserção de pontos, seleção, popovers, costuras removíveis, painel compacto de medidas, undo/redo transacional e gestos touch. O sistema de corte curvo, pences, moldes-base, montagem e física não foram alterados.
 
 ## Referências lidas antes da implementação
 
-- \`docs/MOLDEON_MASTER_PLAN.md\`
-- \`docs/BASELINE_2026.md\`
-- \`docs/progress/PROMPT_02_DOMAIN.md\`
+- `docs/MOLDEON_MASTER_PLAN.md`
+- `docs/BASELINE_2026.md`
+- `docs/progress/PROMPT_02_DOMAIN.md`
 - documentos de arquitetura, domínio, roadmap e formato V3
 - fixtures e auditorias determinísticas existentes
 
@@ -63,14 +18,14 @@ A etapa restaurou a inserção de pontos, seleção, popovers, costuras removív
 
 O Canvas 2D continua sendo renderer e coordenador visual, não fonte de verdade. As responsabilidades extraídas e reutilizadas são:
 
-- \`editor/camera.ts\`: zoom, pan, enquadramento e transformação da câmera;
-- \`editor/coordinates.ts\`: conversão tela, mundo e coordenadas locais de peça;
-- \`editor/canvasHitTesting.ts\`: hit testing de bordas e costuras;
-- \`editor/canvasGestures.ts\`: origem, limiares e conclusão de gestos;
-- \`editor/workspaceInteractions.ts\`: pontos editáveis, caixa de seleção, rotação e edição numérica;
-- \`domain/patternEditing.ts\`: inserção e remoção topológica de pontos, divisão De Casteljau e remapeamento de referências.
+- `editor/camera.ts`: zoom, pan, enquadramento e transformação da câmera;
+- `editor/coordinates.ts`: conversão tela, mundo e coordenadas locais de peça;
+- `editor/canvasHitTesting.ts`: hit testing de bordas e costuras;
+- `editor/canvasGestures.ts`: origem, limiares e conclusão de gestos;
+- `editor/workspaceInteractions.ts`: pontos editáveis, caixa de seleção, rotação e edição numérica;
+- `domain/patternEditing.ts`: inserção e remoção topológica de pontos, divisão De Casteljau e remapeamento de referências.
 
-Permanecem em \`PatternCanvas.tsx\` a composição do frame, o agendamento por \`requestAnimationFrame\`, o ownership de ponteiros e a coordenação dos overlays DOM. Esses pontos continuam candidatos a extração incremental, sem reescrita do renderer.
+Permanecem em `PatternCanvas.tsx` a composição do frame, o agendamento por `requestAnimationFrame`, o ownership de ponteiros e a coordenação dos overlays DOM. Esses pontos continuam candidatos a extração incremental, sem reescrita do renderer.
 
 ## Inserção de pontos
 
@@ -109,14 +64,14 @@ O foco retorna ao gatilho, os itens usam semântica de menu e o posicionamento �
 
 Costuras podem ser selecionadas na bancada e na lista. A interface permite excluir, desativar, reativar e inverter direção. O nome é exibido no canvas e os dois lados são destacados. Todas as operações participam do histórico.
 
-O estado \`active\` agora é preservado no round trip entre \`GarmentDraft\` e \`PatternDocumentV3\`; costuras inativas não geram restrições de montagem.
+O estado `active` agora é preservado no round trip entre `GarmentDraft` e `PatternDocumentV3`; costuras inativas não geram restrições de montagem.
 
 ## Painel de medidas
 
 - grupos recolhíveis e densidade compacta no desktop;
 - largura limitada e redimensionamento horizontal no desktop;
 - bottom sheet no mobile;
-- campos numéricos com \`inputMode=decimal\` e fonte de 16 px no mobile;
+- campos numéricos com `inputMode=decimal` e fonte de 16 px no mobile;
 - alteração de uma medida é agrupada entre foco e blur/Enter, produzindo uma única entrada de histórico.
 
 ## Undo e redo
@@ -135,34 +90,46 @@ Atalhos ignoram inputs, textareas, selects e conteúdo editável.
 
 Execução final:
 
-- commit de disparo: \`${commit}\`;
-- workflow run: \`${runId}\`;
-- navegador: Chromium ${report.browserVersion};
-- cenários funcionais e visuais: ${report.scenarios.length}/${report.scenarios.length} aprovados.
+- commit de disparo: `2b4d9454c011b38f284378f2e3bfba9b426591bf`;
+- workflow run: `31048790852`;
+- navegador: Chromium 140.0.7339.16;
+- cenários funcionais e visuais: 13/13 aprovados.
 
 | Cenário | Resultado | Avisos/erros de console |
 |---|---:|---:|
-${rows}
+| point-straight-mouse | aprovado | 0 |
+| point-curve-mouse | aprovado | 0 |
+| point-zoomed-mouse | aprovado | 0 |
+| point-transformed-mouse | aprovado | 0 |
+| point-straight-touch | aprovado | 0 |
+| touch-does-not-move-piece-on-tap | aprovado | 0 |
+| selection-and-shortcuts | aprovado | 0 |
+| piece-popover-dismissal | aprovado | 0 |
+| seam-lifecycle | aprovado | 0 |
+| measurements-desktop-1366 | aprovado | 0 |
+| measurements-desktop-1920 | aprovado | 0 |
+| measurements-mobile-360 | aprovado | 0 |
+| measurements-mobile-390 | aprovado | 0 |
 
 Também foram aprovados no mesmo executor:
 
-- \`npm run typecheck\`;
-- \`npm test\`;
-- \`npm run build\`.
+- `npm run typecheck`;
+- `npm test`;
+- `npm run build`.
 
 A CI principal executa ainda as verificações Rust, Clippy e rustfmt.
 
 ## Evidências
 
-- \`docs/evidence/prompt03/point-curve-mouse.png\`
-- \`docs/evidence/prompt03/point-straight-touch.png\`
-- \`docs/evidence/prompt03/selection-and-shortcuts.png\`
-- \`docs/evidence/prompt03/piece-popover-dismissal.png\`
-- \`docs/evidence/prompt03/seam-lifecycle.png\`
-- \`docs/evidence/prompt03/measurements-desktop-1366.png\`
-- \`docs/evidence/prompt03/measurements-desktop-1920.png\`
-- \`docs/evidence/prompt03/measurements-mobile-360.png\`
-- \`docs/evidence/prompt03/measurements-mobile-390.png\`
+- `docs/evidence/prompt03/point-curve-mouse.png`
+- `docs/evidence/prompt03/point-straight-touch.png`
+- `docs/evidence/prompt03/selection-and-shortcuts.png`
+- `docs/evidence/prompt03/piece-popover-dismissal.png`
+- `docs/evidence/prompt03/seam-lifecycle.png`
+- `docs/evidence/prompt03/measurements-desktop-1366.png`
+- `docs/evidence/prompt03/measurements-desktop-1920.png`
+- `docs/evidence/prompt03/measurements-mobile-360.png`
+- `docs/evidence/prompt03/measurements-mobile-390.png`
 - relatório bruto em JSON e Markdown na mesma pasta.
 
 ## Limitações de inspeção
@@ -179,9 +146,4 @@ Mouse e touch foram exercitados em Chromium headless. Eventos de caneta não est
 - medidas compactas em desktop e mobile: atendido;
 - undo/redo transacional: atendido;
 - typecheck, testes, build e inspeção visual: atendidos;
-- mudanças publicadas em \`main\`: atendido.
-`;
-
-await mkdir(resolve("docs/progress"), { recursive: true });
-await writeFile(resolve("docs/progress/PROMPT_03_EDITOR.md"), markdown, "utf8");
-console.log(`Prompt 03 progress written with ${report.scenarios.length} passing scenarios.`);
+- mudanças publicadas em `main`: atendido.

@@ -53,6 +53,16 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 5. Veja a roupa em 3D.
 6. Use **Prova** quando quiser vestir no corpo.
 
+## Atalhos do editor
+
+- `Ctrl+A` ou `Cmd+A` com foco na bancada seleciona todas as peças visíveis.
+- `Ctrl+Z` ou `Cmd+Z` desfaz; `Ctrl+Shift+Z`, `Cmd+Shift+Z` ou `Ctrl+Y` refaz.
+- `Shift` mantém a seleção múltipla e permite seleção aditiva por caixa.
+- Espaço pressionado ou a ferramenta **Mão** move a câmera; a roda aplica zoom no cursor e a pinça controla zoom e pan no touch.
+- `F` enquadra a seleção. `[` e `]` giram a peça ativa em 15°; com `Shift`, em 90°.
+- `Escape` cancela a intenção atual, limpa a seleção quando aplicável e fecha menus ou popovers ativos.
+- Atalhos de edição não são capturados enquanto o foco está em campos de texto, número ou seleção.
+
 ## Desempenho
 
 O carregamento inicial do editor fallback permanece em aproximadamente **239 KB**

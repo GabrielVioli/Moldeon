@@ -1,0 +1,323 @@
+{
+  "label": "fallback",
+  "baseUrl": "http://127.0.0.1:5184",
+  "generatedAt": "2026-08-05T21:29:33.797Z",
+  "browserVersion": "140.0.7339.16",
+  "scenarios": [
+    {
+      "name": "point-straight-mouse",
+      "status": "passed",
+      "result": {
+        "fixtureId": "free-simple-piece",
+        "input": "mouse",
+        "options": {},
+        "insertion": {
+          "inserted": true,
+          "attempts": 19,
+          "x": 279.49,
+          "y": 268.56
+        },
+        "before": 4,
+        "inserted": 5,
+        "undone": 4,
+        "redone": 5
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "point-curve-mouse",
+      "status": "passed",
+      "result": {
+        "fixtureId": "bezier-piece",
+        "input": "mouse",
+        "options": {},
+        "insertion": {
+          "inserted": true,
+          "attempts": 73,
+          "x": 397.895,
+          "y": 668.4000000000001
+        },
+        "before": 4,
+        "inserted": 5,
+        "undone": 4,
+        "redone": 5
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "point-zoomed-mouse",
+      "status": "passed",
+      "result": {
+        "fixtureId": "free-simple-piece",
+        "input": "mouse",
+        "options": {
+          "zoom": true
+        },
+        "insertion": {
+          "inserted": true,
+          "attempts": 1,
+          "x": 245.66,
+          "y": 227.04
+        },
+        "before": 4,
+        "inserted": 5,
+        "undone": 4,
+        "redone": 5
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "point-transformed-mouse",
+      "status": "passed",
+      "result": {
+        "fixtureId": "free-simple-piece",
+        "input": "mouse",
+        "options": {
+          "move": true
+        },
+        "insertion": {
+          "inserted": true,
+          "attempts": 19,
+          "x": 279.49,
+          "y": 268.56
+        },
+        "before": 4,
+        "inserted": 5,
+        "undone": 4,
+        "redone": 5
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "point-straight-touch",
+      "status": "passed",
+      "result": {
+        "fixtureId": "free-simple-piece",
+        "input": "touch",
+        "options": {},
+        "insertion": {
+          "inserted": true,
+          "attempts": 102,
+          "x": 62.4,
+          "y": 556.34
+        },
+        "before": 4,
+        "inserted": 5,
+        "undone": 4,
+        "redone": 5
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "touch-does-not-move-piece-on-tap",
+      "status": "passed",
+      "result": {
+        "before": {
+          "id": "free-piece",
+          "name": "free-piece",
+          "pointCount": 4,
+          "dartCount": 0,
+          "cutQuantity": 1,
+          "cutOnFold": false,
+          "visible": true,
+          "locked": false,
+          "xMm": 0,
+          "yMm": 0,
+          "rotationDeg": 0,
+          "roles": [
+            "waist",
+            "sideSeam",
+            "hem",
+            "sideSeam"
+          ]
+        },
+        "after": {
+          "id": "free-piece",
+          "name": "free-piece",
+          "pointCount": 4,
+          "dartCount": 0,
+          "cutQuantity": 1,
+          "cutOnFold": false,
+          "visible": true,
+          "locked": false,
+          "xMm": 0,
+          "yMm": 0,
+          "rotationDeg": 0,
+          "roles": [
+            "waist",
+            "sideSeam",
+            "hem",
+            "sideSeam"
+          ]
+        }
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "selection-and-shortcuts",
+      "status": "passed",
+      "result": {
+        "selectedAll": [
+          "tshirt-front",
+          "tshirt-back",
+          "tshirt-sleeve"
+        ],
+        "pieceCount": 3
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "piece-popover-dismissal",
+      "status": "passed",
+      "result": {
+        "duplicatedFrom": 3,
+        "duplicatedTo": 4
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "seam-lifecycle",
+      "status": "passed",
+      "result": {
+        "initialDirection": "same",
+        "before": 1,
+        "afterRedo": 0
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "measurements-desktop-1366",
+      "status": "passed",
+      "result": {
+        "isMobile": false,
+        "original": 168,
+        "layout": {
+          "viewport": {
+            "width": 1366,
+            "height": 768
+          },
+          "canvas": {
+            "width": 845.75,
+            "height": 588
+          },
+          "inspector": {
+            "left": 1024.75,
+            "top": 381.03125,
+            "width": 341.25,
+            "height": 358.96875,
+            "bottom": 740
+          },
+          "overflowX": false
+        }
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "measurements-desktop-1920",
+      "status": "passed",
+      "result": {
+        "isMobile": false,
+        "original": 168,
+        "layout": {
+          "viewport": {
+            "width": 1920,
+            "height": 1080
+          },
+          "canvas": {
+            "width": 1261.25,
+            "height": 934
+          },
+          "inspector": {
+            "left": 1440.25,
+            "top": 499.265625,
+            "width": 440,
+            "height": 552.734375,
+            "bottom": 1052
+          },
+          "overflowX": false
+        }
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "measurements-mobile-360",
+      "status": "passed",
+      "result": {
+        "isMobile": true,
+        "original": 168,
+        "layout": {
+          "viewport": {
+            "width": 360,
+            "height": 800
+          },
+          "canvas": {
+            "width": 360,
+            "height": 449
+          },
+          "inspector": {
+            "left": 0,
+            "top": 256,
+            "width": 360,
+            "height": 544,
+            "bottom": 800
+          },
+          "overflowX": false
+        }
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    },
+    {
+      "name": "measurements-mobile-390",
+      "status": "passed",
+      "result": {
+        "isMobile": true,
+        "original": 168,
+        "layout": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "canvas": {
+            "width": 390,
+            "height": 493
+          },
+          "inspector": {
+            "left": 0,
+            "top": 270.09375,
+            "width": 390,
+            "height": 573.90625,
+            "bottom": 844
+          },
+          "overflowX": false
+        }
+      },
+      "error": null,
+      "consoleMessages": [],
+      "pageErrors": []
+    }
+  ]
+}

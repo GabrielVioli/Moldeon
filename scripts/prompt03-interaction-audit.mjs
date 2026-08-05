@@ -196,7 +196,7 @@ async function auditSeamLifecycle(page) {
   await page.waitForTimeout(100);
   const row = page.locator(".seam-editor-row").first();
   assert(await row.isVisible(), "Linha de costura não apareceu.");
-  await row.click();
+  await row.getByRole("button", { name: /Selecionar costura/i }).click();
   const selected = await state(page);
   assert(Boolean(selected.selectedSeamId), "Clique na lista não selecionou a costura.");
 
@@ -228,9 +228,9 @@ async function auditMeasurements(page) {
   }
   const section = page.locator(".measurement-panel-section");
   const details = section.locator("details").first();
-  await details.locator("summary").click();
+  await details.locator(":scope > summary").click();
   const mainGroup = section.locator(".measurement-groups details").first();
-  if (!(await mainGroup.evaluate((element) => element.open))) await mainGroup.locator("summary").click();
+  if (!(await mainGroup.evaluate((element) => element.open))) await mainGroup.locator(":scope > summary").click();
   const input = section.locator("input[type=number]").first();
   assert(await input.isVisible(), "Campo de medida não ficou acessível.");
   const original = Number(await input.inputValue());

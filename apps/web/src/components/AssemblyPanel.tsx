@@ -144,6 +144,18 @@ export const AssemblyPanel = memo(function AssemblyPanel({
         ) : (
           (garment.seams ?? []).map((seam) => (
             <div className={`assembly-row seam-editor-row${selectedSeamId === seam.id ? " is-selected" : ""}${seam.active === false ? " is-inactive" : ""}`} key={seam.id} onClick={() => selectSeam(seam.id)}>
+              <button
+                type="button"
+                className="seam-select-button"
+                aria-label={"Selecionar costura " + (seam.name ?? seam.id)}
+                aria-pressed={selectedSeamId === seam.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectSeam(seam.id);
+                }}
+              >
+                {selectedSeamId === seam.id ? "✓" : "○"}
+              </button>
               <input
                 aria-label="Nome da costura"
                 value={seam.name ?? seam.id}
