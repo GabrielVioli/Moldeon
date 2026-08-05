@@ -28,6 +28,35 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare verified patch runner
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/prompt03-apply.mjs")
+          source = path.read_text(encoding="utf-8")
+
+          guard = '''  if (source.indexOf(before, index + before.length) >= 0) {
+              throw new Error(`Trecho ambíguo: ${label}`);
+            }
+          '''
+          if guard not in source:
+              raise SystemExit("Ambiguity guard not found")
+          source = source.replace(guard, "", 1)
+
+          marker = "seam.name ?? `"
+          start = source.find(marker)
+          if start < 0:
+              raise SystemExit("Nested seam-name literal not found")
+          end = source.find("`}</strong>", start)
+          if end < 0:
+              raise SystemExit("Nested seam-name literal end not found")
+          replacement = 'seam.name ?? ((firstPiece?.name ?? \\"Peça ausente\\") + \\" ↔ \\" + (secondPiece?.name ?? \\"Peça ausente\\"))'
+          source = source[:start] + replacement + source[end + 1:]
+
+          path.write_text(source, encoding="utf-8")
+          PY
+
       - name: Apply verified patch
         run: node scripts/prompt03-apply.mjs
 
