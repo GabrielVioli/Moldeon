@@ -106,15 +106,28 @@ function templateFixture(
     ...generated,
     id: `fixture-${fixtureId}`,
     fabrics: [fabric],
-    pieces: generated.pieces.map((piece) => ({
-      ...structuredClone(piece),
-      fabricId: fabric.id,
-    })),
+    pieces: generated.pieces.map((piece) => normalizeGeneratedPiece(piece, fabric.id)),
     seams: structuredClone(generated.seams ?? []),
     assemblyPlacements: structuredClone(generated.assemblyPlacements ?? []),
   };
 
   return resolveTemplateAssemblyGarment(normalized);
+}
+
+function normalizeGeneratedPiece(
+  piece: PatternPiece,
+  fabricId: string,
+): PatternPiece {
+  const clone = structuredClone(piece);
+  return {
+    ...clone,
+    fabricId,
+    darts: clone.darts?.map((dart, index) => ({
+      ...dart,
+      id: `${clone.id}:fixture-dart-${index + 1}`,
+      pieceId: clone.id,
+    })),
+  };
 }
 
 function garmentFixture(
