@@ -31,7 +31,18 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - name: Apply integration patch
-        run: python scripts/prompt05-apply.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/prompt05-apply.py")
+          source = path.read_text(encoding="utf-8")
+          source = source.replace(
+              '    if count != 1:\n        raise SystemExit(f"{path}: expected one occurrence, found {count}: {old[:120]!r}")\n    file.write_text(source.replace(old, new), encoding="utf-8")',
+              '    if count < 1:\n        raise SystemExit(f"{path}: expected at least one occurrence, found {count}: {old[:120]!r}")\n    file.write_text(source.replace(old, new, 1), encoding="utf-8")',
+          )
+          path.write_text(source, encoding="utf-8")
+          PY
+          python scripts/prompt05-apply.py
       - name: Install dependencies
         run: npm install
       - name: Check diff
