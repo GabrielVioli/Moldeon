@@ -67,6 +67,38 @@ try {
     const canvas = page.locator("canvas.pattern-canvas");
     const box = await canvas.boundingBox();
     if (!box) throw new Error(`${scenario.name}: Canvas não encontrado`);
+    const layout = await page.evaluate(() => {
+      const inspect = (selector) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLElement)) return null;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          selector,
+          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          display: style.display,
+          gridTemplateColumns: style.gridTemplateColumns,
+          gridTemplateRows: style.gridTemplateRows,
+          visibility: style.visibility,
+          pointerEvents: style.pointerEvents,
+          minWidth: style.minWidth,
+          width: style.width,
+          overflow: style.overflow,
+        };
+      };
+      return [
+        inspect("main.workspace"),
+        inspect(".editor-panel"),
+        inspect(".editor-body"),
+        inspect(".pieces-panel"),
+        inspect(".canvas-stack"),
+        inspect("canvas.pattern-canvas"),
+      ];
+    });
+    console.log(`LAYOUT ${scenario.name}: ${JSON.stringify(layout)}`);
+    if (box.width < Math.min(260, scenario.viewport.width - 24) || box.height < 300) {
+      throw new Error(`${scenario.name}: Canvas sem área útil: ${JSON.stringify({ box, layout })}`);
+    }
     const left = Math.max(40, Math.min(box.width - 180, box.width * 0.25));
     const right = Math.max(left + 130, Math.min(box.width - 35, box.width * 0.70));
     const top = Math.max(80, Math.min(box.height - 190, box.height * 0.25));
@@ -79,7 +111,7 @@ try {
 
     const pieceItem = page.locator(".pieces-item").filter({ hasText: "Peça teste" }).first();
     await pieceItem.waitFor({ state: "visible" });
-    steps.push({ step: "desenhar primeira peça", result: "ok" });
+    steps.push({ step: "desenhar primeira peça", result: "ok", evidence: { canvas: box } });
     await page.screenshot({ path: `${artifactDir}/${scenario.name}-drawn.png`, fullPage: true });
 
     await page.getByRole("button", { name: "Mais ações para Peça teste" }).click();
