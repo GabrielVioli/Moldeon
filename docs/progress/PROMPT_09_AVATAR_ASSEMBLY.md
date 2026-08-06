@@ -46,6 +46,12 @@ Foram executados:
 
 A auditoria verifica avatar sempre visível, quantidade esperada de instâncias, zero diagnóstico de erro nos templates, ausência de overflow, ausência de controles explodidos ou corpo ocultável e ausência de erros de navegador.
 
+## Cobertura permanente de regressão
+
+A execução interrompida havia produzido evidências visuais válidas, mas removeu junto com o workflow temporário o script que as gerava. Isso deixava o Prompt 9 sem uma barreira permanente contra regressões.
+
+A correção final mantém `scripts/prompt09-browser-regression.mjs` e `.github/workflows/prompt09-avatar-regression.yml` na branch `main`. O workflow é somente leitura: ele não altera nem publica a própria branch. Em mudanças do avatar, montagem, viewport ou estilos, ele abre camiseta com mangas, saia e calça em Chrome/WebGL 2, incluindo viewport móvel, verifica anchors, instâncias, enquadramento, overflow, diagnósticos e ausência dos modos legados, e publica screenshots como artifact.
+
 ## Licença
 
 Nenhum asset humano externo foi incorporado. O avatar é procedural e coberto pela licença MIT do Moldeon.

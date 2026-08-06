@@ -1,0 +1,109 @@
+name: Prompt 9 Avatar Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/src/App.tsx"
+      - "apps/web/src/avatar/**"
+      - "apps/web/src/domain/**"
+      - "apps/web/src/garment3d/**"
+      - "apps/web/src/viewport/**"
+      - "apps/web/src/styles.css"
+      - "scripts/prompt09-browser-regression.mjs"
+      - ".github/workflows/prompt09-avatar-regression.yml"
+  pull_request:
+    paths:
+      - "apps/web/src/App.tsx"
+      - "apps/web/src/avatar/**"
+      - "apps/web/src/domain/**"
+      - "apps/web/src/garment3d/**"
+      - "apps/web/src/viewport/**"
+      - "apps/web/src/styles.css"
+      - "scripts/prompt09-browser-regression.mjs"
+      - ".github/workflows/prompt09-avatar-regression.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt09-avatar-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dressed-avatar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PROMPT09_ARTIFACT_DIR: artifacts/prompt09-avatar-regression
+      PROMPT09_BASE_URL: http://127.0.0.1:4179
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Enforce dressed-avatar source policy
+        shell: bash
+        run: |
+          if grep -R -n -E 'showBody|setBodyVisible|setExploded|Explodida' \
+            apps/web/src/App.tsx \
+            apps/web/src/viewport \
+            apps/web/src/garment3d; then
+            echo "Forbidden public 3D mode remains"
+            exit 1
+          fi
+          if grep -R -n -E 'wrapAsTube|placementBasePosition' apps/web/src/garment3d; then
+            echo "Forbidden cylindrical or generic placement path remains"
+            exit 1
+          fi
+          test ! -e apps/web/src/viewport/ThreeViewport.ts
+
+      - name: Install browser controller
+        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+
+      - name: Start fallback application
+        shell: bash
+        run: |
+          mkdir -p "$PROMPT09_ARTIFACT_DIR"
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
+          ) > "$PROMPT09_ARTIFACT_DIR/server.log" 2>&1 &
+          echo $! > "$PROMPT09_ARTIFACT_DIR/server.pid"
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$PROMPT09_BASE_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$PROMPT09_ARTIFACT_DIR/server.log"
+          exit 1
+
+      - name: Audit dressed avatar on desktop and mobile
+        run: node scripts/prompt09-browser-regression.mjs | tee "$PROMPT09_ARTIFACT_DIR/audit.json"
+
+      - name: Stop fallback application
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$PROMPT09_ARTIFACT_DIR/server.pid"; then
+            kill "$(cat "$PROMPT09_ARTIFACT_DIR/server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt09-avatar-regression-${{ github.sha }}
+          path: artifacts/prompt09-avatar-regression
+          retention-days: 21
+          if-no-files-found: warn
