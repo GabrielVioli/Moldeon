@@ -33,8 +33,14 @@ for (const scenario of scenarios) {
 
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Moldes" }).click();
-  await page.getByRole("button", { name: scenario.template, exact: false }).click();
-  await page.getByRole("button", { name: "Criar molde", exact: false }).click();
+
+  const templateCard = page.getByRole("button", { name: scenario.template, exact: false }).first();
+  await templateCard.waitFor({ state: "visible" });
+  await templateCard.click({ force: true });
+
+  const createButton = page.getByRole("button", { name: "Criar molde", exact: false }).first();
+  await createButton.waitFor({ state: "visible" });
+  await createButton.click({ force: true });
 
   const previewTab = page.getByRole("tab", { name: "Prévia 3D" });
   if (await previewTab.isVisible()) await previewTab.click();
