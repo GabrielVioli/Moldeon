@@ -46,10 +46,14 @@ for (const scenario of scenarios) {
   const context = await browser.newContext({ viewport: scenario.viewport, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const consoleErrors = [];
+  const failedResponses = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("response", (response) => {
+    if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() });
+  });
 
   await page.goto(baseURL, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Moldes" }).click();
@@ -95,19 +99,20 @@ for (const scenario of scenarios) {
   });
 
   if (!inspection.hasCanvas) {
-    throw new Error(`${scenario.label}: canvas 3D ausente (${JSON.stringify({ inspection, consoleErrors, rendererProfile })})`);
+    throw new Error(`${scenario.label}: canvas 3D ausente (${JSON.stringify({ inspection, consoleErrors, failedResponses, rendererProfile })})`);
   }
   await canvas.waitFor({ state: "visible", timeout: 10_000 });
   if (!inspection.canvasBox || inspection.canvasBox.width < 240 || inspection.canvasBox.height < 300) {
-    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify({ inspection, rendererProfile })})`);
+    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify({ inspection, failedResponses, rendererProfile })})`);
   }
   if (inspection.hasExploded) throw new Error(`${scenario.label}: modo explodido ainda visível`);
   if (inspection.hasHideBody) throw new Error(`${scenario.label}: controle público para ocultar corpo ainda visível`);
+  if (failedResponses.length > 0) throw new Error(`${scenario.label}: recursos HTTP falharam: ${JSON.stringify(failedResponses)}`);
   if (consoleErrors.length > 0) throw new Error(`${scenario.label}: erros no console: ${consoleErrors.join(" | ")}`);
 
   const screenshot = path.join(artifactDir, `${scenario.label}.png`);
   await page.screenshot({ path: screenshot, fullPage: true });
-  report.push({ ...scenario, inspection, consoleErrors, screenshot, rendererProfile });
+  report.push({ ...scenario, inspection, consoleErrors, failedResponses, screenshot, rendererProfile });
   await context.close();
 }
 
