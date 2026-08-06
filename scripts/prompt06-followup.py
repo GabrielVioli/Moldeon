@@ -21,4 +21,10 @@ replace(
     '  componentValidation?: {\n    body: "experimental" | "geometrically-validated" | "manually-reviewed";\n    sleeve?: "experimental" | "geometrically-validated" | "manually-reviewed";\n  };\n',
 )
 
+replace(
+    "apps/web/src/domain/parametricMeasurements.ts",
+    "  limits?: Record<string, number>;\n",
+    "  limits?: {\n    minimumAreaMm2: number;\n    shoulderToleranceMm?: number;\n    sideSeamToleranceMm: number;\n    minimumCurveSeparationMm: number;\n  };\n",
+)
+
 print("Prompt 6 typed metadata follow-up applied")
