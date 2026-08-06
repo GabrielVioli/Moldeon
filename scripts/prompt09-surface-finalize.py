@@ -8,116 +8,214 @@ def replace_once(path: str, old: str, new: str) -> None:
     source = target.read_text(encoding="utf-8")
     count = source.count(old)
     if count != 1:
-        raise SystemExit(f"{path}: expected one replacement, found {count}")
+        raise SystemExit(f"{path}: expected one replacement, found {count}: {old[:90]!r}")
     target.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
+arrangement = "apps/web/src/garment3d/SemanticAvatarArrangement.ts"
 replace_once(
-    "apps/web/src/garment3d/PanelRefinement.ts",
-    '''const DEFAULT_REFINEMENT_ITERATIONS = 2;
-const MAX_REFINEMENT_ITERATIONS = 3;
-''',
-    '''const DEFAULT_REFINEMENT_ITERATIONS = 2;
-const MAX_REFINEMENT_ITERATIONS = 5;
-const TARGET_DISPLAY_EDGE_MM = 24;
-''',
+    arrangement,
+    '''  diagnostics: ArrangementDiagnostic[];
+  visibleInstanceIds: Set<string>;
+}''',
+    '''  diagnostics: ArrangementDiagnostic[];
+  visibleInstanceIds: Set<string>;
+  coveredAvatarPartNames: Set<string>;
+}''',
 )
-
 replace_once(
-    "apps/web/src/garment3d/PanelRefinement.ts",
-    '''export function recommendedPanelRefinement(
-  topology: PanelTopology,
-): number {
-  const triangleCount = topology.triangles.length / 3;
+    arrangement,
+    '''  state.initialPositions.set(state.positions);
+  state.previousPositions.set(state.positions);
 
-  if (triangleCount <= 180) return 2;
-  if (triangleCount <= 700) return 1;
-  return 0;
-}
-''',
-    '''export function recommendedPanelRefinement(
-  topology: PanelTopology,
-): number {
-  const triangleCount = topology.triangles.length / 3;
-  const maximumEdgeMm = maximumTriangleEdgeMm(topology);
-  const edgeDrivenIterations = maximumEdgeMm <= TARGET_DISPLAY_EDGE_MM
-    ? 0
-    : clampInteger(
-        Math.ceil(Math.log2(maximumEdgeMm / TARGET_DISPLAY_EDGE_MM)),
-        0,
-        MAX_REFINEMENT_ITERATIONS,
-      );
-  const budgetLimit = triangleCount <= 120
-    ? 5
-    : triangleCount <= 500
-      ? 4
-      : triangleCount <= 1800
-        ? 3
-        : triangleCount <= 5000
-          ? 2
-          : 1;
+  return {
+    garment: resolvedGarment,
+    state,
+    avatar,
+    collision: buildAvatarCollisionModel(avatar),
+    diagnostics: uniqueDiagnostics(diagnostics),
+    visibleInstanceIds,
+  };''',
+    '''  state.initialPositions.set(state.positions);
+  state.previousPositions.set(state.positions);
+  const coveredAvatarPartNames = resolveCoveredAvatarParts(state, visibleInstanceIds, avatar);
 
-  return Math.min(edgeDrivenIterations, budgetLimit);
-}
+  return {
+    garment: resolvedGarment,
+    state,
+    avatar,
+    collision: buildAvatarCollisionModel(avatar),
+    diagnostics: uniqueDiagnostics(diagnostics),
+    visibleInstanceIds,
+    coveredAvatarPartNames,
+  };''',
+)
+insert_marker = '''function arrangeInstance(
+  state: GarmentAssemblyState,'''
+coverage_function = r'''function resolveCoveredAvatarParts(
+  state: GarmentAssemblyState,
+  visibleInstanceIds: ReadonlySet<string>,
+  avatar: AvatarParametricModel,
+): Set<string> {
+  const covered = new Set<string>();
+  const upperArmLength = Math.hypot(
+    avatar.joints.elbowLeft[0] - avatar.joints.shoulderLeft[0],
+    avatar.joints.elbowLeft[1] - avatar.joints.shoulderLeft[1],
+    avatar.joints.elbowLeft[2] - avatar.joints.shoulderLeft[2],
+  );
+  const thighLength = Math.max(0.1, avatar.landmarks.crotchY - avatar.landmarks.kneeY);
 
-export function maximumTriangleEdgeMm(topology: PanelTopology): number {
-  const positions = topology.positions2DMm;
-  const triangles = topology.triangles;
-  let maximum = 0;
+  for (const instance of state.instances) {
+    if (!visibleInstanceIds.has(instance.id)) continue;
+    const region = instance.placement.region;
+    const side = instance.placement.bodySide;
+    const panelLength = instance.topology.boundsMm.height * validScale(instance.placement.scale) * METERS_PER_MM;
 
-  for (let offset = 0; offset < triangles.length; offset += 3) {
-    const a = triangles[offset];
-    const b = triangles[offset + 1];
-    const c = triangles[offset + 2];
-    maximum = Math.max(
-      maximum,
-      vertexDistanceMm(positions, a, b),
-      vertexDistanceMm(positions, b, c),
-      vertexDistanceMm(positions, c, a),
-    );
+    if (region === "torso") {
+      covered.add("avatar:chest");
+      covered.add("avatar:abdomen");
+      continue;
+    }
+
+    if (region === "waist" || region === "hip") {
+      covered.add("avatar:abdomen");
+      covered.add("avatar:pelvis");
+      const bodySides = side === "center" ? (["left", "right"] as const) : ([side] as const);
+      for (const bodySide of bodySides) {
+        if (bodySide !== "left" && bodySide !== "right") continue;
+        covered.add(`avatar:hip-${bodySide}`);
+        covered.add(`avatar:thigh-${bodySide}`);
+        if (panelLength >= thighLength * 0.82) covered.add(`avatar:knee-${bodySide}`);
+        if (panelLength >= thighLength * 1.55) covered.add(`avatar:calf-${bodySide}`);
+      }
+      continue;
+    }
+
+    if (region === "arm" && (side === "left" || side === "right")) {
+      covered.add(`avatar:shoulder-${side}`);
+      covered.add(`avatar:upper-arm-${side}`);
+      if (panelLength >= upperArmLength * 0.78) {
+        covered.add(`avatar:elbow-${side}`);
+        covered.add(`avatar:forearm-${side}`);
+      }
+      continue;
+    }
+
+    if (region === "leg" && (side === "left" || side === "right")) {
+      covered.add("avatar:pelvis");
+      covered.add(`avatar:hip-${side}`);
+      covered.add(`avatar:thigh-${side}`);
+      covered.add(`avatar:knee-${side}`);
+      covered.add(`avatar:calf-${side}`);
+    }
   }
 
-  return maximum;
+  return covered;
 }
-''',
-)
 
+'''
+target = ROOT / arrangement
+source = target.read_text(encoding="utf-8")
+if coverage_function.strip() not in source:
+    index = source.find(insert_marker)
+    if index < 0:
+        raise SystemExit("SemanticAvatarArrangement.ts: arrangeInstance marker not found")
+    source = source[:index] + coverage_function + source[index:]
+    target.write_text(source, encoding="utf-8")
+
+visual = "apps/web/src/viewport/AvatarVisual.ts"
 replace_once(
-    "apps/web/src/garment3d/PanelRefinement.ts",
-    '''function edgeKey(first: number, second: number): string {
-  return first < second ? `${first}:${second}` : `${second}:${first}`;
-}
-''',
-    '''function edgeKey(first: number, second: number): string {
-  return first < second ? `${first}:${second}` : `${second}:${first}`;
-}
-
-function vertexDistanceMm(
-  positions: Float32Array,
-  first: number,
-  second: number,
-): number {
-  return Math.hypot(
-    positions[first * 2] - positions[second * 2],
-    positions[first * 2 + 1] - positions[second * 2 + 1],
-  );
-}
-''',
+    visual,
+    '''  receiveShadow: boolean;
+}''',
+    '''  receiveShadow: boolean;
+  hiddenPartNames?: ReadonlySet<string>;
+}''',
+)
+replace_once(
+    visual,
+    '''  options: AvatarVisualOptions,
+): void {
+  const geometry = new THREE.SphereGeometry''',
+    '''  options: AvatarVisualOptions,
+): void {
+  if (options.hiddenPartNames?.has(name)) return;
+  const geometry = new THREE.SphereGeometry''',
+)
+replace_once(
+    visual,
+    '''  options: AvatarVisualOptions,
+): void {
+  const direction = new THREE.Vector3''',
+    '''  options: AvatarVisualOptions,
+): void {
+  if (options.hiddenPartNames?.has(name)) return;
+  const direction = new THREE.Vector3''',
 )
 
-# Add a rendered-surface invariant to the semantic arrangement suite.
+viewport = "apps/web/src/viewport/GlobalThreeViewport.ts"
+replace_once(
+    viewport,
+    '''    const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
+    const visual = createAvatarVisual(avatar, {
+      radialSegments: this.profile.avatarRadialSegments,
+      castShadow: this.profile.shadows,
+      receiveShadow: this.profile.shadows,
+    });
+    this.avatarGroup.add(visual);
+
+    const arrangement = buildSemanticAvatarArrangement(snapshots, garment, avatar);''',
+    '''    const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
+    const arrangement = buildSemanticAvatarArrangement(snapshots, garment, avatar);
+    const visual = createAvatarVisual(avatar, {
+      radialSegments: this.profile.avatarRadialSegments,
+      castShadow: this.profile.shadows,
+      receiveShadow: this.profile.shadows,
+      hiddenPartNames: arrangement.coveredAvatarPartNames,
+    });
+    this.avatarGroup.add(visual);''',
+)
+replace_once(
+    viewport,
+    '''    this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+    this.host.dataset.arrangementDiagnosticCount''',
+    '''    this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+    this.host.dataset.coveredAvatarPartCount = String(arrangement.coveredAvatarPartNames.size);
+    this.host.dataset.arrangementDiagnosticCount''',
+)
+
 test_path = ROOT / "apps/web/src/garment3d/SemanticAvatarArrangement.test.ts"
 test_source = test_path.read_text(encoding="utf-8")
 insert = r'''
 
-  it("keeps dressed display triangles small enough to follow curved body surfaces", () => {
-    for (const templateId of ["tshirt", "straight-skirt", "straight-pants"] as const) {
-      const result = arrange(templateId);
-      const visible = result.state.instances.filter((instance) => result.visibleInstanceIds.has(instance.id));
-      const maximumEdge = Math.max(...visible.map((instance) => maximumDressedTriangleEdge(result, instance.id)));
-      expect(maximumEdge, `${templateId} has a chord too large for the avatar surface`).toBeLessThan(0.075);
-      expect(visible.reduce((total, instance) => total + instance.topology.triangles.length / 3, 0)).toBeLessThan(120_000);
-    }
+  it("masks only mannequin shells covered by each semantic garment", () => {
+    const shirt = arrange("tshirt");
+    expect([...shirt.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:chest",
+      "avatar:abdomen",
+      "avatar:upper-arm-left",
+      "avatar:upper-arm-right",
+    ]));
+    expect(shirt.coveredAvatarPartNames.has("avatar:head")).toBe(false);
+    expect(shirt.coveredAvatarPartNames.has("avatar:hand-left")).toBe(false);
+
+    const skirt = arrange("straight-skirt");
+    expect([...skirt.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:pelvis",
+      "avatar:thigh-left",
+      "avatar:thigh-right",
+    ]));
+    expect(skirt.coveredAvatarPartNames.has("avatar:calf-left")).toBe(false);
+
+    const trousers = arrange("straight-pants");
+    expect([...trousers.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:pelvis",
+      "avatar:thigh-left",
+      "avatar:thigh-right",
+      "avatar:calf-left",
+      "avatar:calf-right",
+    ]));
+    expect(trousers.coveredAvatarPartNames.has("avatar:foot-left")).toBe(false);
   });
 '''
 marker = '\n});\n'
@@ -126,80 +224,33 @@ if insert.strip() not in test_source:
     if index < 0:
         raise SystemExit("SemanticAvatarArrangement.test.ts: describe ending not found")
     test_source = test_source[:index] + insert + test_source[index:]
-
-helper = r'''
-
-function maximumDressedTriangleEdge(
-  result: ReturnType<typeof arrange>,
-  instanceId: string,
-): number {
-  const instance = result.state.instances.find((candidate) => candidate.id === instanceId);
-  if (!instance) throw new Error(`Instância ausente: ${instanceId}`);
-  let maximum = 0;
-  for (let offset = 0; offset < instance.topology.triangles.length; offset += 3) {
-    const a = instance.topology.triangles[offset];
-    const b = instance.topology.triangles[offset + 1];
-    const c = instance.topology.triangles[offset + 2];
-    maximum = Math.max(
-      maximum,
-      dressedDistance(result, instance.particleStart + a, instance.particleStart + b),
-      dressedDistance(result, instance.particleStart + b, instance.particleStart + c),
-      dressedDistance(result, instance.particleStart + c, instance.particleStart + a),
-    );
-  }
-  return maximum;
-}
-
-function dressedDistance(
-  result: ReturnType<typeof arrange>,
-  first: number,
-  second: number,
-): number {
-  const firstOffset = first * 3;
-  const secondOffset = second * 3;
-  return Math.hypot(
-    result.state.positions[firstOffset] - result.state.positions[secondOffset],
-    result.state.positions[firstOffset + 1] - result.state.positions[secondOffset + 1],
-    result.state.positions[firstOffset + 2] - result.state.positions[secondOffset + 2],
-  );
-}
-'''
-helper_marker = '\ndescribe("SemanticAvatarArrangement", () => {'
-if helper.strip() not in test_source:
-    index = test_source.find(helper_marker)
-    if index < 0:
-        raise SystemExit("SemanticAvatarArrangement.test.ts: describe marker not found")
-    test_source = test_source[:index] + helper + test_source[index:]
 test_path.write_text(test_source, encoding="utf-8")
 
-# Add direct refinement tests.
-refinement_test = ROOT / "apps/web/src/garment3d/PanelRefinement.test.ts"
-refinement_test.write_text(r'''import { describe, expect, it } from "vitest";
-import { createPatternSnapshot } from "../core/fallbackPatternEngine";
-import { buildPanelTopology } from "./PanelTopology";
-import {
-  maximumTriangleEdgeMm,
-  recommendedPanelRefinement,
-  refinePanelTopology,
-} from "./PanelRefinement";
-import {
-  createGarmentFromTemplate,
-  DEFAULT_BODY_MEASUREMENTS,
-} from "../patterns/templateCatalog";
+avatar_visual_test = ROOT / "apps/web/src/viewport/AvatarVisual.test.ts"
+avatar_visual_test.write_text(r'''import { describe, expect, it } from "vitest";
+import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
+import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
+import { createAvatarVisual } from "./AvatarVisual";
 
-describe("PanelRefinement", () => {
-  it("chooses enough subdivisions to avoid long display chords", () => {
-    const garment = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
-    for (const piece of garment.pieces) {
-      const snapshot = createPatternSnapshot(piece);
-      const base = buildPanelTopology(snapshot.piece);
-      const iterations = recommendedPanelRefinement(base);
-      const refined = refinePanelTopology(base, iterations);
-      expect(iterations).toBeGreaterThanOrEqual(3);
-      expect(maximumTriangleEdgeMm(refined)).toBeLessThanOrEqual(25);
-    }
+describe("AvatarVisual coverage", () => {
+  it("omits covered internal shells while preserving visible human extremities", () => {
+    const avatar = buildAvatarParametricModel(DEFAULT_BODY_MEASUREMENTS, "feminine");
+    const visual = createAvatarVisual(avatar, {
+      radialSegments: 10,
+      castShadow: false,
+      receiveShadow: false,
+      hiddenPartNames: new Set(["avatar:chest", "avatar:pelvis", "avatar:thigh-left"]),
+    });
+    const names = new Set<string>();
+    visual.traverse((object) => names.add(object.name));
+    expect(names.has("avatar:chest")).toBe(false);
+    expect(names.has("avatar:pelvis")).toBe(false);
+    expect(names.has("avatar:thigh-left")).toBe(false);
+    expect(names.has("avatar:head")).toBe(true);
+    expect(names.has("avatar:hand-left")).toBe(true);
+    expect(names.has("avatar:foot-left")).toBe(true);
   });
 });
 ''', encoding="utf-8")
 
-print("Prompt 9 adaptive surface tessellation applied")
+print("Prompt 9 semantic avatar coverage mask applied")
