@@ -5,8 +5,6 @@ on:
     branches:
       - "recovery/9.5-03-empty-workspace"
     paths:
-      - "scripts/apply-recovery-zero-workspace.py"
-      - "scripts/apply-recovery-zero-workspace-references.py"
       - "scripts/recovery-empty-workspace-visual.mjs"
       - ".github/workflows/recovery-zero-workspace.yml"
 
@@ -31,19 +29,19 @@ jobs:
           ref: "recovery/9.5-03-empty-workspace"
           fetch-depth: 0
 
+      - name: Record and verify exact commit
+        shell: bash
+        run: |
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          git rev-parse HEAD | tee "$RECOVERY_ARTIFACT_DIR/commit.txt"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: npm
-
-      - name: Verify recovery patch is fully committed
-        shell: bash
-        run: |
-          python scripts/apply-recovery-zero-workspace.py
-          python scripts/apply-recovery-zero-workspace-references.py
-          git diff --check
-          git diff --exit-code
 
       - name: Install dependencies
         run: npm ci
@@ -63,7 +61,6 @@ jobs:
       - name: Start recovery application
         shell: bash
         run: |
-          mkdir -p "$RECOVERY_ARTIFACT_DIR"
           (
             cd apps/web
             npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
