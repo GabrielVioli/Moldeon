@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: recovery-9-5-empty-workspace-final
-  cancel-in-progress: true
+  group: recovery-9-5-empty-workspace-final-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -23,16 +23,17 @@ jobs:
       RECOVERY_BASE_URL: http://127.0.0.1:4179
       RECOVERY_ARTIFACT_DIR: artifacts/recovery-empty-workspace
     steps:
-      - name: Checkout exact branch head
+      - name: Checkout exact triggering commit
         uses: actions/checkout@v4
         with:
-          ref: "recovery/9.5-03-empty-workspace"
+          ref: "${{ github.sha }}"
           fetch-depth: 0
 
       - name: Record and verify exact commit
         shell: bash
         run: |
           mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git rev-parse HEAD | tee "$RECOVERY_ARTIFACT_DIR/commit.txt"
           git diff --check
           test -z "$(git status --porcelain)"
