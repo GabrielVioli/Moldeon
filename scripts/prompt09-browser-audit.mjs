@@ -11,7 +11,13 @@ await fs.mkdir(artifactDir, { recursive: true });
 const browser = await chromium.launch({
   executablePath,
   headless: true,
-  args: ["--no-sandbox", "--disable-dev-shm-usage", "--use-gl=swiftshader", "--enable-webgl"],
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--use-gl=swiftshader",
+    "--enable-webgl",
+    "--ignore-gpu-blocklist",
+  ],
 });
 
 const scenarios = [
@@ -36,34 +42,47 @@ for (const scenario of scenarios) {
 
   const templateCard = page.getByRole("button", { name: scenario.template, exact: false }).first();
   await templateCard.waitFor({ state: "visible" });
-  await templateCard.click({ force: true });
+  await templateCard.evaluate((element) => element.click());
   await page.locator(".pattern-library-dialog").waitFor({ state: "detached", timeout: 10_000 });
+  await page.locator(".brand span:last-child").filter({ hasText: scenario.template }).waitFor({ state: "visible", timeout: 10_000 });
 
-  const previewTab = page.getByRole("tab", { name: "Prévia 3D" });
-  if (await previewTab.isVisible()) await previewTab.click();
-  else await page.getByRole("button", { name: "Vestir no manequim" }).click();
+  const previewTab = page.getByRole("tab", { name: "Manequim 3D" });
+  if (await previewTab.isVisible()) await previewTab.evaluate((element) => element.click());
+  else {
+    const dressButton = page.getByRole("button", { name: "Vestir no manequim" });
+    await dressButton.waitFor({ state: "visible" });
+    await dressButton.evaluate((element) => element.click());
+  }
 
+  await page.waitForTimeout(2500);
   const canvas = page.locator("canvas.three-canvas");
-  await canvas.waitFor({ state: "visible", timeout: 20_000 });
-  await page.waitForTimeout(1800);
-
   const inspection = await page.evaluate(() => {
     const canvas = document.querySelector("canvas.three-canvas");
+    const host = document.querySelector("[data-testid='dressed-avatar-viewport']");
     const box = canvas?.getBoundingClientRect();
-    const diagnostics = [...document.querySelectorAll(".viewport-diagnostics li")].map((node) => node.textContent?.trim() ?? "");
+    const hostBox = host?.getBoundingClientRect();
+    const diagnostics = [...document.querySelectorAll(".viewport-diagnostics li, .viewport-warnings span")].map((node) => node.textContent?.trim() ?? "");
     const bodyText = document.body.innerText;
     return {
       canvasBox: box ? { width: box.width, height: box.height, top: box.top, bottom: box.bottom } : null,
+      hostBox: hostBox ? { width: hostBox.width, height: hostBox.height, top: hostBox.top, bottom: hostBox.bottom } : null,
+      hostDataset: host instanceof HTMLElement ? { ...host.dataset } : null,
       diagnostics,
+      viewportError: document.querySelector(".viewport-error")?.textContent?.trim() ?? null,
+      placeholder: document.querySelector(".viewport-placeholder")?.textContent?.trim() ?? null,
+      workspaceClass: document.querySelector(".workspace")?.className ?? null,
       hasExploded: /Explodida|explodido/i.test(bodyText),
       hasHideBody: /Ocultar corpo|Mostrar corpo/i.test(bodyText),
       hasCanvas: Boolean(canvas),
     };
   });
 
-  if (!inspection.hasCanvas) throw new Error(`${scenario.label}: canvas 3D ausente`);
+  if (!inspection.hasCanvas) {
+    throw new Error(`${scenario.label}: canvas 3D ausente (${JSON.stringify({ inspection, consoleErrors })})`);
+  }
+  await canvas.waitFor({ state: "visible", timeout: 10_000 });
   if (!inspection.canvasBox || inspection.canvasBox.width < 240 || inspection.canvasBox.height < 300) {
-    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify(inspection.canvasBox)})`);
+    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify(inspection)})`);
   }
   if (inspection.hasExploded) throw new Error(`${scenario.label}: modo explodido ainda visível`);
   if (inspection.hasHideBody) throw new Error(`${scenario.label}: controle público para ocultar corpo ainda visível`);
