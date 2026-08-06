@@ -90,6 +90,22 @@ export interface PatternGenerationRecord {
   measurementValues: Partial<Record<BodyMeasurementKey, number>>;
   measurementOrigins: Partial<Record<BodyMeasurementKey, MeasurementOrigin>>;
   defaultValues: Partial<Record<BodyMeasurementKey, number>>;
+  constructionSystem?: string;
+  validationStatus?: "experimental" | "geometrically-validated" | "manually-reviewed";
+  componentValidation?: {
+    body: "experimental" | "geometrically-validated" | "manually-reviewed";
+    sleeve?: "experimental" | "geometrically-validated" | "manually-reviewed";
+  };
+  requiredMeasurements?: BodyMeasurementKey[];
+  estimatedMeasurements?: BodyMeasurementKey[];
+  ease?: { bustMm: number; waistMm: number; hipMm: number; sleeveMm: number };
+  limits?: {
+    minimumAreaMm2: number;
+    shoulderToleranceMm?: number;
+    sideSeamToleranceMm: number;
+    minimumCurveSeparationMm: number;
+  };
+  manualReview?: boolean;
 }
 
 export interface ParametricProjectMetadata {

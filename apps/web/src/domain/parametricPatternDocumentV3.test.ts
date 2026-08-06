@@ -27,9 +27,9 @@ describe("PatternDocumentV3 paramétrico", () => {
   it("round trips formula versions and generation snapshots", () => {
     const garment = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
     const document = garmentDraftToPatternDocumentV3(garment);
-    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@1");
+    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@2");
     expect(document.measurements.profile?.schemaVersion).toBe(1);
-    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@1")).toBe(true);
+    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@2")).toBe(true);
 
     const serialized = serializePatternDocumentV3(document);
     const parsed = parsePatternDocumentV3(JSON.parse(serialized));

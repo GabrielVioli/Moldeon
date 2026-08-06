@@ -117,7 +117,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
               className="template-card"
               key={template.id}
               type="button"
-              disabled={template.status !== "ready"}
+              disabled={template.status !== "available"}
               onClick={() => chooseTemplate(template.id)}
             >
               <span
@@ -135,9 +135,12 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                 <small>
                   <strong>Estimadas:</strong> {template.estimatedMeasurements.join(", ")}
                 </small>
-                {template.status === "development" ? (
-                  <small className="template-status">Em desenvolvimento</small>
-                ) : null}
+                <small className="template-status">
+                  {template.status === "development"
+                    ? "Em desenvolvimento"
+                    : validationLabel(template.validationStatus)}
+                </small>
+                <small>{template.reviewNotes[0]}</small>
               </span>
             </button>
           ))}
@@ -153,3 +156,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
     </div>
   );
 });
+
+function validationLabel(status: "experimental" | "geometrically-validated" | "manually-reviewed"): string {
+  if (status === "manually-reviewed") return "Revisado manualmente";
+  if (status === "geometrically-validated") return "Validado geometricamente · prova manual pendente";
+  return "Experimental · não validado manualmente";
+}

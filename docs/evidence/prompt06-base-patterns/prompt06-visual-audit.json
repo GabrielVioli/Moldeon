@@ -1,0 +1,124 @@
+{
+  "browserVersion": "140.0.7339.16",
+  "physicalDevicesValidated": false,
+  "threeDimensionalPreviewUsedAsEvidence": false,
+  "scenarios": [
+    {
+      "name": "bodice-block-medium",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "pieces": [
+          "Frente",
+          "Costas"
+        ],
+        "pathCount": 2,
+        "invalidPaths": 0,
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "frontBackPresent": true
+      }
+    },
+    {
+      "name": "tshirt-medium",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "pieces": [
+          "Frente",
+          "Costas",
+          "Manga"
+        ],
+        "pathCount": 3,
+        "invalidPaths": 0,
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "frontBackPresent": true
+      }
+    },
+    {
+      "name": "blouse-medium",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "pieces": [
+          "Frente",
+          "Costas",
+          "Manga"
+        ],
+        "pathCount": 3,
+        "invalidPaths": 0,
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "frontBackPresent": true
+      }
+    },
+    {
+      "name": "straight-skirt-medium",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "pieces": [
+          "Frente",
+          "Costas"
+        ],
+        "pathCount": 2,
+        "invalidPaths": 0,
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "frontBackPresent": true
+      }
+    },
+    {
+      "name": "mini-skirt-medium",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "pieces": [
+          "Frente",
+          "Costas"
+        ],
+        "pathCount": 2,
+        "invalidPaths": 0,
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "frontBackPresent": true
+      }
+    },
+    {
+      "name": "upper-body-comparison",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "cards": 15,
+        "paths": 30,
+        "invalidPaths": 0,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    },
+    {
+      "name": "skirt-comparison",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "cards": 10,
+        "paths": 20,
+        "invalidPaths": 0,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    },
+    {
+      "name": "measurement-continuity",
+      "status": "passed",
+      "diagnostics": [],
+      "data": {
+        "samples": 51,
+        "monotonic": true,
+        "maxJumpMm": 2.5,
+        "consistentOrientation": true
+      }
+    }
+  ]
+}

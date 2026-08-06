@@ -7,8 +7,9 @@ import {
 } from "./templateCatalog";
 
 describe("pattern template catalog", () => {
-  it("offers the six essential editable bases", () => {
+  it("offers the seven essential editable bases", () => {
     expect(PATTERN_TEMPLATES.map((template) => template.id)).toEqual([
+      "bodice-block",
       "tshirt",
       "blouse",
       "straight-skirt",
@@ -18,7 +19,7 @@ describe("pattern template catalog", () => {
     ]);
   });
 
-  it.each(PATTERN_TEMPLATES.filter((template) => template.status === "ready"))(
+  it.each(PATTERN_TEMPLATES.filter((template) => template.status === "available"))(
     "generates valid pieces for $name",
     ({ id }) => {
       const garment = createGarmentFromTemplate(id, DEFAULT_BODY_MEASUREMENTS);
@@ -78,6 +79,8 @@ describe("pattern template catalog", () => {
     expect(top.pieces.flatMap((piece) => piece.segments ?? []).some((segment) => segment.role === "frontArmhole")).toBe(true);
     expect(top.pieces.find((piece) => piece.name === "Manga")?.segments?.map((segment) => segment.role)).toContain("sleeveCapFront");
     expect(top.pieces.every((piece) => piece.grainline)).toBe(true);
+    expect(top.parametric?.templateVersion).toBe("tshirt@2");
+    expect(top.parametric?.variables.length).toBeGreaterThan(10);
 
     const skirt = createGarmentFromTemplate("straight-skirt", DEFAULT_BODY_MEASUREMENTS);
     expect(skirt.pieces.every((piece) => piece.darts?.length === 1)).toBe(true);

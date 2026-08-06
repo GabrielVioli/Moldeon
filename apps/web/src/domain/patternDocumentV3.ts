@@ -21,6 +21,7 @@ import {
 import {
   PATTERN_DOCUMENT_FORMAT_VERSION,
   PATTERN_DOCUMENT_UNITS,
+  type ConnectorLandmarkV3,
   type ConnectorRoleV3,
   type PanelArrangementAnchorV3,
   type PanelInstanceV3,
@@ -715,9 +716,59 @@ function migrateSemanticConnectors(piece: PatternPiece): PatternConnectorV3[] {
       startT: 0,
       endT: 1,
     })),
-    landmarks: [],
+    landmarks: semanticConnectorLandmarks(piece.id, role, segments.length),
     direction: "forward",
+    metadata: { landmarkSource: "semantic-role-v1" },
   }));
+}
+
+function semanticConnectorLandmarks(
+  pieceId: string,
+  role: ConnectorRoleV3,
+  rangeCount: number,
+): ConnectorLandmarkV3[] {
+  const lastRange = Math.max(0, rangeCount - 1);
+  const landmarks: ConnectorLandmarkV3[] = [
+    { id: `${pieceId}:${role}:start`, kind: "start", rangeIndex: 0, t: 0 },
+    { id: `${pieceId}:${role}:end`, kind: "end", rangeIndex: lastRange, t: 1 },
+  ];
+  if (role === "front-armhole" || role === "sleeve-cap-front") {
+    landmarks.push({
+      id: `${pieceId}:${role}:front-notch`,
+      kind: "notch",
+      rangeIndex: 0,
+      t: rangeCount > 1 ? 1 : 0.62,
+      label: "Pique frontal",
+    });
+  }
+  if (role === "back-armhole" || role === "sleeve-cap-back") {
+    landmarks.push(
+      {
+        id: `${pieceId}:${role}:back-notch-1`,
+        kind: "notch",
+        rangeIndex: 0,
+        t: rangeCount > 1 ? 0.74 : 0.42,
+        label: "Primeiro pique traseiro",
+      },
+      {
+        id: `${pieceId}:${role}:back-notch-2`,
+        kind: "notch",
+        rangeIndex: lastRange,
+        t: rangeCount > 1 ? 0.28 : 0.68,
+        label: "Segundo pique traseiro",
+      },
+    );
+  }
+  if (role === "shoulder") {
+    landmarks.push({
+      id: `${pieceId}:${role}:balance`,
+      kind: "balance",
+      rangeIndex: 0,
+      t: 0.5,
+      label: "Marca de ombro",
+    });
+  }
+  return landmarks;
 }
 
 function inferSemanticRole(

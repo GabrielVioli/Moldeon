@@ -19,8 +19,15 @@ import {
   measurementProfileToBodyMeasurements,
   type MeasurementProfile,
 } from "../domain/parametricMeasurements";
+import {
+  BASE_PATTERN_METADATA,
+  draftBasePattern,
+  isBasePatternTemplateId,
+  type PatternValidationStatus,
+} from "./basePatternDrafting";
 
 export type PatternTemplateId =
+  | "bodice-block"
   | "tshirt"
   | "blouse"
   | "straight-skirt"
@@ -34,7 +41,9 @@ export interface PatternTemplateSummary {
   category: "Parte de cima" | "Parte de baixo" | "Casaco";
   description: string;
   pieces: string;
-  status: "ready" | "development";
+  status: "available" | "development";
+  validationStatus: PatternValidationStatus;
+  reviewNotes: string[];
   requiredMeasurements: string[];
   estimatedMeasurements: string[];
   formulaVersion: string;
@@ -52,10 +61,11 @@ export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
 };
 
 export const TEMPLATE_FORMULA_VERSIONS: Record<PatternTemplateId, string> = {
-  tshirt: "tshirt@1",
-  blouse: "blouse@1",
-  "straight-skirt": "straight-skirt@1",
-  "mini-skirt": "mini-skirt@1",
+  "bodice-block": BASE_PATTERN_METADATA["bodice-block"].templateVersion,
+  tshirt: BASE_PATTERN_METADATA.tshirt.templateVersion,
+  blouse: BASE_PATTERN_METADATA.blouse.templateVersion,
+  "straight-skirt": BASE_PATTERN_METADATA["straight-skirt"].templateVersion,
+  "mini-skirt": BASE_PATTERN_METADATA["mini-skirt"].templateVersion,
   "straight-pants": "straight-pants@1",
   "basic-jacket": "basic-jacket@1",
 };
@@ -73,12 +83,27 @@ export const DEFAULT_MASCULINE_BODY_MEASUREMENTS: BodyMeasurements = {
 
 export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
   {
+    id: "bodice-block",
+    name: "Corpo básico",
+    category: "Parte de cima",
+    description: "Bloco de referência com frente e costas distintas.",
+    pieces: "Frente e costas",
+    status: "available",
+    validationStatus: BASE_PATTERN_METADATA["bodice-block"].validationStatus,
+    reviewNotes: BASE_PATTERN_METADATA["bodice-block"].notes,
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["bodice-block"],
+    requiredMeasurements: ["busto", "cintura", "quadril", "ombro", "cava", "frente e costas"],
+    estimatedMeasurements: ["pescoço", "inclinação do ombro", "altura do quadril"],
+  },
+  {
     id: "tshirt",
     name: "Camiseta básica",
     category: "Parte de cima",
     description: "Corpo com folga confortável e manga curta.",
     pieces: "Frente, costas e manga",
-    status: "ready",
+    status: "available",
+    validationStatus: BASE_PATTERN_METADATA["tshirt"].validationStatus,
+    reviewNotes: BASE_PATTERN_METADATA["tshirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["tshirt"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps"],
@@ -89,7 +114,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de cima",
     description: "Base solta, decote mais aberto e manga longa.",
     pieces: "Frente, costas e manga",
-    status: "ready",
+    status: "available",
+    validationStatus: BASE_PATTERN_METADATA["blouse"].validationStatus,
+    reviewNotes: BASE_PATTERN_METADATA["blouse"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["blouse"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco", "braço"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps", "punho"],
@@ -100,7 +127,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Base simples da cintura ao joelho.",
     pieces: "Frente e costas",
-    status: "ready",
+    status: "available",
+    validationStatus: BASE_PATTERN_METADATA["straight-skirt"].validationStatus,
+    reviewNotes: BASE_PATTERN_METADATA["straight-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-skirt"],
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
@@ -111,7 +140,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Base curta com leve abertura na barra.",
     pieces: "Frente e costas",
-    status: "ready",
+    status: "available",
+    validationStatus: BASE_PATTERN_METADATA["mini-skirt"].validationStatus,
+    reviewNotes: BASE_PATTERN_METADATA["mini-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["mini-skirt"],
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
@@ -122,7 +153,9 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     category: "Parte de baixo",
     description: "Perna reta e gancho simplificado para edição.",
     pieces: "Frente e costas",
-    status: "ready",
+    status: "available",
+    validationStatus: "experimental",
+    reviewNotes: ["Fora do escopo do Prompt 6; o gerador de calça permanece simplificado e sem revisão manual."],
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-pants"],
     requiredMeasurements: ["cintura", "quadril", "altura", "entrepernas"],
     estimatedMeasurements: ["gancho", "coxa", "joelho", "barra"],
@@ -134,6 +167,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Modelagem própria de casaco ainda em validação.",
     pieces: "Em desenvolvimento",
     status: "development",
+    validationStatus: "experimental",
+    reviewNotes: ["Indisponível até possuir bloco próprio e revisão manual."],
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["basic-jacket"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "braço"],
     estimatedMeasurements: ["pescoço", "cava", "folga estrutural"],
@@ -151,10 +186,13 @@ export function createGarmentFromTemplate(
   const generator = GENERATORS[templateId];
   const summary = PATTERN_TEMPLATES.find((template) => template.id === templateId);
   if (!summary) throw new RangeError("Molde-base desconhecido.");
-  if (summary.status !== "ready") throw new RangeError(`${summary.name} está em desenvolvimento.`);
+  if (summary.status !== "available") throw new RangeError(`${summary.name} está em desenvolvimento.`);
 
+  const baseDraft = isBasePatternTemplateId(templateId)
+    ? draftBasePattern(templateId, measurements)
+    : undefined;
   const fabric = createDefaultFabricSource();
-  const pieces = generator(measurements).map((piece) => ({
+  const pieces = (baseDraft?.pieces ?? generator(measurements)).map((piece) => ({
     ...piece,
     fabricId: fabric.id,
   }));
@@ -172,8 +210,9 @@ export function createGarmentFromTemplate(
       schemaVersion: 1,
       templateId,
       templateVersion,
-      variables: [],
-      constructionGraph: createInitialConstructionGraph(BODY_MEASUREMENT_CATALOG.map((entry) => entry.key)),
+      variables: baseDraft?.variables ?? [],
+      constructionGraph: baseDraft?.constructionGraph
+        ?? createInitialConstructionGraph(BODY_MEASUREMENT_CATALOG.map((entry) => entry.key)),
       generations: pieces.map((piece) => ({
         patternId: piece.id,
         templateId,
@@ -184,18 +223,29 @@ export function createGarmentFromTemplate(
         measurementValues: snapshot.values,
         measurementOrigins: snapshot.origins,
         defaultValues: snapshot.defaults,
+        ...(baseDraft ? {
+          constructionSystem: baseDraft.metadata.constructionSystem,
+          validationStatus: baseDraft.metadata.validationStatus,
+          componentValidation: baseDraft.metadata.componentStatus,
+          requiredMeasurements: baseDraft.metadata.requiredMeasurements,
+          estimatedMeasurements: baseDraft.metadata.estimatedMeasurements,
+          ease: baseDraft.metadata.ease,
+          limits: baseDraft.metadata.limits,
+          manualReview: baseDraft.metadata.manualReview,
+        } : {}),
       })),
     },
     fabrics: [fabric],
     pieces,
     assemblyPlacements: pieces.map((piece, index) => ({ ...inferAssemblyPlacement(piece, index), source: "template" })),
-    ease: { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 },
+    ease: baseDraft?.ease ?? { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 },
   };
 }
 
 type TemplateGenerator = (measurements: BodyMeasurements) => PatternPiece[];
 
 const GENERATORS: Record<PatternTemplateId, TemplateGenerator> = {
+  "bodice-block": (measurements) => draftBasePattern("bodice-block", measurements).pieces,
   tshirt: (measurements) =>
     createTopPieces(measurements, {
       id: "tshirt",
