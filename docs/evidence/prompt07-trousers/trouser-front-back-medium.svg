@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1280" viewBox="0 0 1180 1280">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker>
+  </defs>
+  <style>
+    svg { background: #f7f4ee; font-family: Inter, Arial, sans-serif; }
+    .title { font-size: 28px; font-weight: 700; fill: #161616; }
+    .subtitle { font-size: 15px; fill: #555; }
+    .card { fill: #fff; stroke: #c8c2b8; stroke-width: 2; }
+    .card-title, .node-title { font-size: 20px; font-weight: 700; fill: #222; }
+    .small { font-size: 13px; fill: #555; }
+    .pattern { fill: #e7ddd0; fill-opacity: .72; stroke: #171717; stroke-width: 2.3; vector-effect: non-scaling-stroke; }
+    .reference { stroke: #777; stroke-width: 1.2; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; }
+    .grain { stroke: #111; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .dart { fill: none; stroke: #8a3f2e; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+    .node { fill: #fff; stroke: #272727; stroke-width: 2; }
+    .seam { stroke: #3f5a76; stroke-width: 4; }
+    .seam-label { font-size: 14px; font-weight: 700; fill: #23384e; paint-order: stroke; stroke: #f7f4ee; stroke-width: 6; }
+  </style>
+  <text x="60" y="54" class="title">Calça reta paramétrica · frente e costas</text>
+     <text x="60" y="80" class="subtitle">Molde 2D autoritativo · straight-pants@2 · milímetros</text>
+     <g>
+    <rect x="60" y="100" width="500" height="1120" rx="18" class="card"/>
+    <text x="84" y="142" class="card-title">Frente</text>
+    <text x="84" y="169" class="small">straight-pants-front · cortar 2x</text>
+    <g><path d="M 198.82867300855196 195.7735178245412 L 388.5975785528971 190 C 415.57221101181904 244.89574324973577 424.46910733160377 310.67598731622945 438.4769866436053 371.0613048909388 C 430.43192082252335 402.9576246756991 426.74065532814456 416.7762083213222 421.724320169117 440.34351878543293 L 389.26011338522153 824.8030171999617 L 372.3181512443548 1175 L 199.68050350725474 1175 L 184.82079369655042 824.8030171999617 L 140.052368598059 455.48717209570486 C 123.86758912270588 452.64773710002885 108.53464014605554 449.8083021043529 95 440.34351878543293 C 130.11434611319305 417.628038820025 181.79206303449604 273.95262803882 198.82867300855196 195.7735178245412 Z" class="pattern"/><line x1="180.18304987027963" y1="371.0613048909388" x2="438.4769866436053" y2="371.0613048909388" class="reference"/>
+<line x1="95" y1="440.34351878543293" x2="421.724320169117" y2="440.34351878543293" class="reference"/>
+<line x1="184.82079369655042" y1="824.8030171999617" x2="389.26011338522153" y2="824.8030171999617" class="reference"/>
+<line x1="280.888344383588" y1="457.38012875948885" x2="280.888344383588" y2="1157.9633900259441" class="reference"/><line x1="280.888344383588" y1="482.93504372057276" x2="280.888344383588" y2="1132.4084750648603" class="grain" marker-end="url(#arrow)"/><path d="M 301.85283943499576 192.42458953030606 L 308.90410300759106 280.1631308966941 L 315.9553665801865 192.42458953030606" class="dart"/></g>
+  </g>
+<g>
+    <rect x="620" y="100" width="500" height="1120" rx="18" class="card"/>
+    <text x="644" y="142" class="card-title">Costas</text>
+    <text x="644" y="169" class="small">straight-pants-back · cortar 2x</text>
+    <g><path d="M 811.824686940966 190 L 1030.043781188212 206.97156576593542 C 1049.612089257132 260.7612277563318 1056.1039450145938 328.09104604086247 1066.2126918369268 387.2596742302985 C 1060.091799265606 418.51332266264944 1057.309575369551 432.05347895678375 1053.5072027116091 455.1459372940401 L 1014.6488089633744 831.8590528198853 L 997.4917616043688 1175 L 814.2359476508803 1175 L 797.6353450710856 831.8590528198853 L 754.5108746822333 458.85556915544674 C 718.7129272196592 451.4363054326335 684.8625364843235 471.83928067037004 655 455.1459372940401 C 732.6240466999341 419.90443461067696 787.8975614348931 266.6038979380473 811.824686940966 190 Z" class="pattern"/><line x1="783.6314847942755" y1="387.2596742302985" x2="1066.2126918369268" y2="387.2596742302985" class="reference"/>
+<line x1="655" y1="455.1459372940401" x2="1053.5072027116091" y2="455.1459372940401" class="reference"/>
+<line x1="797.6353450710856" y1="831.8590528198853" x2="1014.6488089633744" y2="831.8590528198853" class="reference"/>
+<line x1="904.0090386969213" y1="471.83928067037004" x2="904.0090386969213" y2="1158.3066566236703" class="reference"/><line x1="904.0090386969213" y1="496.8792957348649" x2="904.0090386969213" y2="1133.2666415591752" class="grain" marker-end="url(#arrow)"/><path d="M 900.2066660389794 197.81139214811222 L 912.262969588551 316.0559077304491 L 924.3192731381225 197.81139214811222" class="dart"/></g>
+  </g>
+</svg>
