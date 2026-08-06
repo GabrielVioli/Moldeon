@@ -6,6 +6,7 @@ on:
       - scripts/prompt09-apply.py
       - scripts/prompt09-tests.py
       - scripts/prompt09-followup.py
+      - scripts/prompt09-test-alignment.py
       - scripts/prompt09-browser-audit.mjs
       - scripts/prompt09-docs.py
       - .github/workflows/prompt09-avatar-assembly.yml
@@ -38,6 +39,7 @@ jobs:
           python scripts/prompt09-apply.py
           python scripts/prompt09-tests.py
           python scripts/prompt09-followup.py
+          python scripts/prompt09-test-alignment.py
       - name: Install dependencies
         run: npm install
       - name: Check patch
@@ -108,6 +110,7 @@ jobs:
             scripts/prompt09-apply.py \
             scripts/prompt09-tests.py \
             scripts/prompt09-followup.py \
+            scripts/prompt09-test-alignment.py \
             scripts/prompt09-browser-audit.mjs \
             scripts/prompt09-docs.py \
             .github/workflows/prompt09-avatar-assembly.yml
