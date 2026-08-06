@@ -6,14 +6,15 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 
 - Editor 2D em milímetros, com grade, zoom, pan e pontos arrastáveis.
 - Interface móvel com abas, pan por toque e zoom por pinça.
-- Biblioteca paramétrica com camiseta, blusa, saia, minissaia e calça; a jaqueta aparece como **Em desenvolvimento** até possuir bloco próprio validado.
-- Geração por altura, busto/tórax, cintura e quadril explícitos.
+- Biblioteca versionada com corpo básico, camiseta, blusa, saia reta e minissaia reconstruídos por fórmulas; calça permanece experimental e jaqueta indisponível.
+- Geração por perfil corporal expandido, com medidas informadas, estimadas e derivadas identificadas e substituíveis.
+- Estado de confiança separado entre experimental, validado geometricamente e revisado manualmente; nenhum template é promovido somente por compilar ou triangular.
 - Avatar procedural feminino ou masculino com altura, busto/tórax, cintura,
   quadril, ombros, tronco, braço e entreperna.
 - Sala de prova com tecidos leves, algodão, malha, jeans e couro sintético.
 - Vários tecidos/retalhos no mesmo projeto, dimensões disponíveis, cor e
   atribuição por peça para criações upcycled.
-- Projetos com frente, costas, manga, quantidade de corte e corte na dobra.
+- Projetos com frente e costas distintas, quantidade de corte, dobra, fio, pences, conectores e landmarks; mangas atuais permanecem experimentais até sua fase dedicada.
 - Alternância entre peças, inserção/remoção de pontos e enquadramento automático.
 - Cálculo de área, perímetro e validações equivalentes em Rust/WASM e TypeScript.
 - Validação de pontos duplicados, autointerseções e contornos degenerados.
@@ -185,8 +186,9 @@ Leia também:
 
 ## Limitações atuais
 
-- Camiseta, blusa, saias e calça são bases paramétricas editáveis com fio, bordas semânticas e linhas construtivas; a jaqueta permanece indisponível enquanto não houver bloco próprio validado.
-- As saias incluem pences persistentes de cintura. Transferência de pence, graduação, cós, vistas e aviamentos ainda não foram implementados.
+- Corpo básico, corpos de camiseta/blusa e saias `@2` passaram por validação geométrica automatizada, mas ainda exigem toile e revisão manual; isso não equivale a validação industrial.
+- As mangas de camiseta/blusa, a calça `@1` e qualquer jaqueta permanecem experimentais ou indisponíveis.
+- As saias incluem pences estruturais de cintura. Transferência de pence, gradação, cós, vistas, aberturas funcionais e aviamentos ainda não foram implementados.
 - A inserção de ponto acontece em um contorno existente; a criação livre de novas peças e a prancheta multi-peça agora entram como fluxo principal do editor.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
 - A transformação 2D → 3D é uma prévia geométrica, não uma simulação física.
@@ -200,4 +202,4 @@ Leia também:
 
 ## Próxima etapa recomendada
 
-Ampliar a montagem estrutural e sua validação antes de conectar física XPBD, autocolisão ou alegações de caimento físico ao viewport.
+Validar manualmente os blocos `@2` em toile e executar as fases próprias de manga e calça antes de ampliar alegações de vestibilidade ou conectar física XPBD.
