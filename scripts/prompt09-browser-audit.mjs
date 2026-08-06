@@ -41,7 +41,7 @@ for (const scenario of scenarios) {
 
   const previewTab = page.getByRole("tab", { name: "Prévia 3D" });
   if (await previewTab.isVisible()) await previewTab.click();
-  else await page.getByRole("button", { name: "Montar no 3D" }).click();
+  else await page.getByRole("button", { name: "Vestir no manequim" }).click();
 
   const canvas = page.locator("canvas.three-canvas");
   await canvas.waitFor({ state: "visible", timeout: 20_000 });
