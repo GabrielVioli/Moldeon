@@ -34,6 +34,27 @@ jobs:
           python scripts/prompt08-finalize.py
           python scripts/prompt08-arc-fix.py
           python scripts/prompt08-precision-fix.py
+      - name: Patch mobile audit prerequisite
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/prompt08-browser-audit.mjs")
+          source = path.read_text(encoding="utf-8")
+          old = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
+            await card.scrollIntoViewIfNeeded();
+            await card.click();
+            await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+          '''
+          new = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
+            await card.waitFor({ state: "visible" });
+            await card.focus();
+            await page.keyboard.press("Enter");
+            await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+          '''
+          if source.count(old) != 1:
+              raise SystemExit(f"library selection block not found exactly once: {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
       - name: Install dependencies
         run: npm install
       - name: Check patch
