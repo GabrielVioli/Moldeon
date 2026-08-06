@@ -66,8 +66,7 @@ export class ThreeViewport {
     this.scene.add(createFloor(profile.shadows));
 
     this.resizeObserver = new ResizeObserver(() => {
-      this.resize();
-      this.requestRender();
+      this.refresh();
     });
     this.resizeObserver.observe(this.host);
   }
@@ -81,8 +80,7 @@ export class ThreeViewport {
     signal?.addEventListener("abort", abort, { once: true });
     try {
       if (signal?.aborted || viewport.disposed) throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
-      viewport.resize();
-      viewport.requestRender();
+      viewport.refresh();
       return viewport;
     } catch (error) {
       viewport.dispose();
@@ -102,7 +100,6 @@ export class ThreeViewport {
       radialSegments: this.profile.avatarRadialSegments,
       castShadow: this.profile.shadows,
       receiveShadow: this.profile.shadows,
-      hiddenPartNames: arrangement.coveredAvatarPartNames,
     });
     this.avatarGroup.add(visual);
     this.garmentMeshes = buildGarmentAssemblyMeshes(arrangement.state, arrangement.garment, {
@@ -130,7 +127,15 @@ export class ThreeViewport {
   }
 
   dress(): void {
+    this.refresh();
+  }
+
+  refresh(): void {
+    if (this.disposed) return;
+    this.resize();
     this.frameDressedScene();
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
     this.requestRender();
   }
 

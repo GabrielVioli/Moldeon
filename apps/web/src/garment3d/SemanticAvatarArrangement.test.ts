@@ -42,6 +42,19 @@ describe("SemanticAvatarArrangement", () => {
     expect(instanceCenterX(result, left.id)).toBeLessThan(0);
     expect(instanceCenterX(result, right.id)).toBeGreaterThan(0);
     expect(visible.every((instance) => instance.arrangement?.anchorId)).toBe(true);
+    const torso = visible.filter((instance) => instance.placement.region === "torso");
+    const shoulderDepths: number[] = [];
+    for (const instance of torso) {
+      for (let local = 0; local < instance.vertexCount; local += 1) {
+        const y = result.state.positions[(instance.particleStart + local) * 3 + 1];
+        if (y < result.avatar.landmarks.bustY) continue;
+        shoulderDepths.push(Math.abs(result.state.positions[(instance.particleStart + local) * 3 + 2]));
+      }
+    }
+    expect(shoulderDepths.length).toBeGreaterThan(0);
+    const averageShoulderDepth = shoulderDepths.reduce((sum, value) => sum + value, 0) / shoulderDepths.length;
+    expect(averageShoulderDepth).toBeGreaterThan(0.04);
+    expect(Math.max(...shoulderDepths)).toBeGreaterThan(0.08);
     expect(result.state.positions.every(Number.isFinite)).toBe(true);
   });
 

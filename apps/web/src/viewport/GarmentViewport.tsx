@@ -58,6 +58,8 @@ export const GarmentViewport = memo(function GarmentViewport({
         if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
           lastDressedVersionRef.current = latestSimulateVersionRef.current;
+        } else if (latestActiveRef.current) {
+          viewport.refresh();
         }
       })
       .catch((reason: unknown) => {
@@ -93,6 +95,12 @@ export const GarmentViewport = memo(function GarmentViewport({
       updateFrameRef.current = null;
     };
   }, [active, garment, snapshots]);
+
+  useEffect(() => {
+    if (!active) return;
+    const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
 
   useEffect(() => {
     if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;

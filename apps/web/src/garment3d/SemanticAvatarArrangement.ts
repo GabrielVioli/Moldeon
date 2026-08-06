@@ -382,11 +382,6 @@ function mapTorsoSurface(
       return Math.abs(x - (piece.cutOnFold ? foldX : centerX));
     }),
   );
-  const shoulderDepthRange = Math.max(
-    0.08,
-    avatar.landmarks.shoulderY - avatar.landmarks.bustY,
-  );
-
   for (let local = 0; local < instance.vertexCount; local += 1) {
     const xMm = instance.topology.positions2DMm[local * 2];
     const yMm = instance.topology.positions2DMm[local * 2 + 1];
@@ -401,14 +396,8 @@ function mapTorsoSurface(
     const normalizedAcross = clamp01(Math.abs(rotatedX) / patternHalfWidth);
     const angle = normalizedAcross * Math.PI * 0.5;
     const xDirection = rotatedX < 0 ? -1 : rotatedX > 0 ? 1 : instance.placement.bodySide === "left" ? -1 : 1;
-    const shoulderProgress = instance.placement.region === "torso"
-      ? clamp01((topY - worldY) / shoulderDepthRange)
-      : 1;
-    const depthScale = instance.placement.region === "torso"
-      ? lerp(0.16, 1, smoothstep(shoulderProgress))
-      : 1;
     const radialWidth = axes.halfWidth + anchor.initialMarginM * 0.62;
-    const radialDepth = axes.halfDepth * depthScale + anchor.initialMarginM;
+    const radialDepth = axes.halfDepth + anchor.initialMarginM;
     const offset = (instance.particleStart + local) * 3;
     positions[offset] = xDirection * Math.sin(angle) * radialWidth + instance.placement.offsetXMm * METERS_PER_MM;
     positions[offset + 1] = worldY;
