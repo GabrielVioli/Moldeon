@@ -37,10 +37,7 @@ for (const scenario of scenarios) {
   const templateCard = page.getByRole("button", { name: scenario.template, exact: false }).first();
   await templateCard.waitFor({ state: "visible" });
   await templateCard.click({ force: true });
-
-  const createButton = page.getByRole("button", { name: "Criar molde", exact: false }).first();
-  await createButton.waitFor({ state: "visible" });
-  await createButton.click({ force: true });
+  await page.locator(".pattern-library-dialog").waitFor({ state: "detached", timeout: 10_000 });
 
   const previewTab = page.getByRole("tab", { name: "Prévia 3D" });
   if (await previewTab.isVisible()) await previewTab.click();
