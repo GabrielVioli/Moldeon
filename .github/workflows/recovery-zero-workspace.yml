@@ -7,13 +7,14 @@ on:
     paths:
       - "scripts/apply-recovery-zero-workspace.py"
       - "scripts/apply-recovery-zero-workspace-references.py"
+      - "scripts/recovery-empty-workspace-visual.mjs"
       - ".github/workflows/recovery-zero-workspace.yml"
 
 permissions:
   contents: write
 
 concurrency:
-  group: recovery-9-5-empty-workspace-v3
+  group: recovery-9-5-empty-workspace-v4
   cancel-in-progress: true
 
 jobs:
@@ -78,7 +79,10 @@ jobs:
           exit 1
 
       - name: Run visual journey
-        run: node scripts/recovery-empty-workspace-visual.mjs | tee "$RECOVERY_ARTIFACT_DIR/audit.json"
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/recovery-empty-workspace-visual.mjs | tee "$RECOVERY_ARTIFACT_DIR/audit.json"
 
       - name: Stop recovery application
         if: always()
