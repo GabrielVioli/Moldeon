@@ -34,26 +34,41 @@ jobs:
           python scripts/prompt08-finalize.py
           python scripts/prompt08-arc-fix.py
           python scripts/prompt08-precision-fix.py
-      - name: Patch mobile audit prerequisite
+      - name: Patch browser audit prerequisites
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path("scripts/prompt08-browser-audit.mjs")
           source = path.read_text(encoding="utf-8")
-          old = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
+          old_library = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
             await card.scrollIntoViewIfNeeded();
             await card.click();
             await dialog.waitFor({ state: "hidden", timeout: 20_000 });
           '''
-          new = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
+          new_library = '''  const card = page.locator("button.template-card").filter({ hasText: "Corpo básico" }).first();
             await card.waitFor({ state: "visible" });
             await card.focus();
             await page.keyboard.press("Enter");
             await dialog.waitFor({ state: "hidden", timeout: 20_000 });
           '''
-          if source.count(old) != 1:
-              raise SystemExit(f"library selection block not found exactly once: {source.count(old)}")
-          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          old_console = '''    page.on("console", (message) => {
+                if (message.type() === "error") consoleErrors.push(message.text());
+              });
+          '''
+          new_console = '''    page.on("console", (message) => {
+                if (message.type() !== "error") return;
+                const location = message.location().url ?? "";
+                const text = message.text();
+                if (text.includes("Failed to load resource") && /\\/favicon\\.ico(?:$|\\?)/.test(location)) return;
+                consoleErrors.push(`${text}${location ? ` @ ${location}` : ""}`);
+              });
+          '''
+          if source.count(old_library) != 1:
+              raise SystemExit(f"library selection block not found exactly once: {source.count(old_library)}")
+          if source.count(old_console) != 1:
+              raise SystemExit(f"console listener block not found exactly once: {source.count(old_console)}")
+          source = source.replace(old_library, new_library, 1).replace(old_console, new_console, 1)
+          path.write_text(source, encoding="utf-8")
           PY
       - name: Install dependencies
         run: npm install
