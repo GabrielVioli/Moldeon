@@ -365,10 +365,18 @@ export function updateMeasurementFormula(
     origin: entry.overridden ? "supplied" : entry.defaultOrigin,
     error: undefined,
   };
-  const result = recomputeMeasurementProfile({ ...profile, entries });
-  const targetError = result.profile.entries[key]?.error;
-  if (targetError || result.error) return failure(profile, targetError ?? result.error!);
-  return result;
+  const validationEntries = structuredClone(entries);
+  validationEntries[key] = {
+    ...validationEntries[key]!,
+    origin: entry.defaultOrigin,
+    overridden: false,
+  };
+  const validation = recomputeMeasurementProfile({ ...profile, entries: validationEntries });
+  const targetError = validation.profile.entries[key]?.error;
+  if (targetError || validation.error) return failure(profile, targetError ?? validation.error!);
+  return entry.overridden
+    ? recomputeMeasurementProfile({ ...profile, entries })
+    : validation;
 }
 
 export function recomputeMeasurementProfile(profile: MeasurementProfile): MeasurementFormulaUpdateResult {
