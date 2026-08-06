@@ -21,5 +21,5 @@ block = r'''
 }
 '''
 if marker not in text:
-    path.write_text(text.rstrip() + block + "\n", encoding="utf-8")
+    path.write_text(text.rstrip() + block, encoding="utf-8")
 print("Prompt 9 mobile viewport layout applied")
