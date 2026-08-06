@@ -1,5 +1,92 @@
 from pathlib import Path
 
+
+def patch(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    source = file.read_text(encoding="utf-8")
+    if old not in source:
+        raise SystemExit(f"{path}: missing {old[:120]!r}")
+    file.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+
+patch(
+    "apps/web/src/App.tsx",
+    'const MOBILE_QUERY = "(max-width: 760px)";\n',
+    'const MOBILE_QUERY = "(max-width: 760px)";\nconst COMPACT_WORKSPACE_QUERY = "(max-width: 1180px)";\n',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '''  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
+''',
+    '''  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
+  const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
+''',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '''    if (isMobile) setMobileView("preview");
+    simulate();
+  }, [isMobile, simulate]);
+''',
+    '''    if (isCompactWorkspace) setMobileView("preview");
+    simulate();
+  }, [isCompactWorkspace, simulate]);
+''',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '''    if (isMobile) setMobileView("preview");
+  }, [isMobile]);
+  const closeRightPanel = useCallback(() => {
+    setIsRightPanelOpen(false);
+    if (isMobile) setMobileView("editor");
+  }, [isMobile]);
+  const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
+    setIsRightPanelOpen(true);
+    if (isMobile) setMobileView(view);
+  }, [isMobile]);
+''',
+    '''    if (isCompactWorkspace) setMobileView("preview");
+  }, [isCompactWorkspace]);
+  const closeRightPanel = useCallback(() => {
+    setIsRightPanelOpen(false);
+    if (isCompactWorkspace) setMobileView("editor");
+  }, [isCompactWorkspace]);
+  const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
+    setIsRightPanelOpen(true);
+    if (isCompactWorkspace) setMobileView(view);
+  }, [isCompactWorkspace]);
+''',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '''      if (isMobile) setMobileView("editor");
+    },
+    [isMobile, loadGarment],
+''',
+    '''      if (isCompactWorkspace) setMobileView("editor");
+    },
+    [isCompactWorkspace, loadGarment],
+''',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '            title={isMobile ? "Voltar à bancada 2D" : "Recolher painel direito"}\n',
+    '            title={isCompactWorkspace ? "Voltar à bancada 2D" : "Recolher painel direito"}\n',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '            <span>{isMobile ? "Voltar à bancada" : "Recolher"}</span>\n',
+    '            <span>{isCompactWorkspace ? "Voltar à bancada" : "Recolher"}</span>\n',
+)
+patch(
+    "apps/web/src/App.tsx",
+    '                active={isRightPanelOpen && (!isMobile || mobileView === "preview")}\n',
+    '                active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}\n',
+)
+
 path = Path("apps/web/src/styles.css")
 source = path.read_text(encoding="utf-8")
 marker = "/* Prompt 5: compact landscape workspace access */"
@@ -100,4 +187,4 @@ addition = r'''
 '''
 if marker not in source:
     path.write_text(source + addition, encoding="utf-8")
-print("Prompt 5 compact landscape workspace patch applied")
+print("Prompt 5 compact workspace state and layout patch applied")
