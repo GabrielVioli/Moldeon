@@ -109,4 +109,35 @@ describe("SemanticAvatarArrangement", () => {
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === "disconnected-component" && diagnostic.pieceId === extra.id)).toBe(true);
   });
 
+
+  it("masks only mannequin shells covered by each semantic garment", () => {
+    const shirt = arrange("tshirt");
+    expect([...shirt.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:chest",
+      "avatar:abdomen",
+      "avatar:upper-arm-left",
+      "avatar:upper-arm-right",
+    ]));
+    expect(shirt.coveredAvatarPartNames.has("avatar:head")).toBe(false);
+    expect(shirt.coveredAvatarPartNames.has("avatar:hand-left")).toBe(false);
+
+    const skirt = arrange("straight-skirt");
+    expect([...skirt.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:pelvis",
+      "avatar:thigh-left",
+      "avatar:thigh-right",
+    ]));
+    expect(skirt.coveredAvatarPartNames.has("avatar:foot-left")).toBe(false);
+
+    const trousers = arrange("straight-pants");
+    expect([...trousers.coveredAvatarPartNames]).toEqual(expect.arrayContaining([
+      "avatar:pelvis",
+      "avatar:thigh-left",
+      "avatar:thigh-right",
+      "avatar:calf-left",
+      "avatar:calf-right",
+    ]));
+    expect(trousers.coveredAvatarPartNames.has("avatar:foot-left")).toBe(false);
+  });
+
 });

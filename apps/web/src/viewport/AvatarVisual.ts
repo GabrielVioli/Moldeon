@@ -6,6 +6,7 @@ export interface AvatarVisualOptions {
   radialSegments: number;
   castShadow: boolean;
   receiveShadow: boolean;
+  hiddenPartNames?: ReadonlySet<string>;
 }
 
 export function createAvatarVisual(
@@ -104,6 +105,7 @@ function addEllipsoid(
   segments: number,
   options: AvatarVisualOptions,
 ): void {
+  if (options.hiddenPartNames?.has(name)) return;
   const geometry = new THREE.SphereGeometry(1, segments, Math.max(6, Math.floor(segments * 0.72)));
   geometry.scale(Math.max(0.001, radii[0]), Math.max(0.001, radii[1]), Math.max(0.001, radii[2]));
   const mesh = new THREE.Mesh(geometry, material);
@@ -124,6 +126,7 @@ function addCapsule(
   segments: number,
   options: AvatarVisualOptions,
 ): void {
+  if (options.hiddenPartNames?.has(name)) return;
   const direction = new THREE.Vector3(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
   const distance = direction.length();
   if (distance <= 1e-6) return;

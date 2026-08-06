@@ -48,6 +48,7 @@ export interface SemanticAvatarArrangementResult {
   collision: AvatarCollisionModel;
   diagnostics: ArrangementDiagnostic[];
   visibleInstanceIds: Set<string>;
+  coveredAvatarPartNames: Set<string>;
 }
 
 const METERS_PER_MM = 0.001;
@@ -89,6 +90,7 @@ export function buildSemanticAvatarArrangement(
   applyMinimalSeamStabilization(state, visibleInstanceIds, 1, 0.0015);
   state.initialPositions.set(state.positions);
   state.previousPositions.set(state.positions);
+  const coveredAvatarPartNames = resolveCoveredAvatarParts(state, visibleInstanceIds, avatar);
 
   return {
     garment: resolvedGarment,
@@ -97,6 +99,7 @@ export function buildSemanticAvatarArrangement(
     collision: buildAvatarCollisionModel(avatar),
     diagnostics: uniqueDiagnostics(diagnostics),
     visibleInstanceIds,
+    coveredAvatarPartNames,
   };
 }
 
@@ -266,6 +269,67 @@ function explicitPlacements(piece: PatternPiece, garment: GarmentDraft): Pattern
       mirrorX: Boolean(placement.flipped) !== (index === 1),
     }));
   });
+}
+
+function resolveCoveredAvatarParts(
+  state: GarmentAssemblyState,
+  visibleInstanceIds: ReadonlySet<string>,
+  avatar: AvatarParametricModel,
+): Set<string> {
+  const covered = new Set<string>();
+  const upperArmLength = Math.hypot(
+    avatar.joints.elbowLeft[0] - avatar.joints.shoulderLeft[0],
+    avatar.joints.elbowLeft[1] - avatar.joints.shoulderLeft[1],
+    avatar.joints.elbowLeft[2] - avatar.joints.shoulderLeft[2],
+  );
+  const thighLength = Math.max(0.1, avatar.landmarks.crotchY - avatar.landmarks.kneeY);
+
+  for (const instance of state.instances) {
+    if (!visibleInstanceIds.has(instance.id)) continue;
+    const region = instance.placement.region;
+    const side = instance.placement.bodySide;
+    const panelLength = instance.topology.boundsMm.height * validScale(instance.placement.scale) * METERS_PER_MM;
+
+    if (region === "torso") {
+      covered.add("avatar:chest");
+      covered.add("avatar:abdomen");
+      continue;
+    }
+
+    if (region === "waist" || region === "hip") {
+      covered.add("avatar:abdomen");
+      covered.add("avatar:pelvis");
+      const bodySides = side === "center" ? (["left", "right"] as const) : ([side] as const);
+      for (const bodySide of bodySides) {
+        if (bodySide !== "left" && bodySide !== "right") continue;
+        covered.add(`avatar:hip-${bodySide}`);
+        covered.add(`avatar:thigh-${bodySide}`);
+        if (panelLength >= thighLength * 0.82) covered.add(`avatar:knee-${bodySide}`);
+        if (panelLength >= thighLength * 1.55) covered.add(`avatar:calf-${bodySide}`);
+      }
+      continue;
+    }
+
+    if (region === "arm" && (side === "left" || side === "right")) {
+      covered.add(`avatar:shoulder-${side}`);
+      covered.add(`avatar:upper-arm-${side}`);
+      if (panelLength >= upperArmLength * 0.78) {
+        covered.add(`avatar:elbow-${side}`);
+        covered.add(`avatar:forearm-${side}`);
+      }
+      continue;
+    }
+
+    if (region === "leg" && (side === "left" || side === "right")) {
+      covered.add("avatar:pelvis");
+      covered.add(`avatar:hip-${side}`);
+      covered.add(`avatar:thigh-${side}`);
+      covered.add(`avatar:knee-${side}`);
+      covered.add(`avatar:calf-${side}`);
+    }
+  }
+
+  return covered;
 }
 
 function arrangeInstance(

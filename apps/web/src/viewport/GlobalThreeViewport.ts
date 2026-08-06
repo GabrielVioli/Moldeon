@@ -97,14 +97,14 @@ export class ThreeViewport {
     this.clearAvatar();
 
     const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
+    const arrangement = buildSemanticAvatarArrangement(snapshots, garment, avatar);
     const visual = createAvatarVisual(avatar, {
       radialSegments: this.profile.avatarRadialSegments,
       castShadow: this.profile.shadows,
       receiveShadow: this.profile.shadows,
+      hiddenPartNames: arrangement.coveredAvatarPartNames,
     });
     this.avatarGroup.add(visual);
-
-    const arrangement = buildSemanticAvatarArrangement(snapshots, garment, avatar);
     this.garmentMeshes = buildGarmentAssemblyMeshes(arrangement.state, arrangement.garment, {
       castShadow: this.profile.shadows,
       receiveShadow: this.profile.shadows,
@@ -117,6 +117,7 @@ export class ThreeViewport {
     this.host.dataset.avatarAnchorCount = String(avatar.anchors.length);
     this.host.dataset.collisionProxyCount = String(arrangement.collision.proxies.length);
     this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+    this.host.dataset.coveredAvatarPartCount = String(arrangement.coveredAvatarPartNames.size);
     this.host.dataset.arrangementDiagnosticCount = String(arrangement.diagnostics.length);
     this.host.dataset.arrangementErrorCount = String(arrangement.diagnostics.filter((item) => item.severity === "error").length);
     this.host.dataset.frameTarget = "avatar-and-garment";

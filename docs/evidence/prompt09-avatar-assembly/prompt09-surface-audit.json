@@ -1,0 +1,104 @@
+{
+  "baseUrl": "http://127.0.0.1:4180",
+  "physicalDeviceValidated": false,
+  "physicalDrapeClaimed": false,
+  "results": [
+    {
+      "label": "desktop-tshirt",
+      "template": "Camiseta básica",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "expectedInstances": 6,
+      "status": "passed",
+      "inspection": {
+        "dataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "6",
+          "coveredAvatarPartCount": "6",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "canvasBox": {
+          "width": 359.75,
+          "height": 365.515625
+        },
+        "bodyWidth": 1440,
+        "viewportWidth": 1440,
+        "forbiddenExploded": false,
+        "bodyToggle": false
+      },
+      "screenshot": "desktop-tshirt.png"
+    },
+    {
+      "label": "desktop-skirt",
+      "template": "Saia reta",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "expectedInstances": 4,
+      "status": "passed",
+      "inspection": {
+        "dataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "4",
+          "coveredAvatarPartCount": "10",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "canvasBox": {
+          "width": 359.75,
+          "height": 365.515625
+        },
+        "bodyWidth": 1440,
+        "viewportWidth": 1440,
+        "forbiddenExploded": false,
+        "bodyToggle": false
+      },
+      "screenshot": "desktop-skirt.png"
+    },
+    {
+      "label": "mobile-trousers",
+      "template": "Calça reta",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "expectedInstances": 4,
+      "mobile": true,
+      "status": "passed",
+      "inspection": {
+        "dataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "4",
+          "coveredAvatarPartCount": "9",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "canvasBox": {
+          "width": 389,
+          "height": 360
+        },
+        "bodyWidth": 390,
+        "viewportWidth": 390,
+        "forbiddenExploded": false,
+        "bodyToggle": false
+      },
+      "screenshot": "mobile-trousers.png"
+    }
+  ]
+}
