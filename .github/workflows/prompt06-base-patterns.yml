@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/prompt06-apply.py
+      - scripts/prompt06-followup.py
       - scripts/prompt06-audit.mjs
       - scripts/prompt06-progress.py
       - .github/workflows/prompt06-base-patterns.yml
@@ -31,7 +32,9 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - name: Apply implementation
-        run: python scripts/prompt06-apply.py
+        run: |
+          python scripts/prompt06-apply.py
+          python scripts/prompt06-followup.py
       - name: Install dependencies
         run: npm install
       - name: Check patch
@@ -74,7 +77,7 @@ jobs:
           git commit -m "docs: document prompt 6 pattern construction"
       - name: Remove temporary delivery automation
         run: |
-          git rm -f scripts/prompt06-apply.py scripts/prompt06-audit.mjs scripts/prompt06-progress.py scripts/prompt06-basePatternDrafting.part00.txt scripts/prompt06-basePatternDrafting.part01.txt scripts/prompt06-basePatternDrafting.part02.txt scripts/prompt06-basePatternDrafting.test.txt .github/workflows/prompt06-base-patterns.yml
+          git rm -f scripts/prompt06-apply.py scripts/prompt06-followup.py scripts/prompt06-audit.mjs scripts/prompt06-progress.py scripts/prompt06-basePatternDrafting.part00.txt scripts/prompt06-basePatternDrafting.part01.txt scripts/prompt06-basePatternDrafting.part02.txt scripts/prompt06-basePatternDrafting.test.txt .github/workflows/prompt06-base-patterns.yml
           git commit -m "chore: remove prompt 6 delivery automation"
           git push origin main
       - name: Upload audit artifact
