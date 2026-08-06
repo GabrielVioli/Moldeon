@@ -1,0 +1,301 @@
+import {
+  FormulaGraphEngine,
+  formulaQuantity,
+  parseFormula,
+  type FormulaDefinition,
+  type FormulaQuantity,
+} from "../domain/formulaEngine";
+import {
+  closeDart,
+  createDart,
+} from "../domain/patternOperations";
+import {
+  migrateLegacyPieceToSegments,
+  type BodyMeasurements,
+  type GarmentEase,
+  type PatternPiece,
+  type PatternPoint,
+  type PatternPreviewPlacement,
+  type SegmentRole,
+} from "../domain/pattern";
+import type {
+  BodyMeasurementKey,
+  ParametricConstructionGraphRecord,
+  ParametricVariableRecord,
+} from "../domain/parametricMeasurements";
+
+export type BasePatternTemplateId =
+  | "bodice-block"
+  | "tshirt"
+  | "blouse"
+  | "straight-skirt"
+  | "mini-skirt";
+
+export type PatternValidationStatus =
+  | "experimental"
+  | "geometrically-validated"
+  | "manually-reviewed";
+
+export interface BasePatternComponentStatus {
+  body: PatternValidationStatus;
+  sleeve?: PatternValidationStatus;
+}
+
+export interface BasePatternLimits {
+  minimumAreaMm2: number;
+  shoulderToleranceMm?: number;
+  sideSeamToleranceMm: number;
+  minimumCurveSeparationMm: number;
+}
+
+export interface BasePatternMetadata {
+  templateId: BasePatternTemplateId;
+  templateVersion: string;
+  constructionSystem: string;
+  validationStatus: PatternValidationStatus;
+  componentStatus: BasePatternComponentStatus;
+  requiredMeasurements: BodyMeasurementKey[];
+  estimatedMeasurements: BodyMeasurementKey[];
+  ease: GarmentEase;
+  limits: BasePatternLimits;
+  manualReview: boolean;
+  notes: string[];
+}
+
+export interface BasePatternDraft {
+  pieces: PatternPiece[];
+  variables: ParametricVariableRecord[];
+  constructionGraph: ParametricConstructionGraphRecord;
+  ease: GarmentEase;
+  metadata: BasePatternMetadata;
+}
+
+export interface BasePatternDraftOptions {
+  /** Test and future style control. Zero removes skirt dart intake. */
+  dartScale?: number;
+}
+
+interface UpperStyle {
+  bustEaseMm: number;
+  waistEaseMm: number;
+  hipEaseMm: number;
+  lowerExtensionMm: number;
+  frontNeckDepthMm: number;
+  backNeckDepthMm: number;
+  hemFactor: number;
+  sleeve: null | {
+    lengthRatio: number;
+    bicepEaseMm: number;
+    cuffEaseMm: number;
+    capHeightRatio: number;
+  };
+}
+
+interface SkirtStyle {
+  waistEaseMm: number;
+  hipEaseMm: number;
+  lengthRatio: number;
+  minimumLengthMm: number;
+  hemFactor: number;
+  frontHipShare: number;
+  frontWaistShare: number;
+}
+
+const UPPER_STYLE: Record<"bodice-block" | "tshirt" | "blouse", UpperStyle> = {
+  "bodice-block": {
+    bustEaseMm: 40,
+    waistEaseMm: 20,
+    hipEaseMm: 35,
+    lowerExtensionMm: 110,
+    frontNeckDepthMm: 72,
+    backNeckDepthMm: 24,
+    hemFactor: 1,
+    sleeve: null,
+  },
+  tshirt: {
+    bustEaseMm: 100,
+    waistEaseMm: 120,
+    hipEaseMm: 100,
+    lowerExtensionMm: 225,
+    frontNeckDepthMm: 88,
+    backNeckDepthMm: 28,
+    hemFactor: 1.01,
+    sleeve: {
+      lengthRatio: 0.28,
+      bicepEaseMm: 55,
+      cuffEaseMm: 80,
+      capHeightRatio: 0.58,
+    },
+  },
+  blouse: {
+    bustEaseMm: 160,
+    waistEaseMm: 180,
+    hipEaseMm: 160,
+    lowerExtensionMm: 285,
+    frontNeckDepthMm: 118,
+    backNeckDepthMm: 34,
+    hemFactor: 1.04,
+    sleeve: {
+      lengthRatio: 0.98,
+      bicepEaseMm: 95,
+      cuffEaseMm: 55,
+      capHeightRatio: 0.62,
+    },
+  },
+};
+
+const SKIRT_STYLE: Record<"straight-skirt" | "mini-skirt", SkirtStyle> = {
+  "straight-skirt": {
+    waistEaseMm: 20,
+    hipEaseMm: 45,
+    lengthRatio: 0.36,
+    minimumLengthMm: 500,
+    hemFactor: 0.98,
+    frontHipShare: 0.49,
+    frontWaistShare: 0.48,
+  },
+  "mini-skirt": {
+    waistEaseMm: 20,
+    hipEaseMm: 45,
+    lengthRatio: 0.245,
+    minimumLengthMm: 350,
+    hemFactor: 1.06,
+    frontHipShare: 0.49,
+    frontWaistShare: 0.48,
+  },
+};
+
+export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMetadata> = {
+  "bodice-block": metadata("bodice-block", "bodice-block@2", {
+    bustMm: 40,
+    waistMm: 20,
+    hipMm: 35,
+    sleeveMm: 0,
+  }, "geometrically-validated", { body: "geometrically-validated" }, [
+    "Base de referência para transformações posteriores, não um molde final de produção.",
+    "Revisão em toile e ajuste manual ainda não foram registrados.",
+  ]),
+  tshirt: metadata("tshirt", "tshirt@2", {
+    bustMm: 100,
+    waistMm: 120,
+    hipMm: 100,
+    sleeveMm: 55,
+  }, "experimental", {
+    body: "geometrically-validated",
+    sleeve: "experimental",
+  }, [
+    "Corpo reconstruído a partir da base superior versionada.",
+    "A manga preserva conectores e piques, mas permanece experimental até a etapa própria de mangas.",
+  ]),
+  blouse: metadata("blouse", "blouse@2", {
+    bustMm: 160,
+    waistMm: 180,
+    hipMm: 160,
+    sleeveMm: 95,
+  }, "experimental", {
+    body: "geometrically-validated",
+    sleeve: "experimental",
+  }, [
+    "Regra estética de decote e comprimento é separada das fórmulas estruturais.",
+    "A manga longa permanece experimental até comparação manual de cava e cabeça de manga.",
+  ]),
+  "straight-skirt": metadata("straight-skirt", "straight-skirt@2", {
+    bustMm: 0,
+    waistMm: 20,
+    hipMm: 45,
+    sleeveMm: 0,
+  }, "geometrically-validated", { body: "geometrically-validated" }, [
+    "Pences frontal e traseira participam da largura aberta da cintura.",
+    "Abertura traseira futura está documentada, mas não é gerada nesta versão.",
+  ]),
+  "mini-skirt": metadata("mini-skirt", "mini-skirt@2", {
+    bustMm: 0,
+    waistMm: 20,
+    hipMm: 45,
+    sleeveMm: 0,
+  }, "geometrically-validated", { body: "geometrically-validated" }, [
+    "Comprimento e abertura de barra são regras estéticas versionadas.",
+    "Revisão manual em toile ainda não foi registrada.",
+  ]),
+};
+
+export function isBasePatternTemplateId(value: string): value is BasePatternTemplateId {
+  return value in BASE_PATTERN_METADATA;
+}
+
+export function draftBasePattern(
+  templateId: BasePatternTemplateId,
+  measurements: BodyMeasurements,
+  options: BasePatternDraftOptions = {},
+): BasePatternDraft {
+  if (templateId === "straight-skirt" || templateId === "mini-skirt") {
+    return draftSkirt(templateId, measurements, options);
+  }
+  return draftUpper(templateId, measurements);
+}
+
+function draftUpper(
+  templateId: "bodice-block" | "tshirt" | "blouse",
+  measurements: BodyMeasurements,
+): BasePatternDraft {
+  const metadataValue = BASE_PATTERN_METADATA[templateId];
+  const style = UPPER_STYLE[templateId];
+  const definitions = upperDefinitions(style);
+  const inputs = measurementInputs(measurements);
+  const values = evaluateDefinitions(definitions, inputs);
+  const pieces = [
+    createUpperPiece(`${templateId}-front`, "Frente", "front", values),
+    createUpperPiece(`${templateId}-back`, "Costas", "back", values),
+  ];
+  if (style.sleeve) {
+    const sleeveDefinitions = createSleeveDefinitions(style.sleeve);
+    const sleeveInputs = measurementInputs(measurements);
+    const sleeveValues = evaluateDefinitions(sleeveDefinitions, sleeveInputs);
+    pieces.push(createSleevePiece(`${templateId}-sleeve`, sleeveValues));
+    definitions.push(...sleeveDefinitions);
+  }
+  return {
+    pieces,
+    variables: formulaVariables(definitions, metadataValue.templateVersion),
+    constructionGraph: constructionGraph(definitions),
+    ease: metadataValue.ease,
+    metadata: metadataValue,
+  };
+}
+
+function draftSkirt(
+  templateId: "straight-skirt" | "mini-skirt",
+  measurements: BodyMeasurements,
+  options: BasePatternDraftOptions,
+): BasePatternDraft {
+  const metadataValue = BASE_PATTERN_METADATA[templateId];
+  const style = SKIRT_STYLE[templateId];
+  const definitions = skirtDefinitions(style, options.dartScale ?? 1);
+  const inputs = measurementInputs(measurements);
+  const values = evaluateDefinitions(definitions, inputs);
+  return {
+    pieces: [
+      createSkirtPiece(`${templateId}-front`, "Frente", "front", values),
+      createSkirtPiece(`${templateId}-back`, "Costas", "back", values),
+    ],
+    variables: formulaVariables(definitions, metadataValue.templateVersion),
+    constructionGraph: constructionGraph(definitions),
+    ease: metadataValue.ease,
+    metadata: metadataValue,
+  };
+}
+
+function upperDefinitions(style: UpperStyle): FormulaDefinition[] {
+  return [
+    formula("bustEaseMm", `${style.bustEaseMm}mm`, "mm"),
+    formula("waistEaseMm", `${style.waistEaseMm}mm`, "mm"),
+    formula("hipEaseMm", `${style.hipEaseMm}mm`, "mm"),
+    formula("lowerExtensionMm", `${style.lowerExtensionMm}mm`, "mm"),
+    formula("frontNeckDepthStyleMm", `${style.frontNeckDepthMm}mm`, "mm"),
+    formula("backNeckDepthStyleMm", `${style.backNeckDepthMm}mm`, "mm"),
+    formula("hemFactor", `${style.hemFactor}`, "ratio"),
+    formula("frontShare", "clamp(frontWidthMm / (frontWidthMm + backWidthMm), 0.46, 0.54)", "ratio"),
+    formula("frontWaistShare", "clamp(frontShare + 0.01, 0.47, 0.55)", "ratio"),
+    formula("frontHipShare", "clamp(frontShare + 0.005, 0.47, 0.54)", "ratio"),
+    formula("halfBustWithEase", "(bustMm + bustEaseMm) / 2", "mm"),
+    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),
