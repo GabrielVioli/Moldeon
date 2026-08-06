@@ -2323,3 +2323,66 @@ button {
     height: 100%;
   }
 }
+
+
+/* Prompt 10 XPBD Worker controls */
+.simulation-toolbar {
+  position: absolute;
+  z-index: 8;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(42px, calc(env(safe-area-inset-bottom) + 10px));
+  display: grid;
+  gap: 6px;
+  max-width: min(360px, calc(100% - 20px));
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 10px;
+  background: rgb(18 20 24 / 78%);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.simulation-toolbar[hidden] {
+  display: none;
+}
+
+.simulation-status-label {
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.simulation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.simulation-actions button {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 12%);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.simulation-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 760px) {
+  .simulation-toolbar {
+    right: max(10px, env(safe-area-inset-right));
+    max-width: none;
+  }
+
+  .simulation-actions button {
+    min-height: 44px;
+    flex: 1 1 0;
+  }
+}

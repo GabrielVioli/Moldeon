@@ -6,8 +6,12 @@ import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
 import {
   buildGarmentAssemblyMeshes,
+  refreshMeshFromAssembly,
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
+import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
+import { buildClothSimulationInput } from "../garment3d/ClothSimulationInput";
+import { ClothWorkerBridge } from "../physics/ClothWorkerBridge";
 import { createAvatarVisual } from "./AvatarVisual";
 
 export type RenderBackend = "webgpu" | "webgl2";
@@ -30,6 +34,15 @@ export class ThreeViewport {
   private readonly profile: PerformanceProfile;
   private readonly renderer: ViewportRenderer;
   private garmentMeshes: GarmentAssemblyMeshData[] = [];
+  private garmentState: GarmentAssemblyState | null = null;
+  private clothWorker: ClothWorkerBridge | null = null;
+  private simulationRequested = false;
+  private simulationRunning = false;
+  private readonly simulationToolbar: HTMLDivElement;
+  private readonly simulationStatusLabel: HTMLSpanElement;
+  private readonly simulationToggleButton: HTMLButtonElement;
+  private readonly simulationStepButton: HTMLButtonElement;
+  private readonly simulationResetButton: HTMLButtonElement;
   private frameId: number | null = null;
   private lastFrameAt = 0;
   private disposed = false;
@@ -49,6 +62,18 @@ export class ThreeViewport {
     this.renderer.shadowMap.enabled = profile.shadows;
     this.renderer.domElement.className = "three-canvas";
     this.host.appendChild(this.renderer.domElement);
+
+    const simulationControls = createSimulationControls();
+    this.simulationToolbar = simulationControls.root;
+    this.simulationStatusLabel = simulationControls.status;
+    this.simulationToggleButton = simulationControls.toggle;
+    this.simulationStepButton = simulationControls.step;
+    this.simulationResetButton = simulationControls.reset;
+    this.simulationToggleButton.addEventListener("click", this.handleSimulationToggle);
+    this.simulationStepButton.addEventListener("click", this.handleSimulationStep);
+    this.simulationResetButton.addEventListener("click", this.handleSimulationReset);
+    this.host.appendChild(this.simulationToolbar);
+    this.setSimulationStatus("unavailable", "Carregue uma peça para iniciar a física.");
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 0.95, 0);
@@ -108,6 +133,7 @@ export class ThreeViewport {
       visibleInstanceIds: arrangement.visibleInstanceIds,
     });
     for (const item of this.garmentMeshes) this.garmentGroup.add(item.mesh);
+    this.attachClothWorker(arrangement.state, arrangement.garment);
 
     this.frameDressedScene();
     this.host.dataset.avatarVisible = "true";
@@ -127,7 +153,31 @@ export class ThreeViewport {
   }
 
   dress(): void {
+    this.resumeSimulation();
     this.refresh();
+  }
+
+  resumeSimulation(): void {
+    this.simulationRequested = true;
+    this.clothWorker?.start();
+  }
+
+  pauseSimulation(): void {
+    this.simulationRequested = false;
+    this.clothWorker?.pause();
+  }
+
+  stepSimulation(): void {
+    this.simulationRequested = false;
+    this.clothWorker?.pause();
+    this.clothWorker?.step();
+  }
+
+  resetSimulation(): void {
+    this.simulationRequested = false;
+    this.clothWorker?.pause();
+    this.clothWorker?.reset();
+    this.setSimulationStatus("paused", "Estado inicial restaurado.");
   }
 
   refresh(): void {
@@ -149,14 +199,116 @@ export class ThreeViewport {
     }
     this.controls.removeEventListener("change", this.requestRender);
     this.controls.dispose();
+    this.simulationRequested = false;
+    this.simulationToggleButton.removeEventListener("click", this.handleSimulationToggle);
+    this.simulationStepButton.removeEventListener("click", this.handleSimulationStep);
+    this.simulationResetButton.removeEventListener("click", this.handleSimulationReset);
     this.clearGarment();
     this.clearAvatar();
     this.scene.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.simulationToolbar.remove();
     delete this.host.dataset.avatarVisible;
     delete this.host.dataset.garmentInstanceCount;
+    delete this.host.dataset.simulationBackend;
+    delete this.host.dataset.simulationStatus;
+    delete this.host.dataset.simulationFrame;
+    delete this.host.dataset.simulationElapsed;
+    delete this.host.dataset.simulationUnstable;
+    delete this.host.dataset.simulationError;
   }
+
+  private attachClothWorker(state: GarmentAssemblyState, garment: GarmentDraft): void {
+    this.garmentState = state;
+    if (state.invalid || state.positions.length === 0 || this.garmentMeshes.length === 0) {
+      this.setSimulationStatus("unavailable", "A montagem não possui uma malha física válida.");
+      return;
+    }
+
+    try {
+      this.host.dataset.simulationBackend = "worker-xpbd";
+      this.host.dataset.simulationFrame = "0";
+      this.host.dataset.simulationElapsed = "0";
+      this.setSimulationStatus("initializing", "Preparando XPBD no Worker…");
+      const activeState = state;
+      this.clothWorker = new ClothWorkerBridge(
+        buildClothSimulationInput(state, garment),
+        {
+          onFrame: (positions, report, frame) => {
+            if (this.disposed || this.garmentState !== activeState) return;
+            if (positions.length !== activeState.positions.length) {
+              this.setSimulationStatus("error", "O Worker devolveu uma malha incompatível.");
+              return;
+            }
+            activeState.positions.set(positions);
+            for (const item of this.garmentMeshes) refreshMeshFromAssembly(item, activeState);
+            this.host.dataset.simulationFrame = String(frame);
+            this.host.dataset.simulationElapsed = report.elapsedSeconds.toFixed(3);
+            this.host.dataset.simulationMaximumSpeed = report.maximumSpeed.toFixed(4);
+            this.host.dataset.simulationMaximumCorrection = report.maximumCorrection.toFixed(5);
+            if (!report.unstable) this.host.dataset.simulationUnstable = "false";
+            this.requestRender();
+          },
+          onStatus: (status) => {
+            if (status === "disposed") return;
+            if (status === "running") this.setSimulationStatus("running", "XPBD em execução no Worker.");
+            else if (status === "paused" && this.host.dataset.simulationUnstable !== "true") {
+              this.setSimulationStatus("paused", "Simulação pausada.");
+            }
+          },
+          onUnstable: (report) => {
+            this.host.dataset.simulationUnstable = "true";
+            this.setSimulationStatus(
+              "unstable",
+              `Instabilidade contida após ${report.elapsedSeconds.toFixed(2)} s; a última malha estável foi preservada.`,
+            );
+          },
+          onError: (message) => {
+            this.host.dataset.simulationError = message;
+            this.setSimulationStatus("error", message);
+          },
+        },
+      );
+      if (this.simulationRequested) this.clothWorker.start();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.host.dataset.simulationError = message;
+      this.setSimulationStatus("error", message);
+    }
+  }
+
+  private setSimulationStatus(
+    status: "unavailable" | "initializing" | "running" | "paused" | "unstable" | "error",
+    detail: string,
+  ): void {
+    this.host.dataset.simulationStatus = status;
+    this.simulationRunning = status === "running";
+    this.simulationToolbar.hidden = status === "unavailable";
+    this.simulationStatusLabel.textContent = detail;
+    this.simulationToggleButton.textContent = this.simulationRunning ? "Pausar" : "Continuar";
+    const unavailable = status === "unavailable" || status === "initializing" || status === "error";
+    this.simulationToggleButton.disabled = unavailable;
+    this.simulationStepButton.disabled = unavailable || this.simulationRunning;
+    this.simulationResetButton.disabled = status === "unavailable" || status === "initializing";
+    if (status === "running" || status === "paused") {
+      this.host.dataset.simulationUnstable = "false";
+      delete this.host.dataset.simulationError;
+    }
+  }
+
+  private readonly handleSimulationToggle = (): void => {
+    if (this.simulationRunning) this.pauseSimulation();
+    else this.resumeSimulation();
+  };
+
+  private readonly handleSimulationStep = (): void => {
+    this.stepSimulation();
+  };
+
+  private readonly handleSimulationReset = (): void => {
+    this.resetSimulation();
+  };
 
   private frameDressedScene(): void {
     this.avatarGroup.updateMatrixWorld(true);
@@ -182,6 +334,17 @@ export class ThreeViewport {
   }
 
   private clearGarment(): void {
+    this.clothWorker?.dispose();
+    this.clothWorker = null;
+    this.garmentState = null;
+    this.setSimulationStatus("unavailable", "Carregue uma peça para iniciar a física.");
+    delete this.host.dataset.simulationBackend;
+    delete this.host.dataset.simulationFrame;
+    delete this.host.dataset.simulationElapsed;
+    delete this.host.dataset.simulationMaximumSpeed;
+    delete this.host.dataset.simulationMaximumCorrection;
+    delete this.host.dataset.simulationUnstable;
+    delete this.host.dataset.simulationError;
     for (const item of this.garmentMeshes) {
       this.garmentGroup.remove(item.mesh);
       item.mesh.geometry.dispose();
@@ -218,6 +381,39 @@ export class ThreeViewport {
     this.controls.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   };
+}
+
+interface SimulationControls {
+  root: HTMLDivElement;
+  status: HTMLSpanElement;
+  toggle: HTMLButtonElement;
+  step: HTMLButtonElement;
+  reset: HTMLButtonElement;
+}
+
+function createSimulationControls(): SimulationControls {
+  const root = document.createElement("div");
+  root.className = "simulation-toolbar";
+  root.setAttribute("aria-label", "Controles da simulação física");
+
+  const status = document.createElement("span");
+  status.className = "simulation-status-label";
+  status.setAttribute("aria-live", "polite");
+
+  const actions = document.createElement("div");
+  actions.className = "simulation-actions";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.textContent = "Continuar";
+  const step = document.createElement("button");
+  step.type = "button";
+  step.textContent = "Passo";
+  const reset = document.createElement("button");
+  reset.type = "button";
+  reset.textContent = "Reiniciar";
+  actions.append(toggle, step, reset);
+  root.append(status, actions);
+  return { root, status, toggle, step, reset };
 }
 
 async function createRenderer(
