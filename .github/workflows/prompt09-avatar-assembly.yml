@@ -1,0 +1,129 @@
+name: Prompt 9 Avatar Assembly
+
+on:
+  push:
+    paths:
+      - scripts/prompt09-apply.py
+      - scripts/prompt09-tests.py
+      - scripts/prompt09-followup.py
+      - scripts/prompt09-test-alignment.py
+      - scripts/prompt09-mobile-layout.py
+      - scripts/prompt09-browser-audit.mjs
+      - scripts/prompt09-docs.py
+      - .github/workflows/prompt09-avatar-assembly.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prompt09-avatar-main
+  cancel-in-progress: true
+
+jobs:
+  validate-audit-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROMPT09_ARTIFACT_DIR: artifacts/prompt09-avatar-assembly
+      PROMPT09_BASE_URL: http://127.0.0.1:4179
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply Prompt 9 implementation and tests
+        run: |
+          python scripts/prompt09-apply.py
+          python scripts/prompt09-tests.py
+          python scripts/prompt09-followup.py
+          python scripts/prompt09-test-alignment.py
+          python scripts/prompt09-mobile-layout.py
+      - name: Install dependencies
+        run: npm install
+      - name: Check patch
+        run: git diff --check
+      - name: Enforce dressed-avatar source policy
+        run: |
+          if grep -R -n -E 'showBody|setBodyVisible|setExploded|Explodida' \
+            apps/web/src/App.tsx \
+            apps/web/src/viewport/GarmentViewport.tsx \
+            apps/web/src/viewport/GlobalThreeViewport.ts; then
+            echo "Forbidden public 3D mode remains"
+            exit 1
+          fi
+          if grep -n -E 'wrapAsTube|placementBasePosition|toLocaleLowerCase' apps/web/src/garment3d/GarmentAssembly.ts; then
+            echo "Forbidden generic placement path remains"
+            exit 1
+          fi
+          test ! -e apps/web/src/viewport/ThreeViewport.ts
+          test ! -e apps/web/src/viewport/ThreeViewport.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run immutable frontend suite
+        run: npm test
+      - name: Build fallback application
+        run: npm run build
+      - name: Install browser controller
+        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+      - name: Audit dressed avatar on desktop and mobile
+        run: |
+          mkdir -p "$PROMPT09_ARTIFACT_DIR"
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
+          ) > "$PROMPT09_ARTIFACT_DIR/server.log" 2>&1 &
+          SERVER_PID=$!
+          cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$PROMPT09_BASE_URL" >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat "$PROMPT09_ARTIFACT_DIR/server.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          curl --silent --fail "$PROMPT09_BASE_URL" >/dev/null
+          node scripts/prompt09-browser-audit.mjs
+          cleanup
+          trap - EXIT
+      - name: Commit implementation and visual evidence
+        run: |
+          mkdir -p docs/evidence/prompt09-avatar-assembly
+          cp -f artifacts/prompt09-avatar-assembly/* docs/evidence/prompt09-avatar-assembly/
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add -A apps/web/src docs/evidence/prompt09-avatar-assembly
+          git commit -m "feat: dress garments on semantic human avatar"
+      - name: Document avatar architecture and limitations
+        run: |
+          python scripts/prompt09-docs.py
+          git add README.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/AVATAR_ARRANGEMENT.md docs/progress/PROMPT_09_AVATAR_ASSEMBLY.md
+          git commit -m "docs: document semantic avatar arrangement"
+      - name: Remove delivery automation and push
+        run: |
+          git rm -f \
+            scripts/prompt09-apply.py \
+            scripts/prompt09-tests.py \
+            scripts/prompt09-followup.py \
+            scripts/prompt09-test-alignment.py \
+            scripts/prompt09-mobile-layout.py \
+            scripts/prompt09-browser-audit.mjs \
+            scripts/prompt09-docs.py \
+            .github/workflows/prompt09-avatar-assembly.yml
+          git commit -m "chore: remove prompt 9 delivery automation"
+          git push origin main
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt09-avatar-assembly-${{ github.sha }}
+          path: artifacts/prompt09-avatar-assembly
+          retention-days: 21
+          if-no-files-found: warn
