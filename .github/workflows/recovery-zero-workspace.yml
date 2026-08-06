@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-22.04
+    runs-on: macos-15
     timeout-minutes: 35
     env:
       RECOVERY_BASE_URL: http://127.0.0.1:4179
@@ -56,8 +56,11 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Install browser controller
-        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+      - name: Install browser controller and Chromium
+        shell: bash
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
 
       - name: Start recovery application
         shell: bash
@@ -80,6 +83,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          export CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")"
           node scripts/recovery-empty-workspace-visual.mjs | tee "$RECOVERY_ARTIFACT_DIR/audit.json"
 
       - name: Stop recovery application
