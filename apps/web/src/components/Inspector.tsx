@@ -42,6 +42,8 @@ export const Inspector = memo(function Inspector({
   const selectSeam = useEditorStore((state) => state.selectSeam);
   const setBodyType = useEditorStore((state) => state.setBodyType);
   const setBodyMeasurement = useEditorStore((state) => state.setBodyMeasurement);
+  const resetBodyMeasurement = useEditorStore((state) => state.resetBodyMeasurement);
+  const setBodyMeasurementFormula = useEditorStore((state) => state.setBodyMeasurementFormula);
   const activePieceId = useEditorStore((state) => state.activePieceId);
   const pieceSelectionActive = useEditorStore((state) => state.pieceSelectionActive);
   const setWorkspaceTransform = useEditorStore((state) => state.setPieceWorkspaceTransform);
@@ -127,8 +129,11 @@ export const Inspector = memo(function Inspector({
             compact
             bodyType={garment.bodyType}
             measurements={garment.measurements}
+            measurementProfile={garment.measurementProfile}
             onBodyTypeChange={setBodyType}
             onMeasurementChange={setBodyMeasurement}
+            onResetMeasurement={resetBodyMeasurement}
+            onFormulaChange={setBodyMeasurementFormula}
             onEditStart={() => onEditStart("Alterar medidas")}
             onEditEnd={onEditEnd}
             onEditCancel={onEditCancel}

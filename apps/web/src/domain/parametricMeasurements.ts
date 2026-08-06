@@ -212,6 +212,17 @@ const FORMULAS_BY_BODY: Record<BodyType, readonly DefaultFormula[]> = {
   ],
 };
 
+export function createDefaultMeasurementProfile(bodyType: BodyType): MeasurementProfile {
+  const measurements: BodyMeasurements = bodyType === "feminine"
+    ? { heightMm: 1680, bustMm: 920, waistMm: 760, hipMm: 1000, shoulderWidthMm: 400, torsoLengthMm: 440, armLengthMm: 590, inseamMm: 780 }
+    : { heightMm: 1780, bustMm: 1000, waistMm: 850, hipMm: 980, shoulderWidthMm: 460, torsoLengthMm: 475, armLengthMm: 630, inseamMm: 830 };
+  let profile = createMeasurementProfile(measurements, bodyType);
+  for (const key of ["shoulderWidthMm", "torsoLengthMm", "armLengthMm", "inseamMm"] as const) {
+    profile = resetMeasurementOverride(profile, key).profile;
+  }
+  return profile;
+}
+
 export function createMeasurementProfile(
   measurements: BodyMeasurements,
   bodyType: BodyType,
@@ -499,9 +510,14 @@ export function parseMeasurementProfile(value: unknown): MeasurementProfile {
   if (value.bodyType !== "feminine" && value.bodyType !== "masculine") {
     throw new TypeError("O tipo corporal do perfil de medidas é inválido.");
   }
-  if (!Array.isArray(value.entries)) throw new TypeError("As entradas do perfil de medidas são inválidas.");
+  const rawEntries = Array.isArray(value.entries)
+    ? value.entries
+    : isRecord(value.entries)
+      ? Object.values(value.entries)
+      : undefined;
+  if (!rawEntries) throw new TypeError("As entradas do perfil de medidas são inválidas.");
   const entries: MeasurementProfile["entries"] = {};
-  for (const candidate of value.entries) {
+  for (const candidate of rawEntries) {
     if (!isRecord(candidate) || typeof candidate.key !== "string") throw new TypeError("Uma entrada de medida é inválida.");
     const catalog = CATALOG_BY_KEY.get(candidate.key as BodyMeasurementKey);
     if (!catalog) throw new TypeError(`A medida ${candidate.key} não é reconhecida.`);

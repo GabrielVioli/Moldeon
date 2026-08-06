@@ -11,6 +11,14 @@ import { migrateLegacyPieceToSegments } from "../domain/pattern";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { inferAssemblyPlacement } from "../domain/assembly";
 import { closeDart, createDart } from "../domain/patternOperations";
+import { createInitialConstructionGraph } from "../domain/constructionGraph";
+import {
+  BODY_MEASUREMENT_CATALOG,
+  createMeasurementProfile,
+  measurementProfileSnapshot,
+  measurementProfileToBodyMeasurements,
+  type MeasurementProfile,
+} from "../domain/parametricMeasurements";
 
 export type PatternTemplateId =
   | "tshirt"
@@ -29,6 +37,7 @@ export interface PatternTemplateSummary {
   status: "ready" | "development";
   requiredMeasurements: string[];
   estimatedMeasurements: string[];
+  formulaVersion: string;
 }
 
 export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
@@ -40,6 +49,15 @@ export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
   torsoLengthMm: 440,
   armLengthMm: 590,
   inseamMm: 780,
+};
+
+export const TEMPLATE_FORMULA_VERSIONS: Record<PatternTemplateId, string> = {
+  tshirt: "tshirt@1",
+  blouse: "blouse@1",
+  "straight-skirt": "straight-skirt@1",
+  "mini-skirt": "mini-skirt@1",
+  "straight-pants": "straight-pants@1",
+  "basic-jacket": "basic-jacket@1",
 };
 
 export const DEFAULT_MASCULINE_BODY_MEASUREMENTS: BodyMeasurements = {
@@ -61,6 +79,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Corpo com folga confortável e manga curta.",
     pieces: "Frente, costas e manga",
     status: "ready",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["tshirt"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps"],
   },
@@ -71,6 +90,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base solta, decote mais aberto e manga longa.",
     pieces: "Frente, costas e manga",
     status: "ready",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["blouse"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco", "braço"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps", "punho"],
   },
@@ -81,6 +101,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base simples da cintura ao joelho.",
     pieces: "Frente e costas",
     status: "ready",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-skirt"],
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
@@ -91,6 +112,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base curta com leve abertura na barra.",
     pieces: "Frente e costas",
     status: "ready",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["mini-skirt"],
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
@@ -101,6 +123,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Perna reta e gancho simplificado para edição.",
     pieces: "Frente e costas",
     status: "ready",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-pants"],
     requiredMeasurements: ["cintura", "quadril", "altura", "entrepernas"],
     estimatedMeasurements: ["gancho", "coxa", "joelho", "barra"],
   },
@@ -111,6 +134,7 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Modelagem própria de casaco ainda em validação.",
     pieces: "Em desenvolvimento",
     status: "development",
+    formulaVersion: TEMPLATE_FORMULA_VERSIONS["basic-jacket"],
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "braço"],
     estimatedMeasurements: ["pescoço", "cava", "folga estrutural"],
   },
@@ -120,8 +144,10 @@ export function createGarmentFromTemplate(
   templateId: PatternTemplateId,
   inputMeasurements: BodyMeasurements,
   bodyType: BodyType = "feminine",
+  inputProfile?: MeasurementProfile,
 ): GarmentDraft {
-  const measurements = validateMeasurements(inputMeasurements);
+  const profile = createMeasurementProfile(inputMeasurements, bodyType, inputProfile);
+  const measurements = validateMeasurements(measurementProfileToBodyMeasurements(profile));
   const generator = GENERATORS[templateId];
   const summary = PATTERN_TEMPLATES.find((template) => template.id === templateId);
   if (!summary) throw new RangeError("Molde-base desconhecido.");
@@ -132,6 +158,8 @@ export function createGarmentFromTemplate(
     ...piece,
     fabricId: fabric.id,
   }));
+  const snapshot = measurementProfileSnapshot(profile);
+  const templateVersion = TEMPLATE_FORMULA_VERSIONS[templateId];
   return {
     id: `${templateId}-${Date.now().toString(36)}`,
     templateId,
@@ -139,6 +167,25 @@ export function createGarmentFromTemplate(
     description: summary.description,
     bodyType,
     measurements: { ...measurements },
+    measurementProfile: profile,
+    parametric: {
+      schemaVersion: 1,
+      templateId,
+      templateVersion,
+      variables: [],
+      constructionGraph: createInitialConstructionGraph(BODY_MEASUREMENT_CATALOG.map((entry) => entry.key)),
+      generations: pieces.map((piece) => ({
+        patternId: piece.id,
+        templateId,
+        templateVersion,
+        engineVersion: 1,
+        measurementSetId: "measurements-primary",
+        formulaSetVersion: profile.formulaSetVersion,
+        measurementValues: snapshot.values,
+        measurementOrigins: snapshot.origins,
+        defaultValues: snapshot.defaults,
+      })),
+    },
     fabrics: [fabric],
     pieces,
     assemblyPlacements: pieces.map((piece, index) => ({ ...inferAssemblyPlacement(piece, index), source: "template" })),
@@ -654,7 +701,7 @@ function placement(
 function validateMeasurements(
   measurements: BodyMeasurements,
 ): BodyMeasurements {
-  const ranges: Record<keyof BodyMeasurements, readonly [number, number]> = {
+  const ranges: Partial<Record<keyof BodyMeasurements, readonly [number, number]>> = {
     heightMm: [1300, 2100],
     bustMm: [600, 1600],
     waistMm: [500, 1500],
@@ -672,11 +719,17 @@ function validateMeasurements(
     keyof BodyMeasurements,
     number,
   ][]) {
-    const [minimum, maximum] = ranges[key];
-    if (!Number.isFinite(value) || value < minimum || value > maximum) {
-      throw new RangeError(
-        `A medida ${key} precisa ficar entre ${minimum} e ${maximum} mm.`,
-      );
+    const range = ranges[key];
+    if (!Number.isFinite(value) || value < 0) {
+      throw new RangeError(`A medida ${key} precisa ser finita e não negativa.`);
+    }
+    if (range) {
+      const [minimum, maximum] = range;
+      if (value < minimum || value > maximum) {
+        throw new RangeError(
+          `A medida ${key} precisa ficar entre ${minimum} e ${maximum} mm.`,
+        );
+      }
     }
   }
   return { ...measurements };

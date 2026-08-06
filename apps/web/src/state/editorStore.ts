@@ -44,6 +44,15 @@ import {
 import { convertPatternSegment, movePatternSegment, splitPatternSegment } from "../domain/segmentEditing";
 import { updateDart as updatePatternDart } from "../domain/patternOperations";
 import {
+  changeMeasurementBodyType,
+  createMeasurementProfile,
+  overrideMeasurement,
+  resetMeasurementOverride,
+  updateMeasurementFormula,
+  type BodyMeasurementKey,
+  type MeasurementFormulaUpdateResult,
+} from "../domain/parametricMeasurements";
+import {
   DocumentCommandHistory,
   type DocumentCommandType,
   type EditorDocumentState,
@@ -126,7 +135,9 @@ export interface EditorState {
   moveGuide(guideId: string, positionMm: number): void;
   removeGuide(guideId: string): void;
   setBodyType(bodyType: BodyType): void;
-  setBodyMeasurement(measurement: keyof BodyMeasurements, valueMm: number): void;
+  setBodyMeasurement(measurement: BodyMeasurementKey, value: number): void;
+  resetBodyMeasurement(measurement: BodyMeasurementKey): void;
+  setBodyMeasurementFormula(measurement: BodyMeasurementKey, expression: string): MeasurementFormulaUpdateResult;
   addFabric(presetId: FabricPresetId): string;
   updateFabric(fabricId: string, update: Partial<FabricSource>): void;
   applyFabricPreset(fabricId: string, presetId: FabricPresetId): void;
@@ -478,19 +489,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     (piece) => ({ ...piece, guides: (piece.guides ?? []).filter((guide) => guide.id !== guideId) }),
   ),
 
-  setBodyType: (bodyType) => changeDocument(set, get, "metadata", "Alterar corpo", (document) => ({
-    ...document,
-    garment: { ...document.garment, bodyType },
-  })),
-  setBodyMeasurement: (measurement, valueMm) => {
-    if (!Number.isFinite(valueMm) || valueMm <= 0) return;
+  setBodyType: (bodyType) => changeDocument(set, get, "metadata", "Alterar corpo", (document) => {
+    const current = createMeasurementProfile(document.garment.measurements, document.garment.bodyType, document.garment.measurementProfile);
+    const profile = changeMeasurementBodyType(current, bodyType);
+    return {
+      ...document,
+      garment: {
+        ...document.garment,
+        bodyType,
+        measurementProfile: profile,
+        measurements: Object.fromEntries(Object.entries(profile.entries).map(([key, entry]) => [key, entry?.value])) as unknown as BodyMeasurements,
+      },
+    };
+  }),
+  setBodyMeasurement: (measurement, value) => {
+    const garment = get().garment;
+    const profile = createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile);
+    const result = overrideMeasurement(profile, measurement, value);
+    if (!result.accepted) return;
     changeDocument(set, get, "measurement", "Alterar medida corporal", (document) => ({
       ...document,
       garment: {
         ...document.garment,
-        measurements: { ...document.garment.measurements, [measurement]: valueMm },
+        measurements: result.measurements,
+        measurementProfile: result.profile,
       },
     }));
+  },
+  resetBodyMeasurement: (measurement) => {
+    const garment = get().garment;
+    const profile = createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile);
+    const result = resetMeasurementOverride(profile, measurement);
+    if (!result.accepted) return;
+    changeDocument(set, get, "measurement", "Restaurar medida estimada", (document) => ({
+      ...document,
+      garment: { ...document.garment, measurements: result.measurements, measurementProfile: result.profile },
+    }));
+  },
+  setBodyMeasurementFormula: (measurement, expression) => {
+    const garment = get().garment;
+    const profile = createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile);
+    const result = updateMeasurementFormula(profile, measurement, expression);
+    if (!result.accepted) return result;
+    changeDocument(set, get, "measurement", "Alterar fórmula de medida", (document) => ({
+      ...document,
+      garment: { ...document.garment, measurements: result.measurements, measurementProfile: result.profile },
+    }));
+    return result;
   },
 
   addFabric: (presetId) => {

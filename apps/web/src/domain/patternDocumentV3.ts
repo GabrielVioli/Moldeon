@@ -1,5 +1,14 @@
 import { parseFabricSources } from "./fabric";
 import {
+  createMeasurementProfile,
+  measurementProfileToBodyMeasurements,
+  parseMeasurementProfile,
+  parseParametricProjectMetadata,
+  type MeasurementOrigin,
+  type ParametricProjectMetadata,
+  type PatternGenerationRecord,
+} from "./parametricMeasurements";
+import {
   migrateLegacyPieceToSegments,
   parseGarmentDraft,
   parsePatternPiece,
@@ -101,6 +110,10 @@ const CONSTRUCTION_NODE_KINDS = [
   "variable",
   "free-point",
   "computed-point",
+  "line",
+  "arc",
+  "curve",
+  "transform",
   "operation",
 ] as const;
 
@@ -269,6 +282,12 @@ export function garmentDraftToPatternDocumentV3(
     options.activePatternId,
     patternDefinitions,
   );
+  const profile = garment.measurementProfile
+    ? createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile)
+    : undefined;
+  const measurementEntries = profile
+    ? Object.values(profile.entries).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    : [];
 
   return parsePatternDocumentV3({
     formatVersion: PATTERN_DOCUMENT_FORMAT_VERSION,
@@ -277,16 +296,25 @@ export function garmentDraftToPatternDocumentV3(
       name: garment.name,
       description: garment.description,
       sourceTemplateId: garment.templateId,
+      ...(garment.parametric?.templateVersion ? { sourceTemplateVersion: garment.parametric.templateVersion } : {}),
       application: { name: "Moldeon" },
     },
     units: PATTERN_DOCUMENT_UNITS,
     measurements: {
       id: "measurements-primary",
-      values: garment.measurements,
-      estimatedKeys: [],
+      values: profile ? measurementProfileToBodyMeasurements(profile) : garment.measurements,
+      estimatedKeys: measurementEntries.filter((entry) => entry.origin === "estimated").map((entry) => entry.key),
+      ...(profile
+        ? {
+            suppliedKeys: measurementEntries.filter((entry) => entry.origin === "supplied").map((entry) => entry.key),
+            derivedKeys: measurementEntries.filter((entry) => entry.origin === "derived").map((entry) => entry.key),
+            formulaSetVersion: profile.formulaSetVersion,
+            profile,
+          }
+        : {}),
     },
-    variables: [],
-    constructionGraph: { version: 1, nodes: [] },
+    variables: garment.parametric?.variables ?? [],
+    constructionGraph: garment.parametric?.constructionGraph ?? { version: 1, nodes: [] },
     patternDefinitions,
     panelInstances,
     seamGroups,
@@ -335,13 +363,41 @@ export function patternDocumentV3ToGarmentDraft(
     )
     .filter((placement): placement is AssemblyPlacement => placement !== undefined);
 
+  const profile = document.measurements.profile
+    ? parseMeasurementProfile(document.measurements.profile)
+    : undefined;
+  const generations = document.patternDefinitions.flatMap((definition) => definition.generation ? [definition.generation] : []);
+  const hasParametricMetadata = Boolean(
+    document.metadata.sourceTemplateVersion
+    || document.variables.length > 0
+    || document.constructionGraph.version === 2
+    || document.constructionGraph.nodes.length > 0
+    || generations.length > 0,
+  );
+  const parametric: ParametricProjectMetadata | undefined = hasParametricMetadata
+    ? {
+        schemaVersion: 1,
+        ...(document.metadata.sourceTemplateId ? { templateId: document.metadata.sourceTemplateId } : {}),
+        ...(document.metadata.sourceTemplateVersion ? { templateVersion: document.metadata.sourceTemplateVersion } : {}),
+        variables: document.variables.map((variable) => ({
+          ...variable,
+          formulaVersion: variable.formulaVersion ?? "legacy-v3",
+          dependencies: variable.dependencies ?? [],
+        })),
+        constructionGraph: document.constructionGraph,
+        generations,
+      }
+    : undefined;
+
   return parseGarmentDraft({
     id: document.metadata.projectId,
     templateId: document.metadata.sourceTemplateId ?? "custom",
     name: document.metadata.name,
     description: document.metadata.description,
     bodyType: document.body.type,
-    measurements: document.measurements.values,
+    measurements: profile ? measurementProfileToBodyMeasurements(profile) : document.measurements.values,
+    ...(profile ? { measurementProfile: profile } : {}),
+    ...(parametric ? { parametric } : {}),
     fabrics: document.fabrics,
     pieces,
     ...(seams.length === 0 ? {} : { seams }),
@@ -590,6 +646,9 @@ function patternPieceToDefinition(
     mirrorRule: mirrorRuleForPiece(piece),
     fabricId: piece.fabricId ?? garment.fabrics[0].id,
     connectors,
+    ...(garment.parametric?.generations.find((generation) => generation.patternId === piece.id)
+      ? { generation: structuredClone(garment.parametric.generations.find((generation) => generation.patternId === piece.id)!) }
+      : {}),
   };
 }
 
@@ -1001,6 +1060,17 @@ function parseApplicationMetadata(
   };
 }
 
+function parsePatternGeneration(value: unknown): PatternGenerationRecord {
+  if (!isRecord(value)) throw new TypeError("O registro de geração paramétrica é inválido.");
+  const parsed = parseParametricProjectMetadata({
+    schemaVersion: 1,
+    variables: [],
+    constructionGraph: { version: 1, nodes: [] },
+    generations: [value],
+  });
+  return parsed.generations[0];
+}
+
 function parseMeasurementSet(value: unknown): PatternDocumentV3["measurements"] {
   if (!isRecord(value) || !Array.isArray(value.estimatedKeys)) {
     throw new TypeError("O conjunto de medidas é inválido.");
@@ -1026,12 +1096,23 @@ function parseMeasurementSet(value: unknown): PatternDocumentV3["measurements"] 
       },
     ],
   });
+  const profile = value.profile === undefined ? undefined : parseMeasurementProfile(value.profile);
+  const parseKeyList = (candidate: unknown, label: string): string[] | undefined =>
+    candidate === undefined
+      ? undefined
+      : Array.isArray(candidate)
+        ? candidate.map((item, index) => readString(item, `${label} ${index + 1}`))
+        : (() => { throw new TypeError(`${label} é inválida.`); })();
   return {
     id: readString(value.id, "O identificador das medidas"),
-    values: garment.measurements,
+    values: profile ? measurementProfileToBodyMeasurements(profile) : garment.measurements,
     estimatedKeys: value.estimatedKeys.map((candidate, index) =>
       readString(candidate, `A medida estimada ${index + 1}`),
     ),
+    ...(parseKeyList(value.suppliedKeys, "A medida informada") ? { suppliedKeys: parseKeyList(value.suppliedKeys, "A medida informada") } : {}),
+    ...(parseKeyList(value.derivedKeys, "A medida derivada") ? { derivedKeys: parseKeyList(value.derivedKeys, "A medida derivada") } : {}),
+    ...(value.formulaSetVersion === undefined ? {} : { formulaSetVersion: readString(value.formulaSetVersion, "A versão das fórmulas de medidas") }),
+    ...(profile === undefined ? {} : { profile }),
     ...(value.notes === undefined
       ? {}
       : { notes: readString(value.notes, "As observações das medidas") }),
@@ -1050,16 +1131,26 @@ function parseVariables(value: unknown): PatternDocumentV3["variables"] {
       ...(candidate.description === undefined
         ? {}
         : { description: readString(candidate.description, `A descrição da variável ${index + 1}`) }),
+      ...(candidate.formulaVersion === undefined
+        ? {}
+        : { formulaVersion: readString(candidate.formulaVersion, `A versão da variável ${index + 1}`) }),
+      ...(candidate.dependencies === undefined
+        ? {}
+        : {
+            dependencies: Array.isArray(candidate.dependencies)
+              ? candidate.dependencies.map((dependency, dependencyIndex) => readString(dependency, `A dependência ${dependencyIndex + 1} da variável ${index + 1}`))
+              : (() => { throw new TypeError(`As dependências da variável ${index + 1} são inválidas.`); })(),
+          }),
     };
   });
 }
 
 function parseConstructionGraph(value: unknown): PatternDocumentV3["constructionGraph"] {
-  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.nodes)) {
+  if (!isRecord(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.nodes)) {
     throw new TypeError("O grafo de construção é inválido.");
   }
   return {
-    version: 1,
+    version: value.version,
     nodes: value.nodes.map((candidate, index) => {
       if (!isRecord(candidate) || !Array.isArray(candidate.dependencies) || !isRecord(candidate.payload)) {
         throw new TypeError(`O nó de construção ${index + 1} é inválido.`);
@@ -1143,6 +1234,7 @@ function parsePatternDefinition(value: unknown, index: number): PatternDefinitio
     mirrorRule: readEnum(value.mirrorRule, MIRROR_RULES, "A regra de espelhamento"),
     fabricId: readString(value.fabricId, "O tecido da definição"),
     connectors,
+    ...(value.generation === undefined ? {} : { generation: parsePatternGeneration(value.generation) }),
   };
 }
 

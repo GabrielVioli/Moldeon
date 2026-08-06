@@ -139,12 +139,12 @@ function evaluateConstructionNode(
   node: ParametricConstructionNodeRecord,
   values: Readonly<Record<string, ConstructionValue>>,
   scope: Readonly<Record<string, FormulaQuantity>>,
-  measurements: Readonly<Record<string, number | undefined>>,
+  measurements: Readonly<Record<string, number | undefined>> | import("./pattern").BodyMeasurements,
 ): ConstructionValue {
   switch (node.kind) {
     case "measurement": {
       const key = readString(node.payload.measurementKey, `A medida do nó ${node.id}`);
-      const value = measurements[key];
+      const value = (measurements as unknown as Record<string, number | undefined>)[key];
       if (typeof value !== "number") throw new TypeError(`A medida ${key} não está disponível.`);
       return { kind: "number", quantity: formulaQuantity(value, key.endsWith("Deg") ? "degree" : "mm") };
     }

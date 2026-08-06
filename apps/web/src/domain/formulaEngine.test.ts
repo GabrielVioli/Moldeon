@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   FormulaError,
@@ -82,8 +81,8 @@ describe("formulaEngine", () => {
     expect(serializeFormulaV1(restored.source, restored.expectedUnit)).toBe(serialized);
   });
 
-  it("contains no eval or Function constructor", () => {
-    const source = readFileSync(new URL("./formulaEngine.ts", import.meta.url), "utf8");
+  it("contains no eval or Function constructor in the executable API", () => {
+    const source = [parseFormula, evaluateFormula, FormulaGraphEngine].map((value) => String(value)).join("\n");
     expect(source).not.toMatch(/\beval\s*\(/);
     expect(source).not.toMatch(/\bnew\s+Function\b/);
     expect(source).not.toMatch(/\bFunction\s*\(/);

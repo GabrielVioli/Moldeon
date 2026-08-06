@@ -11,7 +11,7 @@ import { createGarmentFromTemplate, DEFAULT_BODY_MEASUREMENTS } from "../pattern
 describe("PatternDocumentV3 paramétrico", () => {
   it("preserves an older V3 document without requiring parametric extensions", () => {
     const legacyV3 = garmentDraftToPatternDocumentV3(createBaselineFixture("free-simple-piece"));
-    const plain = structuredClone(legacyV3) as Record<string, unknown>;
+    const plain = structuredClone(legacyV3) as unknown as Record<string, unknown>;
     const measurements = plain.measurements as Record<string, unknown>;
     delete measurements.profile;
     delete measurements.suppliedKeys;

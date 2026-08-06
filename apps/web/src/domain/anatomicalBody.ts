@@ -1,4 +1,5 @@
 import type { BodyMeasurements, BodyType } from "./pattern";
+import { createMeasurementProfile, measurementProfileToBodyMeasurements } from "./parametricMeasurements";
 
 export interface AnatomicalMeasurements extends BodyMeasurements {
   bicepMm: number;
@@ -26,12 +27,13 @@ export interface AnatomicalBodyMesh {
 }
 
 export function deriveAnatomicalMeasurements(input: BodyMeasurements): AnatomicalMeasurements {
+  const resolved = measurementProfileToBodyMeasurements(createMeasurementProfile(input, "feminine"));
   return {
-    ...input,
-    bicepMm: positiveOr(input.bicepMm, input.bustMm * 0.33),
-    wristMm: positiveOr(input.wristMm, input.bustMm * 0.18),
-    thighMm: positiveOr(input.thighMm, input.hipMm * 0.58),
-    calfMm: positiveOr(input.calfMm, input.hipMm * 0.38),
+    ...resolved,
+    bicepMm: positiveOr(resolved.bicepMm, input.bustMm * 0.33),
+    wristMm: positiveOr(resolved.wristMm, input.bustMm * 0.18),
+    thighMm: positiveOr(resolved.thighMm, input.hipMm * 0.58),
+    calfMm: positiveOr(resolved.calfMm, input.hipMm * 0.38),
   };
 }
 

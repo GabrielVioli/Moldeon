@@ -3,6 +3,12 @@ import {
   parseFabricSources,
   type FabricSource,
 } from "./fabric";
+import {
+  parseMeasurementProfile,
+  parseParametricProjectMetadata,
+  type MeasurementProfile,
+  type ParametricProjectMetadata,
+} from "./parametricMeasurements";
 
 export interface PatternPoint {
   id: string;
@@ -26,10 +32,35 @@ export interface BodyMeasurements {
   torsoLengthMm: number;
   armLengthMm: number;
   inseamMm: number;
+  neckCircumferenceMm?: number;
+  neckWidthMm?: number;
+  shoulderSlopeDeg?: number;
+  shoulderLengthMm?: number;
+  bustHeightMm?: number;
+  bustSpanMm?: number;
+  highBustMm?: number;
+  frontWaistLengthMm?: number;
+  backWaistLengthMm?: number;
+  armholeDepthMm?: number;
+  backWidthMm?: number;
+  frontWidthMm?: number;
   bicepMm?: number;
+  elbowCircumferenceMm?: number;
   wristMm?: number;
+  elbowLengthMm?: number;
+  hipHeightMm?: number;
+  sittingCrotchHeightMm?: number;
+  crotchDepthMm?: number;
   thighMm?: number;
+  kneeCircumferenceMm?: number;
   calfMm?: number;
+  ankleCircumferenceMm?: number;
+  kneeHeightMm?: number;
+  outseamLengthMm?: number;
+  insideLegLengthMm?: number;
+  seatDepthMm?: number;
+  waistDropMm?: number;
+  headCircumferenceMm?: number;
 }
 
 export type BodyType = "feminine" | "masculine";
@@ -295,6 +326,8 @@ export interface GarmentDraft {
   workspaceStates?: PieceWorkspaceState[];
   assemblyPlacements?: AssemblyPlacement[];
   ease?: GarmentEase;
+  measurementProfile?: MeasurementProfile;
+  parametric?: ParametricProjectMetadata;
 }
 
 export interface PatternSnapshot {
@@ -540,38 +573,35 @@ export function parseBodyMeasurements(value: unknown): BodyMeasurements {
   const bustMm = readFiniteNumber(value.bustMm, "A medida de busto ou tórax");
   const waistMm = readFiniteNumber(value.waistMm, "A medida de cintura");
   const hipMm = readFiniteNumber(value.hipMm, "A medida de quadril");
-  const measurements = {
+  const measurements: BodyMeasurements = {
     heightMm,
     bustMm,
     waistMm,
     hipMm,
-    shoulderWidthMm: readOptionalPositiveNumber(
-      value.shoulderWidthMm,
-      heightMm * 0.238,
-      "A largura de ombros",
-    ),
-    torsoLengthMm: readOptionalPositiveNumber(
-      value.torsoLengthMm,
-      heightMm * 0.262,
-      "O comprimento do tronco",
-    ),
-    armLengthMm: readOptionalPositiveNumber(
-      value.armLengthMm,
-      heightMm * 0.35,
-      "O comprimento do braço",
-    ),
-    inseamMm: readOptionalPositiveNumber(
-      value.inseamMm,
-      heightMm * 0.465,
-      "A medida de entreperna",
-    ),
-    ...(value.bicepMm === undefined ? {} : { bicepMm: readOptionalPositiveNumber(value.bicepMm, bustMm * 0.33, "A medida de bíceps") }),
-    ...(value.wristMm === undefined ? {} : { wristMm: readOptionalPositiveNumber(value.wristMm, bustMm * 0.18, "A medida de punho") }),
-    ...(value.thighMm === undefined ? {} : { thighMm: readOptionalPositiveNumber(value.thighMm, hipMm * 0.58, "A medida de coxa") }),
-    ...(value.calfMm === undefined ? {} : { calfMm: readOptionalPositiveNumber(value.calfMm, hipMm * 0.38, "A medida de panturrilha") }),
+    shoulderWidthMm: readOptionalPositiveNumber(value.shoulderWidthMm, heightMm * 0.238, "A largura de ombros"),
+    torsoLengthMm: readOptionalPositiveNumber(value.torsoLengthMm, heightMm * 0.262, "O comprimento do tronco"),
+    armLengthMm: readOptionalPositiveNumber(value.armLengthMm, heightMm * 0.35, "O comprimento do braço"),
+    inseamMm: readOptionalPositiveNumber(value.inseamMm, heightMm * 0.465, "A medida de entreperna"),
   };
-  if (Object.values(measurements).some((measurement) => measurement <= 0)) {
-    throw new TypeError("As medidas corporais precisam ser maiores que zero.");
+  const optionalKeys: readonly (keyof BodyMeasurements)[] = [
+    "neckCircumferenceMm", "neckWidthMm", "shoulderSlopeDeg", "shoulderLengthMm",
+    "bustHeightMm", "bustSpanMm", "highBustMm", "frontWaistLengthMm", "backWaistLengthMm",
+    "armholeDepthMm", "backWidthMm", "frontWidthMm", "bicepMm", "elbowCircumferenceMm",
+    "wristMm", "elbowLengthMm", "hipHeightMm", "sittingCrotchHeightMm", "crotchDepthMm",
+    "thighMm", "kneeCircumferenceMm", "calfMm", "ankleCircumferenceMm", "kneeHeightMm",
+    "outseamLengthMm", "insideLegLengthMm", "seatDepthMm", "waistDropMm", "headCircumferenceMm",
+  ];
+  for (const key of optionalKeys) {
+    const candidate = value[key];
+    if (candidate === undefined) continue;
+    const parsed = readFiniteNumber(candidate, `A medida ${key}`);
+    if (parsed < 0 || (parsed === 0 && key !== "shoulderSlopeDeg" && key !== "waistDropMm")) {
+      throw new TypeError(`A medida ${key} precisa ser positiva.`);
+    }
+    measurements[key] = parsed;
+  }
+  if (Object.values(measurements).some((measurement) => measurement < 0)) {
+    throw new TypeError("As medidas corporais não podem ser negativas.");
   }
   return measurements;
 }
@@ -724,6 +754,12 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
 
   const assemblyPlacements = parseAssemblyPlacements(value.assemblyPlacements, pieceIds);
   const ease = parseGarmentEase(value.ease);
+  const measurementProfile = value.measurementProfile === undefined
+    ? undefined
+    : parseMeasurementProfile(value.measurementProfile);
+  const parametric = value.parametric === undefined
+    ? undefined
+    : parseParametricProjectMetadata(value.parametric);
 
   return {
     id: readString(value.id, "O identificador do projeto"),
@@ -746,6 +782,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(workspaceStates === undefined ? {} : { workspaceStates }),
     ...(assemblyPlacements === undefined ? {} : { assemblyPlacements }),
     ...(ease === undefined ? {} : { ease }),
+    ...(measurementProfile === undefined ? {} : { measurementProfile }),
+    ...(parametric === undefined ? {} : { parametric }),
   };
 }
 

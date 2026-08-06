@@ -1816,3 +1816,284 @@ button {
     pointer-events: auto;
   }
 }
+
+
+/* Prompt 5: versioned measurements and formulas */
+.body-form-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.measurement-mode-toggle {
+  min-height: 38px;
+  padding: 7px 10px;
+  color: #514a55;
+  background: #fff;
+  border: 1px solid #bdb5c2;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.measurement-mode-toggle[aria-pressed="true"] {
+  color: #fff;
+  background: #5b4964;
+  border-color: #5b4964;
+}
+
+.measurement-authority-note {
+  margin: 0;
+  color: #686963;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.measurement-groups details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.measurement-groups details > summary small {
+  color: #8a8983;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.measurement-field {
+  align-content: start;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.measurement-field-heading,
+.measurement-status,
+.formula-dependencies,
+.formula-version,
+.formula-direct,
+.formula-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.measurement-origin {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.origin-supplied .measurement-origin {
+  color: #36563f;
+  background: #dceadd;
+}
+
+.origin-estimated .measurement-origin {
+  color: #755622;
+  background: #efe3c7;
+}
+
+.origin-derived .measurement-origin {
+  color: #4d466f;
+  background: #e4e0f0;
+}
+
+.measurement-status {
+  min-height: 18px;
+  color: #777770;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.measurement-status button {
+  padding: 2px 5px;
+  color: #65496e;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.measurement-advanced {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid #ddd8d0;
+}
+
+.measurement-advanced textarea {
+  width: 100%;
+  min-height: 48px;
+  resize: vertical;
+  padding: 7px;
+  color: #303038;
+  background: #f7f6f3;
+  border: 1px solid #c8c3bc;
+  border-radius: 6px;
+  font: 10px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.formula-label {
+  color: #5d5261;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.formula-dependencies,
+.formula-version,
+.formula-direct {
+  justify-content: flex-start;
+  color: #797771;
+  font-size: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.formula-error {
+  justify-content: flex-start;
+  padding: 5px 6px;
+  color: #7a2828;
+  background: #f2dcdc;
+  border-radius: 5px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.measurement-field.has-error {
+  border-color: #ba7777;
+}
+
+@media (max-width: 900px) {
+  .body-measurement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .body-form-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .body-measurement-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .measurement-field {
+    padding: 7px;
+  }
+
+  .measurement-input input,
+  .measurement-advanced textarea {
+    font-size: 16px;
+  }
+}
+
+
+/* Prompt 5: compact landscape workspace access */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .mobile-workspace-tabs {
+    z-index: 4;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-column: 1;
+    grid-row: 1;
+    gap: 4px;
+    min-width: 0;
+    padding: 4px;
+    background: #dfdcd5;
+    border-bottom: 1px solid #c3c0ba;
+  }
+
+  .workspace-tab {
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 8px;
+    overflow: hidden;
+    color: #696a66;
+    background: transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-tab[aria-selected="true"] {
+    color: #17181a;
+    background: #f7f5f0;
+    box-shadow: 0 1px 3px rgba(20, 20, 20, 0.12);
+  }
+
+  .workspace.mode-modeling .workspace-view,
+  .workspace.mode-assembly .workspace-view,
+  .workspace.mode-fitting .workspace-view,
+  .workspace.mode-preparation .workspace-view {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .workspace.mode-modeling .workspace-view.is-mobile-active,
+  .workspace.mode-assembly .workspace-view.is-mobile-active,
+  .workspace.mode-fitting .workspace-view.is-mobile-active,
+  .workspace.mode-preparation .workspace-view.is-mobile-active {
+    z-index: 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .inspector.workspace-view,
+  .assembly-panel.workspace-view,
+  .placement-panel.workspace-view {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 14px 18px;
+    border-left: 0;
+    resize: none;
+    overflow: auto;
+  }
+
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .workspace.is-right-panel-closed .editor-panel {
+    grid-row: 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}

@@ -28,6 +28,7 @@ type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
 
 const MOBILE_QUERY = "(max-width: 760px)";
+const COMPACT_WORKSPACE_QUERY = "(max-width: 1180px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
 const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
 const loadFittingRoom = () => import("./components/FittingRoomDialog");
@@ -102,6 +103,7 @@ export function App() {
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
+  const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const garmentSnapshots = useMemo(
@@ -112,23 +114,23 @@ export function App() {
     setWorkspaceMode("assembly");
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
-    if (isMobile) setMobileView("preview");
+    if (isCompactWorkspace) setMobileView("preview");
     simulate();
-  }, [isMobile, simulate]);
+  }, [isCompactWorkspace, simulate]);
   const handleDressBody = useCallback(() => {
     setWorkspaceMode("fitting");
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
-    if (isMobile) setMobileView("preview");
-  }, [isMobile]);
+    if (isCompactWorkspace) setMobileView("preview");
+  }, [isCompactWorkspace]);
   const closeRightPanel = useCallback(() => {
     setIsRightPanelOpen(false);
-    if (isMobile) setMobileView("editor");
-  }, [isMobile]);
+    if (isCompactWorkspace) setMobileView("editor");
+  }, [isCompactWorkspace]);
   const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
     setIsRightPanelOpen(true);
-    if (isMobile) setMobileView(view);
-  }, [isMobile]);
+    if (isCompactWorkspace) setMobileView(view);
+  }, [isCompactWorkspace]);
   const handleExportSvg = useCallback(() => {
     const currentGarment = useEditorStore.getState().garment;
     exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
@@ -138,9 +140,9 @@ export function App() {
       loadGarment(nextGarment);
       setActiveTool("select");
       setLibraryOpen(false);
-      if (isMobile) setMobileView("editor");
+      if (isCompactWorkspace) setMobileView("editor");
     },
-    [isMobile, loadGarment],
+    [isCompactWorkspace, loadGarment],
   );
   const handleInsertPoint = useCallback(
     (startPointId: string, t: number) => {
@@ -591,11 +593,11 @@ export function App() {
             className="right-panel-close"
             aria-expanded={isRightPanelOpen}
             aria-controls="workspace-right-panel"
-            title={isMobile ? "Voltar à bancada 2D" : "Recolher painel direito"}
+            title={isCompactWorkspace ? "Voltar à bancada 2D" : "Recolher painel direito"}
             onClick={closeRightPanel}
           >
             <span aria-hidden="true">×</span>
-            <span>{isMobile ? "Voltar à bancada" : "Recolher"}</span>
+            <span>{isCompactWorkspace ? "Voltar à bancada" : "Recolher"}</span>
           </button>
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder loading />}>
@@ -603,7 +605,7 @@ export function App() {
                 garment={garment}
                 snapshots={garmentSnapshots}
                 simulateVersion={simulateVersion}
-                active={isRightPanelOpen && (!isMobile || mobileView === "preview")}
+                active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
                 onBackendChange={setRenderBackend}
                 onPieceDrop={handlePieceDrop}
                 showBody={workspaceMode === "fitting"}

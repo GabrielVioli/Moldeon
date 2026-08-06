@@ -1,13 +1,15 @@
-import { memo, useEffect, useState } from "react";
-import type {
-  BodyMeasurements,
-  BodyType,
-  GarmentDraft,
-} from "../domain/pattern";
+import { memo, useEffect, useMemo, useState } from "react";
+import type { GarmentDraft } from "../domain/pattern";
+import {
+  changeMeasurementBodyType,
+  createDefaultMeasurementProfile,
+  measurementProfileToBodyMeasurements,
+  overrideMeasurement,
+  resetMeasurementOverride,
+  updateMeasurementFormula,
+} from "../domain/parametricMeasurements";
 import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import {
-  DEFAULT_BODY_MEASUREMENTS,
-  DEFAULT_MASCULINE_BODY_MEASUREMENTS,
   PATTERN_TEMPLATES,
   createGarmentFromTemplate,
   type PatternTemplateId,
@@ -23,10 +25,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
   onClose,
   onChoose,
 }: PatternLibraryDialogProps) {
-  const [measurements, setMeasurements] = useState<BodyMeasurements>(
-    DEFAULT_BODY_MEASUREMENTS,
-  );
-  const [bodyType, setBodyType] = useState<BodyType>("feminine");
+  const [profile, setProfile] = useState(() => createDefaultMeasurementProfile("feminine"));
+  const measurements = useMemo(() => measurementProfileToBodyMeasurements(profile), [profile]);
+  const bodyType = profile.bodyType;
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
         templateId,
         measurements,
         bodyType,
+        profile,
       );
       onChoose(resolveTemplateAssemblyGarment(generated));
     } catch (reason) {
@@ -92,20 +94,21 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
           compact
           bodyType={bodyType}
           measurements={measurements}
-          onBodyTypeChange={(nextBodyType) => {
-            setBodyType(nextBodyType);
-            setMeasurements(
-              nextBodyType === "feminine"
-                ? DEFAULT_BODY_MEASUREMENTS
-                : DEFAULT_MASCULINE_BODY_MEASUREMENTS,
-            );
+          measurementProfile={profile}
+          onBodyTypeChange={(nextBodyType) => setProfile((current) => changeMeasurementBodyType(current, nextBodyType))}
+          onMeasurementChange={(measurement, value) => {
+            const result = overrideMeasurement(profile, measurement, value);
+            if (result.accepted) setProfile(result.profile);
           }}
-          onMeasurementChange={(measurement, valueMm) =>
-            setMeasurements((current) => ({
-              ...current,
-              [measurement]: valueMm,
-            }))
-          }
+          onResetMeasurement={(measurement) => {
+            const result = resetMeasurementOverride(profile, measurement);
+            if (result.accepted) setProfile(result.profile);
+          }}
+          onFormulaChange={(measurement, expression) => {
+            const result = updateMeasurementFormula(profile, measurement, expression);
+            if (result.accepted) setProfile(result.profile);
+            return result;
+          }}
         />
 
         <div className="template-grid">

@@ -1,4 +1,5 @@
 import type { FabricSource } from "./fabric";
+import type { MeasurementProfile, PatternGenerationRecord } from "./parametricMeasurements";
 import type {
   AssemblyOutwardSide,
   AssemblyPieceRole,
@@ -43,6 +44,10 @@ export interface MeasurementSetV3 {
   id: string;
   values: BodyMeasurements;
   estimatedKeys: string[];
+  suppliedKeys?: string[];
+  derivedKeys?: string[];
+  formulaSetVersion?: string;
+  profile?: MeasurementProfile;
   notes?: string;
 }
 
@@ -52,16 +57,18 @@ export interface FormulaVariableV3 {
   expression: string;
   unit: "mm" | "ratio" | "degree" | "scalar";
   description?: string;
+  formulaVersion?: string;
+  dependencies?: string[];
 }
 
 export interface ConstructionGraphV3 {
-  version: 1;
+  version: 1 | 2;
   nodes: ConstructionGraphNodeV3[];
 }
 
 export interface ConstructionGraphNodeV3 {
   id: string;
-  kind: "measurement" | "variable" | "free-point" | "computed-point" | "operation";
+  kind: "measurement" | "variable" | "free-point" | "computed-point" | "line" | "arc" | "curve" | "transform" | "operation";
   dependencies: string[];
   payload: Record<string, unknown>;
 }
@@ -146,6 +153,7 @@ export interface PatternDefinitionV3 {
   mirrorRule: PatternMirrorRuleV3;
   fabricId: string;
   connectors: PatternConnectorV3[];
+  generation?: PatternGenerationRecord;
 }
 
 export interface PanelArrangementAnchorV3 {

@@ -1,0 +1,86 @@
+{
+  "browserVersion": "140.0.7339.16",
+  "physicalDevicesValidated": false,
+  "scenarios": [
+    {
+      "name": "desktop-1366-simple",
+      "status": "passed",
+      "diagnostics": [],
+      "layout": {
+        "width": 1366,
+        "height": 768,
+        "scrollWidth": 1366,
+        "form": {
+          "left": 1043.75,
+          "right": 1348,
+          "top": 569.5625,
+          "bottom": 1432.5625,
+          "width": 304.25
+        },
+        "inputs": 37,
+        "badges": 37,
+        "formulas": 0
+      }
+    },
+    {
+      "name": "desktop-1920-advanced",
+      "status": "passed",
+      "diagnostics": [],
+      "layout": {
+        "width": 1920,
+        "height": 1080,
+        "scrollWidth": 1920,
+        "form": {
+          "left": 1459.25,
+          "right": 1862.25,
+          "top": 484.40625,
+          "bottom": 1591.40625,
+          "width": 403
+        },
+        "inputs": 37,
+        "badges": 37,
+        "formulas": 33
+      }
+    },
+    {
+      "name": "mobile-390-simple",
+      "status": "passed",
+      "diagnostics": [],
+      "layout": {
+        "width": 390,
+        "height": 844,
+        "scrollWidth": 390,
+        "form": {
+          "left": 16,
+          "right": 374,
+          "top": 657.234375,
+          "bottom": 1543.234375,
+          "width": 358
+        },
+        "inputs": 37,
+        "badges": 37,
+        "formulas": 0
+      }
+    },
+    {
+      "name": "mobile-844-advanced",
+      "status": "passed",
+      "diagnostics": [],
+      "layout": {
+        "width": 844,
+        "height": 390,
+        "scrollWidth": 844,
+        "form": {
+          "left": 18,
+          "right": 826,
+          "top": -138.859375,
+          "bottom": 882.640625,
+          "width": 808
+        },
+        "inputs": 37,
+        "badges": 37,
+        "formulas": 33
+      }
+    }
+  ]
+}

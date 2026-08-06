@@ -39,6 +39,8 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
   const setBodyMeasurement = useEditorStore(
     (state) => state.setBodyMeasurement,
   );
+  const resetBodyMeasurement = useEditorStore((state) => state.resetBodyMeasurement);
+  const setBodyMeasurementFormula = useEditorStore((state) => state.setBodyMeasurementFormula);
   const addFabric = useEditorStore((state) => state.addFabric);
   const updateFabric = useEditorStore((state) => state.updateFabric);
   const chooseFabricPreset = useEditorStore(
@@ -174,8 +176,11 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
               <BodyMeasurementsForm
                 bodyType={garment.bodyType}
                 measurements={garment.measurements}
+                measurementProfile={garment.measurementProfile}
                 onBodyTypeChange={setBodyType}
                 onMeasurementChange={setBodyMeasurement}
+                onResetMeasurement={resetBodyMeasurement}
+                onFormulaChange={setBodyMeasurementFormula}
               />
             </section>
           ) : null}
