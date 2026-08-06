@@ -44,7 +44,12 @@ try {
       emptyVisible: Boolean(document.querySelector(".empty-workspace")),
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     }));
-    if (initial.pieceItems !== 0 || !initial.emptyVisible || initial.horizontalOverflow) {
+    if (
+      initial.title !== "Bancada vazia · milímetros"
+      || initial.pieceItems !== 0
+      || !initial.emptyVisible
+      || initial.horizontalOverflow
+    ) {
       throw new Error(`${scenario.name}: estado vazio inválido: ${JSON.stringify(initial)}`);
     }
 
@@ -58,13 +63,19 @@ try {
       await canvas.click({ position: { x: Math.min(box.width - 100, box.width * 0.55), y: Math.min(box.height - 100, box.height * 0.62) } });
       await canvas.click({ position: { x: Math.max(230, box.width * 0.30), y: Math.min(box.height - 100, box.height * 0.58) } });
       await page.keyboard.press("Enter");
-      await page.getByText("Peça teste", { exact: true }).waitFor();
+
+      const pieceItem = page.locator(".pieces-item").filter({ hasText: "Peça teste" }).first();
+      await pieceItem.waitFor({ state: "visible" });
       await page.screenshot({ path: `${artifactDir}/desktop-drawn.png`, fullPage: true });
 
       await page.keyboard.press("Delete");
       await empty.waitFor({ state: "visible" });
+      await page.screenshot({ path: `${artifactDir}/desktop-deleted.png`, fullPage: true });
+
       await page.keyboard.press("Control+z");
-      await page.getByText("Peça teste", { exact: true }).waitFor();
+      await pieceItem.waitFor({ state: "visible" });
+      await page.screenshot({ path: `${artifactDir}/desktop-undone.png`, fullPage: true });
+
       await page.keyboard.press("Control+y");
       await empty.waitFor({ state: "visible" });
       await page.screenshot({ path: `${artifactDir}/desktop-redone-empty.png`, fullPage: true });
