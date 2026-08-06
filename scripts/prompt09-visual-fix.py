@@ -134,7 +134,6 @@ replace_between(
 }''',
 )
 
-# Add smoothstep helper near the existing interpolation helper.
 replace_once(
     arrangement,
     '''function lerp(start: number, end: number, t: number): number {
@@ -152,7 +151,6 @@ function smoothstep(t: number): number {
 ''',
 )
 
-# Fill visible joint gaps so the procedural body reads as one mannequin rather than a robot.
 visual = "apps/web/src/viewport/AvatarVisual.ts"
 replace_once(
     visual,
@@ -185,7 +183,6 @@ replace_once(
   addEllipsoid(group, "avatar:knee-right", model.joints.kneeRight, [calfRadius * 1.08, calfRadius * 1.08, calfRadius * 1.08], material, segments, options);''',
 )
 
-# Guarantee a useful mobile 3D viewport within the existing tab row.
 styles = ROOT / "apps/web/src/styles.css"
 style_source = styles.read_text(encoding="utf-8")
 mobile_rule = r'''
@@ -205,9 +202,8 @@ mobile_rule = r'''
 }
 '''
 if "min-height: 360px;\n    height: 100%;\n    overflow: hidden;" not in style_source:
-    styles.write_text(style_source.rstrip() + mobile_rule + "\n", encoding="utf-8")
+    styles.write_text(style_source.rstrip() + mobile_rule.rstrip() + "\n", encoding="utf-8")
 
-# Capture every scenario before assertions and report actual dimensions on failure.
 audit = ROOT / "scripts/prompt09-browser-audit.mjs"
 audit_source = audit.read_text(encoding="utf-8")
 audit_source = audit_source.replace(
