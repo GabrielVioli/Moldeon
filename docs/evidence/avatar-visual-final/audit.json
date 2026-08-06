@@ -1,0 +1,107 @@
+[
+  {
+    "scenario": {
+      "label": "desktop-tshirt",
+      "template": "Camiseta básica",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    "metrics": {
+      "box": {
+        "x": 1080.25,
+        "y": 98,
+        "width": 359.75,
+        "height": 383.109375
+      },
+      "opaque": 138240,
+      "quantizedColors": 272,
+      "lumaRange": 208,
+      "host": {
+        "testid": "dressed-avatar-viewport",
+        "avatarVisible": "true",
+        "avatarAnchorCount": "14",
+        "collisionProxyCount": "12",
+        "garmentInstanceCount": "6",
+        "coveredAvatarPartCount": "6",
+        "arrangementDiagnosticCount": "0",
+        "arrangementErrorCount": "0",
+        "frameTarget": "avatar-and-garment"
+      },
+      "consoleErrors": []
+    },
+    "canvasPath": "artifacts/avatar-visual-final/desktop-tshirt-canvas.png",
+    "pagePath": "artifacts/avatar-visual-final/desktop-tshirt.png"
+  },
+  {
+    "scenario": {
+      "label": "desktop-skirt",
+      "template": "Saia reta",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    "metrics": {
+      "box": {
+        "x": 1080.25,
+        "y": 98,
+        "width": 359.75,
+        "height": 383.109375
+      },
+      "opaque": 138240,
+      "quantizedColors": 258,
+      "lumaRange": 208,
+      "host": {
+        "testid": "dressed-avatar-viewport",
+        "avatarVisible": "true",
+        "avatarAnchorCount": "14",
+        "collisionProxyCount": "12",
+        "garmentInstanceCount": "4",
+        "coveredAvatarPartCount": "10",
+        "arrangementDiagnosticCount": "0",
+        "arrangementErrorCount": "0",
+        "frameTarget": "avatar-and-garment"
+      },
+      "consoleErrors": []
+    },
+    "canvasPath": "artifacts/avatar-visual-final/desktop-skirt-canvas.png",
+    "pagePath": "artifacts/avatar-visual-final/desktop-skirt.png"
+  },
+  {
+    "scenario": {
+      "label": "mobile-trousers",
+      "template": "Calça reta",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    "metrics": {
+      "box": {
+        "x": 1,
+        "y": 143,
+        "width": 389,
+        "height": 320
+      },
+      "opaque": 124480,
+      "quantizedColors": 106,
+      "lumaRange": 230,
+      "host": {
+        "testid": "dressed-avatar-viewport",
+        "avatarVisible": "true",
+        "avatarAnchorCount": "14",
+        "collisionProxyCount": "12",
+        "garmentInstanceCount": "4",
+        "coveredAvatarPartCount": "9",
+        "arrangementDiagnosticCount": "0",
+        "arrangementErrorCount": "0",
+        "frameTarget": "avatar-and-garment"
+      },
+      "consoleErrors": []
+    },
+    "canvasPath": "artifacts/avatar-visual-final/mobile-trousers-canvas.png",
+    "pagePath": "artifacts/avatar-visual-final/mobile-trousers.png"
+  }
+]
