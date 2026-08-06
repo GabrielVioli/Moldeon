@@ -1,3 +1,4 @@
+# Temporary execution on PR #5; restored before the functional commit.
 name: CI
 
 on:
