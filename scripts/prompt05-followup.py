@@ -78,4 +78,102 @@ patch(
     '        measurements: Object.fromEntries(Object.entries(profile.entries).map(([key, entry]) => [key, entry?.value])) as BodyMeasurements,\n',
     '        measurements: Object.fromEntries(Object.entries(profile.entries).map(([key, entry]) => [key, entry?.value])) as unknown as BodyMeasurements,\n',
 )
-print("Prompt 5 typecheck follow-up applied")
+patch(
+    "apps/web/src/domain/patternDocumentV3.ts",
+    '''  const profile = createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile);
+  const measurementEntries = Object.values(profile.entries).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+''',
+    '''  const profile = garment.measurementProfile
+    ? createMeasurementProfile(garment.measurements, garment.bodyType, garment.measurementProfile)
+    : undefined;
+  const measurementEntries = profile
+    ? Object.values(profile.entries).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    : [];
+''',
+)
+patch(
+    "apps/web/src/domain/patternDocumentV3.ts",
+    '''    measurements: {
+      id: "measurements-primary",
+      values: measurementProfileToBodyMeasurements(profile),
+      estimatedKeys: measurementEntries.filter((entry) => entry.origin === "estimated").map((entry) => entry.key),
+      suppliedKeys: measurementEntries.filter((entry) => entry.origin === "supplied").map((entry) => entry.key),
+      derivedKeys: measurementEntries.filter((entry) => entry.origin === "derived").map((entry) => entry.key),
+      formulaSetVersion: profile.formulaSetVersion,
+      profile,
+    },
+''',
+    '''    measurements: {
+      id: "measurements-primary",
+      values: profile ? measurementProfileToBodyMeasurements(profile) : garment.measurements,
+      estimatedKeys: measurementEntries.filter((entry) => entry.origin === "estimated").map((entry) => entry.key),
+      ...(profile
+        ? {
+            suppliedKeys: measurementEntries.filter((entry) => entry.origin === "supplied").map((entry) => entry.key),
+            derivedKeys: measurementEntries.filter((entry) => entry.origin === "derived").map((entry) => entry.key),
+            formulaSetVersion: profile.formulaSetVersion,
+            profile,
+          }
+        : {}),
+    },
+''',
+)
+patch(
+    "apps/web/src/domain/patternDocumentV3.ts",
+    '''  const profile = document.measurements.profile
+    ? parseMeasurementProfile(document.measurements.profile)
+    : createMeasurementProfile(document.measurements.values, document.body.type);
+  const parametric: ParametricProjectMetadata = {
+    schemaVersion: 1,
+    ...(document.metadata.sourceTemplateId ? { templateId: document.metadata.sourceTemplateId } : {}),
+    ...(document.metadata.sourceTemplateVersion ? { templateVersion: document.metadata.sourceTemplateVersion } : {}),
+    variables: document.variables.map((variable) => ({
+      ...variable,
+      formulaVersion: variable.formulaVersion ?? "legacy-v3",
+      dependencies: variable.dependencies ?? [],
+    })),
+    constructionGraph: document.constructionGraph,
+    generations: document.patternDefinitions.flatMap((definition) => definition.generation ? [definition.generation] : []),
+  };
+''',
+    '''  const profile = document.measurements.profile
+    ? parseMeasurementProfile(document.measurements.profile)
+    : undefined;
+  const generations = document.patternDefinitions.flatMap((definition) => definition.generation ? [definition.generation] : []);
+  const hasParametricMetadata = Boolean(
+    document.metadata.sourceTemplateVersion
+    || document.variables.length > 0
+    || document.constructionGraph.version === 2
+    || document.constructionGraph.nodes.length > 0
+    || generations.length > 0,
+  );
+  const parametric: ParametricProjectMetadata | undefined = hasParametricMetadata
+    ? {
+        schemaVersion: 1,
+        ...(document.metadata.sourceTemplateId ? { templateId: document.metadata.sourceTemplateId } : {}),
+        ...(document.metadata.sourceTemplateVersion ? { templateVersion: document.metadata.sourceTemplateVersion } : {}),
+        variables: document.variables.map((variable) => ({
+          ...variable,
+          formulaVersion: variable.formulaVersion ?? "legacy-v3",
+          dependencies: variable.dependencies ?? [],
+        })),
+        constructionGraph: document.constructionGraph,
+        generations,
+      }
+    : undefined;
+''',
+)
+patch(
+    "apps/web/src/domain/patternDocumentV3.ts",
+    '''    measurements: measurementProfileToBodyMeasurements(profile),
+    measurementProfile: profile,
+    parametric,
+    fabrics: document.fabrics,
+''',
+    '''    measurements: profile ? measurementProfileToBodyMeasurements(profile) : document.measurements.values,
+    ...(profile ? { measurementProfile: profile } : {}),
+    ...(parametric ? { parametric } : {}),
+    fabrics: document.fabrics,
+''',
+)
+print("Prompt 5 typecheck and compatibility follow-up applied")
