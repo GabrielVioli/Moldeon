@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   apply-test-publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       PROMPT11_BASE_URL: http://127.0.0.1:4181
