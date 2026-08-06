@@ -1,7 +1,6 @@
 # Auditoria visual do Prompt 7
 
 Chrome: 150.0.7871.128
-Executável: /usr/bin/google-chrome
 
 | Cenário | Estado | Paths inválidos | Erros de console |
 |---|---:|---:|---:|
@@ -9,4 +8,5 @@ Executável: /usr/bin/google-chrome
 | trouser-body-comparison | passed | 0 | 0 |
 | trouser-assembly-graph | passed | 0 | 0 |
 
-A inspeção usa apenas o molde 2D e o grafo lógico. O preview 3D não participa da aprovação.
+O grafo apresenta lateral e entreperna em ancoragens separadas. As seis relações lógicas estão visíveis.
+O 3D não participa da aprovação.

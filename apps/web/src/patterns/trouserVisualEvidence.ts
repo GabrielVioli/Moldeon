@@ -114,13 +114,16 @@ function renderAssemblyGraphSvg(
     const first = positions[seam.first.instanceId];
     const second = positions[seam.second.instanceId];
     if (!first || !second) return "";
-    const x1 = first.x + 150;
-    const y1 = first.y + 70;
-    const x2 = second.x + 150;
-    const y2 = second.y + 70;
+    const firstAnchor = graphConnectorAnchor(first, seam.first.connectorRole);
+    const secondAnchor = graphConnectorAnchor(second, seam.second.connectorRole);
+    const labelOffsetX = seam.role.includes("outseam")
+      ? -70
+      : seam.role.includes("inseam")
+        ? 70
+        : 0;
     return `<g>
-      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="seam"/>
-      <text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 10}" text-anchor="middle" class="seam-label">${escapeXml(seam.role)}</text>
+      <line x1="${firstAnchor.x}" y1="${firstAnchor.y}" x2="${secondAnchor.x}" y2="${secondAnchor.y}" class="seam"/>
+      <text x="${(firstAnchor.x + secondAnchor.x) / 2 + labelOffsetX}" y="${(firstAnchor.y + secondAnchor.y) / 2 - 10}" text-anchor="middle" class="seam-label">${escapeXml(seam.role)}</text>
     </g>`;
   }).join("\n");
   const nodes = assembly.instances.map((instance) => {
@@ -147,6 +150,19 @@ function renderAssemblyGraphSvg(
      <text x="60" y="940" class="card-title">Conectores deliberadamente abertos</text>
      ${open}`,
   );
+}
+
+function graphConnectorAnchor(
+  position: { x: number; y: number },
+  connectorRole: string,
+): { x: number; y: number } {
+  if (connectorRole === "outseam") {
+    return { x: position.x + 48, y: position.y + 70 };
+  }
+  if (connectorRole === "inseam") {
+    return { x: position.x + 252, y: position.y + 70 };
+  }
+  return { x: position.x + 150, y: position.y + 70 };
 }
 
 function renderPieceCard(

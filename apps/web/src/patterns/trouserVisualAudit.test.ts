@@ -15,6 +15,17 @@ describe("trouser visual evidence", () => {
       expect(svg.match(/<path/g)?.length ?? 0).toBeGreaterThan(0);
     }
 
+    for (const seamRole of [
+      "left-outseam",
+      "left-inseam",
+      "right-outseam",
+      "right-inseam",
+      "front-rise",
+      "back-rise",
+    ]) {
+      expect(evidence.graphSvg).toContain(seamRole);
+    }
+
     expect(evidence.report).toMatchObject({
       physicalDevicesValidated: false,
       threeDimensionalPreviewUsedAsEvidence: false,
