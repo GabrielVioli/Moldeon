@@ -351,3 +351,57 @@ Essas remoções não devem ocorrer antes de os consumidores React, montagem, vi
 - WebGPU compute;
 - redesign da interface;
 - criação visual de conectores e SeamGroups avançados.
+
+## Medidas, fórmulas e construção paramétrica
+
+O formato do documento continua sendo `formatVersion: 3`. As extensões desta seção são opcionais para preservar documentos V3 anteriores. A ausência dos novos campos não aciona atualização silenciosa de fórmulas.
+
+### Conjunto de medidas
+
+`measurements.values` mantém os valores resolvidos usados pelo runtime. `measurements.profile`, quando presente, usa `schemaVersion: 1` e registra para cada medida:
+
+- valor e unidade;
+- origem `supplied`, `estimated` ou `derived`;
+- fórmula e dependências, quando aplicável;
+- versão da fórmula;
+- estado de substituição manual.
+
+`supplied` é autoritativo. Uma estimativa substituída continua guardando sua fórmula de origem para que o usuário possa restaurá-la explicitamente. O tipo corporal seleciona apenas o conjunto inicial de defaults.
+
+### Sintaxe de fórmulas V1
+
+O parser é próprio, determinístico e não usa `eval` nem o construtor `Function`.
+
+Operadores, em ordem de precedência: parênteses, unário `+`/`-`, potência `^`, multiplicação/divisão e adição/subtração. Potência é associativa à direita.
+
+Literais suportados:
+
+| Sufixo | Dimensão | Conversão interna |
+|---|---|---|
+| sem sufixo | escalar | valor original |
+| `%` | escalar | divide por 100 |
+| `mm` | comprimento | milímetros |
+| `cm` | comprimento | multiplica por 10 |
+| `m` | comprimento | multiplica por 1000 |
+| `deg` | ângulo | graus |
+| `rad` | ângulo | converte para graus |
+
+Funções permitidas: `min`, `max`, `abs`, `sqrt`, `clamp`, `round`, `floor`, `ceil`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` e `hypot`.
+
+O motor rejeita unidades incompatíveis, dependências ausentes, ciclos, divisão por zero, resultados não finitos e entradas fora do domínio das funções. Fórmulas serializadas usam `version: 1`, fonte normalizada, unidade esperada e AST.
+
+### Variáveis e grafo
+
+`variables` pode registrar `formulaVersion` e a lista estável de `dependencies`. `constructionGraph.version` aceita `1` para documentos anteriores e `2` para os nós tipados iniciais:
+
+- `measurement` e `variable`;
+- `free-point` e `computed-point`;
+- `line`, `arc` e `curve`;
+- `transform` e `operation`.
+
+A avaliação é independente de DOM e segue dependências explícitas. Pontos calculados expõem `<id>.x` e `<id>.y`; linhas expõem `<id>.length` ao escopo de fórmulas.
+
+### Versionamento de templates
+
+Cada definição pode carregar `generation`, com versão do template, versão do motor, conjunto de medidas, origens, defaults e valores exatos usados na geração. Um projeto existente conserva essas versões. Adotar fórmulas novas exige migração ou regeneração explícita.
+
