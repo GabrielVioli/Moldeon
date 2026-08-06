@@ -25,7 +25,7 @@ const browser = await chromium.launch({ executablePath, headless: true });
 const results = [];
 try {
   for (const [sourceName, screenshotName] of scenarios) {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 1200 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: 2000, height: 1600 }, deviceScaleFactor: 1 });
     const consoleErrors = [];
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
@@ -49,7 +49,15 @@ try {
     if (!inspection.hasSvg || inspection.width <= 0 || inspection.height <= 0 || inspection.invalidPaths > 0) {
       throw new Error(`${sourceName}: SVG inválido ${JSON.stringify(inspection)}`);
     }
-    await page.screenshot({ path: resolve(directory, screenshotName), fullPage: true });
+    if (inspection.width > 2000 || inspection.height > 1600) {
+      throw new Error(`${sourceName}: prancheta excede a viewport de auditoria ${JSON.stringify(inspection)}`);
+    }
+    await page.screenshot({
+      path: resolve(directory, screenshotName),
+      fullPage: false,
+      animations: "disabled",
+      timeout: 60_000,
+    });
     results.push({
       name: sourceName.replace(/\.svg$/, ""),
       status: "passed",
