@@ -110,4 +110,28 @@
   .empty-workspace { padding: 20px; }
   .empty-workspace::before { inset: 18px; }
   .empty-workspace > div { display: grid; width: min(100%, 280px); }
+
+  /* The right-panel wrapper uses display: contents. Its descendants therefore
+     become grid items without matching the direct-child mobile rule in styles.css.
+     Keep every modeling panel on the single mobile track so the editor cannot
+     collapse to a zero-width first column while the hidden right panel owns a
+     second implicit column. */
+  .workspace.mode-modeling {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .workspace.mode-modeling > .editor-panel.workspace-view,
+  .workspace.mode-modeling > .workspace-right-panel > .workspace-view {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace.mode-modeling .editor-body,
+  .workspace.mode-modeling .canvas-stack,
+  .workspace.mode-modeling canvas.pattern-canvas {
+    width: 100%;
+    min-width: 0;
+  }
 }
