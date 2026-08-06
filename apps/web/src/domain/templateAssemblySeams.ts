@@ -32,6 +32,9 @@ interface SeamDefinition {
 export function resolveTemplateAssemblyGarment(
   garment: GarmentDraft,
 ): GarmentDraft {
+  if ((garment.seams ?? []).some((seam) => seam.groupId?.startsWith("guided-sleeve:"))) {
+    return garment;
+  }
   const canonical = buildTemplateAssemblySeams(garment);
 
   if (canonical.length === 0) {

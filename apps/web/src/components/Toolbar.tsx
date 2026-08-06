@@ -6,6 +6,9 @@ interface ToolbarProps {
   garmentName: string;
   onOpenLibrary(): void;
   onPrepareLibrary(): void;
+  onOpenSleeveWizard(): void;
+  onPrepareSleeveWizard(): void;
+  canAddSleeve: boolean;
   onOpenFitting(): void;
   onPrepareFitting(): void;
   onSimulate(): void;
@@ -30,6 +33,9 @@ export const Toolbar = memo(function Toolbar({
   garmentName,
   onOpenLibrary,
   onPrepareLibrary,
+  onOpenSleeveWizard,
+  onPrepareSleeveWizard,
+  canAddSleeve,
   onOpenFitting,
   onPrepareFitting,
   onSimulate,
@@ -97,6 +103,18 @@ export const Toolbar = memo(function Toolbar({
       </nav>
 
       <div className="toolbar-actions">
+        <button
+          className="sleeve-button"
+          type="button"
+          disabled={!canAddSleeve}
+          onFocus={onPrepareSleeveWizard}
+          onPointerEnter={onPrepareSleeveWizard}
+          onClick={onOpenSleeveWizard}
+          title={canAddSleeve ? "Gerar manga a partir das cavas" : "Adicione frente e costas com cavas semânticas"}
+          data-testid="open-sleeve-wizard"
+        >
+          Adicionar manga
+        </button>
         <button
           className="library-button"
           type="button"

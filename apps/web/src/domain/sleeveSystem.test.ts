@@ -122,6 +122,8 @@ describe("guided sleeve system", () => {
       "guided-sleeve:front-armhole",
       "guided-sleeve:back-armhole",
       "guided-sleeve:underarm",
+      "guided-sleeve:body-shoulder",
+      "guided-sleeve:body-side",
     ]));
     const underarm = draft.seams.find((seam) => seam.groupId === "guided-sleeve:underarm");
     expect(underarm?.first.pieceId).toBe(draft.sleevePiece.id);

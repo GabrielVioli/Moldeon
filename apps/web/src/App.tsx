@@ -23,6 +23,7 @@ import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import { createPreviewPlacement, type GarmentDraft, type PreviewRegion } from "./domain/pattern";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
+import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -32,6 +33,7 @@ const COMPACT_WORKSPACE_QUERY = "(max-width: 1180px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
 const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
 const loadFittingRoom = () => import("./components/FittingRoomDialog");
+const loadSleeveWizard = () => import("./components/SleeveWizardDialog");
 const LazyGarmentViewport = lazy(async () => {
   const module = await loadGarmentViewport();
   return { default: module.GarmentViewport };
@@ -43,6 +45,10 @@ const LazyPatternLibraryDialog = lazy(async () => {
 const LazyFittingRoomDialog = lazy(async () => {
   const module = await loadFittingRoom();
   return { default: module.FittingRoomDialog };
+});
+const LazySleeveWizardDialog = lazy(async () => {
+  const module = await loadSleeveWizard();
+  return { default: module.SleeveWizardDialog };
 });
 
 export function App() {
@@ -91,6 +97,7 @@ export function App() {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const simulate = useEditorStore((state) => state.simulate);
+  const addGuidedSleeve = useEditorStore((state) => state.addGuidedSleeve);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
@@ -98,6 +105,7 @@ export function App() {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
+  const [sleeveWizardOpen, setSleeveWizardOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("modeling");
   const [renderBackend, setRenderBackend] =
@@ -105,6 +113,7 @@ export function App() {
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
+  const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const garmentSnapshots = useMemo(
     () => (showViewport ? garment.pieces.map(createPatternSnapshot) : []),
@@ -144,6 +153,17 @@ export function App() {
     },
     [isCompactWorkspace, loadGarment],
   );
+  const handleConfirmSleeve = useCallback((options: Parameters<typeof addGuidedSleeve>[0]) => {
+    const result = addGuidedSleeve(options);
+    if (!result.accepted) {
+      window.alert(result.message ?? "Não foi possível criar a manga.");
+      return;
+    }
+    setSleeveWizardOpen(false);
+    setActiveTool("select");
+    setWorkspaceMode("modeling");
+    if (isCompactWorkspace) setMobileView("editor");
+  }, [addGuidedSleeve, isCompactWorkspace]);
   const handleInsertPoint = useCallback(
     (startPointId: string, t: number) => {
       insertPoint(startPointId, t);
@@ -441,6 +461,11 @@ export function App() {
         onPrepareLibrary={() => {
           void loadPatternLibrary();
         }}
+        onOpenSleeveWizard={() => setSleeveWizardOpen(true)}
+        onPrepareSleeveWizard={() => {
+          if (canAddSleeve) void loadSleeveWizard();
+        }}
+        canAddSleeve={canAddSleeve}
         onOpenFitting={() => setFittingOpen(true)}
         onPrepareFitting={() => {
           void loadFittingRoom();
@@ -650,6 +675,16 @@ export function App() {
           <LazyPatternLibraryDialog
             onClose={() => setLibraryOpen(false)}
             onChoose={handleChooseTemplate}
+          />
+        </Suspense>
+      ) : null}
+
+      {sleeveWizardOpen ? (
+        <Suspense fallback={<DialogPlaceholder label="Preparando assistente de manga" />}>
+          <LazySleeveWizardDialog
+            garment={garment}
+            onClose={() => setSleeveWizardOpen(false)}
+            onConfirm={handleConfirmSleeve}
           />
         </Suspense>
       ) : null}

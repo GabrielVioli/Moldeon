@@ -700,8 +700,12 @@ function definitionToPatternPiece(
 
 function migrateSemanticConnectors(piece: PatternPiece): PatternConnectorV3[] {
   const grouped = new Map<ConnectorRoleV3, NonNullable<PatternPiece["segments"]>>();
+  const sleeveDefinition = (piece.segments ?? []).some((segment) => segment.role === "sleeveCapFront")
+    && (piece.segments ?? []).some((segment) => segment.role === "sleeveCapBack");
   for (const segment of piece.segments ?? []) {
-    const role = CONNECTOR_ROLE_BY_SEGMENT_ROLE[segment.role];
+    const role = sleeveDefinition && segment.role === "sideSeam"
+      ? "underarm"
+      : CONNECTOR_ROLE_BY_SEGMENT_ROLE[segment.role];
     if (!role) continue;
     const current = grouped.get(role) ?? [];
     current.push(segment);
@@ -758,6 +762,33 @@ function semanticConnectorLandmarks(
         label: "Segundo pique traseiro",
       },
     );
+  }
+  if (role === "front-armhole" || role === "back-armhole") {
+    landmarks.push({
+      id: `${pieceId}:${role}:shoulder-balance`,
+      kind: "balance",
+      rangeIndex: 0,
+      t: 0,
+      label: "Marca de ombro",
+    });
+  }
+  if (role === "sleeve-cap-front") {
+    landmarks.push({
+      id: `${pieceId}:${role}:apex`,
+      kind: "apex",
+      rangeIndex: lastRange,
+      t: 1,
+      label: "Ápice da manga",
+    });
+  }
+  if (role === "sleeve-cap-back") {
+    landmarks.push({
+      id: `${pieceId}:${role}:apex`,
+      kind: "apex",
+      rangeIndex: 0,
+      t: 0,
+      label: "Ápice da manga",
+    });
   }
   if (role === "shoulder") {
     landmarks.push({

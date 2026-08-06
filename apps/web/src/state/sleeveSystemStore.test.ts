@@ -40,7 +40,7 @@ describe("guided sleeve editor command", () => {
     created.undo();
     const undone = useEditorStore.getState();
     expect(undone.garment.pieces.some(isSleevePiece)).toBe(false);
-    expect(undone.garment.seams?.some((seam) => seam.groupId?.startsWith("guided-sleeve:"))).toBe(false);
+    expect(undone.garment.seams?.some((seam) => seam.groupId?.startsWith("guided-sleeve:")) ?? false).toBe(false);
     expect(undone.garment.pieces).toHaveLength(initial.pieces.length);
 
     undone.redo();

@@ -30,6 +30,11 @@ import { closeDart, createDart, createPatternPiecesFromSplit, extendCutLine } fr
 import { analyzeSeamCompatibility, inferAssemblyPlacement, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
 import { validatePatternContour } from "../domain/polygonGeometry";
 import {
+  draftGuidedSleeve,
+  isSleevePiece,
+  type SleeveDraftSettings,
+} from "../domain/sleeveSystem";
+import {
   applyFabricPreset,
   createDefaultFabricSource,
   createFabricSource,
@@ -147,6 +152,12 @@ export interface EditorState {
   setAssemblyPlacement(pieceId: string, placement: Partial<ReturnType<typeof inferAssemblyPlacement>>): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
+  addGuidedSleeve(options: {
+    frontPieceId: string;
+    backPieceId: string;
+    settings: SleeveDraftSettings;
+    replaceExisting: boolean;
+  }): { accepted: boolean; message?: string };
   movePieceInWorkspace(pieceId: string, xMm: number, yMm: number): void;
   setPieceWorkspaceTransform(pieceId: string, transform: PieceWorkspaceTransform): void;
   setPieceWorkspaceTransforms(transforms: PieceWorkspaceTransform[]): void;
@@ -827,6 +838,102 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         workspaceStates: [...(document.garment.workspaceStates ?? []), nextWorkspace],
       }),
     }));
+  },
+
+
+  addGuidedSleeve: (options) => {
+    const state = get();
+    const existingSleeves = state.garment.pieces.filter(isSleevePiece);
+    if (existingSleeves.length > 0 && !options.replaceExisting) {
+      return {
+        accepted: false,
+        message: "O projeto já possui manga. Confirme a substituição explícita no assistente.",
+      };
+    }
+    let guided;
+    try {
+      guided = draftGuidedSleeve(
+        state.garment,
+        options.frontPieceId,
+        options.backPieceId,
+        options.settings,
+      );
+    } catch (reason) {
+      return {
+        accepted: false,
+        message: reason instanceof Error ? reason.message : "Não foi possível criar a manga.",
+      };
+    }
+    if (guided.compatibility.status === "error") {
+      return {
+        accepted: false,
+        message: guided.compatibility.diagnostics.map((diagnostic) => diagnostic.message).join(" "),
+      };
+    }
+    const sleeveId = guided.sleevePiece.id;
+    const removableIds = new Set([
+      ...existingSleeves.map((piece) => piece.id),
+      ...(state.garment.pieces.some((piece) => piece.id === sleeveId) ? [sleeveId] : []),
+    ]);
+    changeDocument(
+      set,
+      get,
+      "piece-create",
+      existingSleeves.length > 0 ? "Substituir sistema de manga" : "Adicionar sistema de manga",
+      (document) => {
+        const retainedPieces = document.garment.pieces.filter((piece) => !removableIds.has(piece.id));
+        const retainedStates = (document.garment.workspaceStates ?? []).filter((entry) => !removableIds.has(entry.pieceId));
+        const rightmost = retainedPieces.reduce((maximum, piece) => {
+          const workspace = workspaceStateFor(document.garment, piece.id);
+          return Math.max(maximum, workspace.transform.xMm + pieceWidth(piece));
+        }, 0);
+        const workspace: PieceWorkspaceState = {
+          pieceId: sleeveId,
+          transform: {
+            pieceId: sleeveId,
+            xMm: rightmost + 100,
+            yMm: 0,
+            rotationDeg: 0,
+          },
+          visible: true,
+          locked: false,
+        };
+        const retainedSeams = (document.garment.seams ?? []).filter((seam) =>
+          !seam.groupId?.startsWith("guided-sleeve:")
+          && !removableIds.has(seam.first.pieceId)
+          && !removableIds.has(seam.second.pieceId),
+        );
+        const retainedPlacements = (document.garment.assemblyPlacements ?? []).filter(
+          (placement) => !removableIds.has(placement.pieceId),
+        );
+        return {
+          activePieceId: sleeveId,
+          garment: syncLegacyTransforms({
+            ...document.garment,
+            pieces: [...retainedPieces, guided.sleevePiece],
+            seams: [...retainedSeams, ...guided.seams],
+            workspaceStates: [...retainedStates, workspace],
+            assemblyPlacements: [
+              ...retainedPlacements,
+              {
+                pieceId: sleeveId,
+                role: "sleeve",
+                outwardSide: "front",
+                positionMm: [0, 0, 0],
+                rotationDeg: [0, 0, guided.settings.rotationDeg],
+                flipped: false,
+                source: "manual",
+              },
+            ],
+          }),
+        };
+      },
+      {
+        selectedPieceIds: [sleeveId],
+        pieceSelectionActive: true,
+      },
+    );
+    return { accepted: true };
   },
 
   startDraft: (name) => set({
