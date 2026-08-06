@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { chromium } from "playwright-core";
 
 const baseURL = process.env.RECOVERY_BASE_URL ?? "http://127.0.0.1:4179";
@@ -137,4 +137,5 @@ try {
   await browser.close();
 }
 
+await cp("apps/web/dist", `${artifactDir}/dist`, { recursive: true });
 console.log(JSON.stringify(report, null, 2));
