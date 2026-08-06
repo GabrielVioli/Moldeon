@@ -40,4 +40,16 @@ replace(
     "    expect(openFront.points[1].xMm).not.toBe(front.points[1].xMm);\n",
 )
 
-print("Prompt 6 typed metadata and source-boundary follow-up applied")
+replace(
+    "apps/web/src/patterns/basePatternDrafting.ts",
+    '    "Manga experimental",\n',
+    '    "Manga",\n',
+)
+
+replace(
+    "apps/web/src/domain/parametricPatternDocumentV3.test.ts",
+    '    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@1");\n',
+    '    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@2");\n',
+)
+
+print("Prompt 6 typed metadata, compatibility and source-boundary follow-up applied")
