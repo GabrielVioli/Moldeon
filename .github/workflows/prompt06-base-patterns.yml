@@ -42,7 +42,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Generate golden snapshots
-        run: npm test -- --update
+        run: npm run test --workspace @moldeon/web -- --update
       - name: Test golden snapshots and full suite
         run: npm test
       - name: Build
