@@ -81,10 +81,11 @@ Os templates fornecem `previewPlacements` explícitos com região, superfície e
 6. associação de cada instância a um anchor corporal;
 7. transformação para superfície de torso/quadril, tubo local de braço ou meia superfície anatômica de perna;
 8. orientação da face externa por instância;
-9. duas passagens limitadas de relaxamento de costura, com correção máxima de 4 mm por passagem;
-10. renderização apenas das instâncias válidas junto ao avatar.
+9. resolução das partes visuais do manequim totalmente cobertas por cada instância semântica;
+10. uma passagem limitada de relaxamento de costura, com correção máxima de 1,5 mm;
+11. renderização apenas das instâncias válidas, mantendo cabeça, mãos, pés e demais regiões expostas do avatar.
 
-A estabilização não possui massa, velocidade, gravidade, integração temporal, colisão ou autocolisão. Ela existe somente para reduzir pequenas aberturas geométricas entre bordas já posicionadas semanticamente.
+Partes internas do manequim que ficam integralmente sob uma roupa são omitidas do avatar visual, prática equivalente à ocultação de superfícies cobertas em personagens vestidos. Essa máscara é derivada de região, lado e comprimento da instância, nunca do nome da peça. Cabeça, mãos, pés e regiões expostas permanecem visíveis. A estabilização não possui massa, velocidade, gravidade, integração temporal, colisão ou autocolisão. Ela existe somente para reduzir pequenas aberturas geométricas entre bordas já posicionadas semanticamente.
 
 ## Mapeamentos
 

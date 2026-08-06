@@ -12,7 +12,8 @@ Entrega concluída na branch `main` após validação de domínio, frontend, bui
 - montagem determinística em `garment3d/SemanticAvatarArrangement.ts`;
 - viewport único com avatar sempre visível;
 - diagnóstico e omissão de instâncias inválidas;
-- câmera enquadrando avatar e roupa em conjunto.
+- câmera enquadrando avatar e roupa em conjunto;
+- máscara semântica das superfícies do manequim totalmente cobertas, evitando que o corpo recorte visualmente painéis posicionados sobre superfícies curvas.
 
 O molde 2D continua sendo a fonte de verdade. Os painéis 3D são reconstruídos das topologias trianguladas e dos placements semânticos.
 
