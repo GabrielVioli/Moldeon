@@ -1,0 +1,271 @@
+): BasePatternMetadata {
+  const upper = templateId === "bodice-block" || templateId === "tshirt" || templateId === "blouse";
+  return {
+    templateId,
+    templateVersion,
+    constructionSystem: upper
+      ? "Moldeon Reference Upper Block 2026"
+      : "Moldeon Reference Skirt Block 2026",
+    validationStatus,
+    componentStatus,
+    requiredMeasurements: upper
+      ? [
+          "bustMm",
+          "waistMm",
+          "hipMm",
+          "neckWidthMm",
+          "shoulderLengthMm",
+          "shoulderSlopeDeg",
+          "armholeDepthMm",
+          "frontWidthMm",
+          "backWidthMm",
+          "frontWaistLengthMm",
+          "backWaistLengthMm",
+          "hipHeightMm",
+        ]
+      : ["heightMm", "waistMm", "hipMm", "hipHeightMm", "waistDropMm"],
+    estimatedMeasurements: upper
+      ? [
+          "neckWidthMm",
+          "shoulderLengthMm",
+          "shoulderSlopeDeg",
+          "armholeDepthMm",
+          "frontWidthMm",
+          "backWidthMm",
+          "frontWaistLengthMm",
+          "backWaistLengthMm",
+          "hipHeightMm",
+        ]
+      : ["hipHeightMm", "waistDropMm"],
+    ease,
+    limits: {
+      minimumAreaMm2: 4_000,
+      ...(upper ? { shoulderToleranceMm: 0.8 } : {}),
+      sideSeamToleranceMm: upper ? 8 : 6,
+      minimumCurveSeparationMm: 0.5,
+    },
+    manualReview: false,
+    notes,
+  };
+}
+
+function formula(id: string, expression: string, unit: FormulaDefinition["unit"]): FormulaDefinition {
+  return { id, expression, unit, formulaVersion: "formula-v1" };
+}
+
+function evaluateDefinitions(
+  definitions: readonly FormulaDefinition[],
+  inputs: Readonly<Record<string, FormulaQuantity>>,
+): Record<string, number> {
+  const evaluation = new FormulaGraphEngine(definitions, inputs).evaluateAll();
+  if (Object.keys(evaluation.errors).length > 0) {
+    const messages = Object.entries(evaluation.errors).map(([id, error]) => `${id}: ${error.message}`);
+    throw new RangeError(`Não foi possível calcular o molde-base. ${messages.join(" ")}`);
+  }
+  return {
+    ...Object.fromEntries(Object.entries(inputs).map(([id, quantity]) => [id, quantity.value])),
+    ...Object.fromEntries(Object.entries(evaluation.values).map(([id, quantity]) => [id, roundMm(quantity.value)])),
+  };
+}
+
+function measurementInputs(
+  measurements: BodyMeasurements,
+): Record<string, FormulaQuantity> {
+  const resolved = measurements as Readonly<Record<string, number | undefined>>;
+  const required = [
+    "heightMm",
+    "bustMm",
+    "waistMm",
+    "hipMm",
+    "neckWidthMm",
+    "shoulderLengthMm",
+    "shoulderSlopeDeg",
+    "armholeDepthMm",
+    "frontWidthMm",
+    "backWidthMm",
+    "frontWaistLengthMm",
+    "backWaistLengthMm",
+    "hipHeightMm",
+    "waistDropMm",
+    "armLengthMm",
+    "bicepMm",
+    "wristMm",
+  ] as const;
+  const inputs: Record<string, FormulaQuantity> = {};
+  for (const key of required) {
+    const value = resolved[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new RangeError(`A medida ${key} é necessária para esta construção.`);
+    }
+    inputs[key] = formulaQuantity(value, key.endsWith("Deg") ? "degree" : "mm");
+  }
+  return inputs;
+}
+
+function formulaVariables(
+  definitions: readonly FormulaDefinition[],
+  templateVersion: string,
+): ParametricVariableRecord[] {
+  const unique = new Map(definitions.map((definition) => [definition.id, definition]));
+  return [...unique.values()].map((definition) => ({
+    id: definition.id,
+    name: definition.id,
+    expression: definition.expression,
+    unit: definition.unit,
+    formulaVersion: `${templateVersion}:formula-v1`,
+    dependencies: parseFormula(definition.expression).dependencies,
+    description: formulaDescription(definition.id),
+  }));
+}
+
+function constructionGraph(
+  definitions: readonly FormulaDefinition[],
+): ParametricConstructionGraphRecord {
+  const unique = new Map(definitions.map((definition) => [definition.id, definition]));
+  const measurementKeys = new Set<string>();
+  for (const definition of unique.values()) {
+    for (const dependency of parseFormula(definition.expression).dependencies) {
+      if (!unique.has(dependency)) measurementKeys.add(dependency);
+    }
+  }
+  return {
+    version: 2,
+    nodes: [
+      ...[...measurementKeys].sort().map((measurementKey) => ({
+        id: `measurement:${measurementKey}`,
+        kind: "measurement" as const,
+        dependencies: [],
+        payload: { measurementKey },
+      })),
+      ...[...unique.values()].map((definition) => ({
+        id: `variable:${definition.id}`,
+        kind: "variable" as const,
+        dependencies: parseFormula(definition.expression).dependencies.map((dependency) =>
+          unique.has(dependency) ? `variable:${dependency}` : `measurement:${dependency}`,
+        ),
+        payload: {
+          variableId: definition.id,
+          expression: definition.expression,
+          unit: definition.unit,
+          formulaVersion: definition.formulaVersion ?? "formula-v1",
+        },
+      })),
+    ],
+  };
+}
+
+function formulaDescription(id: string): string {
+  const descriptions: Record<string, string> = {
+    frontShare: "Distribuição estrutural entre frente e costas a partir das larguras corporais.",
+    shoulderRun: "Projeção horizontal do ombro medido com inclinação real.",
+    shoulderDrop: "Queda vertical do ombro medida em graus.",
+    frontArmholeNotchY: "Landmark frontal da cava.",
+    backArmholeNotchY: "Landmark traseiro da cava.",
+    frontDartWidth: "Parcela frontal da supressão de cintura absorvida pela pence.",
+    backDartWidth: "Parcela traseira da supressão de cintura absorvida pela pence.",
+    skirtLength: "Comprimento estético versionado com limite mínimo explícito.",
+  };
+  return descriptions[id] ?? "Variável versionada da construção geométrica.";
+}
+
+interface PointHandles {
+  in?: { xMm: number; yMm: number };
+  out?: { xMm: number; yMm: number };
+}
+
+function point(id: string, xMm: number, yMm: number, handles: PointHandles = {}): PatternPoint {
+  return {
+    id,
+    xMm: roundMm(xMm),
+    yMm: roundMm(yMm),
+    ...(handles.in ? { handleIn: { xMm: roundMm(handles.in.xMm), yMm: roundMm(handles.in.yMm) } } : {}),
+    ...(handles.out ? { handleOut: { xMm: roundMm(handles.out.xMm), yMm: roundMm(handles.out.yMm) } } : {}),
+  };
+}
+
+interface PieceOptions {
+  cutQuantity: number;
+  cutOnFold?: boolean;
+  previewPlacements: PatternPreviewPlacement[];
+  segmentRoles: SegmentRole[];
+  darts?: PatternPiece["darts"];
+  internalLines?: PatternPiece["internalLines"];
+  grainline: NonNullable<PatternPiece["grainline"]>;
+  annotations: NonNullable<PatternPiece["annotations"]>;
+}
+
+function piece(id: string, name: string, points: PatternPoint[], options: PieceOptions): PatternPiece {
+  const migrated = migrateLegacyPieceToSegments({
+    id,
+    name,
+    seamAllowanceMm: 10,
+    cutQuantity: options.cutQuantity,
+    fabricId: "fabric-primary",
+    ...(options.cutOnFold === undefined ? {} : { cutOnFold: options.cutOnFold }),
+    previewPlacements: options.previewPlacements.map((current) => ({ ...current, pieceId: id })),
+    points: points.map((current) => ({ ...current, id: `${id}:${current.id}` })),
+    ...(options.darts ? { darts: options.darts.map((dart) => ({ ...dart, pieceId: id })) } : {}),
+    ...(options.internalLines ? { internalLines: options.internalLines.map((line) => ({ ...line, pieceId: id })) } : {}),
+    grainline: options.grainline,
+    annotations: options.annotations,
+  });
+  migrated.segments = migrated.segments?.map((segment, index) => ({
+    ...segment,
+    role: options.segmentRoles[index] ?? "other",
+  }));
+  return migrated;
+}
+
+function referenceLine(
+  id: string,
+  pieceId: string,
+  name: string,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): NonNullable<PatternPiece["internalLines"]>[number] {
+  return {
+    id,
+    pieceId,
+    name,
+    nodes: [
+      point("start", x1, y1),
+      point("end", x2, y2),
+    ],
+    segments: [{ id: `${id}:segment`, startNodeId: "start", endNodeId: "end", kind: "line" }],
+    purpose: "reference",
+    visible: true,
+    locked: true,
+    metadata: { source: "template", label: name, version: 1 },
+  };
+}
+
+function placement(
+  region: PatternPreviewPlacement["region"],
+  surface: PatternPreviewPlacement["surface"],
+  bodySide: PatternPreviewPlacement["bodySide"],
+  mirrorX = false,
+): PatternPreviewPlacement {
+  return {
+    id: `placement-${region}-${surface}-${bodySide}`,
+    pieceId: "pending-piece",
+    region,
+    surface,
+    bodySide,
+    rotationDeg: 0,
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 0,
+    scale: 1,
+    ...(mirrorX ? { mirrorX: true } : {}),
+  };
+}
+
+function interpolateY(start: number, end: number, t: number): number {
+  return start + (end - start) * Math.max(0, Math.min(1, t));
+}
+
+function roundMm(value: number): number {
+  return Math.round(value * 10) / 10;
+}
