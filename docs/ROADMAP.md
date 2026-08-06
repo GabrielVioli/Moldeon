@@ -118,3 +118,22 @@ Cada fase deve terminar com:
 - inspeção funcional e visual;
 - documento de progresso;
 - compatibilidades temporárias listadas objetivamente.
+
+## Prompt 9 concluído: manequim vestido
+
+- [x] separar avatar paramétrico, visual e proxies de colisão;
+- [x] anchors de torso, ombros, braços, cintura, quadril, pernas, pescoço e cabeça;
+- [x] remover corpo ocultável, modo explodido e roupa isolada;
+- [x] remover inicialização cilíndrica global e inferência por nome;
+- [x] vestir camiseta, saia, calça e mangas por placements semânticos;
+- [x] omitir instâncias inválidas e emitir diagnósticos;
+- [x] validar desktop e mobile em navegador.
+
+### Próximo ciclo físico
+
+- integrar proxies ao solver XPBD;
+- gravidade, colisão e estabilização temporal;
+- constraints de costura com distribuição de folga;
+- autocolisão e camadas em fases posteriores;
+- não regredir para roupa isolada ou modos de inspeção explodidos.
+

@@ -174,3 +174,19 @@ Interface
 ```
 
 React não entra no loop por partícula. Three.js não decide a semântica de costura. O solver não modifica a geometria 2D autoritativa.
+
+## Avatar e arranjo semântico
+
+A camada 3D visível é dividida em quatro partes:
+
+1. `avatar/AvatarParametricModel.ts`: medidas, landmarks, articulações e anchors, sem Three.js.
+2. `avatar/AvatarCollisionModel.ts`: elipsoides e cápsulas futuros, sem renderização.
+3. `viewport/AvatarVisual.ts`: LOD visual procedural e materiais do manequim.
+4. `garment3d/SemanticAvatarArrangement.ts`: expansão, validação, associação aos anchors e estabilização geométrica limitada.
+
+`GlobalThreeViewport` apenas coordena renderer, avatar visual, malhas de roupa, câmera e descarte. React recebe diagnósticos agregados e não participa de qualquer loop por vértice.
+
+O pipeline ativo não contém projeção cilíndrica global, modo explodido ou corpo ocultável. `previewPlacements` são metadados de arranjo; transforms da bancada 2D não determinam a posição no corpo.
+
+Nenhum asset externo de avatar é usado. A geometria procedural pertence ao código MIT do projeto.
+

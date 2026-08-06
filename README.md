@@ -32,12 +32,11 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Diagnósticos de tangência, excesso de interseções, regiões degeneradas e costuras afetadas antes de aplicar operações.
 - Grafo de montagem com componentes conectados, bordas abertas, alertas e elegibilidade determinística para o 3D.
 - Placements estruturais, folgas da roupa e acabamentos de borda persistentes e cobertos por undo/redo.
-- Manequim procedural proporcional às medidas, sem depender de arquivo 3D
-  externo pesado.
-- Conversão visual de todas as peças em painéis posicionados ao redor do manequim.
-- Região, frente/costas e lado do corpo configuráveis por peça.
-- Caimento visual rápido que responde à gramatura, espessura, elasticidade,
-  rigidez e atrito do tecido.
+- Manequim procedural humano com modelo paramétrico, visual low-poly e proxies de colisão separados, sem asset 3D externo.
+- Montagem semântica por anchors de torso, ombros, braços, cintura, quadril, pernas, pescoço e cabeça.
+- Camisetas, saias, calças e mangas usam região, superfície e lado explícitos; instâncias inválidas geram diagnóstico em vez de flutuar.
+- O 3D público sempre mostra o manequim vestido. Não existem corpo ocultável, roupa isolada ou modo explodido.
+- Estabilização geométrica limitada responde às costuras, sem alegar gravidade ou caimento físico.
 - Margem de costura visível e exportação SVG com linhas de corte e costura em escala 1:1.
 - Undo/redo transacional com limite de memória, atalhos de teclado e um único comando por gesto.
 - Curvas Bézier cúbicas editáveis por alças, preservadas no SVG e amostradas com limite de custo para 3D.
@@ -55,9 +54,9 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 2. Ajuste as medidas.
 3. Desenhe caminhos internos e escolha sua finalidade.
 4. Aplique corte, corte e costura ou fechamento de pence quando necessário.
-5. Aproxime outras bordas e clique em **Costurar**.
-6. Veja a roupa em 3D.
-7. Use **Prova** quando quiser vestir no corpo.
+5. Selecione duas bordas e clique em **Costurar**.
+6. Use **Vestir no manequim**.
+7. Corrija qualquer diagnóstico de anchor, instância, conector ou costura mostrado sobre o 3D.
 
 ## Atalhos do editor
 
@@ -78,7 +77,7 @@ paramétrica e a edição de múltiplas peças. A base anterior a essas otimiza�
 baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 - Three.js não entra no JavaScript inicial.
-- Em qualquer tela, o 3D só é baixado depois de uma solicitação explícita e quando há ao menos duas peças trianguláveis ligadas por uma costura válida.
+- Em qualquer tela, o 3D só é baixado depois de uma solicitação explícita e quando há ao menos uma peça triangulável.
 - WebGL 2 e os recursos comuns do Three.js formam o caminho 3D mais leve.
 - O módulo adicional de WebGPU só é baixado quando a API está disponível.
 - O Canvas 2D reutiliza o mesmo `ResizeObserver` e limita atualizações ao frame da tela.
@@ -88,11 +87,9 @@ baixava cerca de 1,07 MB, ou 301 KB comprimidos.
 
 ## O que ainda não é uma simulação profissional
 
-O botão **Montar no 3D** desta versão executa uma prévia geométrica estrutural; **Vestir no corpo** abre a Prova separadamente.
-Os presets já alteram aderência, volume e ondulação de forma aproximada, mas
-ainda não calculam gravidade, autocolisão, franzido, elástico ou costuras
-complexas. O solver XPBD inicial está isolado para ser desenvolvido e testado
-sem contaminar o editor.
+O botão **Vestir no manequim** executa uma montagem geométrica por anchors corporais. O avatar é sempre visível e peças inválidas não recebem posição arbitrária.
+
+A etapa ainda não calcula gravidade, colisão, autocolisão, enrugamento, franzido, elástico ou caimento real. O solver XPBD permanece isolado para ser desenvolvido e testado sem contaminar o editor ou transformar a montagem determinística em uma falsa simulação.
 
 O fechamento da pence já é estrutural no documento, mas seu volume ainda não é simulado no avatar.
 
