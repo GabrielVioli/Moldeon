@@ -1,0 +1,41 @@
+name: Recovery Gate Zero Workspace
+
+on:
+  push:
+    paths:
+      - "scripts/apply-recovery-zero-workspace.py"
+      - ".github/workflows/recovery-zero-workspace.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-zero-workspace-main
+  cancel-in-progress: true
+
+jobs:
+  apply-test-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: python scripts/apply-recovery-zero-workspace.py
+      - run: npm ci
+      - run: git diff --check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Commit validated zero-workspace recovery
+        run: |
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src/state/editorStore.ts apps/web/src/App.tsx apps/web/src/recovery.css
+          git commit -m "fix: allow an empty editable workspace"
+          git push origin main
