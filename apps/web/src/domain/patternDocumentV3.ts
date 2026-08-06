@@ -1250,8 +1250,8 @@ function parseConstructionGraph(value: unknown): PatternDocumentV3["construction
 }
 
 function parsePatternDefinitions(value: unknown): PatternDefinitionV3[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new TypeError("O documento precisa ter ao menos uma definição de molde.");
+  if (!Array.isArray(value)) {
+    throw new TypeError("As definições de molde do documento são inválidas.");
   }
   return value.map(parsePatternDefinition);
 }

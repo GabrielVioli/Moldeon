@@ -1862,19 +1862,18 @@ function draw(
 
   drawGrid(context, width, height, camera);
 
-  const activePiece = garment.pieces.find((piece) => piece.id === activePieceId) ?? snapshot.piece;
-  const activePoints = activePiece.points;
-  if (activePoints.length < 3) return;
-  const sampledContour = samplePatternContour(activePoints);
+  const activePiece = garment.pieces.find((piece) => piece.id === activePieceId);
 
   context.save();
   context.translate(camera.panX, camera.panY);
   context.scale(camera.zoom, camera.zoom);
 
-  const activeTransform = getPieceWorkspaceTransform(garment, activePieceId);
+  const activeTransform = activePiece
+    ? getPieceWorkspaceTransform(garment, activePieceId)
+    : { pieceId: "empty-workspace", xMm: 0, yMm: 0, rotationDeg: 0 };
 
   // draw persistent guides (from the active piece metadata)
-  if (activePiece.guides) {
+  if (activePiece?.guides) {
     for (const guide of activePiece.guides) {
       const first = pieceLocalToWorld(
         guide.orientation === "vertical"

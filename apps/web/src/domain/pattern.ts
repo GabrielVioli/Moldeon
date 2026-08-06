@@ -610,8 +610,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
   if (!isRecord(value)) {
     throw new TypeError("O projeto de roupa precisa ser um objeto.");
   }
-  if (!Array.isArray(value.pieces) || value.pieces.length === 0) {
-    throw new TypeError("O projeto precisa ter pelo menos uma peça.");
+  if (!Array.isArray(value.pieces)) {
+    throw new TypeError("A lista de peças do projeto é inválida.");
   }
 
   // keep raw pieces for legacy migration (some older documents may include seams per-piece)

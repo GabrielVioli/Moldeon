@@ -133,12 +133,12 @@ export async function saveAutosave(
   activePieceId: string,
 ): Promise<"opfs" | "localStorage"> {
   const document = garmentDraftToPatternDocumentV3(garment, {
-    activePatternId: activePieceId,
+    ...(activePieceId ? { activePatternId: activePieceId } : {}),
   });
   const serialized = JSON.stringify({
     version: 3,
     document,
-    activePatternId: activePieceId,
+    ...(activePieceId ? { activePatternId: activePieceId } : {}),
     savedAt: new Date().toISOString(),
   });
   const storage = navigator.storage as StorageManagerWithDirectory | undefined;
@@ -221,15 +221,16 @@ export function parseAutosaveOrThrow(serialized: string): ParsedAutosave {
     const document = parsePatternDocumentV3(value.document);
     const activePieceId =
       value.activePatternId === undefined
-        ? document.workspace.activePatternId ?? document.patternDefinitions[0]?.id
+        ? document.workspace.activePatternId ?? document.patternDefinitions[0]?.id ?? ""
         : readString(value.activePatternId, "A peça ativa do autosave V3");
-    if (!activePieceId) {
+    const garment = patternDocumentV3ToGarmentDraft(document);
+    if (activePieceId) {
+      assertActivePattern(garment, activePieceId);
+    } else if (garment.pieces.length > 0) {
       throw new AutosaveParseError(
-        "O autosave V3 não possui uma definição de molde ativa.",
+        "O autosave V3 possui peças, mas nenhuma definição ativa.",
       );
     }
-    const garment = patternDocumentV3ToGarmentDraft(document);
-    assertActivePattern(garment, activePieceId);
     return {
       kind: "garment",
       garment,

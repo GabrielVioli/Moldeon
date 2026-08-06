@@ -230,7 +230,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     history.clear();
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces.find((piece) => piece.id === requestedPieceId) ?? normalized.pieces[0];
-    if (!activePiece) return;
+    if (!activePiece) {
+      set({
+        garment: ensureWorkspaceState(normalized),
+        baselinePieces: [],
+        activePieceId: "",
+        engineBackend: backend,
+        selectedPointId: null,
+        selectedEdgeId: null,
+        selectedSeamId: null,
+        selectedDartId: null,
+        pieceSelectionActive: false,
+        selectedPieceIds: [],
+        draftContour: null,
+        draftCursor: null,
+        draftError: null,
+        seamIssues: [],
+        seamProposal: null,
+        seamFirstEdge: null,
+        nearbySeamSuggestion: null,
+        cutDraft: null,
+        dartDraft: null,
+        measureDraft: null,
+        ...historyAvailability(),
+      });
+      return;
+    }
     const snapshot = restoreSnapshot(activePiece);
     set({
       garment: replacePiece(normalized, snapshot.piece),
@@ -262,7 +287,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     history.clear();
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces[0];
-    if (!activePiece) return;
+    if (!activePiece) {
+      set({
+        garment: ensureWorkspaceState(normalized),
+        baselinePieces: [],
+        activePieceId: "",
+        selectedPointId: null,
+        selectedEdgeId: null,
+        selectedSeamId: null,
+        selectedDartId: null,
+        selectedPieceIds: [],
+        pieceSelectionActive: false,
+        seamIssues: [],
+        seamProposal: null,
+        seamFirstEdge: null,
+        nearbySeamSuggestion: null,
+        cutDraft: null,
+        dartDraft: null,
+        measureDraft: null,
+        draftContour: null,
+        draftCursor: null,
+        draftError: null,
+        ...historyAvailability(),
+      });
+      return;
+    }
     applyDocumentState(set, get, { garment: normalized, activePieceId: activePiece.id });
     set({ baselinePieces: clonePieces(normalized.pieces), ...historyAvailability() });
   },
@@ -299,14 +348,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const piece = state.garment.pieces.find((candidate) => candidate.id === activePieceId);
     set({ selectedPieceIds, pieceSelectionActive: selectedPieceIds.length > 0, ...(piece ? { activePieceId, snapshot: restoreSnapshot(piece) } : {}), selectedPointId: null, selectedEdgeId: null, selectedSeamId: null });
   },
-  selectAllPieces: () => set((state) => ({ selectedPieceIds: state.garment.pieces.filter((piece) => workspaceStateFor(state.garment, piece.id).visible).map((piece) => piece.id), pieceSelectionActive: true, selectedPointId: null, selectedEdgeId: null, selectedSeamId: null })),
+  selectAllPieces: () => set((state) => {
+    const selectedPieceIds = state.garment.pieces
+      .filter((piece) => workspaceStateFor(state.garment, piece.id).visible)
+      .map((piece) => piece.id);
+    return {
+      selectedPieceIds,
+      pieceSelectionActive: selectedPieceIds.length > 0,
+      selectedPointId: null,
+      selectedEdgeId: null,
+      selectedSeamId: null,
+    };
+  }),
   deleteSelectedPieces: () => {
     const state = get();
     const removable = state.selectedPieceIds.filter((id) => !workspaceStateFor(state.garment, id).locked);
-    if (removable.length === 0 || removable.length >= state.garment.pieces.length) return;
+    if (removable.length === 0) return;
     changeDocument(set, get, "piece-delete", "Excluir peças selecionadas", (document) => {
       const pieces = document.garment.pieces.filter((piece) => !removable.includes(piece.id));
-      return { activePieceId: pieces[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces, seams: (document.garment.seams ?? []).filter((seam) => !removable.includes(seam.first.pieceId) && !removable.includes(seam.second.pieceId)), workspaceStates: (document.garment.workspaceStates ?? []).filter((item) => !removable.includes(item.pieceId)) }) };
+      return {
+        activePieceId: pieces[0]?.id ?? "",
+        garment: syncLegacyTransforms({
+          ...document.garment,
+          pieces,
+          seams: (document.garment.seams ?? []).filter(
+            (seam) => !removable.includes(seam.first.pieceId) && !removable.includes(seam.second.pieceId),
+          ),
+          workspaceStates: (document.garment.workspaceStates ?? []).filter(
+            (item) => !removable.includes(item.pieceId),
+          ),
+          assemblyPlacements: (document.garment.assemblyPlacements ?? []).filter(
+            (item) => !removable.includes(item.pieceId),
+          ),
+          ...(document.garment.parametric
+            ? {
+                parametric: {
+                  ...document.garment.parametric,
+                  generations: document.garment.parametric.generations.filter(
+                    (generation) => !removable.includes(generation.patternId),
+                  ),
+                },
+              }
+            : {}),
+        }),
+      };
     }, { selectedPieceIds: [], pieceSelectionActive: false });
   },
   rotateSelectedPieces: (deltaDeg) => {
@@ -1020,10 +1105,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cancelDraft: () => set({ draftContour: null, draftCursor: null, draftError: null }),
 
   deletePiece: (pieceId) => {
-    if (get().garment.pieces.length <= 1) return;
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
     changeDocument(set, get, "piece-delete", "Excluir peça", (document) => {
       const pieces = document.garment.pieces.filter((piece) => piece.id !== pieceId);
-      const activePieceId = document.activePieceId === pieceId ? pieces[0].id : document.activePieceId;
+      const activePieceId = document.activePieceId === pieceId
+        ? (pieces[0]?.id ?? "")
+        : document.activePieceId;
       return {
         activePieceId,
         garment: syncLegacyTransforms({
@@ -1033,6 +1120,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             (seam) => seam.first.pieceId !== pieceId && seam.second.pieceId !== pieceId,
           ),
           workspaceStates: (document.garment.workspaceStates ?? []).filter((state) => state.pieceId !== pieceId),
+          assemblyPlacements: (document.garment.assemblyPlacements ?? []).filter(
+            (placement) => placement.pieceId !== pieceId,
+          ),
+          ...(document.garment.parametric
+            ? {
+                parametric: {
+                  ...document.garment.parametric,
+                  generations: document.garment.parametric.generations.filter(
+                    (generation) => generation.patternId !== pieceId,
+                  ),
+                },
+              }
+            : {}),
         }),
       };
     }, { pieceSelectionActive: false });
@@ -1082,7 +1182,28 @@ function applyDocumentState(
 ): void {
   const garment = ensureWorkspaceState(document.garment);
   const piece = garment.pieces.find((candidate) => candidate.id === document.activePieceId) ?? garment.pieces[0];
-  if (!piece) return;
+  if (!piece) {
+    set({
+      garment,
+      activePieceId: "",
+      selectedPointId: null,
+      selectedEdgeId: null,
+      selectedSeamId: null,
+      selectedDartId: null,
+      selectedPieceIds: [],
+      pieceSelectionActive: false,
+      seamIssues: [],
+      seamProposal: null,
+      seamFirstEdge: null,
+      nearbySeamSuggestion: null,
+      cutDraft: null,
+      dartDraft: null,
+      measureDraft: null,
+      ...historyAvailability(),
+      ...additional,
+    });
+    return;
+  }
   const snapshot = restoreSnapshot(piece);
   const selectedPieceIds = get().selectedPieceIds.filter((id) => garment.pieces.some((candidate) => candidate.id === id));
   set({
