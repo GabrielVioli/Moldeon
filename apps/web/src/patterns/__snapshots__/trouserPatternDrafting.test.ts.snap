@@ -1,0 +1,176 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`versioned parametric trouser drafting > matches golden geometry metrics for varied bodies 1`] = `
+[
+  {
+    "fixture": "small",
+    "pieces": [
+      {
+        "areaMm2": 201120.3,
+        "backCrotchMm": 0,
+        "dartWidthsMm": [
+          13.7,
+        ],
+        "frontCrotchMm": 300.6,
+        "heightMm": 954.1,
+        "inseamMm": 697.3,
+        "name": "Frente",
+        "outseamMm": 963.9,
+        "perimeterMm": 2310.6,
+        "widthMm": 308.1,
+      },
+      {
+        "areaMm2": 226111.9,
+        "backCrotchMm": 396.8,
+        "dartWidthsMm": [
+          24.2,
+        ],
+        "frontCrotchMm": 0,
+        "heightMm": 973.8,
+        "inseamMm": 709.1,
+        "name": "Costas",
+        "outseamMm": 963.4,
+        "perimeterMm": 2464.1,
+        "widthMm": 375.9,
+      },
+    ],
+    "template": "straight-pants@2",
+  },
+  {
+    "fixture": "medium",
+    "pieces": [
+      {
+        "areaMm2": 251417.6,
+        "backCrotchMm": 0,
+        "dartWidthsMm": [
+          14.9,
+        ],
+        "frontCrotchMm": 334.3,
+        "heightMm": 1040.7,
+        "inseamMm": 763.4,
+        "name": "Frente",
+        "outseamMm": 1052.3,
+        "perimeterMm": 2533.1,
+        "widthMm": 362.9,
+      },
+      {
+        "areaMm2": 283071.9,
+        "backCrotchMm": 448.4,
+        "dartWidthsMm": [
+          26,
+        ],
+        "frontCrotchMm": 0,
+        "heightMm": 1062.1,
+        "inseamMm": 775.3,
+        "name": "Costas",
+        "outseamMm": 1051.9,
+        "perimeterMm": 2709.2,
+        "widthMm": 443.4,
+      },
+    ],
+    "template": "straight-pants@2",
+  },
+  {
+    "fixture": "large",
+    "pieces": [
+      {
+        "areaMm2": 336262.5,
+        "backCrotchMm": 0,
+        "dartWidthsMm": [
+          8.9,
+        ],
+        "frontCrotchMm": 382.8,
+        "heightMm": 1133.6,
+        "inseamMm": 835.9,
+        "name": "Frente",
+        "outseamMm": 1143.2,
+        "perimeterMm": 2841.5,
+        "widthMm": 457.1,
+      },
+      {
+        "areaMm2": 379603.2,
+        "backCrotchMm": 526.1,
+        "dartWidthsMm": [
+          16,
+        ],
+        "frontCrotchMm": 0,
+        "heightMm": 1158.1,
+        "inseamMm": 848,
+        "name": "Costas",
+        "outseamMm": 1144.7,
+        "perimeterMm": 3057.5,
+        "widthMm": 557.6,
+      },
+    ],
+    "template": "straight-pants@2",
+  },
+  {
+    "fixture": "tall-narrow",
+    "pieces": [
+      {
+        "areaMm2": 281482.9,
+        "backCrotchMm": 0,
+        "dartWidthsMm": [
+          10.6,
+        ],
+        "frontCrotchMm": 372.6,
+        "heightMm": 1226.4,
+        "inseamMm": 902.2,
+        "name": "Frente",
+        "outseamMm": 1232.8,
+        "perimeterMm": 2886.5,
+        "widthMm": 344.3,
+      },
+      {
+        "areaMm2": 316040.7,
+        "backCrotchMm": 480.2,
+        "dartWidthsMm": [
+          17.7,
+        ],
+        "frontCrotchMm": 0,
+        "heightMm": 1249.4,
+        "inseamMm": 914.2,
+        "name": "Costas",
+        "outseamMm": 1234.7,
+        "perimeterMm": 3054.5,
+        "widthMm": 419.2,
+      },
+    ],
+    "template": "straight-pants@2",
+  },
+  {
+    "fixture": "short-wide",
+    "pieces": [
+      {
+        "areaMm2": 282957.1,
+        "backCrotchMm": 0,
+        "dartWidthsMm": [
+          17.3,
+        ],
+        "frontCrotchMm": 338.9,
+        "heightMm": 917,
+        "inseamMm": 674.5,
+        "name": "Frente",
+        "outseamMm": 937.4,
+        "perimeterMm": 2429.3,
+        "widthMm": 472.6,
+      },
+      {
+        "areaMm2": 320283.8,
+        "backCrotchMm": 489.5,
+        "dartWidthsMm": [
+          29.6,
+        ],
+        "frontCrotchMm": 0,
+        "heightMm": 939.5,
+        "inseamMm": 686.6,
+        "name": "Costas",
+        "outseamMm": 934.7,
+        "perimeterMm": 2651.6,
+        "widthMm": 578.4,
+      },
+    ],
+    "template": "straight-pants@2",
+  },
+]
+`;

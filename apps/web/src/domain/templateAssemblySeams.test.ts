@@ -67,6 +67,26 @@ describe("template assembly seams", () => {
     );
   });
 
+
+  it("creates complete definition-level outseam and inseam ranges for trousers", () => {
+    const garment = createGarmentFromTemplate(
+      "straight-pants",
+      DEFAULT_BODY_MEASUREMENTS,
+    );
+    const seams = buildTemplateAssemblySeams(garment);
+    const roles = seams.map((seam) => {
+      const firstPiece = garment.pieces.find((piece) => piece.id === seam.first.pieceId)!;
+      const secondPiece = garment.pieces.find((piece) => piece.id === seam.second.pieceId)!;
+      const firstRole = getPatternEdges(firstPiece).find((edge) => edge.id === seam.first.edgeId)?.role;
+      const secondRole = getPatternEdges(secondPiece).find((edge) => edge.id === seam.second.edgeId)?.role;
+      return `${firstRole}/${secondRole}`;
+    });
+    expect(seams.length).toBeGreaterThanOrEqual(6);
+    expect(roles.filter((role) => role === "outseam/outseam").length).toBeGreaterThanOrEqual(3);
+    expect(roles.filter((role) => role === "inseam/inseam").length).toBeGreaterThanOrEqual(2);
+    expect(roles.some((role) => /Crotch/.test(role))).toBe(false);
+  });
+
   it("replaces incompatible template-edge seams and preserves unrelated custom seams", () => {
     const generated = createGarmentFromTemplate(
       "tshirt",

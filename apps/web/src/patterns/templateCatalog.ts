@@ -25,6 +25,10 @@ import {
   isBasePatternTemplateId,
   type PatternValidationStatus,
 } from "./basePatternDrafting";
+import {
+  draftTrouserPattern,
+  TROUSER_PATTERN_METADATA,
+} from "./trouserPatternDrafting";
 
 export type PatternTemplateId =
   | "bodice-block"
@@ -47,6 +51,7 @@ export interface PatternTemplateSummary {
   requiredMeasurements: string[];
   estimatedMeasurements: string[];
   formulaVersion: string;
+  instanceExpansion?: string[];
 }
 
 export const DEFAULT_BODY_MEASUREMENTS: BodyMeasurements = {
@@ -66,7 +71,7 @@ export const TEMPLATE_FORMULA_VERSIONS: Record<PatternTemplateId, string> = {
   blouse: BASE_PATTERN_METADATA.blouse.templateVersion,
   "straight-skirt": BASE_PATTERN_METADATA["straight-skirt"].templateVersion,
   "mini-skirt": BASE_PATTERN_METADATA["mini-skirt"].templateVersion,
-  "straight-pants": "straight-pants@1",
+  "straight-pants": TROUSER_PATTERN_METADATA.templateVersion,
   "basic-jacket": "basic-jacket@1",
 };
 
@@ -151,14 +156,18 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     id: "straight-pants",
     name: "Calça reta",
     category: "Parte de baixo",
-    description: "Perna reta e gancho simplificado para edição.",
-    pieces: "Frente e costas",
+    description: "Base paramétrica com frente, costas e ganchos construídos separadamente.",
+    pieces: "2 definições editáveis · 4 instâncias físicas",
     status: "available",
-    validationStatus: "experimental",
-    reviewNotes: ["Fora do escopo do Prompt 6; o gerador de calça permanece simplificado e sem revisão manual."],
+    validationStatus: TROUSER_PATTERN_METADATA.validationStatus,
+    reviewNotes: TROUSER_PATTERN_METADATA.notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-pants"],
-    requiredMeasurements: ["cintura", "quadril", "altura", "entrepernas"],
-    estimatedMeasurements: ["gancho", "coxa", "joelho", "barra"],
+    requiredMeasurements: ["cintura", "quadril", "gancho sentado", "coxa", "joelho", "entrepernas"],
+    estimatedMeasurements: ["profundidade do gancho", "assento", "queda de cintura", "tornozelo"],
+    instanceExpansion: [
+      "Frente · cortar 2x → frente esquerda e frente direita",
+      "Costas · cortar 2x → costas esquerda e costas direita",
+    ],
   },
   {
     id: "basic-jacket",
@@ -188,11 +197,13 @@ export function createGarmentFromTemplate(
   if (!summary) throw new RangeError("Molde-base desconhecido.");
   if (summary.status !== "available") throw new RangeError(`${summary.name} está em desenvolvimento.`);
 
-  const baseDraft = isBasePatternTemplateId(templateId)
+  const parametricDraft = isBasePatternTemplateId(templateId)
     ? draftBasePattern(templateId, measurements)
-    : undefined;
+    : templateId === "straight-pants"
+      ? draftTrouserPattern(measurements)
+      : undefined;
   const fabric = createDefaultFabricSource();
-  const pieces = (baseDraft?.pieces ?? generator(measurements)).map((piece) => ({
+  const pieces = (parametricDraft?.pieces ?? generator(measurements)).map((piece) => ({
     ...piece,
     fabricId: fabric.id,
   }));
@@ -210,8 +221,8 @@ export function createGarmentFromTemplate(
       schemaVersion: 1,
       templateId,
       templateVersion,
-      variables: baseDraft?.variables ?? [],
-      constructionGraph: baseDraft?.constructionGraph
+      variables: parametricDraft?.variables ?? [],
+      constructionGraph: parametricDraft?.constructionGraph
         ?? createInitialConstructionGraph(BODY_MEASUREMENT_CATALOG.map((entry) => entry.key)),
       generations: pieces.map((piece) => ({
         patternId: piece.id,
@@ -223,22 +234,22 @@ export function createGarmentFromTemplate(
         measurementValues: snapshot.values,
         measurementOrigins: snapshot.origins,
         defaultValues: snapshot.defaults,
-        ...(baseDraft ? {
-          constructionSystem: baseDraft.metadata.constructionSystem,
-          validationStatus: baseDraft.metadata.validationStatus,
-          componentValidation: baseDraft.metadata.componentStatus,
-          requiredMeasurements: baseDraft.metadata.requiredMeasurements,
-          estimatedMeasurements: baseDraft.metadata.estimatedMeasurements,
-          ease: baseDraft.metadata.ease,
-          limits: baseDraft.metadata.limits,
-          manualReview: baseDraft.metadata.manualReview,
+        ...(parametricDraft ? {
+          constructionSystem: parametricDraft.metadata.constructionSystem,
+          validationStatus: parametricDraft.metadata.validationStatus,
+          componentValidation: parametricDraft.metadata.componentStatus,
+          requiredMeasurements: parametricDraft.metadata.requiredMeasurements,
+          estimatedMeasurements: parametricDraft.metadata.estimatedMeasurements,
+          ease: parametricDraft.metadata.ease,
+          limits: parametricDraft.metadata.limits,
+          manualReview: parametricDraft.metadata.manualReview,
         } : {}),
       })),
     },
     fabrics: [fabric],
     pieces,
     assemblyPlacements: pieces.map((piece, index) => ({ ...inferAssemblyPlacement(piece, index), source: "template" })),
-    ease: baseDraft?.ease ?? { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 },
+    ease: parametricDraft?.ease ?? { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50 },
   };
 }
 
@@ -276,7 +287,7 @@ const GENERATORS: Record<PatternTemplateId, TemplateGenerator> = {
       lengthMm: measurements.heightMm * 0.245,
       hemFactor: 1.06,
     }),
-  "straight-pants": createPantsPieces,
+  "straight-pants": (measurements) => draftTrouserPattern(measurements).pieces,
   "basic-jacket": createJacketPieces,
 };
 
@@ -499,104 +510,6 @@ function createSkirtPieces(
   };
 
   return [createSide("front", "front"), createSide("back", "back")];
-}
-
-function createPantsPieces(measurements: BodyMeasurements): PatternPiece[] {
-  const hipQuarter = (measurements.hipMm + 55) / 4;
-  const waistQuarter = (measurements.waistMm + 30) / 4;
-  const length = measurements.heightMm * 0.59;
-  const rise = Math.max(255, measurements.hipMm * 0.27);
-  const frontCrotch = measurements.hipMm / 18;
-  const backCrotch = measurements.hipMm / 9;
-  const hemHalfWidth = Math.max(78, measurements.hipMm * 0.085);
-
-  const front = createTrouserPiece({
-    id: "straight-pants-front",
-    name: "Frente",
-    waistQuarter,
-    hipQuarter,
-    length,
-    rise,
-    crotchExtension: frontCrotch,
-    hemHalfWidth,
-    surface: "front",
-  });
-  const back = createTrouserPiece({
-    id: "straight-pants-back",
-    name: "Costas",
-    waistQuarter: waistQuarter + 20,
-    hipQuarter: hipQuarter + 18,
-    length,
-    rise: rise + 35,
-    crotchExtension: backCrotch,
-    hemHalfWidth: hemHalfWidth + 8,
-    surface: "back",
-  });
-  return [front, back];
-}
-
-interface TrouserPieceOptions {
-  id: string;
-  name: string;
-  waistQuarter: number;
-  hipQuarter: number;
-  length: number;
-  rise: number;
-  crotchExtension: number;
-  hemHalfWidth: number;
-  surface: "front" | "back";
-}
-
-function createTrouserPiece(options: TrouserPieceOptions): PatternPiece {
-  const {
-    id,
-    name,
-    waistQuarter,
-    hipQuarter,
-    length,
-    rise,
-    crotchExtension,
-    hemHalfWidth,
-    surface,
-  } = options;
-  const centerLine = crotchExtension + 78;
-  const outerWaistX = centerLine + waistQuarter;
-  const outerHipX = centerLine + hipQuarter;
-  const legCenter = centerLine + hipQuarter * 0.48;
-  return piece(
-    id,
-    name,
-    [
-      point("waist-center", centerLine, 0),
-      point("waist-side", outerWaistX, 12),
-      point("hip-side", outerHipX, rise * 0.62, {
-        in: { xMm: -3, yMm: -rise * 0.22 },
-      }),
-      point("hem-outside", legCenter + hemHalfWidth, length),
-      point("hem-inside", legCenter - hemHalfWidth, length),
-      point("inseam-crotch", centerLine + 40, rise + 45, {
-        out: { xMm: -48, yMm: -8 },
-      }),
-      point("crotch-tip", 0, rise, {
-        in: { xMm: 24, yMm: 26 },
-        out: { xMm: crotchExtension * 0.75, yMm: -rise * 0.42 },
-      }),
-    ],
-    {
-      cutQuantity: 2,
-      previewPlacements: [
-        placement("leg", surface, "left"),
-        placement("leg", surface, "right", true),
-      ],
-      segmentRoles: ["waist", "outseam", "outseam", "hem", "inseam", surface === "front" ? "frontCrotch" : "backCrotch", surface === "front" ? "frontCrotch" : "backCrotch"],
-      ...(surface === "back" ? { darts: [closeDart(createDart(id, { xMm: centerLine + waistQuarter * 0.48, yMm: 5 }, { xMm: centerLine + waistQuarter * 0.48, yMm: 115 }, 24))] } : {}),
-      internalLines: [
-        { id: `${id}:hip-line`, pieceId: id, curved: false, purpose: "reference", points: [point("hip-a", centerLine - crotchExtension * 0.5, rise * 0.62), point("hip-b", outerHipX, rise * 0.62)] },
-        { id: `${id}:knee-line`, pieceId: id, curved: false, purpose: "reference", points: [point("knee-a", legCenter - hemHalfWidth * 1.18, rise + (length - rise) * 0.5), point("knee-b", legCenter + hemHalfWidth * 1.18, rise + (length - rise) * 0.5)] },
-      ],
-      grainline: { start: { xMm: legCenter, yMm: rise + 35 }, end: { xMm: legCenter, yMm: length - 35 } },
-    },
-  );
 }
 
 function createJacketPieces(measurements: BodyMeasurements): PatternPiece[] {

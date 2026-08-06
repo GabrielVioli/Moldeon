@@ -103,6 +103,7 @@ export interface PatternGenerationRecord {
     minimumAreaMm2: number;
     shoulderToleranceMm?: number;
     sideSeamToleranceMm: number;
+    inseamToleranceMm?: number;
     minimumCurveSeparationMm: number;
   };
   manualReview?: boolean;

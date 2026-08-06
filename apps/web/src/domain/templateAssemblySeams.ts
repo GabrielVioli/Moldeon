@@ -84,6 +84,12 @@ export function buildTemplateAssemblySeams(
     return topDefinitions.map(createSeam);
   }
 
+  const trouserDefinitions = buildTrouserDefinitions(garment.pieces);
+
+  if (trouserDefinitions.length > 0) {
+    return trouserDefinitions.map(createSeam);
+  }
+
   const skirtDefinitions = buildSkirtDefinitions(garment.pieces);
   return skirtDefinitions.map(createSeam);
 }
@@ -194,6 +200,55 @@ function buildTopDefinitions(
       direction: "same",
       treatment: "ease",
     },
+  ];
+}
+
+
+function buildTrouserDefinitions(
+  pieces: readonly PatternPiece[],
+): SeamDefinition[] {
+  const front = pieces.find(
+    (piece) => hasRole(piece, "frontCrotch") && !hasRole(piece, "backCrotch"),
+  );
+  const back = pieces.find(
+    (piece) => hasRole(piece, "backCrotch") && !hasRole(piece, "frontCrotch"),
+  );
+  if (!front || !back) return [];
+
+  const frontOutseams = edgesWithRole(front, "outseam");
+  const backOutseams = edgesWithRole(back, "outseam");
+  const frontInseams = edgesWithRole(front, "inseam");
+  const backInseams = edgesWithRole(back, "inseam");
+  if (
+    frontOutseams.length === 0 ||
+    frontOutseams.length !== backOutseams.length ||
+    frontInseams.length === 0 ||
+    frontInseams.length !== backInseams.length
+  ) {
+    return [];
+  }
+
+  return [
+    ...frontOutseams.map((edge, index): SeamDefinition => ({
+      key: `trouser-outseam-${index + 1}`,
+      name: `Laterais das pernas ${index + 1}/${frontOutseams.length}`,
+      firstPiece: front,
+      firstEdge: edge,
+      secondPiece: back,
+      secondEdge: backOutseams[index],
+      direction: "same",
+      treatment: "ease",
+    })),
+    ...frontInseams.map((edge, index): SeamDefinition => ({
+      key: `trouser-inseam-${index + 1}`,
+      name: `Entrepernas ${index + 1}/${frontInseams.length}`,
+      firstPiece: front,
+      firstEdge: edge,
+      secondPiece: back,
+      secondEdge: backInseams[index],
+      direction: "same",
+      treatment: "ease",
+    })),
   ];
 }
 

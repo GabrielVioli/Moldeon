@@ -129,6 +129,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                 <strong>{template.name}</strong>
                 <span>{template.description}</span>
                 <small>{template.pieces}</small>
+                {template.instanceExpansion?.map((line) => (
+                  <small className="template-instance-expansion" key={line}>{line}</small>
+                ))}
                 <small>
                   <strong>Usa:</strong> {template.requiredMeasurements.join(", ")}
                 </small>

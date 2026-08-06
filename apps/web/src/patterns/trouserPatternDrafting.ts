@@ -264,7 +264,7 @@ function createTrouserPiece(
         "hem",
         "inseam",
         "inseam",
-        "inseam",
+        isFront ? "frontCrotch" : "backCrotch",
         isFront ? "frontCrotch" : "backCrotch",
       ],
       darts,

@@ -91,7 +91,9 @@ describe("pattern template catalog", () => {
 
     const pants = createGarmentFromTemplate("straight-pants", DEFAULT_BODY_MEASUREMENTS);
     expect(pants.pieces.every((piece) => piece.internalLines?.some((line) => line.id.includes("knee-line")))).toBe(true);
-    expect(pants.pieces.find((piece) => piece.name === "Costas")?.darts).toHaveLength(1);
+    expect(pants.pieces.every((piece) => piece.darts?.length === 1)).toBe(true);
+    expect(pants.parametric?.templateVersion).toBe("straight-pants@2");
+    expect(PATTERN_TEMPLATES.find((template) => template.id === "straight-pants")?.instanceExpansion).toHaveLength(2);
   });
 
   it("rejects measurements outside the supported drafting range", () => {
