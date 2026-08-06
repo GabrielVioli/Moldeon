@@ -5,20 +5,34 @@ import { chromium } from "playwright-core";
 const baseURL = process.env.PROMPT09_BASE_URL ?? "http://127.0.0.1:4179";
 const artifactDir = process.env.PROMPT09_ARTIFACT_DIR ?? "artifacts/prompt09-avatar-assembly";
 const executablePath = "/usr/bin/google-chrome";
+const commonArgs = [
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+  "--enable-webgl",
+  "--ignore-gpu-blocklist",
+];
+const rendererCandidates = [
+  {
+    name: "angle-swiftshader-unsafe",
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+  },
+  {
+    name: "swiftshader-angle",
+    args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+  },
+  {
+    name: "egl",
+    args: ["--use-gl=egl"],
+  },
+  {
+    name: "default",
+    args: [],
+  },
+];
 
 await fs.mkdir(artifactDir, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath,
-  headless: true,
-  args: [
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--use-gl=swiftshader",
-    "--enable-webgl",
-    "--ignore-gpu-blocklist",
-  ],
-});
+const { browser, rendererProfile } = await launchBrowserWithWebGL2();
 
 const scenarios = [
   { label: "desktop-tshirt", template: "Camiseta básica", viewport: { width: 1440, height: 1000 } },
@@ -81,11 +95,11 @@ for (const scenario of scenarios) {
   });
 
   if (!inspection.hasCanvas) {
-    throw new Error(`${scenario.label}: canvas 3D ausente (${JSON.stringify({ inspection, consoleErrors })})`);
+    throw new Error(`${scenario.label}: canvas 3D ausente (${JSON.stringify({ inspection, consoleErrors, rendererProfile })})`);
   }
   await canvas.waitFor({ state: "visible", timeout: 10_000 });
   if (!inspection.canvasBox || inspection.canvasBox.width < 240 || inspection.canvasBox.height < 300) {
-    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify(inspection)})`);
+    throw new Error(`${scenario.label}: canvas sem área adequada (${JSON.stringify({ inspection, rendererProfile })})`);
   }
   if (inspection.hasExploded) throw new Error(`${scenario.label}: modo explodido ainda visível`);
   if (inspection.hasHideBody) throw new Error(`${scenario.label}: controle público para ocultar corpo ainda visível`);
@@ -93,10 +107,60 @@ for (const scenario of scenarios) {
 
   const screenshot = path.join(artifactDir, `${scenario.label}.png`);
   await page.screenshot({ path: screenshot, fullPage: true });
-  report.push({ ...scenario, inspection, consoleErrors, screenshot });
+  report.push({ ...scenario, inspection, consoleErrors, screenshot, rendererProfile });
   await context.close();
 }
 
-await fs.writeFile(path.join(artifactDir, "audit.json"), JSON.stringify(report, null, 2));
+await fs.writeFile(path.join(artifactDir, "audit.json"), JSON.stringify({ rendererProfile, scenarios: report }, null, 2));
 await browser.close();
-console.log(JSON.stringify(report, null, 2));
+console.log(JSON.stringify({ rendererProfile, scenarios: report }, null, 2));
+
+async function launchBrowserWithWebGL2() {
+  const attempts = [];
+  for (const candidate of rendererCandidates) {
+    let candidateBrowser = null;
+    try {
+      const args = [...commonArgs, ...candidate.args];
+      candidateBrowser = await chromium.launch({
+        executablePath,
+        headless: true,
+        args,
+      });
+      const page = await candidateBrowser.newPage();
+      const capability = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("webgl2");
+        if (!context) return { supported: false, version: null, renderer: null };
+        const debug = context.getExtension("WEBGL_debug_renderer_info");
+        return {
+          supported: true,
+          version: context.getParameter(context.VERSION),
+          renderer: debug
+            ? context.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+            : context.getParameter(context.RENDERER),
+        };
+      });
+      await page.close();
+      attempts.push({ candidate: candidate.name, args, capability });
+      if (capability.supported) {
+        return {
+          browser: candidateBrowser,
+          rendererProfile: {
+            candidate: candidate.name,
+            args,
+            capability,
+            attempts,
+          },
+        };
+      }
+    } catch (error) {
+      attempts.push({
+        candidate: candidate.name,
+        args: [...commonArgs, ...candidate.args],
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    await candidateBrowser?.close();
+  }
+  throw new Error(`Nenhum backend do Chrome criou WebGL 2: ${JSON.stringify(attempts)}`);
+}
