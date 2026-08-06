@@ -44,7 +44,10 @@ for (const scenario of scenarios) {
   await templateCard.waitFor({ state: "visible" });
   await templateCard.evaluate((element) => element.click());
   await page.locator(".pattern-library-dialog").waitFor({ state: "detached", timeout: 10_000 });
-  await page.locator(".brand span:last-child").filter({ hasText: scenario.template }).waitFor({ state: "visible", timeout: 10_000 });
+  const projectName = (await page.locator(".brand span:last-child").textContent())?.trim() ?? "";
+  if (!projectName.includes(scenario.template)) {
+    throw new Error(`${scenario.label}: template não foi aplicado; projeto atual: ${projectName}`);
+  }
 
   const previewTab = page.getByRole("tab", { name: "Manequim 3D" });
   if (await previewTab.isVisible()) await previewTab.evaluate((element) => element.click());
