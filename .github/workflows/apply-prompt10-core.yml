@@ -1,0 +1,61 @@
+name: Apply Prompt 10 XPBD Core
+
+on:
+  push:
+    paths:
+      - "scripts/apply-prompt10-core.py"
+      - ".github/workflows/apply-prompt10-core.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-prompt10-core-main
+  cancel-in-progress: true
+
+jobs:
+  apply-test-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Apply deterministic XPBD core
+        run: python scripts/apply-prompt10-core.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check patch
+        run: git diff --check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit XPBD core
+        run: |
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src/physics/clothXpbd.ts apps/web/src/physics/clothXpbd.test.ts
+          git commit -m "feat: add deterministic XPBD cloth core"
+
+      - name: Remove temporary delivery files and push
+        run: |
+          git rm -f scripts/apply-prompt10-core.py .github/workflows/apply-prompt10-core.yml
+          git commit -m "chore: remove prompt 10 core delivery workflow"
+          git push origin main
