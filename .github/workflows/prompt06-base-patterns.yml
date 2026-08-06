@@ -74,7 +74,7 @@ jobs:
           git commit -m "docs: document prompt 6 pattern construction"
       - name: Remove temporary delivery automation
         run: |
-          git rm -f scripts/prompt06-apply.py scripts/prompt06-audit.mjs scripts/prompt06-progress.py .github/workflows/prompt06-base-patterns.yml
+          git rm -f scripts/prompt06-apply.py scripts/prompt06-audit.mjs scripts/prompt06-progress.py scripts/prompt06-basePatternDrafting.part00.txt scripts/prompt06-basePatternDrafting.part01.txt scripts/prompt06-basePatternDrafting.part02.txt scripts/prompt06-basePatternDrafting.test.txt .github/workflows/prompt06-base-patterns.yml
           git commit -m "chore: remove prompt 6 delivery automation"
           git push origin main
       - name: Upload audit artifact
