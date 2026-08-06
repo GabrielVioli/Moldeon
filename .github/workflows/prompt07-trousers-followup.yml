@@ -1,0 +1,51 @@
+name: Prompt 7 Trousers Follow-up
+
+on:
+  push:
+    paths:
+      - scripts/prompt07-followup.py
+      - .github/workflows/prompt07-trousers-followup.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prompt07-trousers-followup-main
+  cancel-in-progress: true
+
+jobs:
+  validate-and-integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply integration patches
+        run: |
+          python scripts/prompt07-apply.py
+          python scripts/prompt07-followup.py
+      - name: Install dependencies
+        run: npm install
+      - name: Check patch
+        run: git diff --check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Generate golden snapshots
+        run: npm run test --workspace @moldeon/web -- --update
+      - name: Run full test suite
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit integrated implementation
+        run: |
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src
+          git commit -m "feat: integrate parametric trousers and logical assembly"
+          git push origin main
