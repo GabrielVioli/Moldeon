@@ -9,8 +9,8 @@ A palavra **validado geometricamente** significa apenas que o gerador passou pel
 | Template | Versão | Sistema | Estado | Revisão manual |
 |---|---|---|---|---|
 | Corpo básico | `bodice-block@2` | Moldeon Reference Upper Block 2026 | validado geometricamente | pendente |
-| Camiseta | `tshirt@2` | derivação da base superior | experimental no conjunto; corpo validado geometricamente; manga experimental | pendente |
-| Blusa | `blouse@2` | derivação da base superior | experimental no conjunto; corpo validado geometricamente; manga experimental | pendente |
+| Camiseta | `tshirt@2` | derivação da base superior | corpo validado; manga legada experimental; substituição guiada disponível | pendente |
+| Blusa | `blouse@2` | derivação da base superior | corpo validado; manga legada experimental; substituição guiada disponível | pendente |
 | Saia reta | `straight-skirt@2` | Moldeon Reference Skirt Block 2026 | validado geometricamente | pendente |
 | Minissaia | `mini-skirt@2` | derivação da base de saia | validado geometricamente | pendente |
 | Calça reta | `straight-pants@2` | Moldeon Reference Trouser Block 2026 | validado geometricamente; montagem lógica validada | pendente |
@@ -81,7 +81,7 @@ Esses valores são regras estéticas versionadas. Eles não são apresentados co
 
 Frente e costas possuem centro na dobra, decote, ombro, cava frontal ou traseira, lateral, cintura, quadril, barra e fio. O V3 gera landmarks de início/fim, marca de ombro, um pique frontal e dois piques traseiros a partir do papel semântico do conector, sem consultar nome de template.
 
-A camiseta e a blusa preservam uma manga compatível com o fluxo existente. A manga expõe cabeça frontal, cabeça traseira, pique frontal, dois piques traseiros, marca de ombro, bíceps e fio. Ela permanece **experimental** até a fase de manga derivada diretamente do comprimento das cavas e revisão manual.
+A camiseta e a blusa preservam suas mangas legadas para compatibilidade de projetos. O assistente `guided-sleeve@1` pode substituí-las explicitamente por uma manga derivada dos arcos reais das cavas, com cabeça frontal/traseira independente, ápice, piques, duas instâncias e diagnóstico de encaixe. Consulte `docs/SLEEVE_SYSTEM.md`.
 
 ## Saia reta e minissaia
 
@@ -250,3 +250,15 @@ Golden datasets cobrem corpos pequeno, médio, grande, alto-estreito e baixo-lar
 - A auditoria visual usa Chromium automatizado, não aparelho físico ou Safari.
 
 <!-- PROMPT07_TROUSERS_END -->
+
+<!-- PROMPT08_SLEEVES_START -->
+
+## Sistema guiado de mangas `guided-sleeve@1`
+
+O sistema mede as cavas frontal e traseira da geometria atual, resolve uma cabeça assimétrica por comprimento de arco e cria uma definição com duas instâncias. Ele não depende do nome do template ou da posição das peças na bancada.
+
+A compatibilidade é avaliada separadamente para frente e costas. A cabeça contém ápice, pique frontal, dois piques traseiros e axilas; a manga longa acrescenta linha de cotovelo. Costuras e landmarks são persistidos semanticamente e a criação completa participa de undo/redo.
+
+O assistente foi validado em fluxo Chrome desktop e mobile emulado. A validação de vestibilidade continua pendente. Fórmulas, tolerâncias, pesquisa e limitações estão em `docs/SLEEVE_SYSTEM.md`.
+
+<!-- PROMPT08_SLEEVES_END -->

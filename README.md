@@ -14,7 +14,7 @@ Fundação web para um software de modelagem de roupas com molde técnico 2D, vi
 - Sala de prova com tecidos leves, algodão, malha, jeans e couro sintético.
 - Vários tecidos/retalhos no mesmo projeto, dimensões disponíveis, cor e
   atribuição por peça para criações upcycled.
-- Projetos com frente e costas distintas, quantidade de corte, dobra, fio, pences, conectores e landmarks; mangas atuais permanecem experimentais até sua fase dedicada.
+- Projetos com frente e costas distintas, quantidade de corte, dobra, fio, pences, conectores e landmarks; o assistente de manga mede as cavas reais, cria piques, costuras e instâncias esquerda/direita.
 - Alternância entre peças, inserção/remoção de pontos e enquadramento automático.
 - Cálculo de área, perímetro e validações equivalentes em Rust/WASM e TypeScript.
 - Validação de pontos duplicados, autointerseções e contornos degenerados.
@@ -180,6 +180,7 @@ Leia também:
 - `docs/ARCHITECTURE.md`
 - `docs/DOMAIN_STUDY.md`
 - `docs/PATTERN_LIBRARY.md`
+- `docs/SLEEVE_SYSTEM.md`
 - `docs/ROADMAP.md`
 - `docs/INSTALL_WINDOWS.md`
 - `docs/PHYSICS_PLAN.md`
@@ -187,7 +188,7 @@ Leia também:
 ## Limitações atuais
 
 - Corpo básico, corpos de camiseta/blusa e saias `@2` passaram por validação geométrica automatizada, mas ainda exigem toile e revisão manual; isso não equivale a validação industrial.
-- As mangas de camiseta/blusa permanecem experimentais. A calça `@2` foi validada geometricamente e no grafo de quatro instâncias, mas ainda exige toile e revisão humana; qualquer jaqueta permanece indisponível.
+- As mangas legadas de camiseta/blusa permanecem experimentais, mas podem ser substituídas explicitamente pelo sistema guiado validado geometricamente; tanto mangas quanto calça ainda exigem toile e revisão humana. Qualquer jaqueta permanece indisponível.
 - As saias incluem pences estruturais de cintura. Transferência de pence, gradação, cós, vistas, aberturas funcionais e aviamentos ainda não foram implementados.
 - A inserção de ponto acontece em um contorno existente; a criação livre de novas peças e a prancheta multi-peça agora entram como fluxo principal do editor.
 - A margem de costura usa offset com limite de miter. Contornos côncavos extremos ainda precisarão de operações booleanas robustas.
@@ -202,4 +203,4 @@ Leia também:
 
 ## Próxima etapa recomendada
 
-Validar manualmente os blocos `@2` em toile e executar a fase própria de manga antes de ampliar alegações de vestibilidade. A próxima evolução da calça é conectar o grafo de quatro instâncias ao XPBD sem perder a autoridade do molde 2D.
+Validar manualmente blocos, mangas e calça em toile antes de ampliar alegações de vestibilidade. A próxima evolução é conectar costuras semânticas e instâncias ao XPBD sem perder a autoridade do molde 2D.
