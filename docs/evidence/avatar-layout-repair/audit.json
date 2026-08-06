@@ -1,0 +1,55 @@
+{
+  "desktop": {
+    "host": {
+      "testid": "dressed-avatar-viewport",
+      "avatarVisible": "true",
+      "avatarAnchorCount": "14",
+      "collisionProxyCount": "12",
+      "garmentInstanceCount": "6",
+      "coveredAvatarPartCount": "6",
+      "arrangementDiagnosticCount": "0",
+      "arrangementErrorCount": "0",
+      "frameTarget": "avatar-and-garment"
+    },
+    "errors": []
+  },
+  "mobile": {
+    "boxes": {
+      "workspace": {
+        "x": 0,
+        "y": 143,
+        "width": 390,
+        "height": 673,
+        "bottom": 816
+      },
+      "preview": {
+        "x": 26.171875,
+        "y": 187,
+        "width": 363.828125,
+        "height": 629,
+        "bottom": 816
+      },
+      "host": {
+        "x": 26.171875,
+        "y": 187,
+        "width": 363.828125,
+        "height": 628,
+        "bottom": 815
+      },
+      "canvas": {
+        "x": 26.171875,
+        "y": 187,
+        "width": 363.828125,
+        "height": 628,
+        "bottom": 815
+      }
+    },
+    "reference": [
+      233,
+      230,
+      223
+    ],
+    "variedBelowHeader": 6907,
+    "errors": []
+  }
+}
