@@ -1,0 +1,226 @@
+name: Repair Mobile Avatar V2
+
+on:
+  push:
+    paths:
+      - .github/workflows/repair-mobile-avatar-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mobile-avatar-v2-main
+  cancel-in-progress: true
+
+jobs:
+  repair-validate-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      AUDIT_DIR: artifacts/avatar-layout-repair
+      BASE_URL: http://127.0.0.1:4179
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Restore complete stylesheet and fill the mobile preview row
+        run: |
+          git show 983f357131340a7f520f6bb11fd768978b9c791a:apps/web/src/styles.css > apps/web/src/styles.css
+          cat >> apps/web/src/styles.css <<'CSS'
+
+          /* Avatar viewport owns the mobile content row while its tab is active. */
+          @media (max-width: 760px) {
+            .workspace-view.is-mobile-active#preview-panel {
+              position: absolute;
+              inset: 44px 0 0;
+              z-index: 2;
+              display: block;
+              width: 100%;
+              min-width: 0;
+              min-height: 0;
+              height: auto;
+            }
+
+            .workspace-view.is-mobile-active#preview-panel .viewport-host,
+            .workspace-view.is-mobile-active#preview-panel .three-canvas {
+              width: 100%;
+              min-height: 0;
+              height: 100%;
+            }
+          }
+          CSS
+          git diff --check
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src/styles.css
+          git commit -m "fix: restore stylesheet and fill mobile avatar viewport"
+
+      - name: Refine small visual panels around anatomical curvature
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('apps/web/src/garment3d/PanelRefinement.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '  if (triangleCount <= 180) return 2;'
+          new = '  if (triangleCount <= 180) return 3;'
+          if old not in text:
+              raise SystemExit('Refinement recommendation not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git add apps/web/src/garment3d/PanelRefinement.ts
+          git commit -m "fix: refine small panels around body curvature"
+
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+      - name: Install temporary visual audit dependencies
+        run: npm install --no-save --package-lock=false playwright-core@1.55.0 pngjs@7.0.0
+
+      - name: Inspect desktop garment and mobile renderer content
+        run: |
+          mkdir -p "$AUDIT_DIR"
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
+          ) > "$AUDIT_DIR/server.log" 2>&1 &
+          SERVER_PID=$!
+          cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$BASE_URL" >/dev/null; then break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then cat "$AUDIT_DIR/server.log"; exit 1; fi
+            sleep 0.25
+          done
+          curl --silent --fail "$BASE_URL" >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs/promises';
+          import path from 'node:path';
+          import { chromium } from 'playwright-core';
+          import { PNG } from 'pngjs';
+
+          const output = process.env.AUDIT_DIR;
+          const baseURL = process.env.BASE_URL;
+          const browser = await chromium.launch({
+            executablePath: '/usr/bin/google-chrome',
+            headless: true,
+            args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-webgl', '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+          });
+
+          async function openTemplate(page, name) {
+            await page.goto(baseURL, { waitUntil: 'networkidle' });
+            await page.getByRole('button', { name: 'Moldes' }).click();
+            const card = page.getByRole('button', { name, exact: false }).first();
+            await card.waitFor({ state: 'visible' });
+            await card.evaluate((element) => element.click());
+            await page.locator('.pattern-library-dialog').waitFor({ state: 'detached' });
+          }
+
+          const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+          const mobile = await mobileContext.newPage();
+          const mobileErrors = [];
+          mobile.on('console', (message) => message.type() === 'error' && mobileErrors.push(message.text()));
+          mobile.on('pageerror', (error) => mobileErrors.push(error.message));
+          await openTemplate(mobile, 'Calça reta');
+          const tab = mobile.getByRole('tab', { name: 'Manequim 3D' });
+          await tab.waitFor({ state: 'visible' });
+          await tab.evaluate((element) => element.click());
+          const mobileCanvas = mobile.locator('canvas.three-canvas');
+          await mobileCanvas.waitFor({ state: 'visible', timeout: 15000 });
+          await mobile.waitForTimeout(1800);
+          await mobile.evaluate(() => window.dispatchEvent(new Event('resize')));
+          await mobile.waitForTimeout(700);
+          const boxes = await mobile.evaluate(() => {
+            const rect = (selector) => {
+              const element = document.querySelector(selector);
+              if (!element) return null;
+              const value = element.getBoundingClientRect();
+              return { x: value.x, y: value.y, width: value.width, height: value.height, bottom: value.bottom };
+            };
+            return { workspace: rect('.workspace'), preview: rect('#preview-panel'), host: rect('[data-testid="dressed-avatar-viewport"]'), canvas: rect('canvas.three-canvas') };
+          });
+          const mobileCanvasPath = path.join(output, 'mobile-trousers-canvas.png');
+          await mobileCanvas.screenshot({ path: mobileCanvasPath });
+          await mobile.screenshot({ path: path.join(output, 'mobile-trousers.png'), fullPage: true });
+          const png = PNG.sync.read(await fs.readFile(mobileCanvasPath));
+          let variedBelowHeader = 0;
+          const sampleY = Math.min(png.height - 1, Math.max(80, Math.floor(png.height * 0.55)));
+          const referenceOffset = (sampleY * png.width + Math.floor(png.width * 0.05)) * 4;
+          const reference = [png.data[referenceOffset], png.data[referenceOffset + 1], png.data[referenceOffset + 2]];
+          for (let y = 80; y < png.height; y += 4) {
+            for (let x = 0; x < png.width; x += 4) {
+              const offset = (y * png.width + x) * 4;
+              const difference = Math.abs(png.data[offset] - reference[0]) + Math.abs(png.data[offset + 1] - reference[1]) + Math.abs(png.data[offset + 2] - reference[2]);
+              if (difference > 35) variedBelowHeader += 1;
+            }
+          }
+          const mobileResult = { boxes, reference, variedBelowHeader, errors: mobileErrors };
+          if (!boxes.workspace || !boxes.canvas || !boxes.preview || !boxes.host) throw new Error(`mobile missing boxes ${JSON.stringify(mobileResult)}`);
+          if (boxes.canvas.height < boxes.workspace.height - 60) throw new Error(`mobile clipped canvas ${JSON.stringify(mobileResult)}`);
+          if (boxes.preview.bottom < boxes.workspace.bottom - 2) throw new Error(`mobile preview does not fill row ${JSON.stringify(mobileResult)}`);
+          if (variedBelowHeader < 120) throw new Error(`mobile renderer absent below overlays ${JSON.stringify(mobileResult)}`);
+          if (mobileErrors.length) throw new Error(`mobile console ${mobileErrors.join(' | ')}`);
+          await mobileContext.close();
+
+          const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+          const desktop = await desktopContext.newPage();
+          const desktopErrors = [];
+          desktop.on('console', (message) => message.type() === 'error' && desktopErrors.push(message.text()));
+          desktop.on('pageerror', (error) => desktopErrors.push(error.message));
+          await openTemplate(desktop, 'Camiseta básica');
+          const dress = desktop.getByRole('button', { name: 'Vestir no manequim' });
+          await dress.waitFor({ state: 'visible' });
+          await dress.evaluate((element) => element.click());
+          const desktopCanvas = desktop.locator('canvas.three-canvas');
+          await desktopCanvas.waitFor({ state: 'visible', timeout: 15000 });
+          await desktop.waitForTimeout(1800);
+          const host = await desktop.locator('[data-testid="dressed-avatar-viewport"]').evaluate((element) => ({ ...element.dataset }));
+          await desktopCanvas.screenshot({ path: path.join(output, 'desktop-tshirt-canvas.png') });
+          await desktop.screenshot({ path: path.join(output, 'desktop-tshirt.png'), fullPage: true });
+          if (host.avatarVisible !== 'true' || Number(host.garmentInstanceCount ?? 0) < 6 || Number(host.arrangementErrorCount ?? 0) !== 0) throw new Error(`desktop scene invalid ${JSON.stringify(host)}`);
+          if (desktopErrors.length) throw new Error(`desktop console ${desktopErrors.join(' | ')}`);
+          await desktopContext.close();
+
+          const report = { desktop: { host, errors: desktopErrors }, mobile: mobileResult };
+          await browser.close();
+          await fs.writeFile(path.join(output, 'audit.json'), JSON.stringify(report, null, 2));
+          console.log(JSON.stringify(report, null, 2));
+          NODE
+          cleanup
+          trap - EXIT
+
+      - name: Record visual evidence
+        run: |
+          mkdir -p docs/evidence/avatar-layout-repair
+          cp -f "$AUDIT_DIR"/* docs/evidence/avatar-layout-repair/
+          git add docs/evidence/avatar-layout-repair
+          git commit -m "test: record repaired avatar layout"
+
+      - name: Remove temporary workflows and push
+        run: |
+          git rm -f \
+            .github/workflows/repair-mobile-avatar-and-refinement.yml \
+            .github/workflows/repair-mobile-avatar-v2.yml
+          git commit -m "chore: remove avatar repair workflows"
+          git push origin main
+
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avatar-layout-repair-v2-${{ github.sha }}
+          path: artifacts/avatar-layout-repair
+          retention-days: 21
+          if-no-files-found: warn
