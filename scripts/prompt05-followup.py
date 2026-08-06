@@ -47,8 +47,31 @@ patch(
 )
 patch(
     "apps/web/src/patterns/templateCatalog.ts",
-    'const MEASUREMENT_RANGES: Record<keyof BodyMeasurements, readonly [number, number]> = {\n',
-    'const MEASUREMENT_RANGES: Partial<Record<keyof BodyMeasurements, readonly [number, number]>> = {\n',
+    '  const ranges: Record<keyof BodyMeasurements, readonly [number, number]> = {\n',
+    '  const ranges: Partial<Record<keyof BodyMeasurements, readonly [number, number]>> = {\n',
+)
+patch(
+    "apps/web/src/patterns/templateCatalog.ts",
+    '''    const [minimum, maximum] = ranges[key];
+    if (!Number.isFinite(value) || value < minimum || value > maximum) {
+      throw new RangeError(
+        `A medida ${key} precisa ficar entre ${minimum} e ${maximum} mm.`,
+      );
+    }
+''',
+    '''    const range = ranges[key];
+    if (!Number.isFinite(value) || value < 0) {
+      throw new RangeError(`A medida ${key} precisa ser finita e não negativa.`);
+    }
+    if (range) {
+      const [minimum, maximum] = range;
+      if (value < minimum || value > maximum) {
+        throw new RangeError(
+          `A medida ${key} precisa ficar entre ${minimum} e ${maximum} mm.`,
+        );
+      }
+    }
+''',
 )
 patch(
     "apps/web/src/state/editorStore.ts",
