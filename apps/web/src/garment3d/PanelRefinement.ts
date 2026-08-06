@@ -135,7 +135,7 @@ export function recommendedPanelRefinement(
 ): number {
   const triangleCount = topology.triangles.length / 3;
 
-  if (triangleCount <= 180) return 2;
+  if (triangleCount <= 180) return 3;
   if (triangleCount <= 700) return 1;
   return 0;
 }
