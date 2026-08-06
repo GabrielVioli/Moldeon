@@ -27,4 +27,17 @@ replace(
     "  limits?: {\n    minimumAreaMm2: number;\n    shoulderToleranceMm?: number;\n    sideSeamToleranceMm: number;\n    minimumCurveSeparationMm: number;\n  };\n",
 )
 
-print("Prompt 6 typed metadata follow-up applied")
+replace(
+    "apps/web/src/patterns/basePatternDrafting.ts",
+    '    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),\n'
+    '    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),\n',
+    '    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),\n',
+)
+
+replace(
+    "apps/web/src/patterns/basePatternDrafting.test.ts",
+    "    expect(maxX(openFront)).not.toBe(maxX(front));\n",
+    "    expect(openFront.points[1].xMm).not.toBe(front.points[1].xMm);\n",
+)
+
+print("Prompt 6 typed metadata and source-boundary follow-up applied")
