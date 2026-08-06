@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/prompt05-apply.py
+      - scripts/prompt05-followup.py
       - scripts/prompt05-audit.mjs
       - scripts/prompt05-progress.py
       - .github/workflows/prompt05-parametric.yml
@@ -43,6 +44,7 @@ jobs:
           path.write_text(source, encoding="utf-8")
           PY
           python scripts/prompt05-apply.py
+          python scripts/prompt05-followup.py
       - name: Install dependencies
         run: npm install
       - name: Check diff
@@ -80,7 +82,7 @@ jobs:
         run: |
           python scripts/prompt05-progress.py
           git add docs/PATTERN_DOCUMENT_V3.md docs/DEPENDENCY_AUDIT.md docs/progress/PROMPT_05_PARAMETRIC_ENGINE.md
-          git rm -f scripts/prompt05-apply.py scripts/prompt05-audit.mjs scripts/prompt05-progress.py .github/workflows/prompt05-parametric.yml
+          git rm -f scripts/prompt05-apply.py scripts/prompt05-followup.py scripts/prompt05-audit.mjs scripts/prompt05-progress.py .github/workflows/prompt05-parametric.yml
           git commit -m "docs: record prompt 5 parametric engine delivery"
           git push origin main
       - name: Upload audit artifact
