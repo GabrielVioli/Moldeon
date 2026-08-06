@@ -1,0 +1,277 @@
+{
+  "rendererProfile": {
+    "candidate": "angle-swiftshader-unsafe",
+    "args": [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--enable-webgl",
+      "--ignore-gpu-blocklist",
+      "--use-gl=angle",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader"
+    ],
+    "capability": {
+      "supported": true,
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+    },
+    "attempts": [
+      {
+        "candidate": "angle-swiftshader-unsafe",
+        "args": [
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--enable-webgl",
+          "--ignore-gpu-blocklist",
+          "--use-gl=angle",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader"
+        ],
+        "capability": {
+          "supported": true,
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+        }
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "label": "desktop-tshirt",
+      "template": "Camiseta básica",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "inspection": {
+        "canvasBox": {
+          "width": 359.75,
+          "height": 383.109375,
+          "top": 98,
+          "bottom": 481.109375
+        },
+        "hostBox": {
+          "width": 359.75,
+          "height": 383.109375,
+          "top": 98,
+          "bottom": 481.109375
+        },
+        "hostDataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "6",
+          "coveredAvatarPartCount": "6",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "diagnostics": [],
+        "viewportError": null,
+        "placeholder": null,
+        "workspaceClass": "workspace mode-assembly",
+        "hasExploded": false,
+        "hasHideBody": false,
+        "hasCanvas": true
+      },
+      "consoleErrors": [],
+      "failedResponses": [],
+      "screenshot": "artifacts/prompt09-avatar-assembly/desktop-tshirt.png",
+      "rendererProfile": {
+        "candidate": "angle-swiftshader-unsafe",
+        "args": [
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--enable-webgl",
+          "--ignore-gpu-blocklist",
+          "--use-gl=angle",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader"
+        ],
+        "capability": {
+          "supported": true,
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+        },
+        "attempts": [
+          {
+            "candidate": "angle-swiftshader-unsafe",
+            "args": [
+              "--no-sandbox",
+              "--disable-dev-shm-usage",
+              "--enable-webgl",
+              "--ignore-gpu-blocklist",
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader"
+            ],
+            "capability": {
+              "supported": true,
+              "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+              "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "desktop-skirt",
+      "template": "Saia reta",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "inspection": {
+        "canvasBox": {
+          "width": 359.75,
+          "height": 383.109375,
+          "top": 98,
+          "bottom": 481.109375
+        },
+        "hostBox": {
+          "width": 359.75,
+          "height": 383.109375,
+          "top": 98,
+          "bottom": 481.109375
+        },
+        "hostDataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "4",
+          "coveredAvatarPartCount": "10",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "diagnostics": [],
+        "viewportError": null,
+        "placeholder": null,
+        "workspaceClass": "workspace mode-assembly",
+        "hasExploded": false,
+        "hasHideBody": false,
+        "hasCanvas": true
+      },
+      "consoleErrors": [],
+      "failedResponses": [],
+      "screenshot": "artifacts/prompt09-avatar-assembly/desktop-skirt.png",
+      "rendererProfile": {
+        "candidate": "angle-swiftshader-unsafe",
+        "args": [
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--enable-webgl",
+          "--ignore-gpu-blocklist",
+          "--use-gl=angle",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader"
+        ],
+        "capability": {
+          "supported": true,
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+        },
+        "attempts": [
+          {
+            "candidate": "angle-swiftshader-unsafe",
+            "args": [
+              "--no-sandbox",
+              "--disable-dev-shm-usage",
+              "--enable-webgl",
+              "--ignore-gpu-blocklist",
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader"
+            ],
+            "capability": {
+              "supported": true,
+              "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+              "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "mobile-trousers",
+      "template": "Calça reta",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "inspection": {
+        "canvasBox": {
+          "width": 389,
+          "height": 320,
+          "top": 143,
+          "bottom": 463
+        },
+        "hostBox": {
+          "width": 389,
+          "height": 320,
+          "top": 143,
+          "bottom": 463
+        },
+        "hostDataset": {
+          "testid": "dressed-avatar-viewport",
+          "avatarVisible": "true",
+          "avatarAnchorCount": "14",
+          "collisionProxyCount": "12",
+          "garmentInstanceCount": "4",
+          "coveredAvatarPartCount": "9",
+          "arrangementDiagnosticCount": "0",
+          "arrangementErrorCount": "0",
+          "frameTarget": "avatar-and-garment"
+        },
+        "diagnostics": [],
+        "viewportError": null,
+        "placeholder": null,
+        "workspaceClass": "workspace mode-modeling",
+        "hasExploded": false,
+        "hasHideBody": false,
+        "hasCanvas": true
+      },
+      "consoleErrors": [],
+      "failedResponses": [],
+      "screenshot": "artifacts/prompt09-avatar-assembly/mobile-trousers.png",
+      "rendererProfile": {
+        "candidate": "angle-swiftshader-unsafe",
+        "args": [
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--enable-webgl",
+          "--ignore-gpu-blocklist",
+          "--use-gl=angle",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader"
+        ],
+        "capability": {
+          "supported": true,
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+        },
+        "attempts": [
+          {
+            "candidate": "angle-swiftshader-unsafe",
+            "args": [
+              "--no-sandbox",
+              "--disable-dev-shm-usage",
+              "--enable-webgl",
+              "--ignore-gpu-blocklist",
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader"
+            ],
+            "capability": {
+              "supported": true,
+              "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+              "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

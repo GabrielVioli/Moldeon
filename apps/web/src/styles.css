@@ -2287,3 +2287,18 @@ button {
     height: 100%;
   }
 }
+
+/* Prompt 09 mobile dressed-avatar viewport */
+@media (max-width: 760px) {
+  .workspace-view.is-mobile-active#preview-panel {
+    display: block;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .workspace-view.is-mobile-active#preview-panel .viewport-host,
+  .workspace-view.is-mobile-active#preview-panel .three-canvas {
+    min-height: 320px;
+    height: 100%;
+  }
+}
