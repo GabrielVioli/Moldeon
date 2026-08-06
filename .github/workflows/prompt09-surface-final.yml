@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/prompt09-surface-finalize.py
+      - scripts/prompt09-surface-test-fix.py
       - scripts/prompt09-surface-browser-audit.mjs
       - scripts/prompt09-surface-docs.py
       - .github/workflows/prompt09-surface-final.yml
@@ -32,7 +33,9 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - name: Apply semantic avatar coverage mask
-        run: python scripts/prompt09-surface-finalize.py
+        run: |
+          python scripts/prompt09-surface-finalize.py
+          python scripts/prompt09-surface-test-fix.py
       - name: Install dependencies
         run: npm install
       - name: Check patch
@@ -86,6 +89,7 @@ jobs:
         run: |
           git rm -f \
             scripts/prompt09-surface-finalize.py \
+            scripts/prompt09-surface-test-fix.py \
             scripts/prompt09-surface-browser-audit.mjs \
             scripts/prompt09-surface-docs.py \
             .github/workflows/prompt09-surface-final.yml
