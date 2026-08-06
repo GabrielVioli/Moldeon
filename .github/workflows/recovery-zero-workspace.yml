@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: recovery-9-5-empty-workspace
+  group: recovery-9-5-empty-workspace-v2
   cancel-in-progress: true
 
 jobs:
