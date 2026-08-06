@@ -6,6 +6,7 @@ on:
       - "recovery/9.5-03-empty-workspace"
     paths:
       - "scripts/apply-recovery-zero-workspace.py"
+      - "scripts/apply-recovery-zero-workspace-references.py"
       - ".github/workflows/recovery-zero-workspace.yml"
 
 permissions:
@@ -36,7 +37,9 @@ jobs:
           cache: npm
 
       - name: Apply scoped recovery patch
-        run: python scripts/apply-recovery-zero-workspace.py
+        run: |
+          python scripts/apply-recovery-zero-workspace.py
+          python scripts/apply-recovery-zero-workspace-references.py
 
       - name: Install dependencies
         run: npm ci
@@ -104,6 +107,7 @@ jobs:
             apps/web/src/storage/opfs.ts \
             apps/web/src/state/editorStore.ts \
             apps/web/src/editor/PatternCanvas.tsx \
+            apps/web/src/components/PatternLibraryDialog.tsx \
             apps/web/src/App.tsx \
             apps/web/src/recovery.css \
             apps/web/src/state/emptyWorkspace.test.ts \
