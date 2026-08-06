@@ -2,17 +2,17 @@
 
 exports[`guided sleeve system > matches a stable golden metric set 1`] = `
 {
-  "areaMm2": 79261.3,
+  "areaMm2": 79287.7,
   "compatibility": {
     "backArmholeMm": 188.2,
-    "backCapMm": 193.4,
-    "backDifferenceMm": 5.2,
+    "backCapMm": 193.6,
+    "backDifferenceMm": 5.4,
     "configuredEaseMm": 9.4,
     "diagnostics": [],
-    "easePercent": 2.4,
-    "frontArmholeMm": 186.6,
-    "frontCapMm": 190.4,
-    "frontDifferenceMm": 3.8,
+    "easePercent": 2.5,
+    "frontArmholeMm": 186.9,
+    "frontCapMm": 190.9,
+    "frontDifferenceMm": 4,
     "landmarkPairs": [
       {
         "bodyArcPosition": 1,
@@ -25,13 +25,13 @@ exports[`guided sleeve system > matches a stable golden metric set 1`] = `
         "sleeveConnectorRole": "sleeveCapFront",
       },
       {
-        "bodyArcPosition": 0.51302,
+        "bodyArcPosition": 0.513476,
         "bodyConnectorRole": "frontArmhole",
         "bodyPieceId": "bodice-block-front",
         "id": "front-notch",
         "kind": "notch",
         "label": "Pique frontal",
-        "sleeveArcPosition": 0.573413,
+        "sleeveArcPosition": 0.573019,
         "sleeveConnectorRole": "sleeveCapFront",
       },
       {
@@ -55,23 +55,23 @@ exports[`guided sleeve system > matches a stable golden metric set 1`] = `
         "sleeveConnectorRole": "sleeveCapBack",
       },
       {
-        "bodyArcPosition": 0.313343,
+        "bodyArcPosition": 0.313384,
         "bodyConnectorRole": "backArmhole",
         "bodyPieceId": "bodice-block-back",
         "id": "back-notch-1",
         "kind": "notch",
         "label": "Primeiro pique traseiro",
-        "sleeveArcPosition": 0.364779,
+        "sleeveArcPosition": 0.364523,
         "sleeveConnectorRole": "sleeveCapBack",
       },
       {
-        "bodyArcPosition": 0.584874,
+        "bodyArcPosition": 0.584915,
         "bodyConnectorRole": "backArmhole",
         "bodyPieceId": "bodice-block-back",
         "id": "back-notch-2",
         "kind": "notch",
         "label": "Segundo pique traseiro",
-        "sleeveArcPosition": 0.654052,
+        "sleeveArcPosition": 0.654358,
         "sleeveConnectorRole": "sleeveCapBack",
       },
       {
@@ -88,24 +88,24 @@ exports[`guided sleeve system > matches a stable golden metric set 1`] = `
     "status": "compatible",
     "tolerances": {
       "arcSolveToleranceMm": 0.35,
-      "errorMaximumEaseMm": 26.2,
+      "errorMaximumEaseMm": 26.3,
       "minimumEaseMm": -2,
-      "sideDifferenceWarningMm": 8.2,
+      "sideDifferenceWarningMm": 8.3,
       "warningMaximumEaseMm": 16.9,
     },
-    "totalArmholeMm": 374.8,
-    "totalCapMm": 383.8,
-    "totalDifferenceMm": 9,
+    "totalArmholeMm": 375.1,
+    "totalCapMm": 384.5,
+    "totalDifferenceMm": 9.4,
   },
-  "perimeterMm": 1402.5,
+  "perimeterMm": 1402.8,
   "points": [
     [
       0,
       131.9,
     ],
     [
-      2.6,
-      27.2,
+      2.4,
+      27.1,
     ],
     [
       75.9,
@@ -113,7 +113,7 @@ exports[`guided sleeve system > matches a stable golden metric set 1`] = `
     ],
     [
       142.6,
-      16.2,
+      16.1,
     ],
     [
       163.7,

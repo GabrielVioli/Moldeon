@@ -1,0 +1,91 @@
+{
+  "browserVersion": "150.0.7871.128",
+  "browserExecutable": "/usr/bin/google-chrome",
+  "baseUrl": "http://127.0.0.1:4178",
+  "physicalDeviceValidated": false,
+  "threeDimensionalDrapeUsedAsEvidence": false,
+  "results": [
+    {
+      "label": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "sleeveType": "short",
+      "status": "passed",
+      "sleeveButtonBox": {
+        "x": 760.65625,
+        "y": 18.5,
+        "width": 166.046875,
+        "height": 23
+      },
+      "buttonInViewport": true,
+      "fitBounds": {
+        "x": 624.984375,
+        "y": 193.390625,
+        "width": 630.015625,
+        "height": 416.484375
+      },
+      "fitStatusText": "Encaixe dentro da tolerânciaDiferença total: +9.3 mm · +2.5%Cava frontal187.3 mmCabeça frontal191.2 mmCava traseira188.6 mmCabeça traseira194.0 mm",
+      "dialogOverflow": {
+        "horizontal": 0,
+        "vertical": 0
+      },
+      "appOverflow": {
+        "width": 1440,
+        "viewport": 1440
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "unexpectedDialogs": [],
+      "screenshots": [
+        "desktop-wizard-body.png",
+        "desktop-wizard-settings.png",
+        "desktop-fit.png",
+        "desktop-created.png"
+      ]
+    },
+    {
+      "label": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "sleeveType": "long",
+      "status": "passed",
+      "sleeveButtonBox": {
+        "x": 10,
+        "y": 44,
+        "width": 104,
+        "height": 13
+      },
+      "buttonInViewport": true,
+      "fitBounds": {
+        "x": 16,
+        "y": 556.015625,
+        "width": 358,
+        "height": 300
+      },
+      "fitStatusText": "Encaixe dentro da tolerânciaDiferença total: +9.3 mm · +2.5%Cava frontal187.3 mmCabeça frontal191.2 mmCava traseira188.6 mmCabeça traseira194.0 mm",
+      "dialogOverflow": {
+        "horizontal": 0,
+        "vertical": 0
+      },
+      "appOverflow": {
+        "width": 390,
+        "viewport": 390
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "unexpectedDialogs": [],
+      "screenshots": [
+        "mobile-wizard-body.png",
+        "mobile-wizard-settings.png",
+        "mobile-fit.png",
+        "mobile-created.png"
+      ]
+    }
+  ]
+}

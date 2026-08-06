@@ -573,39 +573,32 @@ function buildGuidedSleeveSeams(
   sleeve: PatternPiece,
   compatibility: SleeveCompatibility,
 ): Seam[] {
-  const frontBodyIntervals = partitionRoleIntervals(body.front, "frontArmhole", [body.frontNotchPosition]);
-  const frontSleeveIntervals = partitionRoleIntervals(
+  const seams: Seam[] = [];
+  appendMappedConnectorSeams(
+    seams,
+    body.front,
+    "frontArmhole",
+    [body.frontNotchPosition],
     sleeve,
     "sleeveCapFront",
     [connectorBoundaryPosition(sleeve, "sleeveCapFront", 0.60)],
-  ).reverse();
-  const backBodyIntervals = partitionRoleIntervals(body.back, "backArmhole", body.backNotchPositions);
-  const backSleeveIntervals = partitionRoleIntervals(
-    sleeve,
-    "sleeveCapBack",
-    connectorInternalBoundaryPositions(sleeve, "sleeveCapBack"),
-  );
-  const seams: Seam[] = [];
-
-  appendConnectorIntervalSeams(
-    seams,
-    body.front,
-    frontBodyIntervals,
-    sleeve,
-    frontSleeveIntervals,
     "guided-sleeve:front-armhole",
     "Cava frontal",
     "opposite",
+    true,
   );
-  appendConnectorIntervalSeams(
+  appendMappedConnectorSeams(
     seams,
     body.back,
-    backBodyIntervals,
+    "backArmhole",
+    body.backNotchPositions,
     sleeve,
-    backSleeveIntervals,
+    "sleeveCapBack",
+    connectorInternalBoundaryPositions(sleeve, "sleeveCapBack"),
     "guided-sleeve:back-armhole",
     "Cava traseira",
     "same",
+    false,
   );
 
   const sideEdges = edgesWithRole(sleeve, "sideSeam");
@@ -656,26 +649,77 @@ function buildGuidedSleeveSeams(
   }));
 }
 
-function appendConnectorIntervalSeams(
+function appendMappedConnectorSeams(
   target: Seam[],
   firstPiece: PatternPiece,
-  firstIntervals: readonly EdgeRange[][],
+  firstRole: SegmentRole,
+  firstLandmarks: readonly number[],
   secondPiece: PatternPiece,
-  secondIntervals: readonly EdgeRange[][],
+  secondRole: SegmentRole,
+  secondLandmarks: readonly number[],
   groupId: string,
   label: string,
   direction: Seam["direction"],
+  reverseSecondIntervals: boolean,
 ): void {
+  const firstBoundaries = connectorLandmarkBoundaries(firstLandmarks);
+  const secondBoundaries = connectorLandmarkBoundaries(secondLandmarks);
+  const intervalCount = Math.min(firstBoundaries.length, secondBoundaries.length) - 1;
+  const firstEdgeBoundaries = connectorEdgeBoundaryPositions(firstPiece, firstRole);
+  const secondEdgeBoundaries = connectorEdgeBoundaryPositions(secondPiece, secondRole);
   let sequence = 0;
-  const intervalCount = Math.min(firstIntervals.length, secondIntervals.length);
+
   for (let intervalIndex = 0; intervalIndex < intervalCount; intervalIndex += 1) {
-    const pairs = alignRangeLists(
-      firstPiece,
-      firstIntervals[intervalIndex],
-      secondPiece,
-      secondIntervals[intervalIndex],
-    );
-    for (const [first, second] of pairs) {
+    const secondIntervalIndex = reverseSecondIntervals
+      ? intervalCount - intervalIndex - 1
+      : intervalIndex;
+    const firstStart = firstBoundaries[intervalIndex];
+    const firstEnd = firstBoundaries[intervalIndex + 1];
+    const secondStart = secondBoundaries[secondIntervalIndex];
+    const secondEnd = secondBoundaries[secondIntervalIndex + 1];
+    const firstSpan = firstEnd - firstStart;
+    const secondSpan = secondEnd - secondStart;
+    if (firstSpan <= 1e-9 || secondSpan <= 1e-9) continue;
+
+    const localBoundaries = new Set<number>([0, 1]);
+    for (const boundary of firstEdgeBoundaries) {
+      if (boundary > firstStart + 1e-9 && boundary < firstEnd - 1e-9) {
+        localBoundaries.add(roundArcT((boundary - firstStart) / firstSpan));
+      }
+    }
+    for (const boundary of secondEdgeBoundaries) {
+      if (boundary > secondStart + 1e-9 && boundary < secondEnd - 1e-9) {
+        const local = (boundary - secondStart) / secondSpan;
+        localBoundaries.add(roundArcT(direction === "opposite" ? 1 - local : local));
+      }
+    }
+
+    const ordered = [...localBoundaries].sort((left, right) => left - right);
+    for (let localIndex = 0; localIndex < ordered.length - 1; localIndex += 1) {
+      const localStart = ordered[localIndex];
+      const localEnd = ordered[localIndex + 1];
+      if (localEnd - localStart <= 1e-9) continue;
+      const firstGlobalStart = firstStart + firstSpan * localStart;
+      const firstGlobalEnd = firstStart + firstSpan * localEnd;
+      const secondGlobalStart = direction === "opposite"
+        ? secondStart + secondSpan * (1 - localEnd)
+        : secondStart + secondSpan * localStart;
+      const secondGlobalEnd = direction === "opposite"
+        ? secondStart + secondSpan * (1 - localStart)
+        : secondStart + secondSpan * localEnd;
+      const first = connectorRangeAt(
+        firstPiece,
+        firstRole,
+        firstGlobalStart,
+        firstGlobalEnd,
+      );
+      const second = connectorRangeAt(
+        secondPiece,
+        secondRole,
+        secondGlobalStart,
+        secondGlobalEnd,
+      );
+      if (!first || !second) continue;
       sequence += 1;
       target.push(seam(
         `${groupId}:${sequence}`,
@@ -690,68 +734,86 @@ function appendConnectorIntervalSeams(
   }
 }
 
-function alignRangeLists(
-  firstPiece: PatternPiece,
-  firstRanges: readonly EdgeRange[],
-  secondPiece: PatternPiece,
-  secondRanges: readonly EdgeRange[],
-): Array<[EdgeRange, EdgeRange]> {
-  if (firstRanges.length === 0 || secondRanges.length === 0) return [];
-  const firstLengths = firstRanges.map((range) => edgeRangeLength(firstPiece, range));
-  const secondLengths = secondRanges.map((range) => edgeRangeLength(secondPiece, range));
-  const firstTotal = firstLengths.reduce((sum, value) => sum + value, 0);
-  const secondTotal = secondLengths.reduce((sum, value) => sum + value, 0);
-  if (firstTotal <= 0 || secondTotal <= 0) return [];
-  const boundaries = new Set<number>([0, 1]);
-  cumulativeFractions(firstLengths, firstTotal).forEach((value) => boundaries.add(roundRatio(value)));
-  cumulativeFractions(secondLengths, secondTotal).forEach((value) => boundaries.add(roundRatio(value)));
-  const ordered = [...boundaries].sort((left, right) => left - right);
-  const pairs: Array<[EdgeRange, EdgeRange]> = [];
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const start = ordered[index];
-    const end = ordered[index + 1];
-    if (end - start < 1e-7) continue;
-    const first = sliceRangeList(firstRanges, firstLengths, firstTotal, start, end);
-    const second = sliceRangeList(secondRanges, secondLengths, secondTotal, start, end);
-    if (first && second) pairs.push([first, second]);
-  }
-  return pairs;
+function connectorLandmarkBoundaries(values: readonly number[]): number[] {
+  return [...new Set([
+    0,
+    ...values.map((value) => roundArcT(clamp(value, 0.001, 0.999))),
+    1,
+  ])].sort((left, right) => left - right);
 }
 
-function cumulativeFractions(lengths: readonly number[], total: number): number[] {
+function connectorEdgeBoundaryPositions(
+  piece: PatternPiece,
+  role: SegmentRole,
+): number[] {
+  const edges = edgesWithRole(piece, role);
+  const lengths = edges.map((edge) => edgeLength(piece, edge));
+  const total = lengths.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || edges.length < 2) return [];
   let cursor = 0;
   return lengths.slice(0, -1).map((length) => {
     cursor += length;
-    return cursor / total;
+    return roundArcT(cursor / total);
   });
 }
 
-function sliceRangeList(
-  ranges: readonly EdgeRange[],
-  lengths: readonly number[],
-  total: number,
-  startFraction: number,
-  endFraction: number,
+function connectorRangeAt(
+  piece: PatternPiece,
+  role: SegmentRole,
+  normalizedStart: number,
+  normalizedEnd: number,
 ): EdgeRange | undefined {
-  const midpoint = ((startFraction + endFraction) / 2) * total;
+  const edges = edgesWithRole(piece, role);
+  const lengths = edges.map((edge) => edgeLength(piece, edge));
+  const total = lengths.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || edges.length === 0) return undefined;
+  const startDistance = clamp(normalizedStart, 0, 1) * total;
+  const endDistance = clamp(normalizedEnd, 0, 1) * total;
+  const midpoint = (startDistance + endDistance) / 2;
   let cursor = 0;
-  for (let index = 0; index < ranges.length; index += 1) {
+  for (let index = 0; index < edges.length; index += 1) {
+    const edge = edges[index];
     const length = lengths[index];
     const next = cursor + length;
-    if (midpoint <= next + 1e-7) {
-      const source = ranges[index];
-      const sourceSpan = source.endT - source.startT;
-      const localStart = clamp((startFraction * total - cursor) / Math.max(length, 1e-9), 0, 1);
-      const localEnd = clamp((endFraction * total - cursor) / Math.max(length, 1e-9), 0, 1);
+    if (midpoint <= next + 1e-7 || index === edges.length - 1) {
+      const localStart = clamp(startDistance - cursor, 0, length);
+      const localEnd = clamp(endDistance - cursor, 0, length);
+      const startT = edgeTAtArcDistance(piece, edge, localStart, length);
+      const endT = edgeTAtArcDistance(piece, edge, localEnd, length);
+      if (endT - startT <= 1e-9) return undefined;
       return {
-        ...source,
-        startT: roundRatio(source.startT + sourceSpan * localStart),
-        endT: roundRatio(source.startT + sourceSpan * localEnd),
+        pieceId: piece.id,
+        edgeId: edge.id,
+        startT: roundArcT(startT),
+        endT: roundArcT(endT),
       };
     }
     cursor = next;
   }
   return undefined;
+}
+
+function edgeTAtArcDistance(
+  piece: PatternPiece,
+  edge: PatternEdge,
+  requestedDistance: number,
+  edgeLengthMm: number,
+): number {
+  if (requestedDistance <= 1e-9) return 0;
+  if (requestedDistance >= edgeLengthMm - 1e-9) return 1;
+  let low = 0;
+  let high = 1;
+  for (let iteration = 0; iteration < 44; iteration += 1) {
+    const middle = (low + high) / 2;
+    const length = preciseEdgeArcLength(piece, edge, 0, middle, 128);
+    if (length < requestedDistance) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+function roundArcT(value: number): number {
+  return Math.round(clamp(value, 0, 1) * 1_000_000_000) / 1_000_000_000;
 }
 
 function buildLandmarkPairs(
@@ -975,44 +1037,6 @@ function cubicPoint(curve: CubicCurve, t: number): PatternVector {
   };
 }
 
-function partitionRoleIntervals(
-  piece: PatternPiece,
-  role: SegmentRole,
-  cutPositions: readonly number[],
-): EdgeRange[][] {
-  const edges = edgesWithRole(piece, role);
-  const lengths = edges.map((edge) => edgeLength(piece, edge));
-  const total = lengths.reduce((sum, value) => sum + value, 0);
-  if (edges.length === 0 || total <= 0) return [];
-  const boundaries = [0, ...cutPositions.map((value) => clamp(value, 0.001, 0.999)).sort((a, b) => a - b), 1];
-  const intervals: EdgeRange[][] = [];
-  for (let intervalIndex = 0; intervalIndex < boundaries.length - 1; intervalIndex += 1) {
-    const startDistance = boundaries[intervalIndex] * total;
-    const endDistance = boundaries[intervalIndex + 1] * total;
-    const ranges: EdgeRange[] = [];
-    let cursor = 0;
-    for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex += 1) {
-      const edge = edges[edgeIndex];
-      const length = lengths[edgeIndex];
-      const edgeStart = cursor;
-      const edgeEnd = cursor + length;
-      const overlapStart = Math.max(startDistance, edgeStart);
-      const overlapEnd = Math.min(endDistance, edgeEnd);
-      if (overlapEnd - overlapStart > 1e-5) {
-        ranges.push({
-          pieceId: piece.id,
-          edgeId: edge.id,
-          startT: roundRatio((overlapStart - edgeStart) / Math.max(length, 1e-9)),
-          endT: roundRatio((overlapEnd - edgeStart) / Math.max(length, 1e-9)),
-        });
-      }
-      cursor = edgeEnd;
-    }
-    intervals.push(ranges);
-  }
-  return intervals;
-}
-
 function connectorBoundaryPosition(
   piece: PatternPiece,
   role: SegmentRole,
@@ -1055,7 +1079,64 @@ function roleLength(piece: PatternPiece, role: SegmentRole): number {
 }
 
 function edgeLength(piece: PatternPiece, edge: PatternEdge): number {
-  return edgeRangeLength(piece, fullRange(piece.id, edge.id));
+  return preciseEdgeArcLength(piece, edge, 0, 1, 192);
+}
+
+function preciseEdgeArcLength(
+  piece: PatternPiece,
+  edge: PatternEdge,
+  startT: number,
+  endT: number,
+  samples: number,
+): number {
+  const start = clamp(startT, 0, 1);
+  const end = clamp(endT, 0, 1);
+  if (end <= start) return 0;
+  let previous = preciseEdgePointAt(piece, edge, start);
+  let length = 0;
+  for (let index = 1; index <= samples; index += 1) {
+    const t = start + (end - start) * (index / samples);
+    const current = preciseEdgePointAt(piece, edge, t);
+    length += distance(previous, current);
+    previous = current;
+  }
+  return length;
+}
+
+function preciseEdgePointAt(
+  piece: PatternPiece,
+  edge: PatternEdge,
+  t: number,
+): PatternVector {
+  const start = piece.points.find((pointValue) => pointValue.id === edge.startPointId);
+  const end = piece.points.find((pointValue) => pointValue.id === edge.endPointId);
+  if (!start || !end) {
+    throw new RangeError(`A borda ${edge.id} referencia pontos ausentes.`);
+  }
+  const segment = piece.segments?.find((candidate) => candidate.id === edge.id);
+  const cubic = segment?.kind === "cubic" || Boolean(start.handleOut || end.handleIn);
+  if (!cubic) return lerp(start, end, t);
+  const control1 = segment?.kind === "cubic" && segment.control1
+    ? segment.control1
+    : {
+        xMm: start.xMm + (start.handleOut?.xMm ?? 0),
+        yMm: start.yMm + (start.handleOut?.yMm ?? 0),
+      };
+  const control2 = segment?.kind === "cubic" && segment.control2
+    ? segment.control2
+    : {
+        xMm: end.xMm + (end.handleIn?.xMm ?? 0),
+        yMm: end.yMm + (end.handleIn?.yMm ?? 0),
+      };
+  const mt = 1 - t;
+  const a = mt * mt * mt;
+  const b = 3 * mt * mt * t;
+  const c = 3 * mt * t * t;
+  const d = t * t * t;
+  return {
+    xMm: start.xMm * a + control1.xMm * b + control2.xMm * c + end.xMm * d,
+    yMm: start.yMm * a + control1.yMm * b + control2.yMm * c + end.yMm * d,
+  };
 }
 
 function roleVerticalSpan(piece: PatternPiece, role: SegmentRole): number {

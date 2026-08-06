@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FallbackPatternEngine } from "../core/fallbackPatternEngine";
-import { garmentDraftToPatternDocumentV3 } from "./patternDocumentV3";
-import { getPatternEdges, type GarmentDraft, type PatternPiece } from "./pattern";
+import { garmentDraftToPatternDocumentV3, validatePatternDocumentV3 } from "./patternDocumentV3";
+import { getPatternEdges, type EdgeRange, type GarmentDraft, type PatternPiece } from "./pattern";
 import {
   analyzeSleeveCompatibility,
   createDefaultSleeveSettings,
@@ -98,6 +98,7 @@ describe("guided sleeve system", () => {
     const backCap = definition?.connectors.find((connector) => connector.role === "sleeve-cap-back");
     expect(frontCap?.landmarks.some((landmark) => landmark.kind === "notch")).toBe(true);
     expect(backCap?.landmarks.filter((landmark) => landmark.kind === "notch")).toHaveLength(2);
+    expect(validatePatternDocumentV3(document)).toEqual([]);
     expect(document.panelInstances.filter((instance) => instance.sourcePatternId === draft.sleevePiece.id).map((instance) => [
       instance.id,
       instance.bodySide,
@@ -130,6 +131,38 @@ describe("guided sleeve system", () => {
     expect(underarm?.second.pieceId).toBe(draft.sleevePiece.id);
     expect(underarm?.first.edgeId).not.toBe(underarm?.second.edgeId);
     expect(underarm?.direction).toBe("opposite");
+  });
+
+
+  it("covers every front and back armhole and cap interval exactly once", () => {
+    const garment = bodice();
+    const [front, back] = bodyDefinitions(garment);
+    const draft = draftGuidedSleeve(
+      garment,
+      front.id,
+      back.id,
+      createDefaultSleeveSettings(garment, front.id, back.id, "short"),
+    );
+    const groups = [
+      {
+        id: "guided-sleeve:front-armhole",
+        body: front,
+        bodyRole: "frontArmhole" as const,
+        capRole: "sleeveCapFront" as const,
+      },
+      {
+        id: "guided-sleeve:back-armhole",
+        body: back,
+        bodyRole: "backArmhole" as const,
+        capRole: "sleeveCapBack" as const,
+      },
+    ];
+    for (const group of groups) {
+      const seams = draft.seams.filter((seam) => seam.groupId === group.id);
+      expectConnectorCoverage(group.body, group.bodyRole, seams.map((seam) => seam.first));
+      expectConnectorCoverage(draft.sleevePiece, group.capRole, seams.map((seam) => seam.second));
+      expect(seams.every((seam) => seam.first.startT < seam.first.endT && seam.second.startT < seam.second.endT)).toBe(true);
+    }
   });
 
   it("updates from changed shoulder and armhole geometry", () => {
@@ -243,6 +276,30 @@ function bodyDefinitions(garment: GarmentDraft): [PatternPiece, PatternPiece] {
   const back = garment.pieces.find((piece) => getPatternEdges(piece).some((edge) => edge.role === "backArmhole"));
   if (!front || !back) throw new Error("Corpo de teste sem frente/costas.");
   return [front, back];
+}
+
+
+function expectConnectorCoverage(
+  piece: PatternPiece,
+  role: "frontArmhole" | "backArmhole" | "sleeveCapFront" | "sleeveCapBack",
+  ranges: readonly EdgeRange[],
+): void {
+  const edges = getPatternEdges(piece).filter((edge) => edge.role === role);
+  expect(edges.length, `${piece.id}/${role}/edges`).toBeGreaterThan(0);
+  for (const edge of edges) {
+    const intervals = ranges
+      .filter((range) => range.edgeId === edge.id)
+      .sort((left, right) => left.startT - right.startT);
+    expect(intervals.length, `${piece.id}/${edge.id}/intervals`).toBeGreaterThan(0);
+    expect(intervals[0].startT, `${piece.id}/${edge.id}/start`).toBeCloseTo(0, 7);
+    for (let index = 1; index < intervals.length; index += 1) {
+      expect(intervals[index].startT, `${piece.id}/${edge.id}/gap-${index}`).toBeCloseTo(
+        intervals[index - 1].endT,
+        7,
+      );
+    }
+    expect(intervals[intervals.length - 1].endT, `${piece.id}/${edge.id}/end`).toBeCloseTo(1, 7);
+  }
 }
 
 function bounds(piece: PatternPiece) {

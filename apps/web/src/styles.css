@@ -2251,5 +2251,13 @@ button {
   .sleeve-landmark-list { grid-template-columns: 1fr; }
   .sleeve-wizard-actions { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .sleeve-wizard-actions button { min-width: 0; flex: 1; }
-  .toolbar-actions .sleeve-button { display: none; }
+  .toolbar-actions .sleeve-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 104px;
+    padding: 0 9px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
 }

@@ -260,7 +260,7 @@ function BodyStep({
         <div className={`sleeve-diagnostic ${diagnostic.severity}`} key={`${diagnostic.code}:${diagnostic.pieceId ?? ""}`}>{diagnostic.message}</div>
       ))}
       <label className="sleeve-confirm-row">
-        <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmedChange(event.currentTarget.checked)} />
+        <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmedChange(event.currentTarget.checked)} data-testid="sleeve-confirm-body" />
         <span>Confirmo que ombros, axilas, cava frontal e cava traseira correspondem ao mesmo corpo.</span>
       </label>
       {detection.existingSleeveIds.length > 0 ? (
