@@ -8,3 +8,5 @@ export * from "./PhysicalGarmentAssembly";
 export * from "./ResolvedGarmentAssembly";
 export * from "./GarmentSolver";
 export * from "./GarmentThreeBridge";
+
+export * from "./SemanticAvatarArrangement";

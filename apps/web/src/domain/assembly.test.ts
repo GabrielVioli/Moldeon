@@ -204,11 +204,11 @@ describe("assembly graph and eligibility", () => {
     expect(graph.intentionalOpenEdges).toHaveLength(6);
   });
 
-  it("shows valid pieces before costuring and reserves body fitting for assembled garments", () => {
+  it("authorizes the always-dressed viewport for valid anchored pieces before and after sewing", () => {
     const draft = garment();
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canPreviewGarment: true,
-      canDressBody: false,
+      canDressBody: true,
       connectedPieceIds: ["front", "back"],
     });
     draft.seams = [seamFor(draft)];
@@ -235,7 +235,7 @@ describe("assembly graph and eligibility", () => {
     ]);
   });
 
-  it("does not authorize loading Three.js before both eligibility and an explicit request", () => {
+  it("loads Three.js only after eligibility and an explicit request, independent of legacy fitting flags", () => {
     const draft = garment();
     draft.seams = [seamFor(draft)];
     const eligibility = evaluateGarment3DEligibility(draft);
@@ -247,6 +247,6 @@ describe("assembly graph and eligibility", () => {
         true,
         "fitting",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

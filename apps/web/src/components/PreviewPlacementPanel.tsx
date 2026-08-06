@@ -11,19 +11,19 @@ export function PreviewPlacementPanel() {
 
   return (
     <aside className="placement-panel">
-      <span className="section-eyebrow">Preparação 3D</span>
+      <span className="section-eyebrow">Anchor semântico</span>
       <h2>{piece.name}</h2>
-      <p className="muted">Arraste uma peça para o avatar ou ajuste o painel.</p>
+      <p className="muted">Defina região, superfície e lado corporal. Sem anchor válido, a peça gera diagnóstico e não aparece suspensa.</p>
       <PlacementSelect label="Região" value={placement.region} options={["torso", "waist", "hip", "arm", "leg"]} onChange={(region) => update({ region: region as PreviewRegion })} />
       <PlacementSelect label="Superfície" value={placement.surface} options={["front", "back", "side"]} onChange={(surface) => update({ surface: surface as PreviewSurface })} />
       <PlacementSelect label="Lado" value={placement.bodySide} options={["center", "left", "right"]} onChange={(bodySide) => update({ bodySide: bodySide as PreviewBodySide })} />
-      {(["rotationDeg", "offsetXMm", "offsetYMm", "offsetZMm", "scale"] as const).map((field) => (
+      {(["rotationDeg", "offsetXMm", "offsetYMm", "offsetZMm"] as const).map((field) => (
         <label className="placement-field" key={field}>
-          <span>{{ rotationDeg: "Rotação (°)", offsetXMm: "Deslocamento X (mm)", offsetYMm: "Deslocamento Y (mm)", offsetZMm: "Deslocamento Z (mm)", scale: "Escala" }[field]}</span>
-          <input type="number" step={field === "scale" ? 0.05 : 1} min={field === "scale" ? 0.05 : undefined} value={placement[field]} onChange={(event) => Number.isFinite(event.currentTarget.valueAsNumber) && update({ [field]: event.currentTarget.valueAsNumber })} />
+          <span>{{ rotationDeg: "Rotação local (°)", offsetXMm: "Ajuste X (mm)", offsetYMm: "Ajuste Y (mm)", offsetZMm: "Margem adicional Z (mm)" }[field]}</span>
+          <input type="number" step={1} value={placement[field]} onChange={(event) => Number.isFinite(event.currentTarget.valueAsNumber) && update({ [field]: event.currentTarget.valueAsNumber })} />
         </label>
       ))}
-      <button type="button" onClick={() => setPlacements([])}>Remover da prévia</button>
+      <button type="button" onClick={() => setPlacements([])}>Remover anchor</button>
     </aside>
   );
 }

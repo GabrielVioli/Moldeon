@@ -169,7 +169,7 @@ export const Toolbar = memo(function Toolbar({
         >
           Restaurar
         </button>
-        <button className="primary-button" type="button" disabled={!canAssemble3D} onClick={onSimulate}>Montar no 3D</button>
+        <button className="primary-button" type="button" disabled={!canAssemble3D} onClick={onSimulate}>Vestir no manequim</button>
       </div>
     </header>
   );

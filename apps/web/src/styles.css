@@ -2261,3 +2261,29 @@ button {
     white-space: nowrap;
   }
 }
+
+
+.viewport-warnings {
+  display: grid;
+  gap: 0.25rem;
+  max-height: min(34%, 13rem);
+  overflow: auto;
+}
+
+.viewport-warnings span {
+  display: block;
+}
+
+@media (max-width: 760px) {
+  .preview-panel.workspace-view.is-mobile-active {
+    align-self: stretch;
+    min-height: 360px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .preview-panel.workspace-view.is-mobile-active .viewport-host {
+    min-height: 360px;
+    height: 100%;
+  }
+}

@@ -132,7 +132,7 @@ describe("PhysicalGarmentAssembly", () => {
     expect(Array.from(state.initialPositions).every(Number.isFinite)).toBe(true);
   });
 
-  it("duplica uma costura lateral para os lados esquerdo e direito", () => {
+  it("duplica uma costura lateral por lado e mantém a expansão física neutra antes dos anchors", () => {
     const front = halfPanel("front", "front");
     const back = halfPanel("back", "back");
     const frontSide = getPatternEdges(front).find((edge) => edge.role === "sideSeam")!;
@@ -180,14 +180,14 @@ describe("PhysicalGarmentAssembly", () => {
         frontInstance.particleStart,
         frontInstance.vertexCount,
       ),
-    ).toBeGreaterThan(0);
+    ).toBeCloseTo(0, 7);
     expect(
       averageInstanceZ(
         state.initialPositions,
         backInstance.particleStart,
         backInstance.vertexCount,
       ),
-    ).toBeLessThan(0);
+    ).toBeCloseTo(0, 7);
 
     const report = solveGarmentAssembly(state, { iterations: 80 });
     expect(report.invalid).toBe(false);

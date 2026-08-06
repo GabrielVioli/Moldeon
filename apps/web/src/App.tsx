@@ -21,7 +21,7 @@ import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
-import { createPreviewPlacement, type GarmentDraft, type PreviewRegion } from "./domain/pattern";
+import type { GarmentDraft } from "./domain/pattern";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 
@@ -194,10 +194,6 @@ export function App() {
     },
     [duplicatePiece],
   );
-  const handlePieceDrop = useCallback((pieceId: string, region: PreviewRegion) => {
-    selectPiece(pieceId);
-    setActivePiecePlacements([createPreviewPlacement(pieceId, { region })]);
-  }, [selectPiece, setActivePiecePlacements]);
   const handleRotatePiece = useCallback((pieceId: string, action: "left" | "right" | "reset") => {
     if (action === "left") rotatePieceInWorkspace(pieceId, -90);
     else if (action === "right") rotatePieceInWorkspace(pieceId, 90);
@@ -510,7 +506,7 @@ export function App() {
               openRightPanel("preview");
             }}
           >
-            Prévia 3D
+            Manequim 3D
           </WorkspaceTab>
           <WorkspaceTab
             id="inspector-tab"
@@ -632,9 +628,6 @@ export function App() {
                 simulateVersion={simulateVersion}
                 active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
                 onBackendChange={setRenderBackend}
-                onPieceDrop={handlePieceDrop}
-                showBody={workspaceMode === "fitting"}
-                connectedPieceIds={eligibility.connectedPieceIds}
               />
             </Suspense>
           ) : (
@@ -695,7 +688,7 @@ export function App() {
             onClose={() => setFittingOpen(false)}
             onPreview={() => {
               setFittingOpen(false);
-              handleSimulate();
+              handleDressBody();
             }}
           />
         </Suspense>
@@ -753,8 +746,8 @@ function ViewportPlaceholder({ loading = false }: { loading?: boolean }) {
   return (
     <div className="viewport-placeholder" role="status">
       {loading ? <span className="viewport-spinner" aria-hidden="true" /> : null}
-      <strong>{loading ? "Preparando prévia 3D" : "Montagem 3D ainda indisponível"}</strong>
-      <span>{loading ? "O editor 2D continua leve enquanto o 3D carrega." : "Conecte duas peças válidas por uma costura e solicite a montagem."}</span>
+      <strong>{loading ? "Preparando manequim vestido" : "Manequim 3D ainda indisponível"}</strong>
+      <span>{loading ? "O editor 2D continua leve enquanto avatar e roupa são preparados." : "Crie ao menos uma peça triangulável e solicite a prova no manequim."}</span>
     </div>
   );
 }

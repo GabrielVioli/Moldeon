@@ -18,6 +18,7 @@ export interface GarmentAssemblyMeshData {
 export interface GarmentThreeBridgeOptions {
   castShadow: boolean;
   receiveShadow: boolean;
+  visibleInstanceIds?: ReadonlySet<string>;
 }
 
 export function buildGarmentAssemblyMeshes(
@@ -35,6 +36,7 @@ export function buildGarmentAssemblyMeshes(
   const meshes: GarmentAssemblyMeshData[] = [];
 
   for (const instance of state.instances) {
+    if (options.visibleInstanceIds && !options.visibleInstanceIds.has(instance.id)) continue;
     const piece = pieceById.get(instance.pieceId);
     const fabric = fabricById.get(piece?.fabricId ?? "") ?? fallbackFabric;
     if (!fabric) continue;
@@ -93,7 +95,15 @@ function buildInstanceGeometry(
     "position",
     new THREE.Float32BufferAttribute(positions, 3),
   );
-  geometry.setIndex(Array.from(instance.topology.triangles));
+  const indices = Array.from(instance.topology.triangles);
+  if (instance.arrangement?.flipWinding) {
+    for (let index = 0; index < indices.length; index += 3) {
+      const second = indices[index + 1];
+      indices[index + 1] = indices[index + 2];
+      indices[index + 2] = second;
+    }
+  }
+  geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();

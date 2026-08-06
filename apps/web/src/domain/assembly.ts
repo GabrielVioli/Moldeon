@@ -300,15 +300,14 @@ export function evaluateGarment3DEligibility(
 
   if (graph.validSeamIds.length === 0 && canPreviewGarment) {
     warnings.push(
-      "Nenhuma costura válida foi criada. As peças serão mostradas separadamente.",
+      "Nenhuma costura válida foi criada. O manequim exibirá somente instâncias com anchors válidos e informará componentes desconectados.",
     );
   }
 
-  const placementIds = new Set(
-    (garment.assemblyPlacements ?? []).map(
-      (placement) => placement.pieceId,
-    ),
-  );
+  const placementIds = new Set([
+    ...(garment.assemblyPlacements ?? []).map((placement) => placement.pieceId),
+    ...garment.pieces.filter((piece) => (piece.previewPlacements?.length ?? 0) > 0).map((piece) => piece.id),
+  ]);
   const missingPlacements = connectedPieceIds.filter(
     (pieceId) => !placementIds.has(pieceId),
   );
@@ -321,10 +320,7 @@ export function evaluateGarment3DEligibility(
 
   return {
     canPreviewGarment,
-    canDressBody:
-      canPreviewGarment &&
-      graph.validSeamIds.length > 0 &&
-      missingPlacements.length === 0,
+    canDressBody: canPreviewGarment,
     issues: unique(issues),
     warnings: unique(warnings),
     connectedPieceIds,
@@ -336,50 +332,35 @@ export function shouldLoadThreeViewport(
   requested: boolean,
   mode: WorkspaceMode,
 ): boolean {
-  if (!requested || !eligibility.canPreviewGarment) return false;
-  return mode !== "fitting" || eligibility.canDressBody;
+  void mode;
+  return requested && eligibility.canPreviewGarment;
 }
 
 export function inferAssemblyPlacement(
   piece: PatternPiece,
   index = 0,
 ): AssemblyPlacement {
-  const normalized = piece.name.toLocaleLowerCase("pt-BR");
   const roles = new Set(piece.segments?.map((segment) => segment.role) ?? []);
-  const role =
-    normalized.includes("costas") || roles.has("backArmhole")
-      ? "back"
-      : normalized.includes("manga") ||
-          roles.has("sleeveCapFront") ||
-          roles.has("sleeveCapBack")
-        ? "sleeve"
-        : normalized.includes("perna") ||
-            normalized.includes("calça") ||
-            roles.has("inseam") ||
-            roles.has("outseam")
-          ? "leg"
-          : normalized.includes("saia") ||
-              normalized.includes("cintura")
-            ? "waist"
-            : normalized.includes("gola")
-              ? "collar"
-              : normalized.includes("frente")
-                ? "front"
-                : "custom";
+  const role = roles.has("backArmhole")
+    ? "back"
+    : roles.has("sleeveCapFront") || roles.has("sleeveCapBack")
+      ? "sleeve"
+      : roles.has("inseam") || roles.has("outseam")
+        ? "leg"
+        : roles.has("waist") && roles.has("hem") && !roles.has("frontArmhole")
+          ? "waist"
+          : roles.has("frontArmhole")
+            ? "front"
+            : "custom";
   const outwardSide = role === "back" ? "back" : "front";
-
   return {
     pieceId: piece.id,
     role,
     outwardSide,
-    positionMm: [
-      (index % 3 - 1) * 180,
-      role === "leg" || role === "waist" ? -260 : 120,
-      outwardSide === "back" ? -90 : 90,
-    ],
-    rotationDeg: [0, outwardSide === "back" ? 180 : 0, 0],
+    positionMm: [0, 0, 0],
+    rotationDeg: [0, 0, 0],
     flipped: false,
-    source: "inferred",
+    source: role === "custom" ? "manual" : "inferred",
   };
 }
 

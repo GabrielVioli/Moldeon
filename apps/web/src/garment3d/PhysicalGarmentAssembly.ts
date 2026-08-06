@@ -27,8 +27,6 @@ interface InstancePlan {
   foldEdgeId?: string;
 }
 
-const FRONT_SURFACE_Z = 0.07;
-const BACK_SURFACE_Z = -0.07;
 const FOLD_REST_DISTANCE = 0.0001;
 const POSITION_EPSILON = 1e-8;
 
@@ -327,15 +325,7 @@ function normalizeSurfaceDepth(
   instance: AssemblyPanelInstance,
 ): void {
   const averageZ = averageAxis(values, 2);
-  const targetZ =
-    instance.placement.surface === "front"
-      ? FRONT_SURFACE_Z
-      : instance.placement.surface === "back"
-        ? BACK_SURFACE_Z
-        : 0;
-  const offsetZ = instance.placement.offsetZMm * 0.001;
-
-  translateValues(values, 0, 0, targetZ + offsetZ - averageZ);
+  translateValues(values, 0, 0, -averageZ);
 }
 
 function assignParticleRanges(plans: InstancePlan[]): void {

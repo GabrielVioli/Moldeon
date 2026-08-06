@@ -1,9 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type {
-  GarmentDraft,
-  PatternSnapshot,
-  PreviewRegion,
-} from "../domain/pattern";
+import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
 import { ThreeViewport } from "./GlobalThreeViewport";
 
 interface GarmentViewportProps {
@@ -12,9 +8,6 @@ interface GarmentViewportProps {
   simulateVersion: number;
   active: boolean;
   onBackendChange(backend: "webgpu" | "webgl2"): void;
-  onPieceDrop?(pieceId: string, region: PreviewRegion): void;
-  showBody: boolean;
-  connectedPieceIds: string[];
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -23,8 +16,6 @@ export const GarmentViewport = memo(function GarmentViewport({
   simulateVersion,
   active,
   onBackendChange,
-  onPieceDrop,
-  showBody,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -32,29 +23,21 @@ export const GarmentViewport = memo(function GarmentViewport({
   const latestGarmentRef = useRef(garment);
   const latestActiveRef = useRef(active);
   const latestSimulateVersionRef = useRef(simulateVersion);
-  const latestShowBodyRef = useRef(showBody);
   const lastDressedVersionRef = useRef(0);
   const lastAppliedGarmentRef = useRef<GarmentDraft | null>(null);
   const lastAppliedSnapshotsRef = useRef<PatternSnapshot[] | null>(null);
-  const lastAppliedShowBodyRef = useRef<boolean | null>(null);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [draggingPiece, setDraggingPiece] = useState(false);
-  const [inspectionMode, setInspectionMode] = useState<"mounted" | "exploded">(
-    "mounted",
-  );
 
   latestSnapshotsRef.current = snapshots;
   latestGarmentRef.current = garment;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
-  latestShowBodyRef.current = showBody;
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-
     let mounted = true;
     const abortController = new AbortController();
     setError(null);
@@ -65,196 +48,70 @@ export const GarmentViewport = memo(function GarmentViewport({
           viewport.dispose();
           return;
         }
-
         viewportRef.current = viewport;
         onBackendChange(viewport.backend);
-        viewport.setBodyVisible(latestShowBodyRef.current);
-
         if (latestActiveRef.current) {
-          setWarnings(
-            viewport.updateGarment(
-              latestSnapshotsRef.current,
-              latestGarmentRef.current,
-            ),
-          );
+          setWarnings(viewport.updateGarment(latestSnapshotsRef.current, latestGarmentRef.current));
           lastAppliedGarmentRef.current = latestGarmentRef.current;
           lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
-          lastAppliedShowBodyRef.current = latestShowBodyRef.current;
         }
-
-        if (
-          latestActiveRef.current &&
-          latestSimulateVersionRef.current > 0
-        ) {
+        if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
           lastDressedVersionRef.current = latestSimulateVersionRef.current;
         }
       })
       .catch((reason: unknown) => {
         if (!mounted) return;
-        if (reason instanceof DOMException && reason.name === "AbortError") {
-          return;
-        }
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
         console.error(reason);
-        setError("Não foi possível iniciar o viewport 3D neste navegador.");
+        setError("Não foi possível iniciar o manequim 3D neste navegador.");
       });
 
     return () => {
       mounted = false;
       abortController.abort();
-      if (updateFrameRef.current !== null) {
-        window.cancelAnimationFrame(updateFrameRef.current);
-        updateFrameRef.current = null;
-      }
+      if (updateFrameRef.current !== null) window.cancelAnimationFrame(updateFrameRef.current);
+      updateFrameRef.current = null;
       viewportRef.current?.dispose();
       viewportRef.current = null;
     };
   }, [onBackendChange]);
 
   useEffect(() => {
-    viewportRef.current?.setBodyVisible(showBody);
-  }, [showBody]);
-
-  useEffect(() => {
-    viewportRef.current?.setExploded(inspectionMode === "exploded");
-  }, [inspectionMode]);
-
-  useEffect(() => {
     if (!active || updateFrameRef.current !== null) return;
-    if (lastAppliedGarmentRef.current === garment && lastAppliedSnapshotsRef.current === snapshots && lastAppliedShowBodyRef.current === showBody) return;
-
+    if (lastAppliedGarmentRef.current === garment && lastAppliedSnapshotsRef.current === snapshots) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
       const viewport = viewportRef.current;
       if (!viewport) return;
-
-      setWarnings(
-        viewport.updateGarment(
-          latestSnapshotsRef.current,
-          latestGarmentRef.current,
-        ),
-      );
+      setWarnings(viewport.updateGarment(latestSnapshotsRef.current, latestGarmentRef.current));
       lastAppliedGarmentRef.current = latestGarmentRef.current;
       lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
-      lastAppliedShowBodyRef.current = latestShowBodyRef.current;
     });
-
     return () => {
-      if (updateFrameRef.current !== null) {
-        window.cancelAnimationFrame(updateFrameRef.current);
-        updateFrameRef.current = null;
-      }
+      if (updateFrameRef.current !== null) window.cancelAnimationFrame(updateFrameRef.current);
+      updateFrameRef.current = null;
     };
-  }, [active, garment, snapshots, showBody]);
+  }, [active, garment, snapshots]);
 
   useEffect(() => {
-    if (
-      simulateVersion <= lastDressedVersionRef.current ||
-      !viewportRef.current
-    ) {
-      return;
-    }
-
+    if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
     viewportRef.current.dress();
     lastDressedVersionRef.current = simulateVersion;
   }, [simulateVersion]);
 
   return (
-    <div
-      className={`viewport-host${draggingPiece ? " is-piece-dragging" : ""}`}
-      ref={hostRef}
-      onDragEnter={(event) => {
-        if (
-          event.dataTransfer.types.includes("application/x-moldeon-piece")
-        ) {
-          setDraggingPiece(true);
-        }
-      }}
-      onDragOver={(event) => {
-        if (
-          event.dataTransfer.types.includes("application/x-moldeon-piece")
-        ) {
-          event.preventDefault();
-        }
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setDraggingPiece(false);
-        }
-      }}
-      onDrop={() => setDraggingPiece(false)}
-    >
+    <div className="viewport-host" ref={hostRef} data-testid="dressed-avatar-viewport">
       {error ? <div className="viewport-error">{error}</div> : null}
       {warnings.length > 0 ? (
         <div className="viewport-warnings" role="alert">
-          {warnings.join(" ")}
+          {warnings.map((warning) => <span key={warning}>{warning}</span>)}
         </div>
       ) : null}
-
-      {draggingPiece ? (
-        <div
-          className="preview-drop-zones"
-          aria-label="Regiões de posicionamento"
-        >
-          {(["torso", "waist", "hip", "arm", "leg"] as const).map(
-            (region) => (
-              <button
-                key={region}
-                type="button"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const pieceId = event.dataTransfer.getData(
-                    "application/x-moldeon-piece",
-                  );
-                  if (pieceId) onPieceDrop?.(pieceId, region);
-                  setDraggingPiece(false);
-                }}
-              >
-                {regionLabel(region)}
-              </button>
-            ),
-          )}
-        </div>
-      ) : null}
-
-      <div
-        className="viewport-inspection"
-        role="group"
-        aria-label="Inspeção da montagem"
-      >
-        <button
-          type="button"
-          className={inspectionMode === "mounted" ? "active" : ""}
-          onClick={() => setInspectionMode("mounted")}
-        >
-          Montada
-        </button>
-        <button
-          type="button"
-          className={inspectionMode === "exploded" ? "active" : ""}
-          onClick={() => setInspectionMode("exploded")}
-        >
-          Explodida
-        </button>
-      </div>
-
       <div className="viewport-label">
-        Preview 3D · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
-        {garment.fabrics.length > 1
-          ? `${garment.fabrics.length} tecidos`
-          : garment.fabrics[0]?.name ?? "sem tecido"}
+        Manequim vestido · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
+        {garment.fabrics.length > 1 ? `${garment.fabrics.length} tecidos` : garment.fabrics[0]?.name ?? "sem tecido"}
       </div>
     </div>
   );
 });
-
-function regionLabel(region: PreviewRegion): string {
-  return {
-    torso: "Tronco",
-    waist: "Cintura",
-    hip: "Quadril",
-    arm: "Braço",
-    leg: "Perna",
-  }[region];
-}

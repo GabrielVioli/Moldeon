@@ -49,6 +49,16 @@ export interface AssemblyAnchorConstraint {
   stiffness: number;
 }
 
+export interface AssemblyInstanceArrangement {
+  anchorId: string;
+  outwardNormal: [number, number, number];
+  axis: [number, number, number];
+  bodySide: PatternPreviewPlacement["bodySide"];
+  marginM: number;
+  mapping: "body-surface" | "local-tube" | "anatomical-half-tube";
+  flipWinding: boolean;
+}
+
 export interface AssemblyPanelInstance {
   id: string;
   pieceId: string;
@@ -56,6 +66,7 @@ export interface AssemblyPanelInstance {
   topology: PanelTopology;
   particleStart: number;
   vertexCount: number;
+  arrangement?: AssemblyInstanceArrangement;
 }
 
 export interface GarmentAssemblyState {
@@ -83,17 +94,6 @@ export function buildGarmentAssembly(
   const warnings: string[] = [];
   const instances: AssemblyPanelInstance[] = [];
   const positionValues: number[] = [];
-  const selfSeamedPieceIds = new Set(
-    (garment.seams ?? [])
-      .filter(
-        (seam) =>
-          seam.active !== false &&
-          seam.first.pieceId === seam.second.pieceId &&
-          !rangesAreIdentical(seam.first, seam.second),
-      )
-      .map((seam) => seam.first.pieceId),
-  );
-
   for (const snapshot of snapshots) {
     let topology: PanelTopology;
 
@@ -114,7 +114,11 @@ export function buildGarmentAssembly(
       continue;
     }
 
-    for (const placement of resolvePiecePlacements(snapshot.piece, garment)) {
+    const placements = resolvePiecePlacements(snapshot.piece, garment);
+    if (placements.length === 0) {
+      warnings.push(`${snapshot.piece.name}: nenhuma instância possui anchor explícito; a peça foi omitida do 3D.`);
+    }
+    for (const placement of placements) {
       const particleStart = positionValues.length / 3;
       const instance: AssemblyPanelInstance = {
         id: `${snapshot.piece.id}/${placement.id}`,
@@ -125,11 +129,7 @@ export function buildGarmentAssembly(
         vertexCount: topology.positions2DMm.length / 2,
       };
 
-      appendInitialPositions(
-        positionValues,
-        instance,
-        selfSeamedPieceIds.has(snapshot.piece.id),
-      );
+      appendInitialPositions(positionValues, instance);
       applyDartDepthBias(positionValues, instance);
       instances.push(instance);
     }
@@ -182,80 +182,24 @@ export function buildGarmentAssembly(
 function appendInitialPositions(
   target: number[],
   instance: AssemblyPanelInstance,
-  wrapAsTube: boolean,
 ): void {
   const { topology, placement } = instance;
   const centerX = (topology.boundsMm.minX + topology.boundsMm.maxX) / 2;
   const topY = topology.boundsMm.minY;
-  const widthMm = Math.max(topology.boundsMm.width, 1);
   const scale = validScale(placement.scale);
   const rotation = placement.rotationDeg * Math.PI / 180;
-  const base = placementBasePosition(placement);
-  const radius = Math.max(
-    widthMm * METERS_PER_MM * scale / (2 * Math.PI),
-    0.025,
-  );
 
   for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
     const xMm = topology.positions2DMm[localIndex * 2];
     const yMm = topology.positions2DMm[localIndex * 2 + 1];
-    const rawX = (xMm - centerX) * METERS_PER_MM;
+    const rawX = (xMm - centerX) * METERS_PER_MM * (placement.mirrorX ? -1 : 1);
     const rawY = -(yMm - topY) * METERS_PER_MM;
-    const mirroredX = placement.mirrorX ? -rawX : rawX;
-    const scaledX = mirroredX * scale;
+    const scaledX = rawX * scale;
     const scaledY = rawY * scale;
     const rotatedX = scaledX * Math.cos(rotation) - scaledY * Math.sin(rotation);
     const rotatedY = scaledX * Math.sin(rotation) + scaledY * Math.cos(rotation);
-
-    if (wrapAsTube) {
-      const normalized = (xMm - topology.boundsMm.minX) / widthMm;
-      const direction = placement.mirrorX ? -1 : 1;
-      const angle = direction * normalized * Math.PI * 2;
-      target.push(
-        base.x + Math.sin(angle) * radius,
-        base.y + rotatedY,
-        base.z + Math.cos(angle) * radius,
-      );
-      continue;
-    }
-
-    target.push(
-      base.x + rotatedX,
-      base.y + rotatedY,
-      base.z,
-    );
+    target.push(rotatedX, rotatedY, 0);
   }
-}
-
-function placementBasePosition(
-  placement: PatternPreviewPlacement,
-): { x: number; y: number; z: number } {
-  let x = 0;
-  let y = 1.62;
-  let z = 0;
-
-  switch (placement.region) {
-    case "torso": y = 1.66; break;
-    case "waist": y = 1.31; break;
-    case "hip": y = 1.18; break;
-    case "arm": y = 1.58; break;
-    case "leg": y = 1.08; break;
-  }
-
-  if (placement.bodySide === "left") {
-    x -= placement.region === "arm" ? 0.58 : placement.region === "leg" ? 0.23 : 0.12;
-  } else if (placement.bodySide === "right") {
-    x += placement.region === "arm" ? 0.58 : placement.region === "leg" ? 0.23 : 0.12;
-  }
-
-  if (placement.surface === "front") z = 0.055;
-  else if (placement.surface === "back") z = -0.055;
-
-  x += placement.offsetXMm * METERS_PER_MM;
-  y -= placement.offsetYMm * METERS_PER_MM;
-  z += placement.offsetZMm * METERS_PER_MM;
-
-  return { x, y, z };
 }
 
 function buildStructuralConstraints(
@@ -688,55 +632,27 @@ function resolvePiecePlacements(
     return piece.previewPlacements.map((placement) => ({ ...placement }));
   }
 
-  const assembly = garment.assemblyPlacements?.find(
+  const placements = garment.assemblyPlacements?.filter(
     (candidate) => candidate.pieceId === piece.id,
-  );
-  const resolved = assembly ?? inferPlacement(piece);
-  const region = roleToRegion(resolved.role);
-  const duplicateSides = resolved.role === "sleeve" || resolved.role === "leg";
-  const sides = duplicateSides
-    ? (["left", "right"] as const)
-    : (["center"] as const);
-
-  return sides.map((bodySide, index) => ({
-    id: `assembly-${piece.id}-${bodySide}`,
-    pieceId: piece.id,
-    region,
-    surface: resolved.outwardSide,
-    bodySide,
-    rotationDeg: resolved.rotationDeg[2],
-    offsetXMm: resolved.positionMm[0],
-    offsetYMm: resolved.positionMm[1],
-    offsetZMm: resolved.positionMm[2],
-    scale: 1,
-    mirrorX: Boolean(resolved.flipped) !== (index === 1),
-  }));
-}
-
-function inferPlacement(piece: PatternPiece): AssemblyPlacement {
-  const name = piece.name.toLocaleLowerCase("pt-BR");
-  const roles = new Set(piece.segments?.map((segment) => segment.role) ?? []);
-  const role = name.includes("costas") || roles.has("backArmhole")
-    ? "back"
-    : name.includes("manga") || roles.has("sleeveCapFront") || roles.has("sleeveCapBack")
-      ? "sleeve"
-      : name.includes("perna") || name.includes("calça") || roles.has("inseam") || roles.has("outseam")
-        ? "leg"
-        : name.includes("saia") || name.includes("cós") || name.includes("cintura")
-          ? "waist"
-          : name.includes("gola")
-            ? "collar"
-            : "front";
-
-  return {
-    pieceId: piece.id,
-    role,
-    outwardSide: role === "back" ? "back" : "front",
-    positionMm: [0, 0, 0],
-    rotationDeg: [0, 0, 0],
-    flipped: false,
-    source: "inferred",
-  };
+  ) ?? [];
+  return placements.flatMap((resolved) => {
+    const region = roleToRegion(resolved.role);
+    const duplicateSides = (resolved.role === "sleeve" || resolved.role === "leg") && (piece.cutQuantity ?? 1) > 1;
+    const sides = duplicateSides ? (["left", "right"] as const) : (["center"] as const);
+    return sides.map((bodySide, index) => ({
+      id: `assembly-${piece.id}-${bodySide}`,
+      pieceId: piece.id,
+      region,
+      surface: resolved.outwardSide,
+      bodySide,
+      rotationDeg: resolved.rotationDeg[2],
+      offsetXMm: resolved.positionMm[0],
+      offsetYMm: resolved.positionMm[1],
+      offsetZMm: resolved.positionMm[2],
+      scale: 1,
+      mirrorX: Boolean(resolved.flipped) !== (index === 1),
+    }));
+  });
 }
 
 function roleToRegion(
