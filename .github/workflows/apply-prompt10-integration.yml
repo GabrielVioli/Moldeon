@@ -125,14 +125,13 @@ jobs:
             apps/web/src/styles.css
           git commit -m "feat: run garment XPBD in a Web Worker"
 
-      - name: Commit tests and regression gate
+      - name: Commit tests
         run: |
           git add \
             apps/web/src/garment3d/ClothSimulationInput.test.ts \
             apps/web/src/physics/ClothWorkerProtocol.test.ts \
             apps/web/src/physics/clothXpbd.scenes.test.ts \
-            scripts/prompt10-xpbd-browser-regression.mjs \
-            .github/workflows/prompt10-xpbd-regression.yml
+            scripts/prompt10-xpbd-browser-regression.mjs
           git commit -m "test: cover XPBD Worker lifecycle and scenes"
 
       - name: Commit documentation
@@ -140,12 +139,7 @@ jobs:
           git add docs/XPBD_IMPLEMENTATION.md docs/PHYSICS_PLAN.md docs/progress/PROMPT_10_XPBD_WORKER.md
           git commit -m "docs: record XPBD Worker architecture"
 
-      - name: Remove temporary delivery files and push
+      - name: Push validated application commits
         run: |
-          git rm -rf \
-            scripts/.prompt10-payload \
-            scripts/run-prompt10-integration.py \
-            scripts/apply-prompt10-integration.py \
-            .github/workflows/apply-prompt10-integration.yml
-          git commit -m "chore: remove prompt 10 integration workflow"
+          rm -f .github/workflows/prompt10-xpbd-regression.yml
           git push origin main
