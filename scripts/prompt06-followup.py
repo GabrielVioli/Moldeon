@@ -52,4 +52,10 @@ replace(
     '    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@2");\n',
 )
 
+replace(
+    "apps/web/src/domain/parametricPatternDocumentV3.test.ts",
+    '    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@1")).toBe(true);\n',
+    '    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@2")).toBe(true);\n',
+)
+
 print("Prompt 6 typed metadata, compatibility and source-boundary follow-up applied")
