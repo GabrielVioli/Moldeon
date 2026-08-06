@@ -1,0 +1,57 @@
+name: Prompt 7 Trousers
+
+on:
+  push:
+    paths:
+      - apps/web/src/patterns/trouserPatternDrafting.ts
+      - apps/web/src/patterns/trouserPatternDrafting.test.ts
+      - apps/web/src/domain/trouserLogicalAssembly.ts
+      - apps/web/src/domain/trouserLogicalAssembly.test.ts
+      - scripts/prompt07-apply.py
+      - .github/workflows/prompt07-trousers.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prompt07-trousers-main
+  cancel-in-progress: true
+
+jobs:
+  validate-and-integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply integration patch
+        run: python scripts/prompt07-apply.py
+      - name: Install dependencies
+        run: npm install
+      - name: Check patch
+        run: git diff --check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Generate golden snapshots
+        run: npm run test --workspace @moldeon/web -- --update
+      - name: Run full test suite
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit integrated implementation
+        run: |
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src
+          if git diff --cached --quiet; then
+            echo "No integration changes to commit"
+          else
+            git commit -m "feat: integrate parametric trousers and logical assembly"
+            git push origin main
+          fi
