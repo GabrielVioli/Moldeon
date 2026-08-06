@@ -1,7 +1,9 @@
-name: Recovery Gate Zero Workspace
+name: Recovery 9.5 Empty Workspace
 
 on:
   push:
+    branches:
+      - "recovery/9.5-03-empty-workspace"
     paths:
       - "scripts/apply-recovery-zero-workspace.py"
       - ".github/workflows/recovery-zero-workspace.yml"
@@ -10,32 +12,49 @@ permissions:
   contents: write
 
 concurrency:
-  group: recovery-zero-workspace-main
+  group: recovery-9-5-empty-workspace
   cancel-in-progress: true
 
 jobs:
-  apply-test-publish:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  apply-test-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout recovery branch
+        uses: actions/checkout@v4
         with:
-          ref: main
+          ref: "recovery/9.5-03-empty-workspace"
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: npm
-      - run: python scripts/apply-recovery-zero-workspace.py
-      - run: npm ci
-      - run: git diff --check
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Commit validated zero-workspace recovery
+
+      - name: Apply scoped recovery patch
+        run: python scripts/apply-recovery-zero-workspace.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit only to recovery branch
         run: |
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
           git add apps/web/src/state/editorStore.ts apps/web/src/App.tsx apps/web/src/recovery.css
+          git diff --cached --quiet && exit 0
           git commit -m "fix: allow an empty editable workspace"
-          git push origin main
+          git push origin HEAD:"recovery/9.5-03-empty-workspace"
