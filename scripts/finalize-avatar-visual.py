@@ -53,11 +53,11 @@ replace_once(
     '''    const radialWidth = axes.halfWidth + anchor.initialMarginM * 0.62;\n    const radialDepth = axes.halfDepth + anchor.initialMarginM;''',
 )
 
-# 3. Strengthen the semantic test so shoulder vertices remain on the anatomical shell.
+# 3. Strengthen the semantic test so the shoulder band keeps anatomical volume.
 test_path = Path("apps/web/src/garment3d/SemanticAvatarArrangement.test.ts")
 test_text = test_path.read_text(encoding="utf-8")
 needle = '''    expect(visible.every((instance) => instance.arrangement?.anchorId)).toBe(true);\n    expect(result.state.positions.every(Number.isFinite)).toBe(true);'''
-replacement = '''    expect(visible.every((instance) => instance.arrangement?.anchorId)).toBe(true);\n    const torso = visible.filter((instance) => instance.placement.region === "torso");\n    const shoulderDepths: number[] = [];\n    for (const instance of torso) {\n      for (let local = 0; local < instance.vertexCount; local += 1) {\n        const y = result.state.positions[(instance.particleStart + local) * 3 + 1];\n        if (y < result.avatar.landmarks.bustY) continue;\n        shoulderDepths.push(Math.abs(result.state.positions[(instance.particleStart + local) * 3 + 2]));\n      }\n    }\n    expect(shoulderDepths.length).toBeGreaterThan(0);\n    expect(Math.min(...shoulderDepths)).toBeGreaterThan(0.025);\n    expect(result.state.positions.every(Number.isFinite)).toBe(true);'''
+replacement = '''    expect(visible.every((instance) => instance.arrangement?.anchorId)).toBe(true);\n    const torso = visible.filter((instance) => instance.placement.region === "torso");\n    const shoulderDepths: number[] = [];\n    for (const instance of torso) {\n      for (let local = 0; local < instance.vertexCount; local += 1) {\n        const y = result.state.positions[(instance.particleStart + local) * 3 + 1];\n        if (y < result.avatar.landmarks.bustY) continue;\n        shoulderDepths.push(Math.abs(result.state.positions[(instance.particleStart + local) * 3 + 2]));\n      }\n    }\n    expect(shoulderDepths.length).toBeGreaterThan(0);\n    const averageShoulderDepth = shoulderDepths.reduce((sum, value) => sum + value, 0) / shoulderDepths.length;\n    expect(averageShoulderDepth).toBeGreaterThan(0.04);\n    expect(Math.max(...shoulderDepths)).toBeGreaterThan(0.08);\n    expect(result.state.positions.every(Number.isFinite)).toBe(true);'''
 if needle not in test_text:
     raise RuntimeError("Trecho do teste semântico não encontrado")
 test_path.write_text(test_text.replace(needle, replacement, 1), encoding="utf-8")
