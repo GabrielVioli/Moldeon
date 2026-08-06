@@ -1,6 +1,7 @@
 name: Apply recovery ghost geometry fix
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - "recovery/9.5-03-empty-workspace"
