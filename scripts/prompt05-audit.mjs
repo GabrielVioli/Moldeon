@@ -38,9 +38,9 @@ async function runScenario(name, viewport, mobile, advanced) {
     await page.waitForFunction(() => Boolean(window.__moldeonPhase0), null, { timeout: 20_000 });
     await page.evaluate(() => window.__moldeonPhase0?.loadFixture("tshirt-standard"));
     await page.waitForTimeout(250);
-    if (mobile) {
-      const tab = page.getByRole("tab", { name: /Medidas|Montagem/i }).last();
-      await tab.click();
+    const responsiveTab = page.getByRole("tab", { name: /Medidas|Montagem/i }).last();
+    if (await responsiveTab.count()) {
+      await responsiveTab.click();
       await page.waitForTimeout(100);
     }
     const section = page.locator(".measurement-panel-section");
@@ -56,14 +56,17 @@ async function runScenario(name, viewport, mobile, advanced) {
       const formula = section.locator("textarea[aria-label^='Fórmula de']").first();
       await expectVisible(formula, "campo de fórmula");
       const original = await formula.inputValue();
+      const numericBefore = await section.locator("input[type=number]").first().inputValue();
       await formula.fill("bustMm / 0");
       await formula.blur();
       await expectVisible(section.locator(".formula-error").first(), "mensagem de fórmula inválida");
-      const numericBefore = await section.locator("input[type=number]").first().inputValue();
+      const numericAfterInvalidFormula = await section.locator("input[type=number]").first().inputValue();
+      assert(numericBefore === numericAfterInvalidFormula, "Uma fórmula inválida alterou valores autoritativos.");
       await formula.fill(original);
       await formula.blur();
-      const numericAfter = await section.locator("input[type=number]").first().inputValue();
-      assert(numericBefore === numericAfter, "Uma fórmula inválida alterou valores autoritativos.");
+      await section.locator(".formula-error").first().waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
+      const numericAfterRestore = await section.locator("input[type=number]").first().inputValue();
+      assert(numericBefore === numericAfterRestore, "Restaurar a fórmula alterou uma medida autoritativa.");
     }
 
     const layout = await page.evaluate(() => ({
