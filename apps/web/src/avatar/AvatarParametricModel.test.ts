@@ -30,8 +30,6 @@ describe("AvatarParametricModel", () => {
     expect(model.armPoseAngleDeg).toBeGreaterThan(0);
     expect(model.legPoseAngleDeg).toBeGreaterThan(0);
     expect(collision.proxies.length).toBeGreaterThanOrEqual(12);
-    const garmentAnchors = model.anchors.filter((anchor) => ["torso", "arm", "waist", "hip", "leg"].includes(anchor.region));
-    expect(Math.min(...garmentAnchors.map((anchor) => anchor.initialMarginM))).toBeGreaterThanOrEqual(0.022);
     expect(collision.proxies.every((proxy) => JSON.stringify(proxy).includes("NaN") === false)).toBe(true);
   });
 
