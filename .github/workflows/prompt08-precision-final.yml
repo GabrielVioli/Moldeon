@@ -51,7 +51,10 @@ jobs:
       - name: Audit real desktop and mobile flows
         run: |
           mkdir -p "$PROMPT08_ARTIFACT_DIR"
-          npm run dev:fallback -- --host 127.0.0.1 --port 4178 --strictPort > "$PROMPT08_ARTIFACT_DIR/server.log" 2>&1 &
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4178 --strictPort
+          ) > "$PROMPT08_ARTIFACT_DIR/server.log" 2>&1 &
           SERVER_PID=$!
           cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
           trap cleanup EXIT
