@@ -18,120 +18,126 @@ Este gate permanece restrito à interação essencial do editor 2D:
 - undo/redo transacional durante drag, rotação e edição numérica.
 
 Não pertencem a este gate: duplicar/espelhar/alinhamento/união/corte/pence/prega,
-moldes-base, manga, costuras, classificação corporal, avatar, física ou Prompt 10.
+moldes-base, manga, costuras como funcionalidade nova, classificação corporal, avatar,
+física ou Prompt 10.
 
-## Fonte de verdade
+## Fontes de verdade
 
-O Documento V3/`garment.pieces` continua sendo a fonte de verdade. O guard do Canvas
-é remontado quando a composição de peças ou a peça ativa muda, preservando a correção
-aprovada no gate 9.5-03. A edição numérica trabalha exclusivamente sobre a peça ativa
-existente no documento.
+O Documento V3 é o formato persistente canônico. No runtime atual,
+`garment.pieces` determina quais peças existem e fornece a geometria que pode ser
+renderizada ou atingida pelo hit testing. `PatternSnapshot` permanece apenas como
+compatibilidade legada e não pode reintroduzir geometria ausente ou anterior.
 
-O handle de rotação é exclusivamente UI em coordenadas de tela. Ele não cria ponto,
-segmento, dimensão ou qualquer entidade no Documento V3.
+Zoom, pan e pinch alteram somente a câmera. Todo frame agendado pelo Canvas consulta o
+estado atual no momento do desenho. O listener nativo de wheel delega para o handler
+mais recente, evitando closures do primeiro render. O `draw()` percorre
+`garment.pieces`; o snapshot recebido por compatibilidade não é fonte de geometria.
 
-## Limpeza integral da seleção
+## Limpeza autoritativa de seleção
 
-O gesto legado do Canvas continua decidindo quando um pointer down/up constitui um
-clique ou tap real no fundo. O gate 9.5-04 decora somente a ação de limpeza para que,
-quando esse gesto é confirmado, todos os domínios de seleção sejam limpos juntos:
+`clearEditorSelection()` é a única ação de alto nível para limpar a seleção persistente
+do editor. Ela converge os estados do store principal e do store de caminhos internos,
+sem monkey patch de métodos Zustand e sem listener de teclado adicional no wrapper.
 
-- peças selecionadas;
+Ela limpa:
+
+- peça e seleção múltipla;
 - ponto/nó;
 - segmento/borda;
 - pence;
-- costura e borda temporariamente escolhida para costura;
-- caminho interno, nó interno e segmento interno;
-- sugestão de costura próxima.
+- costura;
+- primeira borda e proposta temporária de costura;
+- sugestão de costura próxima;
+- caminho interno, nó interno e segmento interno.
 
-Pan real, pinch, box selection e controles fora do Canvas não chamam essa ação. Escape
-também executa a mesma limpeza após cancelar a operação temporária tratada pelo App.
+Clique/tap real no fundo e Escape convergem para essa mesma ação. O App possui o
+listener global de Escape; o Canvas não instala um segundo listener concorrente para
+limpar seleção.
 
 ## Hit testing
 
-A prioridade normativa deste gate é:
+A prioridade normativa continua:
 
 1. handles Bézier;
 2. pontos/nós;
 3. landmarks, piques e marcadores;
-4. controle de rotação, quando a peça inteira está selecionada;
-5. segmentos;
-6. linhas internas;
-7. área da peça;
-8. fundo.
+4. segmentos;
+5. linhas internas;
+6. peça;
+7. fundo.
 
-A tolerância geométrica deve permanecer constante em pixels de tela; a conversão para
-milímetros é `tolerânciaPx / zoom`. O controle de rotação possui alvo de toque maior no
-mobile, sem aumentar o círculo visual.
+Costuras nunca podem roubar o hit de um ponto ou handle que esteja sobre a própria
+borda costurada. `findNearestSeamHit` rejeita o hit de costura dentro da tolerância de
+um controle geométrico editável, preservando a costura e permitindo a edição do ponto.
+
+A tolerância geométrica permanece em pixels de tela e é convertida para milímetros por
+zoom.
+
+## Edição numérica de curvas
+
+O painel numérico aceita tanto um nó selecionado quanto um segmento selecionado.
+Quando o segmento possui geometria cúbica, o fluxo expõe explicitamente:
+
+- handle de saída do ponto inicial;
+- handle de entrada do ponto final;
+- X e Y do vetor;
+- comprimento em milímetros;
+- ângulo em graus.
+
+Cada foco abre uma transação; Enter/blur confirma e Escape cancela a edição local.
+A geometria resultante é gravada no documento atual e continua idêntica após zoom/pan.
 
 ## Rotação
 
-Uma única peça selecionada exibe uma caixa de seleção e um controle circular com `↻`
-no canto superior direito, ligeiramente fora da caixa. O controle:
+Uma única peça selecionada pode exibir o controle `↻` fora da caixa de seleção. O
+controle é UI em coordenadas de tela, não entidade do Documento V3. Ele mantém pivô no
+centro local, Shift para 15°, uma transação por gesto e cancelamento sem persistir
+transformação parcial.
 
-- permanece em coordenadas de tela ao alterar zoom, pan ou viewport;
-- possui área de interação maior do que o círculo visual;
-- usa cursor de arraste em desktop;
-- gira continuamente ao redor do centro local da peça;
-- preserva o centro em coordenadas de mundo durante o gesto;
-- exibe o ângulo enquanto o pointer está capturado;
-- usa Shift para snapping de 15°;
-- abre uma transação no pointer down e a confirma uma única vez no pointer up;
-- cancela e restaura a transformação anterior em Escape/pointer cancel;
-- fica oculto quando ponto, segmento, caminho interno, pence ou costura assumem a seleção.
+O bridge de câmera do wrapper existe somente para posicionar esse overlay. Ele não é
+fonte de geometria e não participa do redraw autoritativo do Canvas.
 
-A câmera do Canvas legado ainda é interna ao componente antigo. Para manter o controle
-de rotação como DOM/UI e não geometria autoritativa, um bridge observa somente o par
-`translate/scale` usado pelo draw do Canvas e replica a câmera para posicionar o overlay.
-Esse bridge não altera desenho, Documento V3 ou hit testing da geometria.
+## Regressões cobertas
 
-## Curvas e inserção
+A suíte cobre, entre outros:
 
-A inserção usa `findNearestPatternSegment` e `insertPatternPoint`. Segmentos cúbicos são
-divididos por De Casteljau, preservando a forma e remapeando referências por parâmetro
-`t`. A suíte de domínio existente valida a preservação da curva amostrada.
+- criação da primeira peça;
+- drag e edição numérica como transações;
+- limpeza integral entre stores;
+- ponto/handle sobre borda costurada com prioridade sobre costura;
+- divisão de reta e curva por De Casteljau;
+- RAF e wheel delegando para callbacks atuais;
+- `draw()` consumindo `garment.pieces`, não `snapshot.piece`;
+- edição numérica de handles a partir de segmento selecionado.
 
-O painel numérico do Canvas permite:
+O fluxo de navegador `recovery-editor-core-live-regression.mjs` comprovou no commit
+`fcf2e3911e5f80546398a90d5405d8efb10f7e24`:
 
-- X/Y do nó em milímetros;
-- seleção individual de handle de entrada e saída;
-- X/Y do vetor do handle;
-- comprimento em milímetros;
-- ângulo em graus;
-- Escape para cancelar;
-- Enter ou blur para confirmar.
+- peça selecionada → clique no fundo → nenhuma seleção;
+- ponto → Escape → nenhuma seleção;
+- handle → Escape → nenhuma seleção;
+- ponto sobre borda costurada selecionável;
+- X/Y de ponto persistindo após zoom e pan;
+- X/Y/comprimento/ângulo de handle persistindo após zoom e pan;
+- comprimento de reta persistindo após zoom e pan;
+- undo e redo preservados após zoom e pan.
 
-Cada foco inicia uma transação e cada confirmação encerra uma transação, de modo que
-uma edição numérica corresponda a um único passo de undo.
-
-## Evidência automatizada prevista
-
-- `editorCoreMath.test.ts`: tolerância por zoom, prioridade de hit testing, IDs válidos,
-  conversão coordenadas ↔ comprimento/ângulo, posição do handle de rotação em zoom/pan,
-  alvo mouse/touch e rotação centro-preservada;
-- `editorCoreStore.test.ts`: primeira peça ativa, drag como uma transação, edição
-  numérica de handle, limpeza completa entre stores, rotação transacional,
-  cancelamento e undo/redo;
-- `patternEditing.test.ts`: inserção em reta, De Casteljau em curva e remapeamento
-  paramétrico de referências;
-- `recovery-editor-core-blockers-visual.mjs`: clique/tap vazio, Escape, seleção múltipla,
-  ponto/handle, zoom alto/baixo, handle visual de rotação e undo/redo em desktop/mobile;
-- typecheck;
-- suíte completa;
-- build;
-- roteiro visual desktop/mobile.
+Na mesma execução passaram `npm run typecheck`, `npm test` e `npm run build`.
 
 ## Roteiro manual obrigatório
 
-1. começar vazio e desenhar polígono fechado;
-2. selecionar área, ponto, segmento e handles;
-3. inserir ponto em reta e curva;
-4. editar X/Y e handles numericamente;
-5. aplicar zoom e pan e repetir as seleções;
-6. selecionar uma peça, arrastar `↻`, verificar pivô/ângulo e undo/redo;
-7. clicar/tocar no fundo após peça, múltiplas peças, ponto e handle selecionados;
-8. usar Escape e confirmar que nenhum destaque/ID de seleção permanece;
-9. repetir toque, pinch e rotação no mobile.
+1. selecionar peça e clicar/tocar em área realmente vazia;
+2. selecionar ponto e usar Escape;
+3. selecionar handle e usar Escape;
+4. selecionar ponto localizado sobre borda costurada;
+5. selecionar uma curva/segmento e editar handle de entrada e saída por X, Y,
+   comprimento e ângulo;
+6. editar X/Y de ponto e repetir zoom/pan;
+7. editar comprimento de reta e repetir zoom/pan;
+8. editar handle e repetir zoom/pan;
+9. executar undo e redo e depois zoom/pan;
+10. repetir os gestos essenciais no mobile.
 
-A etapa não é aprovada por este documento nem por CI. Ela permanece aguardando
-validação manual explícita na URL de preview.
+A etapa não é aprovada por este documento, pela suíte ou pelo navegador automatizado.
+Permanece aguardando validação manual explícita do usuário. Não avançar para 9.5-05
+antes dessa aprovação.
