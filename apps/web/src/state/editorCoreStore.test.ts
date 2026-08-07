@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { GarmentDraft, PatternPiece } from "../domain/pattern";
+import {
+  localBoundsFromPoints,
+  rotateWorkspaceTransformAroundPivot,
+} from "../editor/editorCoreMath";
+import {
+  clearCompleteEditorSelection,
+  installCompleteEditorSelectionClear,
+} from "../editor/editorCoreSelection";
 import { useEditorStore } from "./editorStore";
+import { useInternalPathEditorStore } from "./internalPathEditorStore";
 
 function emptyGarment(): GarmentDraft {
   const current = useEditorStore.getState().garment;
@@ -42,9 +51,31 @@ function curvedPiece(): PatternPiece {
   };
 }
 
+function garmentWithPiece(piece = curvedPiece()): GarmentDraft {
+  return {
+    ...emptyGarment(),
+    pieces: [piece],
+    workspaceStates: [
+      {
+        pieceId: piece.id,
+        transform: { pieceId: piece.id, xMm: 35, yMm: -20, rotationDeg: 0 },
+        visible: true,
+        locked: false,
+      },
+    ],
+  };
+}
+
 describe("recovery 9.5-04 editor core store", () => {
   beforeEach(() => {
     useEditorStore.getState().loadGarment(emptyGarment());
+    useInternalPathEditorStore.setState({
+      draftPathId: null,
+      selectedPathId: null,
+      selectedNodeId: null,
+      selectedSegmentId: null,
+      analysis: null,
+    });
   });
 
   it("creates the first closed piece and makes it immediately active", () => {
@@ -68,19 +99,7 @@ describe("recovery 9.5-04 editor core store", () => {
 
   it("groups a continuous point drag into one undo transaction", () => {
     const piece = curvedPiece();
-    const garment = {
-      ...emptyGarment(),
-      pieces: [piece],
-      workspaceStates: [
-        {
-          pieceId: piece.id,
-          transform: { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 },
-          visible: true,
-          locked: false,
-        },
-      ],
-    };
-    useEditorStore.getState().loadGarment(garment);
+    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
     const original = useEditorStore.getState().garment.pieces[0].points[0];
 
     const state = useEditorStore.getState();
@@ -109,18 +128,7 @@ describe("recovery 9.5-04 editor core store", () => {
   it("keeps handle numeric edits inside one undo transaction", () => {
     const piece = curvedPiece();
     useEditorStore.getState().restoreGarment(
-      {
-        ...emptyGarment(),
-        pieces: [piece],
-        workspaceStates: [
-          {
-            pieceId: piece.id,
-            transform: { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 },
-            visible: true,
-            locked: false,
-          },
-        ],
-      },
+      garmentWithPiece(piece),
       piece.id,
       "typescript",
     );
@@ -140,21 +148,119 @@ describe("recovery 9.5-04 editor core store", () => {
     ).toEqual({ xMm: 30, yMm: -40 });
   });
 
+  it("clears piece, point, edge, seam, dart and internal-path ids together", () => {
+    const piece = curvedPiece();
+    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
+    useEditorStore.setState({
+      selectedPointId: "a",
+      selectedEdgeId: "edge-ghost",
+      selectedSeamId: "seam-ghost",
+      selectedDartId: "dart-ghost",
+      selectedPieceIds: [piece.id],
+      pieceSelectionActive: true,
+    });
+    useInternalPathEditorStore.setState({
+      selectedPathId: "path-ghost",
+      selectedNodeId: "node-ghost",
+      selectedSegmentId: "segment-ghost",
+    });
+
+    clearCompleteEditorSelection(useEditorStore.getState().clearSelection);
+
+    const state = useEditorStore.getState();
+    const internal = useInternalPathEditorStore.getState();
+    expect(state.selectedPointId).toBeNull();
+    expect(state.selectedEdgeId).toBeNull();
+    expect(state.selectedSeamId).toBeNull();
+    expect(state.selectedDartId).toBeNull();
+    expect(state.selectedPieceIds).toEqual([]);
+    expect(state.pieceSelectionActive).toBe(false);
+    expect(internal.selectedPathId).toBeNull();
+    expect(internal.selectedNodeId).toBeNull();
+    expect(internal.selectedSegmentId).toBeNull();
+  });
+
+  it("decorates the legacy empty-canvas clear action without losing cleanup", () => {
+    const piece = curvedPiece();
+    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
+    useEditorStore.getState().selectPiece(piece.id);
+    useInternalPathEditorStore.setState({
+      selectedPathId: "path-ghost",
+      selectedNodeId: "node-ghost",
+      selectedSegmentId: "segment-ghost",
+    });
+
+    const uninstall = installCompleteEditorSelectionClear();
+    try {
+      useEditorStore.getState().clearSelection();
+      expect(useEditorStore.getState().selectedPieceIds).toEqual([]);
+      expect(useInternalPathEditorStore.getState().selectedPathId).toBeNull();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("rotates one piece around its center in one undo/redo transaction", () => {
+    const piece = curvedPiece();
+    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
+    const initial = useEditorStore.getState().garment.workspaceStates![0].transform;
+    const bounds = localBoundsFromPoints(piece.points);
+    const pivot = {
+      xMm: (bounds.minX + bounds.maxX) / 2,
+      yMm: (bounds.minY + bounds.maxY) / 2,
+    };
+    const state = useEditorStore.getState();
+    state.beginEdit("Rotacionar peça");
+    state.setPieceWorkspaceTransform(
+      piece.id,
+      rotateWorkspaceTransformAroundPivot(initial, pivot, 28),
+    );
+    state.setPieceWorkspaceTransform(
+      piece.id,
+      rotateWorkspaceTransformAroundPivot(initial, pivot, 73),
+    );
+    state.commitEdit();
+
+    expect(
+      useEditorStore.getState().garment.workspaceStates![0].transform.rotationDeg,
+    ).toBe(73);
+    useEditorStore.getState().undo();
+    expect(
+      useEditorStore.getState().garment.workspaceStates![0].transform,
+    ).toEqual(initial);
+    useEditorStore.getState().redo();
+    expect(
+      useEditorStore.getState().garment.workspaceStates![0].transform.rotationDeg,
+    ).toBe(73);
+  });
+
+  it("cancels an in-progress rotation and restores the prior transform", () => {
+    const piece = curvedPiece();
+    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
+    const initial = structuredClone(
+      useEditorStore.getState().garment.workspaceStates![0].transform,
+    );
+    const bounds = localBoundsFromPoints(piece.points);
+    const pivot = {
+      xMm: (bounds.minX + bounds.maxX) / 2,
+      yMm: (bounds.minY + bounds.maxY) / 2,
+    };
+    const state = useEditorStore.getState();
+    state.beginEdit("Rotacionar peça");
+    state.setPieceWorkspaceTransform(
+      piece.id,
+      rotateWorkspaceTransformAroundPivot(initial, pivot, -95),
+    );
+    state.cancelEdit();
+    expect(
+      useEditorStore.getState().garment.workspaceStates![0].transform,
+    ).toEqual(initial);
+  });
+
   it("clears incompatible selection ids after document replacement", () => {
     const piece = curvedPiece();
     useEditorStore.getState().restoreGarment(
-      {
-        ...emptyGarment(),
-        pieces: [piece],
-        workspaceStates: [
-          {
-            pieceId: piece.id,
-            transform: { pieceId: piece.id, xMm: 0, yMm: 0, rotationDeg: 0 },
-            visible: true,
-            locked: false,
-          },
-        ],
-      },
+      garmentWithPiece(piece),
       piece.id,
       "typescript",
     );
