@@ -58,15 +58,66 @@ async function assertNoSelection(page, label) {
   }
 }
 
-async function rotateWithPointer(page, handle, dx, dy) {
+async function rotateWithPointer(context, page, handle, dx, dy, mobile) {
   const box = await handle.boundingBox();
   if (!box) throw new Error("Handle de rotação sem bounding box.");
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y + dy, { steps: 10 });
-  await page.mouse.up();
+  if (!mobile) {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 10 });
+    const angle = page.getByRole("status", { name: "Ângulo de rotação" });
+    await angle.waitFor({ state: "visible" });
+    await page.mouse.up();
+  } else {
+    const client = await context.newCDPSession(page);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y, id: 1, radiusX: 8, radiusY: 8, force: 1 }],
+    });
+    for (let step = 1; step <= 8; step += 1) {
+      await client.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{
+          x: x + dx * step / 8,
+          y: y + dy * step / 8,
+          id: 1,
+          radiusX: 8,
+          radiusY: 8,
+          force: 1,
+        }],
+      });
+    }
+    const angle = page.getByRole("status", { name: "Ângulo de rotação" });
+    await angle.waitFor({ state: "visible" });
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+  await page.waitForTimeout(80);
+}
+
+async function dragSelectedPiece(context, page, canvas, mobile) {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas sem bounding box para deslocamento.");
+  const x = box.x + box.width * 0.43;
+  const y = box.y + box.height * 0.45;
+  if (!mobile) {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 55, y + 35, { steps: 8 });
+    await page.mouse.up();
+  } else {
+    const client = await context.newCDPSession(page);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y, id: 3, radiusX: 8, radiusY: 8, force: 1 }],
+    });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: x + 42, y: y + 30, id: 3, radiusX: 8, radiusY: 8, force: 1 }],
+    });
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
   await page.waitForTimeout(80);
 }
 
@@ -83,17 +134,17 @@ try {
 
     await openBlank(page);
     const { canvas, points } = await drawPiece(page, "Rotação");
-
-    // Área da peça seleciona e torna o handle visual disponível.
     const box = await canvas.boundingBox();
     if (!box) throw new Error(`${scenario.name}: canvas ausente.`);
+
+    // Área da peça seleciona e torna o handle visual disponível.
     await canvas.click({ position: { x: box.width * 0.43, y: box.height * 0.45 } });
     const rotationHandle = page.getByRole("button", { name: "Girar peça selecionada" });
     await rotationHandle.waitFor({ state: "visible" });
     const initialRotation = Number(await rotationHandle.getAttribute("data-rotation-deg"));
 
-    // Rotação contínua gera ângulo visual e uma única transação de undo.
-    await rotateWithPointer(page, rotationHandle, 52, 68);
+    // Rotação contínua por mouse/touch gera feedback e uma única transação.
+    await rotateWithPointer(context, page, rotationHandle, 52, 68, scenario.mobile);
     const afterRotation = Number(await rotationHandle.getAttribute("data-rotation-deg"));
     if (!Number.isFinite(afterRotation) || Math.abs(afterRotation - initialRotation) < 2) {
       throw new Error(`${scenario.name}: drag do handle não alterou a rotação.`);
@@ -106,6 +157,9 @@ try {
     await page.waitForTimeout(60);
     const afterRedo = Number(await rotationHandle.getAttribute("data-rotation-deg"));
     if (Math.abs(afterRedo - afterRotation) > 0.05) throw new Error(`${scenario.name}: redo não reaplicou a rotação.`);
+    // Retorna ao ângulo inicial para os testes de hit em coordenadas conhecidas.
+    await page.keyboard.press("Control+z");
+    await page.waitForTimeout(60);
 
     // Escape limpa a seleção e remove o controle de rotação.
     await page.keyboard.press("Escape");
@@ -123,15 +177,24 @@ try {
     await clickEmpty(page, canvas);
     await assertNoSelection(page, `${scenario.name}: ponto/handle + fundo`);
 
-    // Zoom alto e baixo não mudam a semântica do fundo.
-    await page.getByRole("button", { name: "Aumentar zoom" }).click();
-    await page.getByRole("button", { name: "Aumentar zoom" }).click();
+    // Peça deslocada mantém seleção e limpeza previsíveis.
     await canvas.click({ position: { x: box.width * 0.43, y: box.height * 0.45 } });
+    await page.getByRole("button", { name: "Girar peça selecionada" }).waitFor({ state: "visible" });
+    await dragSelectedPiece(context, page, canvas, scenario.mobile);
+    await clickEmpty(page, canvas);
+    await assertNoSelection(page, `${scenario.name}: peça deslocada + fundo`);
+
+    // Zoom alto e baixo não mudam a semântica do fundo. Selecionar via painel evita
+    // depender da nova posição da peça para este teste específico.
+    await page.getByRole("button", { name: "Aumentar zoom" }).click();
+    await page.getByRole("button", { name: "Aumentar zoom" }).click();
+    await page.getByRole("checkbox", { name: "Selecionar Rotação" }).check();
     await clickEmpty(page, canvas);
     await assertNoSelection(page, `${scenario.name}: zoom alto`);
     await page.getByRole("button", { name: "Diminuir zoom" }).click();
     await page.getByRole("button", { name: "Diminuir zoom" }).click();
     await page.getByRole("button", { name: "Diminuir zoom" }).click();
+    await page.getByRole("checkbox", { name: "Selecionar Rotação" }).check();
     await clickEmpty(page, canvas);
     await assertNoSelection(page, `${scenario.name}: zoom baixo`);
 
@@ -154,7 +217,17 @@ try {
 
     await page.screenshot({ path: `${artifactDir}/${scenario.name}-selection-rotation.png`, fullPage: true });
     if (errors.length) throw new Error(`${scenario.name}: ${errors.join(" | ")}`);
-    report.push({ scenario: scenario.name, emptyClick: "ok", escape: "ok", rotationHandle: "ok", undoRedo: "ok", multiSelection: "ok", touch: scenario.mobile ? "ok" : "n/a" });
+    report.push({
+      scenario: scenario.name,
+      emptyClick: "ok",
+      escape: "ok",
+      rotationHandle: scenario.mobile ? "touch ok" : "mouse ok",
+      rotationUndoRedo: "ok",
+      movedPiece: "ok",
+      zoomHighLow: "ok",
+      multiSelection: "ok",
+      touchEmpty: scenario.mobile ? "ok" : "n/a",
+    });
     await context.close();
   }
   console.log(JSON.stringify(report, null, 2));
