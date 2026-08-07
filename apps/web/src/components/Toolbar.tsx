@@ -97,7 +97,7 @@ export const Toolbar = memo(function Toolbar({
         >
           Desenhar
         </button>
-        <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => onSelectTool("cut")} title="Trace uma linha atravessando a peça">Recortar</button>
+        <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => onSelectTool("cut")} title="Comece no contorno, crie os nós internos e termine no contorno; não é preciso ultrapassar a borda">Recortar</button>
         <button className={`tool-button${activeTool === "dart" ? " active" : ""}`} type="button" onClick={() => onSelectTool("dart")} title="Clique na borda e depois no ápice">Pence</button>
         <button className={`tool-button${activeTool === "measure" ? " active" : ""}`} type="button" onClick={() => onSelectTool("measure")} title="Clique em dois pontos">Medir</button>
       </nav>
