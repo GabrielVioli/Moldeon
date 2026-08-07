@@ -73,6 +73,7 @@ jobs:
           node scripts/recovery-editor-core-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report.log" 2>&1
           STATUS=$?
           set -e
+          cp /tmp/moldeon-recovery-9-5-04.log "$RECOVERY_ARTIFACT_DIR/server.log"
           cat "$RECOVERY_ARTIFACT_DIR/report.log"
           exit "$STATUS"
 
@@ -81,8 +82,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: recovery-9-5-04-${{ github.sha }}
-          path: |
-            artifacts/recovery-editor-core-live
-            /tmp/moldeon-recovery-9-5-04.log
+          path: artifacts/recovery-editor-core-live
           retention-days: 14
           if-no-files-found: warn
