@@ -11,6 +11,12 @@ import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
 export function clearEditorSelection(): void {
   const editor = useEditorStore.getState();
   editor.clearSelection();
+  // `activePieceId` is document/editing context, but the legacy canvas also uses
+  // it to render the full point + dimension overlay. Leaving it populated after
+  // a clear made an unselected piece look selected. Empty it here so Escape and
+  // a true background click have one visual and semantic result. The next hit
+  // on a point, edge or piece selects/activates that piece again normally.
+  useEditorStore.setState({ activePieceId: "" });
   editor.selectDart(null);
   editor.cancelSeamProposal();
   editor.setNearbySeamSuggestion(null);
