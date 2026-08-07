@@ -75,6 +75,14 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     : undefined;
   const finish = () => { cancel(); selectPath(null); onDone(); };
   const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || selected.length > 0;
+  const showModelingControls = tool === "select"
+    && !draftPath
+    && !selectedPath
+    && !selectedDart
+    && !selectedSegment
+    && !seam
+    && !seamFirstEdge
+    && !measure;
 
   const confirmCurrentSeam = () => {
     if (!seam) return;
@@ -155,8 +163,8 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       </> : null}
       {measure ? <span><strong>Medida:</strong> {lengthCm.toFixed(1)} cm</span> : null}
 
-      <ModelingOperationsControls />
-      {selected.length > 1 ? <>
+      {showModelingControls ? <ModelingOperationsControls /> : null}
+      {selected.length > 1 && tool === "select" ? <>
         <button onClick={() => rotateSelected(90)}>Girar seleção 90°</button>
         <button onClick={deleteSelected}>Excluir desbloqueadas</button>
       </> : null}
