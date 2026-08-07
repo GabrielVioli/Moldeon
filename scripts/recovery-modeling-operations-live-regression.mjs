@@ -99,6 +99,19 @@ async function currentInternalPath() {
   });
 }
 
+async function internalPathById(pathId) {
+  return page.evaluate(async (id) => {
+    const [{ useEditorStore }, { isInternalPath }] = await Promise.all([
+      import("/src/state/editorStore.ts"),
+      import("/src/domain/pattern.ts"),
+    ]);
+    const path = useEditorStore.getState().garment.pieces
+      .flatMap((piece) => piece.internalLines ?? [])
+      .find((line) => line.id === id && isInternalPath(line));
+    return path ? structuredClone(path) : null;
+  }, pathId);
+}
+
 async function currentPieceCount() {
   return page.evaluate(async () => {
     const { useEditorStore } = await import("/src/state/editorStore.ts");
@@ -178,8 +191,8 @@ try {
   await page.keyboard.press("Control+z");
   await page.waitForTimeout(80);
   if (await currentPieceCount() !== 1) throw new Error("Undo do V não restaurou a peça única.");
-  const restoredPath = await currentInternalPath();
-  if (!restoredPath || restoredPath.id !== vPath.id) throw new Error("Undo do V não restaurou o caminho aplicado.");
+  const restoredPath = await internalPathById(vPath.id);
+  if (!restoredPath || restoredPath.id !== vPath.id) throw new Error("Undo do V não restaurou a topologia do caminho aplicado.");
   await page.keyboard.press("Control+y");
   await page.waitForTimeout(80);
   if (await currentPieceCount() !== 2) throw new Error("Redo do V não reaplicou o corte.");
