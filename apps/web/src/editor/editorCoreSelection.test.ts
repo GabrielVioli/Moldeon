@@ -110,6 +110,7 @@ describe("editor core authoritative selection clear", () => {
 
     const editor = useEditorStore.getState();
     const internal = useInternalPathEditorStore.getState();
+    expect(editor.activePieceId).toBe("");
     expect(editor.selectedPointId).toBeNull();
     expect(editor.selectedEdgeId).toBeNull();
     expect(editor.selectedSeamId).toBeNull();
@@ -123,5 +124,9 @@ describe("editor core authoritative selection clear", () => {
     expect(internal.selectedNodeId).toBeNull();
     expect(internal.selectedSegmentId).toBeNull();
     expect(hasEditorSelection()).toBe(false);
+
+    useEditorStore.getState().selectPiece(piece.id);
+    expect(useEditorStore.getState().activePieceId).toBe(piece.id);
+    expect(useEditorStore.getState().pieceSelectionActive).toBe(true);
   });
 });
