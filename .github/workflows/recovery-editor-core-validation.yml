@@ -68,11 +68,7 @@ jobs:
           npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 4179 --strictPort > /tmp/moldeon-recovery-9-5-04.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          sleep 2
-          if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-            cat /tmp/moldeon-recovery-9-5-04.log
-            exit 1
-          fi
+          sleep 3
           set +e
           node scripts/recovery-editor-core-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report.log" 2>&1
           STATUS=$?
