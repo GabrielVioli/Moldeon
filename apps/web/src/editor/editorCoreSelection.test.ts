@@ -3,8 +3,8 @@ import type { GarmentDraft, PatternPiece } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
 import {
-  clearCompleteEditorSelection,
-  hasCompleteEditorSelection,
+  clearEditorSelection,
+  hasEditorSelection,
 } from "./editorCoreSelection";
 
 const piece: PatternPiece = {
@@ -38,7 +38,7 @@ function garment(): GarmentDraft {
   };
 }
 
-describe("editor core complete selection clear", () => {
+describe("editor core authoritative selection clear", () => {
   beforeEach(() => {
     useEditorStore.getState().loadGarment(garment());
     useInternalPathEditorStore.setState({
@@ -50,27 +50,78 @@ describe("editor core complete selection clear", () => {
     });
   });
 
-  it("reports selection across both editor stores", () => {
-    expect(hasCompleteEditorSelection()).toBe(false);
+  it("reports selection across primary and auxiliary editor state", () => {
+    expect(hasEditorSelection()).toBe(false);
     useInternalPathEditorStore.setState({ selectedPathId: "internal-path" });
-    expect(hasCompleteEditorSelection()).toBe(true);
+    expect(hasEditorSelection()).toBe(true);
+    useInternalPathEditorStore.getState().selectPath(null);
+    useEditorStore.setState({
+      seamFirstEdge: {
+        pieceId: piece.id,
+        edgeId: "edge-a",
+        startT: 0,
+        endT: 1,
+      },
+    });
+    expect(hasEditorSelection()).toBe(true);
   });
 
-  it("does not leave invisible ids after clearing", () => {
+  it("clears every persistent selection id and derived flag through one action", () => {
+    const edge = {
+      pieceId: piece.id,
+      edgeId: "edge-a",
+      startT: 0,
+      endT: 1,
+    };
     useEditorStore.setState({
       selectedPointId: "a",
-      selectedEdgeId: "edge",
-      selectedSeamId: "seam",
-      selectedDartId: "dart",
+      selectedEdgeId: "edge-a",
+      selectedSeamId: "seam-a",
+      selectedDartId: "dart-a",
       selectedPieceIds: [piece.id],
       pieceSelectionActive: true,
+      seamFirstEdge: edge,
+      seamProposal: {
+        first: edge,
+        second: { ...edge, edgeId: "edge-b" },
+        compatibility: {
+          compatible: true,
+          firstLengthMm: 100,
+          secondLengthMm: 100,
+          differenceMm: 0,
+          differencePercent: 0,
+          recommendedTreatment: "standard",
+          recommendedDirection: "opposite",
+          message: "Compatível",
+        },
+      },
+      nearbySeamSuggestion: {
+        first: edge,
+        second: { ...edge, edgeId: "edge-b" },
+      },
     });
     useInternalPathEditorStore.setState({
-      selectedPathId: "path",
-      selectedNodeId: "node",
-      selectedSegmentId: "segment",
+      selectedPathId: "path-a",
+      selectedNodeId: "node-a",
+      selectedSegmentId: "segment-a",
     });
-    clearCompleteEditorSelection(useEditorStore.getState().clearSelection);
-    expect(hasCompleteEditorSelection()).toBe(false);
+
+    clearEditorSelection();
+
+    const editor = useEditorStore.getState();
+    const internal = useInternalPathEditorStore.getState();
+    expect(editor.selectedPointId).toBeNull();
+    expect(editor.selectedEdgeId).toBeNull();
+    expect(editor.selectedSeamId).toBeNull();
+    expect(editor.selectedDartId).toBeNull();
+    expect(editor.selectedPieceIds).toEqual([]);
+    expect(editor.pieceSelectionActive).toBe(false);
+    expect(editor.seamFirstEdge).toBeNull();
+    expect(editor.seamProposal).toBeNull();
+    expect(editor.nearbySeamSuggestion).toBeNull();
+    expect(internal.selectedPathId).toBeNull();
+    expect(internal.selectedNodeId).toBeNull();
+    expect(internal.selectedSegmentId).toBeNull();
+    expect(hasEditorSelection()).toBe(false);
   });
 });

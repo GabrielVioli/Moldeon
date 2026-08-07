@@ -4,10 +4,7 @@ import {
   localBoundsFromPoints,
   rotateWorkspaceTransformAroundPivot,
 } from "../editor/editorCoreMath";
-import {
-  clearCompleteEditorSelection,
-  installCompleteEditorSelectionClear,
-} from "../editor/editorCoreSelection";
+import { clearEditorSelection } from "../editor/editorCoreSelection";
 import { useEditorStore } from "./editorStore";
 import { useInternalPathEditorStore } from "./internalPathEditorStore";
 
@@ -165,7 +162,7 @@ describe("recovery 9.5-04 editor core store", () => {
       selectedSegmentId: "segment-ghost",
     });
 
-    clearCompleteEditorSelection(useEditorStore.getState().clearSelection);
+    clearEditorSelection();
 
     const state = useEditorStore.getState();
     const internal = useInternalPathEditorStore.getState();
@@ -178,26 +175,6 @@ describe("recovery 9.5-04 editor core store", () => {
     expect(internal.selectedPathId).toBeNull();
     expect(internal.selectedNodeId).toBeNull();
     expect(internal.selectedSegmentId).toBeNull();
-  });
-
-  it("decorates the legacy empty-canvas clear action without losing cleanup", () => {
-    const piece = curvedPiece();
-    useEditorStore.getState().loadGarment(garmentWithPiece(piece));
-    useEditorStore.getState().selectPiece(piece.id);
-    useInternalPathEditorStore.setState({
-      selectedPathId: "path-ghost",
-      selectedNodeId: "node-ghost",
-      selectedSegmentId: "segment-ghost",
-    });
-
-    const uninstall = installCompleteEditorSelectionClear();
-    try {
-      useEditorStore.getState().clearSelection();
-      expect(useEditorStore.getState().selectedPieceIds).toEqual([]);
-      expect(useInternalPathEditorStore.getState().selectedPathId).toBeNull();
-    } finally {
-      uninstall();
-    }
   });
 
   it("rotates one piece around its center in one undo/redo transaction", () => {
