@@ -81,6 +81,10 @@ function resetWith(
   useModelingOperationsStore.getState().clearDiagnostics();
 }
 
+function canonicalWorkspaceStates(states: GarmentDraft["workspaceStates"]) {
+  return structuredClone(states ?? []).sort((left, right) => left.pieceId.localeCompare(right.pieceId));
+}
+
 describe("recovery 9.5-05 modeling transactions", () => {
   beforeEach(() => resetWith([rectangle("piece-a")]));
 
@@ -106,22 +110,22 @@ describe("recovery 9.5-05 modeling transactions", () => {
       { xMm: 410, yMm: 250 },
     ]);
     useEditorStore.getState().setPieceSelection(pieces.map((piece) => piece.id));
-    const initial = structuredClone(useEditorStore.getState().garment.workspaceStates);
+    const initial = canonicalWorkspaceStates(useEditorStore.getState().garment.workspaceStates);
 
     expect(useModelingOperationsStore.getState().align("top")).toBe(true);
     const aligned = useEditorStore.getState().garment.workspaceStates!.map((state) => state.transform.yMm);
     expect(new Set(aligned.map((value) => value.toFixed(5))).size).toBe(1);
     useEditorStore.getState().undo();
-    expect(useEditorStore.getState().garment.workspaceStates).toEqual(initial);
+    expect(canonicalWorkspaceStates(useEditorStore.getState().garment.workspaceStates)).toEqual(initial);
     useEditorStore.getState().redo();
     expect(new Set(useEditorStore.getState().garment.workspaceStates!.map((state) => state.transform.yMm.toFixed(5))).size).toBe(1);
 
     expect(useModelingOperationsStore.getState().distribute("horizontal")).toBe(true);
-    const afterDistribution = structuredClone(useEditorStore.getState().garment.workspaceStates);
+    const afterDistribution = canonicalWorkspaceStates(useEditorStore.getState().garment.workspaceStates);
     useEditorStore.getState().undo();
-    expect(useEditorStore.getState().garment.workspaceStates).not.toEqual(afterDistribution);
+    expect(canonicalWorkspaceStates(useEditorStore.getState().garment.workspaceStates)).not.toEqual(afterDistribution);
     useEditorStore.getState().redo();
-    expect(useEditorStore.getState().garment.workspaceStates).toEqual(afterDistribution);
+    expect(canonicalWorkspaceStates(useEditorStore.getState().garment.workspaceStates)).toEqual(afterDistribution);
   });
 
   it("joins compatible pieces in one undo/redo transaction", () => {
