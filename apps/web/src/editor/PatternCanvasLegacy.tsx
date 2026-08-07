@@ -59,6 +59,7 @@ import {
   screenToWorld as cameraScreenToWorld,
   worldToScreen,
 } from "./coordinates";
+import { clearEditorSelection } from "./editorCoreSelection";
 import { findEditablePatternPoint, pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
 
 interface PatternCanvasProps {
@@ -138,6 +139,8 @@ function PatternCanvasComponent({
   const canvasSizeRef = useRef({ width: 0, height: 0 });
   const hasFittedCameraRef = useRef(sessionCamera !== null);
   const drawFrameRef = useRef<number | null>(null);
+  const drawLatestRef = useRef<() => void>(() => undefined);
+  const handleWheelRef = useRef<(event: globalThis.WheelEvent) => void>(() => undefined);
   const moveFrameRef = useRef<number | null>(null);
   const pendingMoveRef = useRef<PendingGeometryMove | null>(null);
   const workspaceFrameRef = useRef<number | null>(null);
@@ -223,7 +226,6 @@ function PatternCanvasComponent({
   const selectPiece = useEditorStore((s) => s.selectPiece);
   const movePieceInWorkspace = useEditorStore((s) => s.movePieceInWorkspace);
   const setPieceWorkspaceTransforms = useEditorStore((s) => s.setPieceWorkspaceTransforms);
-  const clearSelection = useEditorStore((s) => s.clearSelection);
   const draftContour = useEditorStore((s) => s.draftContour);
   const draftCursor = useEditorStore((s) => s.draftCursor);
   const addDraftPoint = useEditorStore((s) => s.addDraftPoint);
@@ -266,38 +268,40 @@ function PatternCanvasComponent({
   } | null>(null);
 
   const drawLatest = useCallback(() => {
-    drawFrameRef.current = null;
     const context = contextRef.current;
     if (!context) return;
 
+    const editor = useEditorStore.getState();
+    const currentGarment = editor.garment;
     const { width, height } = canvasSizeRef.current;
     draw(
       context,
       width,
       height,
       snapshotRef.current,
-      selectedPointIdRef.current,
+      editor.selectedPointId,
       cameraRef.current,
       snapRef.current,
-      seamFirstEdge ? { first: seamFirstEdge } : null,
-      garmentSeams,
-      garment,
-      activePieceId,
-      pieceSelectionActive,
-      draftContour,
-      draftCursor,
+      editor.seamFirstEdge ? { first: editor.seamFirstEdge } : null,
+      currentGarment.seams ?? [],
+      currentGarment,
+      editor.activePieceId,
+      editor.pieceSelectionActive,
+      editor.draftContour,
+      editor.draftCursor,
       hoveredDimension,
       rotationFeedback,
       dragRef.current?.type === "box" ? dragRef.current : null,
-      selectedEdgeId,
-      selectedSeamId,
-      selectedDartId,
-      selectedPieceIds,
-      cutDraft,
-      dartDraft,
-      measureDraft,
+      editor.selectedEdgeId,
+      editor.selectedSeamId,
+      editor.selectedDartId,
+      editor.selectedPieceIds,
+      editor.cutDraft,
+      editor.dartDraft,
+      editor.measureDraft,
     );
-  }, [activePieceId, cutDraft, dartDraft, draftContour, draftCursor, garment, garmentSeams, hoveredDimension, internalPathAnalysis, measureDraft, pieceSelectionActive, rotationFeedback, seamFirstEdge, selectedDartId, selectedEdgeId, selectedInternalPathId, selectedInternalPathNodeId, selectedPieceIds, selectedSeamId, draftInternalPathId]);
+  }, [hoveredDimension, rotationFeedback, internalPathAnalysis, selectedInternalPathId, selectedInternalPathNodeId, draftInternalPathId]);
+  drawLatestRef.current = drawLatest;
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -329,9 +333,13 @@ function PatternCanvasComponent({
 
   const scheduleDraw = useCallback(() => {
     if (drawFrameRef.current !== null) return;
-    drawFrameRef.current = window.requestAnimationFrame(drawLatest);
-  }, [drawLatest]);
+    drawFrameRef.current = window.requestAnimationFrame(() => {
+      drawFrameRef.current = null;
+      drawLatestRef.current();
+    });
+  }, []);
   scheduleDrawRef.current = scheduleDraw;
+  handleWheelRef.current = handleWheel;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -340,7 +348,7 @@ function PatternCanvasComponent({
     const context = canvas.getContext("2d");
     if (!context) return;
     contextRef.current = context;
-    const nativeWheel = (event: globalThis.WheelEvent) => handleWheel(event);
+    const nativeWheel = (event: globalThis.WheelEvent) => handleWheelRef.current(event);
     canvas.addEventListener("wheel", nativeWheel, { passive: false });
 
     const resize = () => {
@@ -396,7 +404,7 @@ function PatternCanvasComponent({
 
   useEffect(() => {
     scheduleDraw();
-  }, [snapshot, selectedPointId, scheduleDraw]);
+  }, [garment, snapshot, selectedPointId, selectedEdgeId, selectedSeamId, selectedDartId, selectedPieceIds, pieceSelectionActive, seamFirstEdge, cutDraft, dartDraft, measureDraft, draftContour, draftCursor, scheduleDraw]);
 
   function ownGesture(pointerId: number, owner: GestureOwnership["owner"]) {
     gestureOwnershipRef.current = claimGesture(gestureOwnershipRef.current, pointerId, owner);
@@ -410,13 +418,15 @@ function PatternCanvasComponent({
   }
 
   function fitAll() {
-    updateCamera(cameraToFitBounds(garmentBounds(garment), canvasSizeRef.current, 54));
+    const currentGarment = useEditorStore.getState().garment;
+    updateCamera(cameraToFitBounds(garmentBounds(currentGarment), canvasSizeRef.current, 54));
   }
 
   function fitSelection() {
-    const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
+    const editor = useEditorStore.getState();
+    const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
     if (!piece) return;
-    const transform = getPieceWorkspaceTransform(garment, piece.id);
+    const transform = getPieceWorkspaceTransform(editor.garment, piece.id);
     const points = samplePatternContour(piece.points).map((point) => pieceLocalToWorld(point, transform));
     updateCamera(cameraToFitBounds(contourBounds(points), canvasSizeRef.current, 70));
   }
@@ -512,7 +522,13 @@ function PatternCanvasComponent({
   }
 
   function activeTransform(): PieceWorkspaceTransform {
-    return getPieceWorkspaceTransform(garment, activePieceId);
+    const editor = useEditorStore.getState();
+    return getPieceWorkspaceTransform(editor.garment, editor.activePieceId);
+  }
+
+  function currentActivePiece(): PatternPiece | null {
+    const editor = useEditorStore.getState();
+    return editor.garment.pieces.find((piece) => piece.id === editor.activePieceId) ?? null;
   }
 
   function findPoint(clientX: number, clientY: number) {
@@ -522,11 +538,12 @@ function PatternCanvasComponent({
   }
 
   function findPieceAtWorld(xMm: number, yMm: number): PatternPiece | null {
-    const pieces = garment.pieces;
+    const currentGarment = garmentRef.current;
+    const pieces = currentGarment.pieces;
 
     for (let index = pieces.length - 1; index >= 0; index -= 1) {
       const piece = pieces[index];
-      const workspace = getPieceWorkspaceState(garment, piece.id);
+      const workspace = getPieceWorkspaceState(currentGarment, piece.id);
       if (!workspace.visible) continue;
       const local = pieceWorldToLocal({ xMm, yMm }, workspace.transform);
       if (isPointInsideLocalPiece(local.xMm, local.yMm, piece.points)) {
@@ -540,9 +557,11 @@ function PatternCanvasComponent({
     clientX: number,
     clientY: number,
   ): { pointId: string; handle: "in" | "out" } | null {
-    if (getPieceWorkspaceState(garment, activePieceId).locked) return null;
-    const selected = snapshotRef.current.piece.points.find(
-      (point) => point.id === selectedPointIdRef.current,
+    const editor = useEditorStore.getState();
+    const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
+    if (!piece || getPieceWorkspaceState(editor.garment, piece.id).locked) return null;
+    const selected = piece.points.find(
+      (point) => point.id === editor.selectedPointId,
     );
     if (!selected) return null;
 
@@ -565,7 +584,8 @@ function PatternCanvasComponent({
   }
 
   function internalPathsForActivePiece(): InternalPath[] {
-    const piece = garmentRef.current.pieces.find((candidate) => candidate.id === activePieceId);
+    const editor = useEditorStore.getState();
+    const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
     return (piece?.internalLines ?? []).filter(isInternalPath);
   }
 
@@ -613,6 +633,11 @@ function PatternCanvasComponent({
 
   function handleInternalPathPointerDown(event: PointerEvent<HTMLCanvasElement>): boolean {
     if (event.button === 1 || spacePressedRef.current || toolRef.current === "hand") return false;
+    if (toolRef.current === "select") {
+      if (findHandle(event.clientX, event.clientY)) return false;
+      if (findPoint(event.clientX, event.clientY)) return false;
+      if (findEdgeRangeAt(event.clientX, event.clientY)) return false;
+    }
     const session = useInternalPathEditorStore.getState();
     if ((toolRef.current === "cut" || toolRef.current === "dart") && session.draftPathId) {
       session.appendDraftPoint(screenToActivePieceLocal(event.clientX, event.clientY));
@@ -647,8 +672,9 @@ function PatternCanvasComponent({
       return true;
     }
     if (toolRef.current === "cut" || toolRef.current === "dart") {
+      const editor = useEditorStore.getState();
       const local = screenToActivePieceLocal(event.clientX, event.clientY);
-      session.startPath(activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
+      session.startPath(editor.activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
       dragRef.current = null;
       scheduleDraw();
       ownGesture(event.pointerId, "internal-path");
@@ -658,12 +684,11 @@ function PatternCanvasComponent({
   }
 
   function insertPointNear(clientX: number, clientY: number): boolean {
-    if (getPieceWorkspaceState(garment, activePieceId).locked) return false;
+    const editor = useEditorStore.getState();
+    const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
+    if (!piece || getPieceWorkspaceState(editor.garment, piece.id).locked) return false;
     const world = screenToActivePieceLocal(clientX, clientY);
-    const target = findNearestPatternSegment(
-      snapshotRef.current.piece,
-      world,
-    );
+    const target = findNearestPatternSegment(piece, world);
     if (
       !target ||
       target.distanceMm > 18 / cameraRef.current.zoom
@@ -675,15 +700,17 @@ function PatternCanvasComponent({
   }
 
   function findEdgeRangeAt(clientX: number, clientY: number): EdgeRange | null {
+    const currentGarment = useEditorStore.getState().garment;
     return findNearestEdgeHit(
-      garment,
+      currentGarment,
       screenToWorld(clientX, clientY),
       18 / cameraRef.current.zoom,
     )?.range ?? null;
   }
 
   function activePieceLocalBounds() {
-    return contourBounds(samplePatternContour(snapshotRef.current.piece.points));
+    const piece = currentActivePiece();
+    return contourBounds(samplePatternContour(piece?.points ?? []));
   }
 
   function rotationHandleWorld() {
@@ -706,7 +733,8 @@ function PatternCanvasComponent({
   }
 
   function isRotationHandleAt(clientX: number, clientY: number): boolean {
-    if (!pieceSelectionActive || getPieceWorkspaceState(garment, activePieceId).locked) return false;
+    const editor = useEditorStore.getState();
+    if (!editor.pieceSelectionActive || !editor.activePieceId || getPieceWorkspaceState(editor.garment, editor.activePieceId).locked) return false;
     const world = screenToWorld(clientX, clientY);
     const handle = rotationHandleWorld();
     return Math.hypot(world.xMm - handle.xMm, world.yMm - handle.yMm) <= 12 / cameraRef.current.zoom;
@@ -716,6 +744,7 @@ function PatternCanvasComponent({
     const currentTool = toolRef.current;
     if (currentTool !== "cut" && currentTool !== "dart" && currentTool !== "measure") return false;
     const state = useEditorStore.getState();
+    const currentGarment = state.garment;
     const world = screenToWorld(clientX, clientY);
     if (currentTool === "measure") {
       state.setMeasureDraft(state.measureDraft ? { ...state.measureDraft, end: world } : { start: world, end: world });
@@ -723,15 +752,15 @@ function PatternCanvasComponent({
     }
     if (currentTool === "cut" && state.cutDraft?.phase === "ready") return true;
     if (currentTool === "cut" && state.cutDraft?.phase === "placing") {
-      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.cutDraft.pieceId));
+      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(currentGarment, state.cutDraft.pieceId));
       state.setCutDraft({ ...state.cutDraft, end: local });
       state.freezeCutDraft();
       return true;
     }
     const piece = findPieceAtWorld(world.xMm, world.yMm);
     if (!piece) return false;
-    if (piece.id !== activePieceId) selectPiece(piece.id);
-    const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, piece.id));
+    if (piece.id !== state.activePieceId) selectPiece(piece.id);
+    const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(currentGarment, piece.id));
     if (currentTool === "cut") state.setCutDraft({ pieceId: piece.id, start: local, end: local, phase: "placing" });
     else {
       if (state.dartDraft?.phase === "ready") return true;
@@ -747,9 +776,10 @@ function PatternCanvasComponent({
     if (!canvas || cameraRef.current.zoom < 0.32) return null;
     const rect = canvas.getBoundingClientRect();
     const screen = { x: clientX - rect.left, y: clientY - rect.top };
-    const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
+    const editor = useEditorStore.getState();
+    const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
     if (!piece) return null;
-    const transform = getPieceWorkspaceTransform(garment, piece.id);
+    const transform = getPieceWorkspaceTransform(editor.garment, piece.id);
     for (let index = 0; index < piece.points.length; index += 1) {
       const start = piece.points[index];
       const end = piece.points[(index + 1) % piece.points.length];
@@ -764,8 +794,9 @@ function PatternCanvasComponent({
 
   function findDartAt(clientX: number, clientY: number): string | null {
     const world = screenToWorld(clientX, clientY); let best: { id: string; distance: number } | null = null;
-    for (const piece of garment.pieces) {
-      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, piece.id));
+    const currentGarment = useEditorStore.getState().garment;
+    for (const piece of currentGarment.pieces) {
+      const local = pieceWorldToLocal(world, getPieceWorkspaceTransform(currentGarment, piece.id));
       for (const dart of piece.darts ?? []) {
         const distance = Math.min(distanceToLine(local, dart.legA, dart.apex), distanceToLine(local, dart.legB, dart.apex), Math.hypot(local.xMm - dart.apex.xMm, local.yMm - dart.apex.yMm));
         if (distance <= 12 / cameraRef.current.zoom && (!best || distance < best.distance)) best = { id: dart.id, distance };
@@ -783,18 +814,21 @@ function PatternCanvasComponent({
     dragOriginRef.current = createGestureOrigin(event.pointerId, event.pointerType, event.clientX, event.clientY);
     dragStartedRef.current = false;
 
+    const editorAtPointerDown = useEditorStore.getState();
+    const currentGarment = editorAtPointerDown.garment;
+
     if (
-      draftContour &&
+      editorAtPointerDown.draftContour &&
       event.button !== 1 &&
       !event.shiftKey &&
       !spacePressedRef.current
     ) {
-      const point = snapDraftWorld(screenToWorld(event.clientX, event.clientY), garment, draftContour.points.at(-1));
-      const first = draftContour.points[0];
+      const point = snapDraftWorld(screenToWorld(event.clientX, event.clientY), currentGarment, editorAtPointerDown.draftContour.points.at(-1));
+      const first = editorAtPointerDown.draftContour.points[0];
       const closeDistance = 12 / cameraRef.current.zoom;
       if (
         first &&
-        draftContour.points.length >= 3 &&
+        editorAtPointerDown.draftContour.points.length >= 3 &&
         Math.hypot(first.xMm - point.xMm, first.yMm - point.yMm) <= closeDistance
       ) {
         closeDraft();
@@ -845,7 +879,7 @@ function PatternCanvasComponent({
 
       if (handleInternalPathPointerDown(event)) return;
 
-    if (handleIntentClick(event.clientX, event.clientY)) {
+      if (handleIntentClick(event.clientX, event.clientY)) {
         const state = useEditorStore.getState();
         if (state.cutDraft?.phase === "placing" || state.dartDraft?.phase === "placing") intentPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
         dragRef.current = null; return;
@@ -885,7 +919,7 @@ function PatternCanvasComponent({
 
       const pointHit = findPoint(event.clientX, event.clientY);
       if (pointHit) {
-        if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
+        if (pointHit.pieceId !== editorAtPointerDown.activePieceId) selectPiece(pointHit.pieceId);
         onSelectPoint(pointHit.point.id);
         onEditStartRef.current("Mover ponto");
         ownGesture(event.pointerId, "point");
@@ -899,8 +933,7 @@ function PatternCanvasComponent({
           selectPiece(edge.pieceId); onSelectPoint(null); useEditorStore.getState().selectEdge(edge.edgeId);
           const world = screenToWorld(event.clientX, event.clientY); onEditStartRef.current("Mover borda");
           ownGesture(event.pointerId, "segment");
-          ownGesture(event.pointerId, "segment");
-        dragRef.current = { type: "segment", pointerId: event.pointerId, edgeId: edge.edgeId, lastWorldX: world.xMm, lastWorldY: world.yMm };
+          dragRef.current = { type: "segment", pointerId: event.pointerId, edgeId: edge.edgeId, lastWorldX: world.xMm, lastWorldY: world.yMm };
           return;
         }
       }
@@ -908,10 +941,10 @@ function PatternCanvasComponent({
       const world = screenToWorld(event.clientX, event.clientY);
       const piece = findPieceAtWorld(world.xMm, world.yMm);
       if (piece) {
-        const selectedPieceIds = useEditorStore.getState().selectedPieceIds;
-        if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);
+        const selectedIds = useEditorStore.getState().selectedPieceIds;
+        if (!selectedIds.includes(piece.id)) selectPiece(piece.id);
         onSelectPoint(null);
-        const workspace = getPieceWorkspaceState(garment, piece.id);
+        const workspace = getPieceWorkspaceState(currentGarment, piece.id);
         if (workspace.locked) {
           dragRef.current = null;
           return;
@@ -924,7 +957,7 @@ function PatternCanvasComponent({
           startWorldY: world.yMm,
           startX: workspace.transform.xMm,
           startY: workspace.transform.yMm,
-          groupStarts: piecesMovingWith(piece.id).map((id) => ({ ...getPieceWorkspaceTransform(garment, id) })),
+          groupStarts: piecesMovingWith(piece.id).map((id) => ({ ...getPieceWorkspaceTransform(currentGarment, id) })),
         };
         dragRef.current = null;
         return;
@@ -946,6 +979,7 @@ function PatternCanvasComponent({
     }
 
     if (toolRef.current === "select" && isRotationHandleAt(event.clientX, event.clientY)) {
+      const state = useEditorStore.getState();
       const transform = activeTransform();
       const bounds = activePieceLocalBounds();
       const center = pieceLocalToWorld({ xMm: (bounds.minX + bounds.maxX) / 2, yMm: (bounds.minY + bounds.maxY) / 2 }, transform);
@@ -955,7 +989,7 @@ function PatternCanvasComponent({
       dragRef.current = {
         type: "rotate",
         pointerId: event.pointerId,
-        pieceId: activePieceId,
+        pieceId: state.activePieceId,
         centerWorldX: center.xMm,
         centerWorldY: center.yMm,
         startPointerAngle: Math.atan2(pointer.yMm - center.yMm, pointer.xMm - center.xMm),
@@ -978,7 +1012,7 @@ function PatternCanvasComponent({
 
     if (toolRef.current === "select") {
       const seamHit = findNearestSeamHit(
-        garment,
+        currentGarment,
         screenToWorld(event.clientX, event.clientY),
         12 / cameraRef.current.zoom,
       );
@@ -1034,7 +1068,7 @@ function PatternCanvasComponent({
 
     const pointHit = findPoint(event.clientX, event.clientY);
     if (pointHit) {
-      if (pointHit.pieceId !== activePieceId) selectPiece(pointHit.pieceId);
+      if (pointHit.pieceId !== editorAtPointerDown.activePieceId) selectPiece(pointHit.pieceId);
       onSelectPoint(pointHit.point.id);
       onEditStartRef.current("Mover ponto");
       ownGesture(event.pointerId, "point");
@@ -1061,11 +1095,11 @@ function PatternCanvasComponent({
     const world = screenToWorld(event.clientX, event.clientY);
     const piece = findPieceAtWorld(world.xMm, world.yMm);
     if (piece) {
-      const selectedPieceIds = useEditorStore.getState().selectedPieceIds;
+      const selectedIds = useEditorStore.getState().selectedPieceIds;
       if (event.shiftKey) useEditorStore.getState().togglePieceSelection(piece.id);
-      else if (!selectedPieceIds.includes(piece.id)) selectPiece(piece.id);
+      else if (!selectedIds.includes(piece.id)) selectPiece(piece.id);
       onSelectPoint(null);
-      const workspace = getPieceWorkspaceState(garment, piece.id);
+      const workspace = getPieceWorkspaceState(currentGarment, piece.id);
       if (workspace.locked) {
         dragRef.current = null;
         return;
@@ -1080,7 +1114,7 @@ function PatternCanvasComponent({
         startWorldY: world.yMm,
         startX: workspace.transform.xMm,
         startY: workspace.transform.yMm,
-        groupStarts: piecesMovingWith(piece.id).map((id) => ({ ...getPieceWorkspaceTransform(garment, id) })),
+        groupStarts: piecesMovingWith(piece.id).map((id) => ({ ...getPieceWorkspaceTransform(currentGarment, id) })),
       };
       return;
     }
@@ -1091,12 +1125,14 @@ function PatternCanvasComponent({
       dragRef.current = { type: "box", pointerId: event.pointerId, startX: x, startY: y, currentX: x, currentY: y, additive: true };
     } else if (toolRef.current === "select") {
       dragRef.current = createPanDrag(event.pointerId, event.clientX, event.clientY);
-    } else clearSelection();
+    } else clearEditorSelection();
   }
 
   function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
-    if (draftContour && !dragRef.current) {
-      const point = snapDraftWorld(screenToWorld(event.clientX, event.clientY), garment, draftContour.points.at(-1));
+    const editor = useEditorStore.getState();
+    const currentGarment = editor.garment;
+    if (editor.draftContour && !dragRef.current) {
+      const point = snapDraftWorld(screenToWorld(event.clientX, event.clientY), currentGarment, editor.draftContour.points.at(-1));
       updateDraftCursor(point.xMm, point.yMm);
       scheduleDraw();
     }
@@ -1136,9 +1172,10 @@ function PatternCanvasComponent({
     }
     if (!drag) {
       const state = useEditorStore.getState();
+      const latestGarment = state.garment;
       const world = screenToWorld(event.clientX, event.clientY);
-      if (toolRef.current === "cut" && state.cutDraft?.phase === "placing") state.setCutDraft({ ...state.cutDraft, end: pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.cutDraft.pieceId)) });
-      if (toolRef.current === "dart" && state.dartDraft?.phase === "placing") state.setDartDraft({ ...state.dartDraft, apex: pieceWorldToLocal(world, getPieceWorkspaceTransform(garment, state.dartDraft.pieceId)) });
+      if (toolRef.current === "cut" && state.cutDraft?.phase === "placing") state.setCutDraft({ ...state.cutDraft, end: pieceWorldToLocal(world, getPieceWorkspaceTransform(latestGarment, state.cutDraft.pieceId)) });
+      if (toolRef.current === "dart" && state.dartDraft?.phase === "placing") state.setDartDraft({ ...state.dartDraft, apex: pieceWorldToLocal(world, getPieceWorkspaceTransform(latestGarment, state.dartDraft.pieceId)) });
       if (toolRef.current === "measure" && state.measureDraft) state.setMeasureDraft({ ...state.measureDraft, end: world });
       const dimension = dimensionAt(event.clientX, event.clientY);
       setHoveredDimension(dimension?.key ?? null);
@@ -1209,7 +1246,8 @@ function PatternCanvasComponent({
         queueWorkspaceTransforms(drag.groupStarts.map((start) => ({ ...start, xMm: start.xMm + deltaX, yMm: start.yMm + deltaY })));
         return;
       }
-      const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
+      const latest = useEditorStore.getState().garment;
+      const current = getPieceWorkspaceState(latest, drag.pieceId).transform;
       queueWorkspaceTransforms([{
         pieceId: drag.pieceId,
         xMm: nextX,
@@ -1236,7 +1274,8 @@ function PatternCanvasComponent({
       const pointer = screenToWorld(event.clientX, event.clientY);
       const angle = Math.atan2(pointer.yMm - drag.centerWorldY, pointer.xMm - drag.centerWorldX);
       const rotationDeg = rotationFromPointer(drag.startRotationDeg, drag.startPointerAngle, angle, event.shiftKey);
-      const current = getPieceWorkspaceState(garment, drag.pieceId).transform;
+      const latest = useEditorStore.getState().garment;
+      const current = getPieceWorkspaceState(latest, drag.pieceId).transform;
       queueWorkspaceTransforms([{ ...current, rotationDeg }]);
       setRotationFeedback(rotationDeg);
       return;
@@ -1250,11 +1289,9 @@ function PatternCanvasComponent({
         screenToWorld(event.clientX, event.clientY),
         getPieceWorkspaceTransform(currentGarment, drag.pieceId),
       );
-      // snapping logic
-      const snapPx = 10; // pixels
+      const snapPx = 10;
       const thresholdMm = snapPx / cameraRef.current.zoom;
       let snapped = null as { xMm: number; yMm: number; type: string } | null;
-      // snap to other points
       for (const other of draggedPiece.points) {
         if (other.id === drag.pointId) continue;
         const d = Math.hypot(other.xMm - world.xMm, other.yMm - world.yMm);
@@ -1263,7 +1300,6 @@ function PatternCanvasComponent({
           break;
         }
       }
-      // snap to midpoint of segments
       if (!snapped) {
         for (let i = 0; i < draggedPiece.points.length; i += 1) {
           const a = draggedPiece.points[i];
@@ -1277,7 +1313,6 @@ function PatternCanvasComponent({
           }
         }
       }
-      // snap to horizontal/vertical alignment with other points
       if (!snapped) {
         for (const other of draggedPiece.points) {
           if (other.id === drag.pointId) continue;
@@ -1291,7 +1326,6 @@ function PatternCanvasComponent({
           }
         }
       }
-      // snap to grid (10mm)
       if (!snapped) {
         const gx = Math.round(world.xMm / 10) * 10;
         const gy = Math.round(world.yMm / 10) * 10;
@@ -1323,21 +1357,21 @@ function PatternCanvasComponent({
     }
 
     const world = screenToActivePieceLocal(event.clientX, event.clientY);
-    const anchor = snapshotRef.current.piece.points.find(
+    const piece = currentActivePiece();
+    const anchor = piece?.points.find(
       (point) => point.id === drag.pointId,
     );
-    if (!anchor) return;
+    if (!piece || !anchor) return;
 
-    // snapping for handles respects anchor position (only grid/hv/points)
     const snapPx = 10;
     const thresholdMm = snapPx / cameraRef.current.zoom;
     let snappedHandle = null as { xMm: number; yMm: number; type: string } | null;
-    for (const other of snapshotRef.current.piece.points) {
-      if (Math.abs(other.xMm - (world.xMm)) <= thresholdMm) {
+    for (const other of piece.points) {
+      if (Math.abs(other.xMm - world.xMm) <= thresholdMm) {
         snappedHandle = { xMm: other.xMm - anchor.xMm, yMm: world.yMm - anchor.yMm, type: "hv" };
         break;
       }
-      if (Math.abs(other.yMm - (world.yMm)) <= thresholdMm) {
+      if (Math.abs(other.yMm - world.yMm) <= thresholdMm) {
         snappedHandle = { xMm: world.xMm - anchor.xMm, yMm: other.yMm - anchor.yMm, type: "hv" };
         break;
       }
@@ -1413,7 +1447,7 @@ function PatternCanvasComponent({
     if (!dimension) return;
     selectPiece(dimension.piece.id);
     if (dimension.start.handleOut || dimension.end.handleIn) {
-      setDimensionError("A edição numérica exata de curvas ainda não está disponível.");
+      setDimensionError("Para curvas, selecione o segmento e edite seus handles no painel numérico.");
       return;
     }
     setDimensionError(null);
@@ -1585,26 +1619,24 @@ function PatternCanvasComponent({
     if (finishedDrag?.type === "box" && finishedDrag.pointerId === event.pointerId) {
       const moved = Math.hypot(finishedDrag.currentX - finishedDrag.startX, finishedDrag.currentY - finishedDrag.startY);
       if (!shouldStartBoxSelection(moved, dragOriginRef.current?.pointerType ?? "mouse")) {
-        clearSelection();
-        useEditorStore.getState().selectDart(null);
-        useEditorStore.getState().setNearbySeamSuggestion(null);
+        clearEditorSelection();
       } else {
-      const left = Math.min(finishedDrag.startX, finishedDrag.currentX); const right = Math.max(finishedDrag.startX, finishedDrag.currentX);
-      const top = Math.min(finishedDrag.startY, finishedDrag.currentY); const bottom = Math.max(finishedDrag.startY, finishedDrag.currentY);
-      const hits = garment.pieces.filter((piece) => getPieceWorkspaceState(garment, piece.id).visible).filter((piece) => {
-        const transform = getPieceWorkspaceTransform(garment, piece.id);
-        const points = samplePatternContour(piece.points).map((point) => worldToScreen(pieceLocalToWorld(point, transform), cameraRef.current));
-        const bounds = { left: Math.min(...points.map((point) => point.x)), right: Math.max(...points.map((point) => point.x)), top: Math.min(...points.map((point) => point.y)), bottom: Math.max(...points.map((point) => point.y)) };
-        return bounds.right >= left && bounds.left <= right && bounds.bottom >= top && bounds.top <= bottom;
-      }).map((piece) => piece.id);
-      const previous = useEditorStore.getState().selectedPieceIds;
-      useEditorStore.getState().setPieceSelection(finishedDrag.additive ? [...previous, ...hits] : hits);
+        const currentGarment = useEditorStore.getState().garment;
+        const left = Math.min(finishedDrag.startX, finishedDrag.currentX); const right = Math.max(finishedDrag.startX, finishedDrag.currentX);
+        const top = Math.min(finishedDrag.startY, finishedDrag.currentY); const bottom = Math.max(finishedDrag.startY, finishedDrag.currentY);
+        const hits = currentGarment.pieces.filter((piece) => getPieceWorkspaceState(currentGarment, piece.id).visible).filter((piece) => {
+          const transform = getPieceWorkspaceTransform(currentGarment, piece.id);
+          const points = samplePatternContour(piece.points).map((point) => worldToScreen(pieceLocalToWorld(point, transform), cameraRef.current));
+          const bounds = { left: Math.min(...points.map((point) => point.x)), right: Math.max(...points.map((point) => point.x)), top: Math.min(...points.map((point) => point.y)), bottom: Math.max(...points.map((point) => point.y)) };
+          return bounds.right >= left && bounds.left <= right && bounds.bottom >= top && bounds.top <= bottom;
+        }).map((piece) => piece.id);
+        const previous = useEditorStore.getState().selectedPieceIds;
+        useEditorStore.getState().setPieceSelection(finishedDrag.additive ? [...previous, ...hits] : hits);
       }
     }
     if (finishedDrag?.type === "pan") {
       if (!dragStartedRef.current && toolRef.current === "select") {
-        clearSelection();
-        useEditorStore.getState().selectDart(null);
+        clearEditorSelection();
       }
       setIsPanning(false);
     }
@@ -1659,7 +1691,7 @@ function PatternCanvasComponent({
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
         onDoubleClick={handleDoubleClick}
-          aria-label="Editor de molde 2D"
+        aria-label="Editor de molde 2D"
       />
       {selectedSeamId ? (
         <div className="canvas-seam-label" role="status">
@@ -1831,7 +1863,7 @@ function draw(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
-  snapshot: PatternSnapshot,
+  _snapshot: PatternSnapshot,
   selectedPointId: string | null,
   camera: Camera2D,
   snapOverlay: { xMm: number; yMm: number; type: string } | null,
@@ -1857,9 +1889,7 @@ function draw(
   context.fillStyle = "#f4f2ed";
   context.fillRect(0, 0, width, height);
 
-  // draw rulers in screen space
   drawRulers(context, width, height, camera);
-
   drawGrid(context, width, height, camera);
 
   const activePiece = garment.pieces.find((piece) => piece.id === activePieceId);
@@ -1872,7 +1902,6 @@ function draw(
     ? getPieceWorkspaceTransform(garment, activePieceId)
     : { pieceId: "empty-workspace", xMm: 0, yMm: 0, rotationDeg: 0 };
 
-  // draw persistent guides (from the active piece metadata)
   if (activePiece?.guides) {
     for (const guide of activePiece.guides) {
       const first = pieceLocalToWorld(
@@ -1994,7 +2023,6 @@ function draw(
     }
 
     if (isActivePiece) {
-
       if (camera.zoom >= 0.32) for (let index = 0; index < transformedPoints.length; index += 1) {
         const point = transformedPoints[index];
         const next = transformedPoints[(index + 1) % transformedPoints.length];
@@ -2135,7 +2163,6 @@ function draw(
   drawIntentLine(context, dartDraft && dartTransform ? pieceLocalToWorld(dartDraft.edgePoint, dartTransform) : undefined, dartDraft && dartTransform ? pieceLocalToWorld(dartDraft.apex, dartTransform) : undefined, camera.zoom, "#8b3f67");
   drawIntentLine(context, measureDraft?.start, measureDraft?.end, camera.zoom, "#22768a");
 
-  // draw snapping feedback if present
   if (snapOverlay) {
     const snapWorld = pieceLocalToWorld(snapOverlay, activeTransform);
     context.beginPath();
@@ -2167,7 +2194,6 @@ function draw(
     context.fillRect(left, top, boxWidth, boxHeight); context.strokeRect(left, top, boxWidth, boxHeight); context.restore();
   }
 
-  // show seam info overlay in screen space if selection complete
   if (seamSelection?.first && seamSelection?.second) {
     const firstPiece = garment.pieces.find((piece) => piece.id === seamSelection.first?.pieceId);
     const secondPiece = garment.pieces.find((piece) => piece.id === seamSelection.second?.pieceId);
@@ -2197,7 +2223,6 @@ function draw(
 }
 
 function drawRulers(context: CanvasRenderingContext2D, width: number, height: number, camera: Camera2D) {
-  // top ruler
   const rulerSize = 28;
   context.save();
   context.fillStyle = "#e9e7e2";
@@ -2217,7 +2242,6 @@ function drawRulers(context: CanvasRenderingContext2D, width: number, height: nu
 
   const minorPx = 10 * camera.zoom;
   const majorPx = 50 * camera.zoom;
-  // draw ticks along top using camera pan offset
   for (let x = ((camera.panX % minorPx) + minorPx) % minorPx; x < width; x += minorPx) {
     const isMajor = Math.abs((x - (camera.panX % majorPx + majorPx) % majorPx)) < 0.0001 || (x % majorPx === 0);
     const tickHeight = isMajor ? 10 : 6;
@@ -2226,13 +2250,11 @@ function drawRulers(context: CanvasRenderingContext2D, width: number, height: nu
     context.lineTo(x + 0.5, rulerSize - 1 - tickHeight);
     context.stroke();
     if (isMajor) {
-      // compute world coordinate at this screen x
       const worldX = (x - camera.panX) / camera.zoom;
       context.fillText(`${Math.round(worldX)} mm`, x + 4, 2);
     }
   }
 
-  // left ticks
   context.textAlign = "left";
   for (let y = ((camera.panY % minorPx) + minorPx) % minorPx; y < height; y += minorPx) {
     const isMajor = Math.abs((y - (camera.panY % majorPx + majorPx) % majorPx)) < 0.0001 || (y % majorPx === 0);
@@ -2346,6 +2368,7 @@ function traceContour(
   context: CanvasRenderingContext2D,
   points: readonly PatternPoint[],
 ) {
+  if (points.length === 0) return;
   context.beginPath();
   context.moveTo(points[0].xMm, points[0].yMm);
   for (let index = 1; index < points.length; index += 1) {

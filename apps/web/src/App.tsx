@@ -10,6 +10,7 @@ import { initializeEngine } from "./core/engineRuntime";
 import { createPatternSnapshot } from "./core/fallbackPatternEngine";
 import { PatternCanvas } from "./editor/PatternCanvas";
 import type { EditorTool } from "./editor/PatternCanvas";
+import { clearEditorSelection } from "./editor/editorCoreSelection";
 import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
@@ -179,11 +180,7 @@ export function App() {
   }, [startDraft]);
   const handleSelectTool = useCallback((tool: EditorTool) => {
     cancelIntent();
-    if (tool !== "select") {
-      const state = useEditorStore.getState();
-      state.clearSelection();
-      state.selectDart(null);
-    }
+    if (tool !== "select") clearEditorSelection();
     if (tool === "draft") handleCreateBlankPiece();
     else setActiveTool(tool);
   }, [cancelIntent, handleCreateBlankPiece]);
@@ -311,24 +308,17 @@ export function App() {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
+        event.preventDefault();
         const pathState = useInternalPathEditorStore.getState();
-        if (pathState.draftPathId) {
-          pathState.cancelDraft();
-          setActiveTool("select");
-          return;
-        }
         const state = useEditorStore.getState();
-        if (state.draftContour) {
-          cancelDraft();
-          setActiveTool("select");
-        } else if (state.selectedPointId || state.selectedEdgeId || state.selectedSeamId || state.selectedDartId || state.pieceSelectionActive || state.selectedPieceIds.length > 1) {
-          state.clearSelection();
-          state.selectDart(null);
-          state.selectFirstSeamEdge(null);
-        } else {
+        if (pathState.draftPathId) pathState.cancelDraft();
+        else if (state.draftContour) cancelDraft();
+        else {
+          state.cancelEdit();
           state.cancelIntent();
-          setActiveTool("select");
         }
+        clearEditorSelection();
+        setActiveTool("select");
         return;
       }
       if (!isEditableTarget(event.target) && useInternalPathEditorStore.getState().draftPathId) {
@@ -355,7 +345,7 @@ export function App() {
           event.preventDefault();
           removeDraftPoint();
           return;
-          }
+        }
       }
       if (event.key === "Enter" && !isEditableTarget(event.target)) {
         const state = useEditorStore.getState();

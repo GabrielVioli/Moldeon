@@ -1,0 +1,87 @@
+name: Recovery 9.5-04 Editor Core
+
+on:
+  push:
+    branches:
+      - "recovery/9.5-04-editor-core"
+    paths:
+      - "apps/web/src/App.tsx"
+      - "apps/web/src/editor/PatternCanvas.tsx"
+      - "apps/web/src/editor/PatternCanvasLegacy.tsx"
+      - "apps/web/src/editor/canvasHitTesting.ts"
+      - "apps/web/src/editor/canvasHitTesting.test.ts"
+      - "apps/web/src/editor/editorCoreSelection.ts"
+      - "apps/web/src/editor/editorCoreSelection.test.ts"
+      - "apps/web/src/state/editorCoreStore.test.ts"
+      - "apps/web/src/editor/PatternCanvasGuard.test.ts"
+      - "scripts/recovery-editor-core-live-regression.mjs"
+      - ".github/workflows/recovery-editor-core-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-9-5-04-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RECOVERY_BASE_URL: http://127.0.0.1:4179
+      RECOVERY_ARTIFACT_DIR: artifacts/recovery-editor-core-live
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: "${{ github.sha }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install browser controller
+        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+
+      - name: Run live editor regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 4179 --strictPort > /tmp/moldeon-recovery-9-5-04.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 3
+          set +e
+          node scripts/recovery-editor-core-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report.log" 2>&1
+          STATUS=$?
+          set -e
+          cp /tmp/moldeon-recovery-9-5-04.log "$RECOVERY_ARTIFACT_DIR/server.log"
+          cat "$RECOVERY_ARTIFACT_DIR/report.log"
+          exit "$STATUS"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-04-${{ github.sha }}
+          path: artifacts/recovery-editor-core-live
+          retention-days: 14
+          if-no-files-found: warn
