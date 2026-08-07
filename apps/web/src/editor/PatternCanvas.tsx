@@ -11,7 +11,7 @@ import {
   type RefObject,
 } from "react";
 import { samplePatternContour } from "../domain/polygonGeometry";
-import type { PieceWorkspaceTransform } from "../domain/pattern";
+import { getEdgeById, type PieceWorkspaceTransform } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
 import type { Camera2D } from "./camera";
@@ -23,9 +23,6 @@ import {
   rotateWorkspaceTransformAroundPivot,
   rotationHandleScreenPosition,
 } from "./editorCoreMath";
-import {
-  installCompleteEditorSelectionClear,
-} from "./editorCoreSelection";
 import { PatternCanvas as LegacyPatternCanvas } from "./PatternCanvasLegacy";
 import { rotationFromPointer } from "./workspaceInteractions";
 
@@ -33,6 +30,7 @@ export type { EditorTool } from "./PatternCanvasLegacy";
 
 type PatternCanvasProps = ComponentProps<typeof LegacyPatternCanvas>;
 type HandleKind = "in" | "out";
+type HandleTarget = { pointId: string; handle: HandleKind };
 
 export function canvasDocumentGenerationKey(
   pieceIds: readonly string[],
@@ -50,19 +48,6 @@ function PatternCanvasGuard(props: PatternCanvasProps) {
     ),
   );
   const camera = useLegacyCanvasCamera(shellRef, generationKey);
-
-  useEffect(() => installCompleteEditorSelectionClear(), []);
-
-  useEffect(() => {
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape" || isEditableTarget(event.target)) return;
-      // App cancels any temporary operation first. The microtask then guarantees
-      // that Escape also leaves no persistent selection id behind.
-      queueMicrotask(() => useEditorStore.getState().clearSelection());
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
 
   return (
     <div
@@ -233,15 +218,11 @@ function EditorCoreRotationHandle({
   );
 
   useEffect(() => {
-    const cancelOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape" || !sessionRef.current) return;
-      useEditorStore.getState().cancelEdit();
+    if (!canRotate && sessionRef.current) {
       sessionRef.current = null;
       setFeedback(null);
-    };
-    window.addEventListener("keydown", cancelOnEscape);
-    return () => window.removeEventListener("keydown", cancelOnEscape);
-  }, []);
+    }
+  }, [canRotate]);
 
   if (!canRotate || !piece || !transform || !camera) return null;
   const shell = shellRef.current;
@@ -442,51 +423,51 @@ function EditorCoreNumericPanel({
   const splitSelectedSegment = useEditorStore(
     (state) => state.splitSelectedSegment,
   );
-  const [selectedHandle, setSelectedHandle] = useState<HandleKind | null>(null);
+  const [handleTarget, setHandleTarget] = useState<HandleTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const cancelNextBlurRef = useRef(false);
 
   const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
   const point = piece?.points.find((candidate) => candidate.id === selectedPointId);
+  const selectedEdge = piece && selectedEdgeId ? getEdgeById(piece, selectedEdgeId) : undefined;
   const segment = selectedEdgeId
     ? piece?.segments?.find((candidate) => candidate.id === selectedEdgeId)
     : undefined;
-
-  useEffect(() => {
-    if (!point) {
-      setSelectedHandle(null);
-      setError(null);
-      return;
-    }
-    if (
-      (selectedHandle === "in" && !point.handleIn)
-      || (selectedHandle === "out" && !point.handleOut)
-    ) {
-      setSelectedHandle(null);
-    }
-  }, [point, selectedHandle]);
-
-  useEffect(() => {
-    const clearTransientSelection = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelectedHandle(null);
-        setError(null);
-      }
-    };
-    window.addEventListener("keydown", clearTransientSelection);
-    return () => window.removeEventListener("keydown", clearTransientSelection);
-  }, []);
-
-  if (!piece || (!point && !segment)) return null;
-
-  const handleVector =
-    selectedHandle === "in"
-      ? point?.handleIn
-      : selectedHandle === "out"
-        ? point?.handleOut
-        : undefined;
+  const edgeStart = selectedEdge
+    ? piece?.points.find((candidate) => candidate.id === selectedEdge.startPointId)
+    : undefined;
+  const edgeEnd = selectedEdge
+    ? piece?.points.find((candidate) => candidate.id === selectedEdge.endPointId)
+    : undefined;
+  const targetPoint = handleTarget
+    ? piece?.points.find((candidate) => candidate.id === handleTarget.pointId)
+    : undefined;
+  const handleVector = handleTarget?.handle === "in"
+    ? targetPoint?.handleIn
+    : handleTarget?.handle === "out"
+      ? targetPoint?.handleOut
+      : undefined;
   const polar = handleVector ? handleVectorToPolar(handleVector) : null;
 
+  useEffect(() => {
+    if (!handleTarget) return;
+    const target = piece?.points.find((candidate) => candidate.id === handleTarget.pointId);
+    const vector = handleTarget.handle === "in" ? target?.handleIn : target?.handleOut;
+    if (!target || !vector) {
+      setHandleTarget(null);
+      setError(null);
+    }
+  }, [handleTarget, piece]);
+
+  useEffect(() => {
+    setHandleTarget(null);
+    setError(null);
+  }, [activePieceId, selectedEdgeId, selectedPointId]);
+
+  if (!piece || (!point && !selectedEdge)) return null;
+
   const begin = (label: string) => {
+    cancelNextBlurRef.current = false;
     setError(null);
     onEditStart(label);
   };
@@ -494,6 +475,7 @@ function EditorCoreNumericPanel({
   const cancel = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      cancelNextBlurRef.current = true;
       onEditCancel();
       setError(null);
       event.currentTarget.blur();
@@ -505,6 +487,10 @@ function EditorCoreNumericPanel({
   };
 
   const finish = (event: FocusEvent<HTMLInputElement>) => {
+    if (cancelNextBlurRef.current) {
+      cancelNextBlurRef.current = false;
+      return;
+    }
     if (!Number.isFinite(event.currentTarget.valueAsNumber)) {
       setError("Informe um número válido.");
       onEditCancel();
@@ -524,15 +510,27 @@ function EditorCoreNumericPanel({
 
   const moveHandleVector = (nextX: number, nextY: number) => {
     if (
-      !point
-      || !selectedHandle
+      !handleTarget
+      || !targetPoint
       || !Number.isFinite(nextX)
       || !Number.isFinite(nextY)
     ) {
       return;
     }
-    onMoveHandle(point.id, selectedHandle, nextX, nextY);
+    onMoveHandle(targetPoint.id, handleTarget.handle, nextX, nextY);
   };
+
+  const pointHandleTarget = (handle: HandleKind): HandleTarget | null => {
+    if (!point) return null;
+    const vector = handle === "in" ? point.handleIn : point.handleOut;
+    return vector ? { pointId: point.id, handle } : null;
+  };
+  const edgeOutTarget = edgeStart?.handleOut
+    ? { pointId: edgeStart.id, handle: "out" as const }
+    : null;
+  const edgeInTarget = edgeEnd?.handleIn
+    ? { pointId: edgeEnd.id, handle: "in" as const }
+    : null;
 
   return (
     <div
@@ -560,30 +558,30 @@ function EditorCoreNumericPanel({
             <strong style={{ marginRight: "auto" }}>Nó selecionado</strong>
             <button
               type="button"
-              aria-pressed={selectedHandle === null}
-              onClick={() => setSelectedHandle(null)}
+              aria-pressed={handleTarget === null}
+              onClick={() => setHandleTarget(null)}
             >
               Nó
             </button>
             <button
               type="button"
-              aria-pressed={selectedHandle === "in"}
+              aria-pressed={handleTarget?.pointId === point.id && handleTarget.handle === "in"}
               disabled={!point.handleIn}
-              onClick={() => setSelectedHandle("in")}
+              onClick={() => setHandleTarget(pointHandleTarget("in"))}
             >
               Handle entrada
             </button>
             <button
               type="button"
-              aria-pressed={selectedHandle === "out"}
+              aria-pressed={handleTarget?.pointId === point.id && handleTarget.handle === "out"}
               disabled={!point.handleOut}
-              onClick={() => setSelectedHandle("out")}
+              onClick={() => setHandleTarget(pointHandleTarget("out"))}
             >
               Handle saída
             </button>
           </div>
 
-          {selectedHandle === null ? (
+          {handleTarget === null ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <NumericField
                 label="X"
@@ -604,76 +602,108 @@ function EditorCoreNumericPanel({
                 onChange={(value) => movePointCoordinate("y", value)}
               />
             </div>
-          ) : handleVector && polar ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <NumericField
-                label="Handle X"
-                unit="mm"
-                value={handleVector.xMm}
-                onFocus={() => begin("Editar handle numericamente")}
-                onBlur={finish}
-                onKeyDown={cancel}
-                onChange={(value) => moveHandleVector(value, handleVector.yMm)}
-              />
-              <NumericField
-                label="Handle Y"
-                unit="mm"
-                value={handleVector.yMm}
-                onFocus={() => begin("Editar handle numericamente")}
-                onBlur={finish}
-                onKeyDown={cancel}
-                onChange={(value) => moveHandleVector(handleVector.xMm, value)}
-              />
-              <NumericField
-                label="Comprimento"
-                unit="mm"
-                min={0}
-                value={polar.lengthMm}
-                onFocus={() => begin("Editar comprimento do handle")}
-                onBlur={finish}
-                onKeyDown={cancel}
-                onChange={(value) => {
-                  if (value < 0) {
-                    setError("O comprimento do handle não pode ser negativo.");
-                    return;
-                  }
-                  const next = handleVectorFromPolar(value, polar.angleDeg);
-                  moveHandleVector(next.xMm, next.yMm);
-                }}
-              />
-              <NumericField
-                label="Ângulo"
-                unit="°"
-                value={polar.angleDeg}
-                onFocus={() => begin("Editar ângulo do handle")}
-                onBlur={finish}
-                onKeyDown={cancel}
-                onChange={(value) => {
-                  const next = handleVectorFromPolar(polar.lengthMm, value);
-                  moveHandleVector(next.xMm, next.yMm);
-                }}
-              />
-            </div>
           ) : null}
         </>
       ) : null}
 
-      {segment ? (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <strong style={{ marginRight: "auto" }}>
-            Segmento · {segment.kind === "cubic" ? "cúbico" : "reta"}
-          </strong>
-          <button
-            type="button"
-            onClick={() =>
-              convertSelectedSegment(segment.kind === "cubic" ? "line" : "cubic")
-            }
-          >
-            Converter
-          </button>
-          <button type="button" onClick={splitSelectedSegment}>
-            Dividir
-          </button>
+      {selectedEdge ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <strong style={{ marginRight: "auto" }}>
+              Segmento · {segment?.kind === "cubic" || edgeOutTarget || edgeInTarget ? "cúbico" : "reta"}
+            </strong>
+            <button
+              type="button"
+              onClick={() =>
+                convertSelectedSegment(segment?.kind === "cubic" ? "line" : "cubic")
+              }
+            >
+              Converter
+            </button>
+            <button type="button" onClick={splitSelectedSegment}>
+              Dividir
+            </button>
+          </div>
+          {edgeOutTarget || edgeInTarget ? (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                aria-pressed={Boolean(
+                  edgeOutTarget
+                    && handleTarget?.pointId === edgeOutTarget.pointId
+                    && handleTarget.handle === edgeOutTarget.handle,
+                )}
+                disabled={!edgeOutTarget}
+                onClick={() => setHandleTarget(edgeOutTarget)}
+              >
+                Handle saída
+              </button>
+              <button
+                type="button"
+                aria-pressed={Boolean(
+                  edgeInTarget
+                    && handleTarget?.pointId === edgeInTarget.pointId
+                    && handleTarget.handle === edgeInTarget.handle,
+                )}
+                disabled={!edgeInTarget}
+                onClick={() => setHandleTarget(edgeInTarget)}
+              >
+                Handle entrada
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {handleTarget && handleVector && polar ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <NumericField
+            label="Handle X"
+            unit="mm"
+            value={handleVector.xMm}
+            onFocus={() => begin("Editar handle numericamente")}
+            onBlur={finish}
+            onKeyDown={cancel}
+            onChange={(value) => moveHandleVector(value, handleVector.yMm)}
+          />
+          <NumericField
+            label="Handle Y"
+            unit="mm"
+            value={handleVector.yMm}
+            onFocus={() => begin("Editar handle numericamente")}
+            onBlur={finish}
+            onKeyDown={cancel}
+            onChange={(value) => moveHandleVector(handleVector.xMm, value)}
+          />
+          <NumericField
+            label="Comprimento"
+            unit="mm"
+            min={0}
+            value={polar.lengthMm}
+            onFocus={() => begin("Editar comprimento do handle")}
+            onBlur={finish}
+            onKeyDown={cancel}
+            onChange={(value) => {
+              if (value < 0) {
+                setError("O comprimento do handle não pode ser negativo.");
+                return;
+              }
+              const next = handleVectorFromPolar(value, polar.angleDeg);
+              moveHandleVector(next.xMm, next.yMm);
+            }}
+          />
+          <NumericField
+            label="Ângulo"
+            unit="°"
+            value={polar.angleDeg}
+            onFocus={() => begin("Editar ângulo do handle")}
+            onBlur={finish}
+            onKeyDown={cancel}
+            onChange={(value) => {
+              const next = handleVectorFromPolar(polar.lengthMm, value);
+              moveHandleVector(next.xMm, next.yMm);
+            }}
+          />
         </div>
       ) : null}
 
@@ -729,15 +759,6 @@ function NumericField({
         <span>{unit}</span>
       </span>
     </label>
-  );
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (
-    target.isContentEditable
-    || target.tagName === "INPUT"
-    || target.tagName === "TEXTAREA"
-    || target.tagName === "SELECT"
   );
 }
 

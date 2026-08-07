@@ -58,6 +58,12 @@ export function findNearestSeamHit(
   world: PatternVector,
   maxDistanceMm: number,
 ): SeamHit | null {
+  // Point/Bezier-handle interaction is more specific than a seam painted over
+  // the same contour. The legacy canvas asks for a seam hit before asking for a
+  // point hit, so protect control geometry here as an invariant of hit testing
+  // instead of letting render order decide interaction priority.
+  if (distanceToEditableControl(garment, world) <= maxDistanceMm) return null;
+
   let nearest: SeamHit | null = null;
   for (const seam of garment.seams ?? []) {
     for (const side of ["first", "second"] as const) {
@@ -101,6 +107,33 @@ export function pointInsidePiece(
     if (intersects) inside = !inside;
   }
   return inside;
+}
+
+function distanceToEditableControl(
+  garment: GarmentDraft,
+  world: PatternVector,
+): number {
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const piece of garment.pieces) {
+    const workspace = workspaceStateFor(garment, piece.id);
+    if (!workspace.visible || workspace.locked) continue;
+    for (const point of piece.points) {
+      const anchor = pieceLocalToWorld(point, workspace.transform);
+      nearest = Math.min(nearest, Math.hypot(world.xMm - anchor.xMm, world.yMm - anchor.yMm));
+      for (const handle of [point.handleIn, point.handleOut]) {
+        if (!handle) continue;
+        const endpoint = pieceLocalToWorld(
+          { xMm: point.xMm + handle.xMm, yMm: point.yMm + handle.yMm },
+          workspace.transform,
+        );
+        nearest = Math.min(
+          nearest,
+          Math.hypot(world.xMm - endpoint.xMm, world.yMm - endpoint.yMm),
+        );
+      }
+    }
+  }
+  return nearest;
 }
 
 function distanceToRange(
