@@ -18,6 +18,7 @@ import {
   finalizeBoundaryAnchors,
   moveAnchoredDraftCursor,
   moveAnchoredInternalPathNode,
+  snapInternalPathPointToContour,
   startAnchoredInternalPath,
 } from "../domain/modelingCut";
 import {
@@ -72,7 +73,10 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     if (!piece) return;
     if (get().draftPathId) get().cancelDraft();
     editor.beginEdit(purpose === "dart" ? "Desenhar pence" : "Desenhar caminho interno", "geometry");
-    let path = createInternalPath(pieceId, purpose, [point, point]);
+    const initialPoint = purpose === "dart"
+      ? snapInternalPathPointToContour(piece, point, 18)?.point ?? point
+      : point;
+    let path = createInternalPath(pieceId, purpose, [initialPoint, initialPoint]);
     path = startAnchoredInternalPath(path, piece);
     const first = path.nodes[0];
     const cursor = path.nodes.at(-1);
