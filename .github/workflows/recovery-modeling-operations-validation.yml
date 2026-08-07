@@ -8,6 +8,8 @@ on:
       - "apps/web/src/components/ContextBar.tsx"
       - "apps/web/src/components/CutRegionPreview.tsx"
       - "apps/web/src/components/ModelingOperationsControls.tsx"
+      - "apps/web/src/components/Toolbar.tsx"
+      - "apps/web/src/modelingOperations.css"
       - "apps/web/src/domain/modelingCut.ts"
       - "apps/web/src/domain/modelingCut.test.ts"
       - "apps/web/src/domain/modelingOperations.ts"
