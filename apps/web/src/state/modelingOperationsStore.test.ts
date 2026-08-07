@@ -197,7 +197,9 @@ describe("recovery 9.5-05 modeling transactions", () => {
     expect(result.ok).toBe(true);
     const updated = result.garment.pieces.find((piece) => piece.id === source.id)!;
     const dart = updated.darts?.[0];
-    const structuralPath = (updated.internalLines ?? []).find((line) => line.id === dartPath.id && isInternalPath(line));
+    const structuralLine = (updated.internalLines ?? []).find((line) => line.id === dartPath.id);
+    expect(structuralLine && isInternalPath(structuralLine)).toBe(true);
+    if (!structuralLine || !isInternalPath(structuralLine)) throw new Error("Pence estrutural não manteve um InternalPath válido.");
     expect(dart).toMatchObject({
       pieceId: source.id,
       pathId: dartPath.id,
@@ -213,8 +215,8 @@ describe("recovery 9.5-05 modeling transactions", () => {
     expect(dart?.lengthMm).toBeGreaterThan(0);
     expect(Number.isFinite(dart?.directionDeg)).toBe(true);
     expect(dart?.legSegmentIds).toHaveLength(2);
-    expect(structuralPath && structuralPath.segments).toHaveLength(3);
-    expect(structuralPath && structuralPath.nodes).toHaveLength(4);
+    expect(structuralLine.segments).toHaveLength(3);
+    expect(structuralLine.nodes).toHaveLength(4);
   });
 
   it("round-trips anchored cuts and pleat metadata through the real V3 autosave parser", () => {
