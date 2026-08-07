@@ -90,3 +90,12 @@ jobs:
           path: artifacts/recovery-modeling-operations-live
           retention-days: 14
           if-no-files-found: warn
+
+      - name: Upload validated preview build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-05-preview-${{ github.sha }}
+          path: apps/web/dist
+          retention-days: 2
+          if-no-files-found: error
