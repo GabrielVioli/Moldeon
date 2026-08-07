@@ -8,6 +8,7 @@ import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
 import { CutRegionPreview } from "./CutRegionPreview";
 import { ModelingOperationsControls } from "./ModelingOperationsControls";
+import "../modelingOperations.css";
 
 const PURPOSES: Array<{ value: InternalPathPurpose; label: string }> = [
   { value: "reference", label: "Referência" },
