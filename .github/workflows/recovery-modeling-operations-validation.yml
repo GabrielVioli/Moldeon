@@ -15,6 +15,7 @@ on:
       - "apps/web/src/domain/modelingOperations.ts"
       - "apps/web/src/domain/modelingOperations.test.ts"
       - "apps/web/src/state/internalPathEditorStore.ts"
+      - "apps/web/src/state/modelingAppliedCutAutosave.test.ts"
       - "apps/web/src/state/modelingOperationsStore.ts"
       - "apps/web/src/state/modelingOperationsStore.test.ts"
       - "scripts/recovery-modeling-operations-live-regression.mjs"
