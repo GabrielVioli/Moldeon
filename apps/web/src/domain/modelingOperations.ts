@@ -5,7 +5,7 @@ import {
   CUT_START_EDGE_KEY,
   CUT_START_T_KEY,
 } from "./modelingCut";
-import { samplePatternContour } from "./polygonGeometry";
+import { samplePatternContour, samplePatternSegment } from "./polygonGeometry";
 import {
   createDocumentId,
   getPatternEdges,
@@ -617,7 +617,8 @@ function clippedInfiniteLine(
   direction: PatternVector,
 ): [PatternVector, PatternVector] | null {
   const hits: Array<{ point: PatternVector; projection: number }> = [];
-  const reach = Math.max(10000, Math.hypot(...[boundsOf(contour).maxX - boundsOf(contour).minX, boundsOf(contour).maxY - boundsOf(contour).minY]) * 5);
+  const bounds = boundsOf(contour);
+  const reach = Math.max(10000, Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 5);
   const start = { xMm: origin.xMm - direction.xMm * reach, yMm: origin.yMm - direction.yMm * reach };
   const end = { xMm: origin.xMm + direction.xMm * reach, yMm: origin.yMm + direction.yMm * reach };
   for (let index = 0; index < contour.length; index += 1) {
@@ -705,13 +706,11 @@ function rotateVector(point: PatternVector, degrees: number): PatternVector {
 }
 
 function approximateEdgeLength(start: PatternPoint, end: PatternPoint): number {
-  const points = samplePatternContour([
-    { ...start, id: "edge-start" },
-    { ...end, id: "edge-end" },
-  ]);
-  if (points.length < 2) return distance(start, end);
+  const points = samplePatternSegment(start, end);
   let total = 0;
-  for (let index = 0; index < points.length; index += 1) total += distance(points[index - 1], points[index]);
+  for (let index = 1; index < points.length; index += 1) {
+    total += distance(points[index - 1], points[index]);
+  }
   return total;
 }
 
