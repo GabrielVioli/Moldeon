@@ -65,6 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
           npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 4179 --strictPort > /tmp/moldeon-recovery-9-5-04.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
@@ -79,7 +80,7 @@ jobs:
             sleep 0.25
           done
           export CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")"
-          node scripts/recovery-editor-core-live-regression.mjs | tee "$RECOVERY_ARTIFACT_DIR/report.json"
+          node scripts/recovery-editor-core-live-regression.mjs 2>&1 | tee "$RECOVERY_ARTIFACT_DIR/report.log"
 
       - name: Upload browser evidence
         if: always()
