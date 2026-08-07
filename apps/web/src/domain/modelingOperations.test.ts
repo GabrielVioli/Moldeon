@@ -7,9 +7,7 @@ import {
   joinModelingPieces,
   worldBoundsForPiece,
 } from "./modelingOperations";
-import {
-  createInternalPath,
-} from "./internalPaths";
+import { createInternalPath } from "./internalPaths";
 import {
   isInternalPath,
   migrateLegacyPieceToSegments,
@@ -18,7 +16,7 @@ import {
 } from "./pattern";
 import { finalizeBoundaryAnchors } from "./modelingCut";
 
-function piece(id: string, x = 0, y = 0): PatternPiece {
+function piece(id: string): PatternPiece {
   return migrateLegacyPieceToSegments({
     id,
     name: id,
@@ -53,21 +51,7 @@ function garment(pieces: PatternPiece[], positions?: Array<{ xMm: number; yMm: n
       armLengthMm: 580,
       inseamMm: 760,
     },
-    fabrics: [{
-      id: "fabric-a",
-      name: "Teste",
-      presetId: "cotton-poplin",
-      weightGsm: 120,
-      stretchWarp: 0.01,
-      stretchWeft: 0.01,
-      bendingWarp: 1,
-      bendingWeft: 1,
-      shear: 1,
-      damping: 0.02,
-      friction: 0.4,
-      thicknessMm: 0.4,
-      color: "#ffffff",
-    } as GarmentDraft["fabrics"][number]],
+    fabrics: [],
     pieces,
     workspaceStates: pieces.map((candidate, index) => ({
       pieceId: candidate.id,
@@ -154,7 +138,7 @@ describe("9.5-05 modeling operations", () => {
     const second = piece("right");
     const source = garment([first, second], [
       { xMm: 0, yMm: 0 },
-      { xMm: 200, yMm: 0, rotationDeg: 180 },
+      { xMm: 200, yMm: 80, rotationDeg: 180 },
     ]);
     const result = joinModelingPieces(source, [first.id, second.id]);
     expect(result.ok).toBe(true);
