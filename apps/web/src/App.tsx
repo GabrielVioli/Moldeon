@@ -222,9 +222,10 @@ export function App() {
     },
     [deletePiece, garment.pieces],
   );
-  const selectedPointIndex = snapshot.piece.points.findIndex(
-    (point) => point.id === selectedPointId,
-  );
+  const hasPieces = garment.pieces.length > 0;
+  const selectedPointIndex = hasPieces
+    ? snapshot.piece.points.findIndex((point) => point.id === selectedPointId)
+    : -1;
   const selectedPoint =
     selectedPointIndex >= 0 ? snapshot.piece.points[selectedPointIndex] : null;
   const nextPoint =
@@ -526,7 +527,7 @@ export function App() {
           <div className="panel-titlebar">
             <div>
               <span className="section-eyebrow">Molde 2D</span>
-              <strong>{snapshot.piece.name} · milímetros</strong>
+              <strong>{hasPieces ? `${snapshot.piece.name} · milímetros` : "Bancada vazia · milímetros"}</strong>
             </div>
             <div className="panel-title-actions">
               <span className="hint desktop-hint">Fundo: pan · Shift + arrastar: selecionar · roda/trackpad: navegar</span>
@@ -567,14 +568,14 @@ export function App() {
                 <button
                   type="button"
                   className={activeTool === "point" ? "active" : ""}
-                  disabled={draftContour !== null}
+                  disabled={!hasPieces || draftContour !== null}
                   onClick={() => setActiveTool(activeTool === "point" ? "select" : "point")}
                 >
                   + Ponto
                 </button>
                 <button
                   type="button"
-                  disabled={snapshot.piece.points.length <= 3 || selectedPoint === null}
+                  disabled={!hasPieces || snapshot.piece.points.length <= 3 || selectedPoint === null}
                   onClick={() => selectedPoint && removePoint(selectedPoint.id)}
                 >
                   − Ponto
@@ -598,6 +599,16 @@ export function App() {
                 onInsertPoint={handleInsertPoint}
                 onToolChange={setActiveTool}
               />
+              {!hasPieces && draftContour === null ? (
+                <div className="empty-workspace" role="status">
+                  <strong>A bancada está vazia</strong>
+                  <span>Escolha uma base ou desenhe a primeira peça diretamente nesta bancada.</span>
+                  <div>
+                    <button type="button" onClick={() => setLibraryOpen(true)}>Abrir moldes</button>
+                    <button type="button" onClick={handleCreateBlankPiece}>Desenhar primeira peça</button>
+                  </div>
+                </div>
+              ) : null}
               <ContextBar tool={activeTool} onDone={() => setActiveTool("select")} />
             </div>
           </div>
@@ -640,7 +651,7 @@ export function App() {
           mobileActive={mobileView === "inspector"}
           onRequestPreview={handleSimulate}
           onDressBody={handleDressBody}
-        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel /> : <Inspector
+        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel /> : hasPieces ? <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}
@@ -653,7 +664,7 @@ export function App() {
           curveActive={selectedCurveActive}
           onToggleCurve={handleToggleCurve}
           onSeamAllowanceChange={setSeamAllowance}
-        />}
+        /> : <EmptyInspector mobileActive={mobileView === "inspector"} />}
         </div>
       </main>
 
@@ -739,6 +750,20 @@ function WorkspaceTab({
     >
       {children}
     </button>
+  );
+}
+
+function EmptyInspector({ mobileActive }: { mobileActive: boolean }) {
+  return (
+    <aside
+      className={`inspector empty-inspector workspace-view${mobileActive ? " is-mobile-active" : ""}`}
+      id="inspector-panel"
+      aria-labelledby="inspector-tab"
+    >
+      <span className="section-eyebrow">Propriedades</span>
+      <strong>Nenhuma peça selecionada</strong>
+      <p>Desenhe uma peça ou abra a biblioteca de moldes para começar.</p>
+    </aside>
   );
 }
 

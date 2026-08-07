@@ -1,41 +1,271 @@
-name: Recovery Gate Zero Workspace
+name: Recovery 9.5 Empty Workspace
 
 on:
   push:
+    branches:
+      - "recovery/9.5-03-empty-workspace"
     paths:
-      - "scripts/apply-recovery-zero-workspace.py"
+      - "scripts/recovery-empty-workspace-visual.mjs"
       - ".github/workflows/recovery-zero-workspace.yml"
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 concurrency:
-  group: recovery-zero-workspace-main
-  cancel-in-progress: true
+  group: recovery-9-5-empty-workspace-final-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
-  apply-test-publish:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  apply-final-ghost-fix:
+    if: github.event_name == 'pull_request' && github.head_ref == 'recovery/9.5-03-empty-workspace'
+    runs-on: macos-15
+    timeout-minutes: 50
+    env:
+      RECOVERY_BASE_URL: http://127.0.0.1:4179
+      RECOVERY_ARTIFACT_DIR: artifacts/recovery-empty-workspace
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact recovery branch head
+        uses: actions/checkout@v4
         with:
-          ref: main
+          ref: recovery/9.5-03-empty-workspace
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Verify exact pull request head
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Apply scoped Canvas fix
+        run: python3 scripts/apply-recovery-ghost-geometry.py
+
+      - name: Normalize strict fixtures and selectors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path("apps/web/src/editor/canvasRenderState.test.ts")
+          test = test_path.read_text(encoding="utf-8")
+          test = test.replace("  } as GarmentDraft;", "  } as unknown as GarmentDraft;")
+          test = test.replace(
+              '  };\n}\n\ndescribe("canvas render state"',
+              '  } as Seam;\n}\n\ndescribe("canvas render state"',
+          )
+          test_path.write_text(test, encoding="utf-8")
+
+          visual_path = Path("scripts/recovery-empty-workspace-visual.mjs")
+          visual = visual_path.read_text(encoding="utf-8")
+          visual = visual.replace(
+              'getByRole("button", { name: "Moldes" })',
+              'getByRole("button", { name: "Moldes", exact: true })',
+          )
+          visual_path.write_text(visual, encoding="utf-8")
+          PY
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: npm
-      - run: python scripts/apply-recovery-zero-workspace.py
-      - run: npm ci
-      - run: git diff --check
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Commit validated zero-workspace recovery
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install browser controller and Chromium
+        shell: bash
         run: |
-          git config user.name "Gabriel Vinicius"
-          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add apps/web/src/state/editorStore.ts apps/web/src/App.tsx apps/web/src/recovery.css
-          git commit -m "fix: allow an empty editable workspace"
-          git push origin main
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Start recovery application
+        shell: bash
+        run: |
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
+          ) > "$GITHUB_WORKSPACE/$RECOVERY_ARTIFACT_DIR/server.log" 2>&1 &
+          echo $! > "$RECOVERY_ARTIFACT_DIR/server.pid"
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$RECOVERY_BASE_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$RECOVERY_ARTIFACT_DIR/server.log"
+          exit 1
+
+      - name: Run strict desktop and mobile visual journey
+        shell: bash
+        run: |
+          set -o pipefail
+          export CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")"
+          node scripts/recovery-empty-workspace-visual.mjs | tee "$RECOVERY_ARTIFACT_DIR/audit.json"
+
+      - name: Stop recovery application
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$RECOVERY_ARTIFACT_DIR/server.pid"; then
+            kill "$(cat "$RECOVERY_ARTIFACT_DIR/server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Restore permanent validation workflow and remove delivery scaffolding
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          Path(".github/workflows/recovery-zero-workspace.yml").write_text('''name: Recovery 9.5 Empty Workspace
+
+on:
+  push:
+    branches:
+      - "recovery/9.5-03-empty-workspace"
+    paths:
+      - "apps/web/src/App.tsx"
+      - "apps/web/src/editor/PatternCanvas.tsx"
+      - "apps/web/src/editor/canvasRenderState.ts"
+      - "apps/web/src/editor/canvasRenderState.test.ts"
+      - "scripts/recovery-empty-workspace-visual.mjs"
+      - ".github/workflows/recovery-zero-workspace.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-9-5-empty-workspace-final-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      RECOVERY_BASE_URL: http://127.0.0.1:4179
+      RECOVERY_ARTIFACT_DIR: artifacts/recovery-empty-workspace
+    steps:
+      - name: Checkout exact triggering commit
+        uses: actions/checkout@v4
+        with:
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+
+      - name: Record and verify exact commit
+        shell: bash
+        run: |
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee "$RECOVERY_ARTIFACT_DIR/commit.txt"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install browser controller and Chromium
+        shell: bash
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Start recovery application
+        shell: bash
+        run: |
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4179 --strictPort
+          ) > "$GITHUB_WORKSPACE/$RECOVERY_ARTIFACT_DIR/server.log" 2>&1 &
+          echo $! > "$RECOVERY_ARTIFACT_DIR/server.pid"
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$RECOVERY_BASE_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$RECOVERY_ARTIFACT_DIR/server.log"
+          exit 1
+
+      - name: Run strict desktop and mobile visual journey
+        shell: bash
+        run: |
+          set -o pipefail
+          export CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")"
+          node scripts/recovery-empty-workspace-visual.mjs | tee "$RECOVERY_ARTIFACT_DIR/audit.json"
+
+      - name: Stop recovery application
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$RECOVERY_ARTIFACT_DIR/server.pid"; then
+            kill "$(cat "$RECOVERY_ARTIFACT_DIR/server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload validation evidence and production bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-empty-workspace-${{ github.sha }}
+          path: |
+            artifacts/recovery-empty-workspace
+            apps/web/dist
+          retention-days: 21
+          if-no-files-found: error
+''', encoding="utf-8")
+          PY
+          git rm -f .github/workflows/apply-recovery-ghost-geometry.yml
+          git rm -f scripts/apply-recovery-ghost-geometry.py
+
+      - name: Commit the validated fix to the current branch
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: remove ghost canvas geometry after zoom"
+          git push origin HEAD:recovery/9.5-03-empty-workspace
+
+      - name: Upload pre-commit validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-ghost-fix-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/recovery-empty-workspace
+            apps/web/dist
+          retention-days: 21
+          if-no-files-found: error

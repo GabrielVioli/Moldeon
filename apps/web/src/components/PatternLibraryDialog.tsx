@@ -67,6 +67,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
           workspaceTransforms: [],
           workspaceStates: [],
           assemblyPlacements: [],
+          parametric: undefined,
         });
         return;
       }
