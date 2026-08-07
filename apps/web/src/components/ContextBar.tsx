@@ -6,6 +6,9 @@ import {
 } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
+import { CutRegionPreview } from "./CutRegionPreview";
+import { ModelingOperationsControls } from "./ModelingOperationsControls";
+import "../modelingOperations.css";
 
 const PURPOSES: Array<{ value: InternalPathPurpose; label: string }> = [
   { value: "reference", label: "Referência" },
@@ -36,7 +39,6 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const cancel = useEditorStore((state) => state.cancelIntent);
   const deleteSelected = useEditorStore((state) => state.deleteSelectedPieces);
   const rotateSelected = useEditorStore((state) => state.rotateSelectedPieces);
-  const duplicateSelected = useEditorStore((state) => state.duplicateSelectedPieces);
 
   const draftPathId = useInternalPathEditorStore((state) => state.draftPathId);
   const selectedPathId = useInternalPathEditorStore((state) => state.selectedPathId);
@@ -61,6 +63,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const draftPath = draftPathId
     ? internalPaths.find((line) => line.id === draftPathId)
     : undefined;
+  const selectedPathPiece = selectedPath
+    ? garment.pieces.find((piece) => piece.id === selectedPath.pieceId)
+    : undefined;
   const selectedPathSegment = selectedPath?.segments.find((segment) => segment.id === selectedPathSegmentId)
     ?? selectedPath?.segments[0];
   const lengthCm = measure ? Math.hypot(measure.end.xMm - measure.start.xMm, measure.end.yMm - measure.start.yMm) / 10 : 0;
@@ -69,7 +74,15 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     ? garment.pieces.flatMap((piece) => (piece.segments ?? []).map((segment) => ({ piece, segment }))).find(({ segment }) => segment.id === selectedEdgeId)
     : undefined;
   const finish = () => { cancel(); selectPath(null); onDone(); };
-  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || selected.length > 1;
+  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || selected.length > 0;
+  const showModelingControls = tool === "select"
+    && !draftPath
+    && !selectedPath
+    && !selectedDart
+    && !selectedSegment
+    && !seam
+    && !seamFirstEdge
+    && !measure;
 
   const confirmCurrentSeam = () => {
     if (!seam) return;
@@ -81,7 +94,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     const hint = tool === "seam"
       ? "Clique na primeira borda e depois na segunda."
       : tool === "cut"
-        ? "Clique para criar nós do caminho. Enter confirma, Backspace remove o último e Escape cancela."
+        ? "Comece na borda, crie os nós internos e termine na borda. Enter confirma, Backspace volta e Escape cancela."
         : tool === "dart"
           ? "Comece na borda, adicione o ápice e pressione Enter."
           : tool === "measure"
@@ -121,6 +134,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         {selectedPathSegment ? <button onClick={() => setPathSegmentKind(selectedPathSegment.kind === "cubic" ? "line" : "cubic")}>Converter segmento para {selectedPathSegment.kind === "cubic" ? "reta" : "curva"}</button> : null}
         <button onClick={togglePathVisibility}>{selectedPath.visible ? "Ocultar" : "Mostrar"}</button>
         <button onClick={togglePathLocked}>{selectedPath.locked ? "Desbloquear" : "Bloquear"}</button>
+        {selectedPathPiece && (selectedPath.purpose === "cut" || selectedPath.purpose === "cut-and-sew") ? (
+          <CutRegionPreview piece={selectedPathPiece} path={selectedPath} analysis={pathAnalysis} />
+        ) : null}
         {pathAnalysis?.diagnostics.map((diagnostic) => (
           <span key={`${diagnostic.code}:${diagnostic.message}`} className={diagnostic.severity === "error" ? "context-error" : "context-diagnostic"} role={diagnostic.severity === "error" ? "alert" : "status"}>
             {diagnostic.message}
@@ -146,7 +162,12 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         <button onClick={splitSegment}>Dividir segmento</button>
       </> : null}
       {measure ? <span><strong>Medida:</strong> {lengthCm.toFixed(1)} cm</span> : null}
-      {selected.length > 1 ? <><span><strong>{selected.length} peças selecionadas</strong></span><button onClick={() => rotateSelected(90)}>Girar 90°</button><button onClick={() => duplicateSelected(false)}>Duplicar</button><button onClick={() => duplicateSelected(true)}>Espelhar</button><button onClick={deleteSelected}>Excluir desbloqueadas</button></> : null}
+
+      {showModelingControls ? <ModelingOperationsControls /> : null}
+      {selected.length > 1 && tool === "select" ? <>
+        <button onClick={() => rotateSelected(90)}>Girar seleção 90°</button>
+        <button onClick={deleteSelected}>Excluir desbloqueadas</button>
+      </> : null}
       {!draftPath ? <button onClick={finish}>Fechar</button> : null}
     </div>
   );

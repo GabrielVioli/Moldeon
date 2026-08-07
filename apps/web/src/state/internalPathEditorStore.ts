@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { currentEngine } from "../core/engineRuntime";
 import {
-  analyzeInternalPath,
   appendInternalPathNode,
-  applyInternalPathOperation,
   createInternalPath,
   moveInternalPathHandle,
   moveInternalPathNode,
@@ -13,6 +11,16 @@ import {
   setInternalPathSegmentKind,
   type InternalPathAnalysis,
 } from "../domain/internalPaths";
+import {
+  analyzeModelingInternalPath,
+  appendAnchoredInternalPathPoint,
+  applyModelingInternalPathOperation,
+  finalizeBoundaryAnchors,
+  moveAnchoredDraftCursor,
+  moveAnchoredInternalPathNode,
+  snapInternalPathPointToContour,
+  startAnchoredInternalPath,
+} from "../domain/modelingCut";
 import {
   isInternalPath,
   type GarmentDraft,
@@ -65,7 +73,16 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     if (!piece) return;
     if (get().draftPathId) get().cancelDraft();
     editor.beginEdit(purpose === "dart" ? "Desenhar pence" : "Desenhar caminho interno", "geometry");
-    const path = createInternalPath(pieceId, purpose, [point, point]);
+    const initialPoint = purpose === "dart"
+      ? snapInternalPathPointToContour(piece, point, 18)?.point ?? point
+      : point;
+    let path = createInternalPath(pieceId, purpose, [initialPoint, initialPoint]);
+    path = startAnchoredInternalPath(path, piece);
+    const first = path.nodes[0];
+    const cursor = path.nodes.at(-1);
+    if (first && cursor && first.id !== cursor.id) {
+      path = moveInternalPathNode(path, cursor.id, first);
+    }
     path.metadata = { ...path.metadata, draft: true };
     updateEditorGarment(addOrReplacePath(editor.garment, pieceId, path), pieceId);
     set({
@@ -80,19 +97,23 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
   appendDraftPoint(point) {
     const path = activePath(get().draftPathId);
     if (!path || path.locked) return;
-    const cursor = path.nodes.at(-1);
-    if (!cursor) return;
-    let next = moveInternalPathNode(path, cursor.id, point);
-    next = appendInternalPathNode(next, point);
+    const piece = activePiece(path.pieceId);
+    if (!piece) return;
+    const next = appendAnchoredInternalPathPoint(
+      path,
+      piece,
+      point,
+      appendInternalPathNode,
+    );
     replacePathWithoutHistory(next);
     set({ selectedSegmentId: next.segments.at(-2)?.id ?? next.segments.at(-1)?.id ?? null });
   },
 
   updateDraftCursor(point) {
     const path = activePath(get().draftPathId);
-    const cursor = path?.nodes.at(-1);
-    if (!path || !cursor || path.locked) return;
-    replacePathWithoutHistory(moveInternalPathNode(path, cursor.id, point));
+    const piece = path ? activePiece(path.pieceId) : null;
+    if (!path || !piece || path.locked) return;
+    replacePathWithoutHistory(moveAnchoredDraftCursor(path, piece, point));
   },
 
   removeLastDraftPoint() {
@@ -110,8 +131,11 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     const state = get();
     const path = activePath(state.draftPathId);
     if (!path) return false;
+    const piece = activePiece(path.pieceId);
+    if (!piece) return false;
     let next = removeLastInternalPathNode(path);
     if (next.nodes.length < 2 || next.segments.length < 1) return false;
+    next = finalizeBoundaryAnchors(next, piece);
     next = { ...next, metadata: { ...next.metadata, draft: false } };
     replacePathWithoutHistory(next);
     useEditorStore.getState().commitEdit();
@@ -157,8 +181,9 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
   moveSelectedNode(point) {
     const state = get();
     const path = activePath(state.selectedPathId);
-    if (!path || !state.selectedNodeId || path.locked) return;
-    const next = moveInternalPathNode(path, state.selectedNodeId, point);
+    const piece = path ? activePiece(path.pieceId) : null;
+    if (!path || !piece || !state.selectedNodeId || path.locked) return;
+    const next = moveAnchoredInternalPathNode(path, piece, state.selectedNodeId, point);
     replacePathWithoutHistory(next);
     set({ analysis: analyzePath(next) });
   },
@@ -185,7 +210,10 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
   setPurpose(purpose) {
     const path = activePath(get().selectedPathId);
     if (!path) return;
-    commitPathMutation(setInternalPathPurpose(path, purpose), "Converter finalidade do caminho");
+    const piece = activePiece(path.pieceId);
+    let next = setInternalPathPurpose(path, purpose);
+    if (piece) next = finalizeBoundaryAnchors(next, piece);
+    commitPathMutation(next, "Converter finalidade do caminho");
     get().refreshAnalysis();
   },
 
@@ -231,7 +259,7 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     const path = activePath(get().selectedPathId);
     if (!path) return false;
     const editor = useEditorStore.getState();
-    const result = applyInternalPathOperation(editor.garment, path.pieceId, path.id, { keepJoined });
+    const result = applyModelingInternalPathOperation(editor.garment, path.pieceId, path.id, { keepJoined });
     if (!result.ok) {
       set({ analysis: analyzePath(path) });
       return false;
@@ -268,10 +296,14 @@ function activePath(pathId: string | null): InternalPath | null {
   return null;
 }
 
+function activePiece(pieceId: string): PatternPiece | null {
+  return useEditorStore.getState().garment.pieces.find((piece) => piece.id === pieceId) ?? null;
+}
+
 function analyzePath(path: InternalPath): InternalPathAnalysis | null {
   const editor = useEditorStore.getState();
   const piece = editor.garment.pieces.find((candidate) => candidate.id === path.pieceId);
-  return piece ? analyzeInternalPath(piece, path, editor.garment.seams ?? []) : null;
+  return piece ? analyzeModelingInternalPath(piece, path, editor.garment.seams ?? []) : null;
 }
 
 function replacePathWithoutHistory(path: InternalPath): void {
