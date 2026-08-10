@@ -5,6 +5,7 @@
 - **Branch:** `recovery/9.5-05-modeling-operations`
 - **Base exata aprovada:** `f8ffb889603e87de8b00b9bcbb782f86d2e6de27`
 - **Gate anterior:** 9.5-04 aprovado manualmente.
+- **Implementação funcional validada automaticamente:** `5b505916be951dcbc887e84f5ddb5c6e384b7474`.
 - **Situação deste gate:** implementação concluída para validação; **aguardando aprovação manual**.
 - `main` permanece congelada. Nenhum merge deste gate foi realizado.
 - 9.5-06, moldes-base, manga, avatar, 3D, física e Prompt 10 permanecem fora do escopo.
@@ -20,7 +21,7 @@ O Documento V3 continua sendo o formato persistente canônico. Em runtime, `garm
 - duplicação de uma ou várias peças;
 - deslocamento previsível de `+40 mm` em X e Y, preservando a disposição relativa do grupo;
 - metadados, tecido, quantidade de corte, guias, anotações, caminhos internos e pences são clonados com IDs novos;
-- espelhamento horizontal/vertical é feito no espaço local da peça;
+- espelhamento em torno do eixo vertical ou horizontal da peça, com rótulos explícitos na interface;
 - a orientação do contorno é corrigida após o espelho;
 - handles Bézier de entrada/saída são remapeados;
 - referências de recorte `segmentId + t` são remapeadas; quando a orientação da borda é invertida, `t` é convertido para `1 - t`.
@@ -138,6 +139,28 @@ O conjunto de testes do gate cobre:
 13. prega com duas dobras e consumo de tecido.
 
 Há também um roteiro de navegador que percorre o V real pela UI, navega com zoom/pan antes da aplicação, aplica/undo/redo, fecha uma pence pela UI e cria uma prega pela UI.
+
+## Evidência automatizada final
+
+No commit funcional `5b505916be951dcbc887e84f5ddb5c6e384b7474`:
+
+- `npm run typecheck`: aprovado;
+- `npm test`: **57 arquivos / 330 testes aprovados**;
+- `npm run build`: aprovado;
+- regressão real em Chromium: aprovada;
+- V em peça deslocada e rotacionada: aprovado;
+- snapping das duas extremidades com `segmentId + t`: aprovado;
+- preview das duas regiões: aprovado;
+- zoom/pan preservando o caminho: aprovado;
+- aplicar + undo/redo do V: aprovado;
+- pence estrutural + undo/redo: aprovado;
+- prega simples + undo/redo: aprovado.
+
+Preview para validação manual:
+
+`https://project-bbln2-mj7lcq8j0-gabrielviolis-projects.vercel.app`
+
+O preview foi publicado a partir do artefato de build produzido pela validação do commit funcional acima.
 
 ## Critérios para validação manual
 
