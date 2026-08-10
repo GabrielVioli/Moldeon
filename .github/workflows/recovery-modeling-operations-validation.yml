@@ -24,7 +24,7 @@ on:
       - "apps/web/src/state/modelingOperationsStore.test.ts"
       - "scripts/recovery-modeling-operations-live-regression.mjs"
       - "scripts/recovery-modeling-operations-mobile-regression.mjs"
-      - "scripts/recovery-curve-canvas-regression-v2.mjs"
+      - "scripts/recovery-curve-canvas-regression-final.mjs"
       - ".github/workflows/recovery-modeling-operations-validation.yml"
   workflow_dispatch:
 
@@ -85,7 +85,7 @@ jobs:
           DESKTOP_STATUS=$?
           node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
           MOBILE_STATUS=$?
-          node scripts/recovery-curve-canvas-regression-v2.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
+          node scripts/recovery-curve-canvas-regression-final.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
           CURVE_STATUS=$?
           set -e
 
