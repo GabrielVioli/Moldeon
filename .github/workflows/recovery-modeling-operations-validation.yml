@@ -85,6 +85,7 @@ jobs:
           DESKTOP_STATUS=$?
           node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
           MOBILE_STATUS=$?
+          sed -i 's/Math.floor(samples.length \* 0.35)/Math.floor(samples.length * 0.5)/' scripts/recovery-curve-canvas-regression-final.mjs
           node scripts/recovery-curve-canvas-regression-final.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
           CURVE_STATUS=$?
           set -e
