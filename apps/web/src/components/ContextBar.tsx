@@ -44,6 +44,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const selectedPathId = useInternalPathEditorStore((state) => state.selectedPathId);
   const selectedPathSegmentId = useInternalPathEditorStore((state) => state.selectedSegmentId);
   const pathAnalysis = useInternalPathEditorStore((state) => state.analysis);
+  const multiCutAnalysis = useInternalPathEditorStore((state) => state.multiCutAnalysis);
   const confirmPath = useInternalPathEditorStore((state) => state.confirmDraft);
   const cancelPath = useInternalPathEditorStore((state) => state.cancelDraft);
   const selectPath = useInternalPathEditorStore((state) => state.selectPath);
@@ -73,8 +74,10 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const selectedSegment = selectedEdgeId
     ? garment.pieces.flatMap((piece) => (piece.segments ?? []).map((segment) => ({ piece, segment }))).find(({ segment }) => segment.id === selectedEdgeId)
     : undefined;
+  const effectiveCutAnalysis = multiCutAnalysis ?? pathAnalysis;
+  const cutTargetCount = multiCutAnalysis?.targetPieceIds.length ?? 0;
   const finish = () => { cancel(); selectPath(null); onDone(); };
-  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || selected.length > 0;
+  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0);
   const showModelingControls = tool === "select"
     && !draftPath
     && !selectedPath
@@ -94,7 +97,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     const hint = tool === "seam"
       ? "Clique na primeira borda e depois na segunda."
       : tool === "cut"
-        ? "Comece na borda, crie os nós internos e termine na borda. Enter confirma, Backspace volta e Escape cancela."
+        ? selected.length > 1
+          ? "Trace uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções; Enter confirma, Backspace volta e Escape cancela."
+          : "Comece na borda, crie os nós internos e termine na borda. Enter confirma, Backspace volta e Escape cancela."
         : tool === "dart"
           ? "Comece na borda, adicione o ápice e pressione Enter."
           : tool === "measure"
@@ -134,17 +139,22 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         {selectedPathSegment ? <button onClick={() => setPathSegmentKind(selectedPathSegment.kind === "cubic" ? "line" : "cubic")}>Converter segmento para {selectedPathSegment.kind === "cubic" ? "reta" : "curva"}</button> : null}
         <button onClick={togglePathVisibility}>{selectedPath.visible ? "Ocultar" : "Mostrar"}</button>
         <button onClick={togglePathLocked}>{selectedPath.locked ? "Desbloquear" : "Bloquear"}</button>
-        {selectedPathPiece && (selectedPath.purpose === "cut" || selectedPath.purpose === "cut-and-sew") ? (
+        {selectedPathPiece && !multiCutAnalysis && (selectedPath.purpose === "cut" || selectedPath.purpose === "cut-and-sew") ? (
           <CutRegionPreview piece={selectedPathPiece} path={selectedPath} analysis={pathAnalysis} />
         ) : null}
-        {pathAnalysis?.diagnostics.map((diagnostic) => (
+        {multiCutAnalysis && cutTargetCount > 0 ? (
+          <span className="context-diagnostic" role="status">
+            <strong>{cutTargetCount === 1 ? "1 peça atravessada." : `${cutTargetCount} peças atravessadas.`}</strong> Um único confirmar aplicará o corte a todas elas.
+          </span>
+        ) : null}
+        {effectiveCutAnalysis?.diagnostics.map((diagnostic) => (
           <span key={`${diagnostic.code}:${diagnostic.message}`} className={diagnostic.severity === "error" ? "context-error" : "context-diagnostic"} role={diagnostic.severity === "error" ? "alert" : "status"}>
             {diagnostic.message}
           </span>
         ))}
-        {selectedPath.purpose === "cut" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(false)}>Aplicar corte</button> : null}
-        {selectedPath.purpose === "cut-and-sew" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(true)}>Cortar e manter costurado</button> : null}
-        {selectedPath.purpose === "dart" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(false)}>Fechar pence</button> : null}
+        {selectedPath.purpose === "cut" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>{multiCutAnalysis ? `Aplicar corte em ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"}` : "Aplicar corte"}</button> : null}
+        {selectedPath.purpose === "cut-and-sew" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(true)) finish(); }}>{multiCutAnalysis ? `Cortar ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"} e manter costuradas` : "Cortar e manter costurado"}</button> : null}
+        {selectedPath.purpose === "dart" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>Fechar pence</button> : null}
         <button onClick={deletePath}>Excluir caminho</button>
       </> : null}
 

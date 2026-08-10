@@ -92,9 +92,10 @@ async function currentInternalPath() {
       import("/src/domain/pattern.ts"),
     ]);
     const selectedPathId = useInternalPathEditorStore.getState().selectedPathId;
-    const path = useEditorStore.getState().garment.pieces
+    const paths = useEditorStore.getState().garment.pieces
       .flatMap((piece) => piece.internalLines ?? [])
-      .find((line) => line.id === selectedPathId && isInternalPath(line));
+      .filter(isInternalPath);
+    const path = paths.find((line) => line.id === selectedPathId) ?? paths.at(-1);
     return path ? structuredClone(path) : null;
   });
 }
@@ -169,8 +170,12 @@ try {
     throw new Error("O V não persistiu segmentId+t nas duas extremidades.");
   }
   const liveAnalysis = await page.evaluate(async () => {
-    const { useInternalPathEditorStore } = await import("/src/state/internalPathEditorStore.ts");
-    return structuredClone(useInternalPathEditorStore.getState().analysis);
+    const [{ useEditorStore }, { analyzeModelingInternalPath }, { isInternalPath }] = await Promise.all([
+      import("/src/state/editorStore.ts"), import("/src/domain/modelingCut.ts"), import("/src/domain/pattern.ts"),
+    ]);
+    const piece = useEditorStore.getState().garment.pieces[0];
+    const path = (piece.internalLines ?? []).filter(isInternalPath).at(-1);
+    return path ? structuredClone(analyzeModelingInternalPath(piece, path)) : null;
   });
   if (!liveAnalysis?.valid || liveAnalysis.intersections.length !== 2) {
     throw new Error(`V válido rejeitado: ${JSON.stringify(liveAnalysis)}`);
@@ -180,8 +185,12 @@ try {
   await navigateCamera(canvas);
   await assertPathUnchanged(vPath, "V transformado");
   const analysisAfterCamera = await page.evaluate(async () => {
-    const { useInternalPathEditorStore } = await import("/src/state/internalPathEditorStore.ts");
-    return useInternalPathEditorStore.getState().analysis;
+    const [{ useEditorStore }, { analyzeModelingInternalPath }, { isInternalPath }] = await Promise.all([
+      import("/src/state/editorStore.ts"), import("/src/domain/modelingCut.ts"), import("/src/domain/pattern.ts"),
+    ]);
+    const piece = useEditorStore.getState().garment.pieces[0];
+    const path = (piece.internalLines ?? []).filter(isInternalPath).at(-1);
+    return path ? analyzeModelingInternalPath(piece, path) : null;
   });
   if (!analysisAfterCamera?.valid) throw new Error("Zoom/pan invalidou o V ancorado.");
 
@@ -239,6 +248,7 @@ try {
 
   await resetPage();
   await installFixture("pleat");
+  await page.getByText("Criar prega", { exact: true }).click();
   const depth = page.getByLabel("Profundidade da prega");
   const direction = page.getByLabel("Direção da prega");
   await depth.fill("28");

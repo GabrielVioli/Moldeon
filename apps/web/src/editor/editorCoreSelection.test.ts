@@ -129,4 +129,20 @@ describe("editor core authoritative selection clear", () => {
     expect(useEditorStore.getState().activePieceId).toBe(piece.id);
     expect(useEditorStore.getState().pieceSelectionActive).toBe(true);
   });
+
+  it("can clear element details while preserving the piece selection for a modeling intent", () => {
+    useEditorStore.getState().selectPiece(piece.id);
+    useEditorStore.setState({ selectedPointId: "a", selectedEdgeId: "edge-a" });
+    useInternalPathEditorStore.setState({ selectedPathId: "path-a", selectedNodeId: "node-a" });
+
+    clearEditorSelection({ preservePieces: true });
+
+    const editor = useEditorStore.getState();
+    expect(editor.activePieceId).toBe(piece.id);
+    expect(editor.selectedPieceIds).toEqual([piece.id]);
+    expect(editor.pieceSelectionActive).toBe(true);
+    expect(editor.selectedPointId).toBeNull();
+    expect(editor.selectedEdgeId).toBeNull();
+    expect(useInternalPathEditorStore.getState().selectedPathId).toBeNull();
+  });
 });

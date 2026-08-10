@@ -4,7 +4,9 @@ import {
   CUT_END_T_KEY,
   CUT_START_EDGE_KEY,
   CUT_START_T_KEY,
+  analyzeMultiPieceCut,
   analyzeModelingInternalPath,
+  applyMultiPieceCutOperation,
   applyModelingInternalPathOperation,
   buildCutPreviewRegions,
   finalizeBoundaryAnchors,
@@ -74,6 +76,51 @@ function withPath(piece: PatternPiece, path: InternalPath): PatternPiece {
 }
 
 describe("9.5-05 anchored cut topology", () => {
+  it("applies one workspace stroke to every selected piece it crosses", () => {
+    const front = rectangle("front");
+    const back = rectangle("back");
+    const path = createInternalPath(front.id, "cut", [
+      { xMm: -20, yMm: 50 },
+      { xMm: 260, yMm: 50 },
+    ]);
+    const source = garment(withPath(front, path), [back]);
+    source.workspaceStates = [
+      { pieceId: front.id, transform: { pieceId: front.id, xMm: 0, yMm: 0, rotationDeg: 0 }, visible: true, locked: false },
+      { pieceId: back.id, transform: { pieceId: back.id, xMm: 140, yMm: 0, rotationDeg: 0 }, visible: true, locked: false },
+    ];
+
+    const analysis = analyzeMultiPieceCut(source, front.id, path, [front.id, back.id]);
+    expect(analysis.valid).toBe(true);
+    expect(analysis.targetPieceIds).toEqual([front.id, back.id]);
+
+    const result = applyMultiPieceCutOperation(source, front.id, path.id, [front.id, back.id]);
+    expect(result.ok).toBe(true);
+    expect(result.garment.pieces).toHaveLength(4);
+    expect(result.createdPieceIds).toHaveLength(4);
+    expect(result.selectedPieceIds).toEqual(result.createdPieceIds);
+    expect(result.garment.pieces.some((piece) => piece.id === front.id || piece.id === back.id)).toBe(false);
+  });
+
+  it("cuts only intersected pieces and keeps selected pieces outside the stroke selected", () => {
+    const crossed = rectangle("crossed");
+    const outside = rectangle("outside");
+    const path = createInternalPath(crossed.id, "cut", [
+      { xMm: -20, yMm: 50 },
+      { xMm: 120, yMm: 50 },
+    ]);
+    const source = garment(withPath(crossed, path), [outside]);
+    source.workspaceStates = [
+      { pieceId: crossed.id, transform: { pieceId: crossed.id, xMm: 0, yMm: 0, rotationDeg: 0 }, visible: true, locked: false },
+      { pieceId: outside.id, transform: { pieceId: outside.id, xMm: 0, yMm: 180, rotationDeg: 0 }, visible: true, locked: false },
+    ];
+
+    const result = applyMultiPieceCutOperation(source, crossed.id, path.id, [crossed.id, outside.id]);
+    expect(result.ok).toBe(true);
+    expect(result.garment.pieces).toHaveLength(3);
+    expect(result.createdPieceIds).toHaveLength(2);
+    expect(result.selectedPieceIds).toEqual([...result.createdPieceIds, outside.id]);
+  });
+
   it("accepts the blocking three-node V that starts and ends on the same contour", () => {
     const piece = rectangle();
     const path = anchoredCut(piece, [

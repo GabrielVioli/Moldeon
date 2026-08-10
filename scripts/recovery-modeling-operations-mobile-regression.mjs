@@ -118,9 +118,10 @@ async function selectedPath() {
       import("/src/domain/pattern.ts"),
     ]);
     const pathId = useInternalPathEditorStore.getState().selectedPathId;
-    const path = useEditorStore.getState().garment.pieces
+    const paths = useEditorStore.getState().garment.pieces
       .flatMap((piece) => piece.internalLines ?? [])
-      .find((line) => line.id === pathId && isInternalPath(line));
+      .filter(isInternalPath);
+    const path = paths.find((line) => line.id === pathId) ?? paths.at(-1);
     return path ? structuredClone(path) : null;
   });
 }

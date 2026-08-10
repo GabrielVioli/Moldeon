@@ -68,7 +68,7 @@ import {
   internalCurveHandleTargets,
   patternCurveHandleTargets,
 } from "./curveHandleInteraction";
-import { findEditablePatternPoint, pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
+import { findEditablePatternPoint, patternSegmentLength, pointInScreenRect, resizeCurvedSegment, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
 
 interface PatternCanvasProps {
   snapshot: PatternSnapshot;
@@ -1486,10 +1486,6 @@ function PatternCanvasComponent({
     const dimension = dimensionAt(event.clientX, event.clientY);
     if (!dimension) return;
     selectPiece(dimension.piece.id);
-    if (dimension.start.handleOut || dimension.end.handleIn) {
-      setDimensionError("Arraste os handles no Canvas ou use o painel numérico para valores exatos.");
-      return;
-    }
     setDimensionError(null);
     dimensionFinishingRef.current = false;
     dimensionCancelRef.current = false;
@@ -1499,7 +1495,7 @@ function PatternCanvasComponent({
       endPointId: dimension.end.id,
       left: event.clientX,
       top: event.clientY,
-      value: distanceMm(dimension.start, dimension.end).toFixed(1),
+      value: patternSegmentLength(dimension.start, dimension.end).toFixed(1),
     });
   }
 
@@ -1520,13 +1516,23 @@ function PatternCanvasComponent({
     const start = points.find((point) => point.id === dimensionEditor.startPointId);
     const end = points.find((point) => point.id === dimensionEditor.endPointId);
     if (!start || !end) return;
-    const next = resizeStraightSegment(start, end, desiredLength);
-    if (!next) return;
+    const curved = Boolean(start.handleOut || end.handleIn);
+    const nextCurve = curved ? resizeCurvedSegment(start, end, desiredLength) : null;
+    const nextLine = curved ? null : resizeStraightSegment(start, end, desiredLength);
+    if (!nextCurve && !nextLine) return;
     dimensionFinishingRef.current = true;
-    useEditorStore.getState().selectPiece(dimensionEditor.pieceId);
-    useEditorStore.getState().beginEdit("Editar comprimento", "geometry");
-    useEditorStore.getState().movePoint(end.id, next.xMm, next.yMm);
-    useEditorStore.getState().commitEdit();
+    const editor = useEditorStore.getState();
+    editor.selectPiece(dimensionEditor.pieceId);
+    editor.beginEdit(curved ? "Editar comprimento da curva" : "Editar comprimento", "geometry");
+    const nextEnd = nextCurve?.end ?? nextLine!;
+    editor.movePoint(end.id, nextEnd.xMm, nextEnd.yMm);
+    if (nextCurve?.startHandleOut) {
+      editor.moveHandle(start.id, "out", nextCurve.startHandleOut.xMm, nextCurve.startHandleOut.yMm);
+    }
+    if (nextCurve?.endHandleIn) {
+      editor.moveHandle(end.id, "in", nextCurve.endHandleIn.xMm, nextCurve.endHandleIn.yMm);
+    }
+    editor.commitEdit();
     setDimensionError(null);
     setDimensionEditor(null);
   }

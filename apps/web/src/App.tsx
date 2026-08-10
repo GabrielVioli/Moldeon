@@ -180,7 +180,7 @@ export function App() {
   }, [startDraft]);
   const handleSelectTool = useCallback((tool: EditorTool) => {
     cancelIntent();
-    if (tool !== "select") clearEditorSelection();
+    if (tool !== "select") clearEditorSelection({ preservePieces: tool === "cut" });
     if (tool === "draft") handleCreateBlankPiece();
     else setActiveTool(tool);
   }, [cancelIntent, handleCreateBlankPiece]);

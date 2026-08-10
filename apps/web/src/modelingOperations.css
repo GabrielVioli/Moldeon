@@ -8,6 +8,35 @@
   z-index: 11;
 }
 
+.modeling-operation-group {
+  position: relative;
+}
+
+.modeling-operation-group > summary {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  list-style-position: inside;
+  white-space: nowrap;
+}
+
+.modeling-operation-group[open] > summary {
+  border-color: var(--accent);
+}
+
+.modeling-operation-group-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
 @media (max-width: 900px) {
   .context-bar {
     bottom: 60px;

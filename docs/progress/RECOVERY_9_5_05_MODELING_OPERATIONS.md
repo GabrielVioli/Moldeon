@@ -10,6 +10,48 @@
 - `main` permanece congelada. Nenhum merge deste gate foi realizado.
 - 9.5-06, moldes-base, manga, avatar, 3D, física e Prompt 10 permanecem fora do escopo.
 
+## Continuação de UX — 10/08/2026
+
+Esta continuação mantém o gate em **validação manual** e prioriza irritações observadas no uso real, sem iniciar 9.5-06:
+
+- ao ativar **Recortar**, a seleção de peças é preservada;
+- um único traço em coordenadas da bancada pode atravessar várias peças selecionadas; as interseções são calculadas separadamente em cada contorno e o botão informa quantas peças serão cortadas;
+- o recorte múltiplo é aplicado de forma atômica: se uma peça atingida estiver bloqueada ou inválida, nenhuma das demais é parcialmente alterada;
+- peças selecionadas que não forem atravessadas continuam selecionadas e as regiões geradas permanecem editáveis;
+- recortar várias peças entra no histórico como uma única intenção de Undo/Redo;
+- linha reta e curva Bézier aceitam comprimento numérico pelo mesmo gesto de duplo clique; na curva, endpoint e handles são escalados juntos para preservar forma e tangentes;
+- após aplicar corte ou fechar pence, a ferramenta volta para **Selecionar**, evitando que o próximo clique crie geometria por engano;
+- ações menos frequentes de espelho, alinhamento, distribuição e prega ficam recolhidas até serem necessárias; **Duplicar** e a união de duas peças continuam imediatamente visíveis.
+
+### Sessão real obrigatória executada
+
+O roteiro `scripts/recovery-modeling-session-regression.mjs` percorre em uma mesma sessão de produto:
+
+1. bancada vazia e criação de uma saia reta;
+2. alteração de medida corporal e revisão de costura;
+3. comprimento numérico de curva e reta, com Undo/Redo;
+4. arraste real de ponto;
+5. duplicar, espelhar e organizar;
+6. criar prega e fechar pence;
+7. selecionar Frente e Costas e recortar ambas com um único traço;
+8. Undo/Redo do recorte e nova edição de uma região gerada;
+9. repetição do recorte múltiplo por toque em viewport `390 × 844`.
+
+Resultado: aprovado, sem erros de página ou console. Frente/Costas passam de 2 para 4 peças, Undo retorna a 2, Redo volta a 4 e a geometria resultante continua editável.
+
+### Evidência automatizada desta continuação
+
+- testes focados: **4 arquivos / 33 testes aprovados**;
+- suíte completa: **59 arquivos / 349 testes aprovados**;
+- `npm run typecheck`: aprovado;
+- `npm run build`: aprovado;
+- sessão real desktop + touch: aprovada;
+- regressão de V, pence, prega, zoom/pan e Undo/Redo: aprovada;
+- regressão final de curvas em desktop e touch: aprovada;
+- regressão móvel sem overflow horizontal e com Canvas único: aprovada.
+
+Os artefatos antigos não são usados como prova principal; a decisão continua baseada no comportamento reproduzido na interface real. Este documento não aprova o gate automaticamente e não autoriza merge em `main`.
+
 ## Fonte de verdade
 
 O Documento V3 continua sendo o formato persistente canônico. Em runtime, `garment.pieces` define as peças existentes. As operações deste gate produzem um novo estado de `GarmentDraft` e entram no histórico como uma única transação; snapshot legado não é usado como fonte autoritativa para criar geometria de modelagem.

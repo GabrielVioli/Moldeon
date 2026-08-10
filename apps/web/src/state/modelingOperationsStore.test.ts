@@ -190,6 +190,33 @@ describe("recovery 9.5-05 modeling transactions", () => {
     expect(useEditorStore.getState().garment.pieces.map((candidate) => candidate.id)).toEqual(cutPieceIds);
   });
 
+  it("applies a cross-piece cut as one undo/redo transaction", () => {
+    const front = rectangle("multi-front");
+    const back = rectangle("multi-back");
+    resetWith([front, back], [{ xMm: 0, yMm: 0 }, { xMm: 140, yMm: 0 }]);
+    useEditorStore.getState().setPieceSelection([front.id, back.id]);
+
+    const paths = useInternalPathEditorStore.getState();
+    paths.startPath(front.id, "cut", { xMm: -20, yMm: 40 });
+    paths.appendDraftPoint({ xMm: 120, yMm: 40 });
+    paths.appendDraftPoint({ xMm: 260, yMm: 40 });
+    expect(paths.confirmDraft()).toBe(true);
+    expect(useInternalPathEditorStore.getState().multiCutAnalysis).toMatchObject({
+      valid: true,
+      targetPieceIds: [front.id, back.id],
+    });
+
+    expect(useInternalPathEditorStore.getState().applySelectedPath(false)).toBe(true);
+    const cutPieceIds = useEditorStore.getState().garment.pieces.map((piece) => piece.id);
+    expect(cutPieceIds).toHaveLength(4);
+    expect(useEditorStore.getState().selectedPieceIds).toHaveLength(4);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.pieces.map((piece) => piece.id)).toEqual([front.id, back.id]);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.pieces.map((piece) => piece.id)).toEqual(cutPieceIds);
+  });
+
   it("closes a dart as paired structural legs instead of a decorative straight line", () => {
     const source = rectangle("dart-piece");
     const dartPath = createInternalPath(source.id, "dart", [
