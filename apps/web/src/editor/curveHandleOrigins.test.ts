@@ -17,6 +17,7 @@ function garment(pieces: PatternPiece[], positions?: Array<{ xMm: number; yMm: n
     id: "curve-origin-garment",
     templateId: "custom",
     name: "Curve origin regression",
+    description: "Curve handle origin regression",
     bodyType: "feminine",
     measurements: {
       heightMm: 1650,
@@ -150,7 +151,7 @@ describe("curve handles remain authoritative across 9.5-05 modeling origins", ()
     );
     const withCut: PatternPiece = { ...source, internalLines: [cut] };
     const result = applyModelingInternalPathOperation(garment([withCut]), withCut.id, cut.id);
-    expect(result.applied).toBe(true);
+    expect(result.ok).toBe(true);
     const curvedResult = result.garment.pieces.find((piece) => firstCurvedEdge(piece));
     expect(curvedResult).toBeTruthy();
     expectEditableCurve(curvedResult!);
