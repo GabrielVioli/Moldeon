@@ -26,7 +26,7 @@ on:
       - "scripts/recovery-modeling-operations-live-regression.mjs"
       - "scripts/recovery-modeling-operations-mobile-regression.mjs"
       - "scripts/recovery-curve-canvas-core-regression.mjs"
-      - "scripts/recovery-curve-touch-diagnostic.mjs"
+      - "scripts/recovery-curve-touch-diagnostic-v2.mjs"
       - ".github/workflows/recovery-modeling-operations-validation.yml"
   workflow_dispatch:
 
@@ -87,7 +87,7 @@ jobs:
           DESKTOP_STATUS=$?
           node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
           MOBILE_STATUS=$?
-          node scripts/recovery-curve-touch-diagnostic.mjs > "$RECOVERY_ARTIFACT_DIR/report-touch-diagnostic.log" 2>&1
+          node scripts/recovery-curve-touch-diagnostic-v2.mjs > "$RECOVERY_ARTIFACT_DIR/report-touch-diagnostic.log" 2>&1
           DIAG_STATUS=$?
           node scripts/recovery-curve-canvas-core-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
           CURVE_STATUS=$?
