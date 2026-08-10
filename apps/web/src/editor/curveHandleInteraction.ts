@@ -22,7 +22,7 @@ export interface InternalCurveHandleTarget {
 }
 
 export function curveHandleHitRadiusPx(pointerType?: string): number {
-  return pointerType === "touch" ? 22 : 13;
+  return pointerType === "touch" ? 28 : 13;
 }
 
 export function patternCurveHandleTargets(
