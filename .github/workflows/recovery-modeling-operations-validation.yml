@@ -20,6 +20,7 @@ on:
       - "apps/web/src/state/modelingOperationsStore.ts"
       - "apps/web/src/state/modelingOperationsStore.test.ts"
       - "scripts/recovery-modeling-operations-live-regression.mjs"
+      - "scripts/recovery-modeling-operations-mobile-regression.mjs"
       - ".github/workflows/recovery-modeling-operations-validation.yml"
   workflow_dispatch:
 
@@ -74,13 +75,24 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           sleep 3
+
           set +e
-          node scripts/recovery-modeling-operations-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report.log" 2>&1
-          STATUS=$?
+          node scripts/recovery-modeling-operations-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-desktop.log" 2>&1
+          DESKTOP_STATUS=$?
+          node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
+          MOBILE_STATUS=$?
           set -e
+
           cp /tmp/moldeon-recovery-9-5-05.log "$RECOVERY_ARTIFACT_DIR/server.log"
-          cat "$RECOVERY_ARTIFACT_DIR/report.log"
-          exit "$STATUS"
+          echo "--- desktop ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-desktop.log"
+          echo "--- mobile ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-mobile.log"
+
+          if [ "$DESKTOP_STATUS" -ne 0 ]; then
+            exit "$DESKTOP_STATUS"
+          fi
+          exit "$MOBILE_STATUS"
 
       - name: Upload browser evidence
         if: always()
