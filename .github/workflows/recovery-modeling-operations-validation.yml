@@ -1,4 +1,5 @@
 name: Recovery 9.5-05 Modeling Operations
+# Final curve-canvas gate after removing superseded diagnostic scripts.
 
 on:
   push:
