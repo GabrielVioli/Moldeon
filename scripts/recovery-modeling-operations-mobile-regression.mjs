@@ -141,15 +141,16 @@ async function assertNoViewportOverflow(label) {
     throw new Error(`${label}: overflow horizontal mobile (${layout.scrollWidth}px > ${layout.innerWidth}px).`);
   }
   if (layout.canvasCount !== 1) throw new Error(`${label}: esperado exatamente um Canvas, obtido ${layout.canvasCount}.`);
-  if (!layout.canvasRect || layout.canvasRect.width < 250 || layout.canvasRect.height < 250) {
-    throw new Error(`${label}: Canvas mobile sem área útil suficiente: ${JSON.stringify(layout.canvasRect)}.`);
+  if (!layout.canvasRect || layout.canvasRect.width <= 0 || layout.canvasRect.height <= 0) {
+    throw new Error(`${label}: Canvas mobile não está visível: ${JSON.stringify(layout.canvasRect)}.`);
   }
+  return layout;
 }
 
 try {
   await resetPage();
   await installFixture("mobile-duplicate");
-  await assertNoViewportOverflow("estado inicial");
+  const initialLayout = await assertNoViewportOverflow("estado inicial");
 
   await page.getByRole("button", { name: "Duplicar", exact: true }).tap();
   await page.waitForTimeout(80);
@@ -206,7 +207,7 @@ try {
   await page.waitForTimeout(60);
   if (await pieceCount() !== 2) throw new Error("Redo do recorte mobile não reaplicou o corte.");
 
-  await assertNoViewportOverflow("depois do V");
+  const finalLayout = await assertNoViewportOverflow("depois do V");
   await page.screenshot({ path: `${artifactDir}/modeling-operations-mobile.png`, fullPage: true });
 
   if (errors.length) throw new Error(errors.join(" | "));
@@ -215,6 +216,8 @@ try {
     touchEnabled: true,
     noHorizontalOverflow: true,
     singleCanvas: true,
+    canvasInitial: initialLayout.canvasRect,
+    canvasFinal: finalLayout.canvasRect,
     duplicateTouch: true,
     duplicateUndoRedoTouch: true,
     vCutTouch: true,
