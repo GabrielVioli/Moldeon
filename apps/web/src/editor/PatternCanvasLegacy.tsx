@@ -60,6 +60,14 @@ import {
   worldToScreen,
 } from "./coordinates";
 import { clearEditorSelection } from "./editorCoreSelection";
+import {
+  curveHandleGrabOffset,
+  curveHandleHitRadiusPx,
+  findNearestInternalCurveHandle,
+  findNearestPatternCurveHandle,
+  internalCurveHandleTargets,
+  patternCurveHandleTargets,
+} from "./curveHandleInteraction";
 import { findEditablePatternPoint, pointInScreenRect, resizeStraightSegment, rotationFromPointer, parsePositiveLength } from "./workspaceInteractions";
 
 interface PatternCanvasProps {
@@ -167,10 +175,19 @@ function PatternCanvasComponent({
         pointerId: number;
         pointId: string;
         handle: "in" | "out";
+        grabOffsetXMm: number;
+        grabOffsetYMm: number;
       }
     | PieceDragState
     | { type: "internal-node"; pointerId: number; nodeId: string }
-    | { type: "internal-handle"; pointerId: number; nodeId: string; handle: "in" | "out" }
+    | {
+        type: "internal-handle";
+        pointerId: number;
+        nodeId: string;
+        handle: "in" | "out";
+        grabOffsetXMm: number;
+        grabOffsetYMm: number;
+      }
     | { type: "segment"; pointerId: number; edgeId: string; lastWorldX: number; lastWorldY: number }
     | {
         type: "rotate";
@@ -242,6 +259,7 @@ function PatternCanvasComponent({
   const measureDraft = useEditorStore((s) => s.measureDraft);
   const selectedInternalPathId = useInternalPathEditorStore((s) => s.selectedPathId);
   const selectedInternalPathNodeId = useInternalPathEditorStore((s) => s.selectedNodeId);
+  const selectedInternalPathSegmentId = useInternalPathEditorStore((s) => s.selectedSegmentId);
   const draftInternalPathId = useInternalPathEditorStore((s) => s.draftPathId);
   const internalPathAnalysis = useInternalPathEditorStore((s) => s.analysis);
   const garmentRef = useRef(garment);
@@ -300,7 +318,7 @@ function PatternCanvasComponent({
       editor.dartDraft,
       editor.measureDraft,
     );
-  }, [hoveredDimension, rotationFeedback, internalPathAnalysis, selectedInternalPathId, selectedInternalPathNodeId, draftInternalPathId]);
+  }, [hoveredDimension, rotationFeedback, internalPathAnalysis, selectedInternalPathId, selectedInternalPathNodeId, selectedInternalPathSegmentId, draftInternalPathId]);
   drawLatestRef.current = drawLatest;
 
   useEffect(() => {
@@ -556,31 +574,20 @@ function PatternCanvasComponent({
   function findHandle(
     clientX: number,
     clientY: number,
+    pointerType?: string,
   ): { pointId: string; handle: "in" | "out" } | null {
     const editor = useEditorStore.getState();
     const piece = editor.garment.pieces.find((candidate) => candidate.id === editor.activePieceId);
     if (!piece || getPieceWorkspaceState(editor.garment, piece.id).locked) return null;
-    const selected = piece.points.find(
-      (point) => point.id === editor.selectedPointId,
+    const local = screenToActivePieceLocal(clientX, clientY);
+    const hit = findNearestPatternCurveHandle(
+      piece,
+      editor.selectedPointId,
+      editor.selectedEdgeId,
+      local,
+      curveHandleHitRadiusPx(pointerType) / cameraRef.current.zoom,
     );
-    if (!selected) return null;
-
-    const world = screenToActivePieceLocal(clientX, clientY);
-    const maxDistanceMm = (POINT_RADIUS_PX + 6) / cameraRef.current.zoom;
-    for (const handle of ["in", "out"] as const) {
-      const vector =
-        handle === "in" ? selected.handleIn : selected.handleOut;
-      if (
-        vector &&
-        Math.hypot(
-          selected.xMm + vector.xMm - world.xMm,
-          selected.yMm + vector.yMm - world.yMm,
-        ) <= maxDistanceMm
-      ) {
-        return { pointId: selected.id, handle };
-      }
-    }
-    return null;
+    return hit ? { pointId: hit.pointId, handle: hit.handle } : null;
   }
 
   function internalPathsForActivePiece(): InternalPath[] {
@@ -601,20 +608,23 @@ function PatternCanvasComponent({
     return null;
   }
 
-  function findInternalPathHandleAt(clientX: number, clientY: number): { path: InternalPath; node: InternalPathNode; handle: "in" | "out" } | null {
+  function findInternalPathHandleAt(
+    clientX: number,
+    clientY: number,
+    pointerType?: string,
+  ): { path: InternalPath; node: InternalPathNode; handle: "in" | "out" } | null {
     const state = useInternalPathEditorStore.getState();
     const path = internalPathsForActivePiece().find((candidate) => candidate.id === state.selectedPathId);
-    const node = path?.nodes.find((candidate) => candidate.id === state.selectedNodeId);
-    if (!path || !node || path.locked) return null;
+    if (!path || path.locked) return null;
     const local = screenToActivePieceLocal(clientX, clientY);
-    const threshold = (POINT_RADIUS_PX + 6) / cameraRef.current.zoom;
-    for (const handle of ["in", "out"] as const) {
-      const vector = handle === "in" ? node.handleIn : node.handleOut;
-      if (vector && Math.hypot(node.xMm + vector.xMm - local.xMm, node.yMm + vector.yMm - local.yMm) <= threshold) {
-        return { path, node, handle };
-      }
-    }
-    return null;
+    const hit = findNearestInternalCurveHandle(
+      path,
+      state.selectedNodeId,
+      state.selectedSegmentId,
+      local,
+      curveHandleHitRadiusPx(pointerType) / cameraRef.current.zoom,
+    );
+    return hit ? { path, node: hit.node, handle: hit.handle } : null;
   }
 
   function findInternalPathSegmentAt(clientX: number, clientY: number): { path: InternalPath; segmentId: string } | null {
@@ -634,7 +644,7 @@ function PatternCanvasComponent({
   function handleInternalPathPointerDown(event: PointerEvent<HTMLCanvasElement>): boolean {
     if (event.button === 1 || spacePressedRef.current || toolRef.current === "hand") return false;
     if (toolRef.current === "select") {
-      if (findHandle(event.clientX, event.clientY)) return false;
+      if (findHandle(event.clientX, event.clientY, event.pointerType)) return false;
       if (findPoint(event.clientX, event.clientY)) return false;
       if (findEdgeRangeAt(event.clientX, event.clientY)) return false;
     }
@@ -646,12 +656,21 @@ function PatternCanvasComponent({
       ownGesture(event.pointerId, "internal-path");
       return true;
     }
-    const handleHit = findInternalPathHandleAt(event.clientX, event.clientY);
+    const handleHit = findInternalPathHandleAt(event.clientX, event.clientY, event.pointerType);
     if (handleHit) {
-      session.selectPath(handleHit.path.id);
+      session.selectPath(handleHit.path.id, session.selectedSegmentId);
       session.selectNode(handleHit.node.id);
       session.beginGeometryEdit("Ajustar curva interna");
-      dragRef.current = { type: "internal-handle", pointerId: event.pointerId, nodeId: handleHit.node.id, handle: handleHit.handle };
+      const pointerLocal = screenToActivePieceLocal(event.clientX, event.clientY);
+      const offset = curveHandleGrabOffset(handleHit.node, handleHit.handle, pointerLocal);
+      dragRef.current = {
+        type: "internal-handle",
+        pointerId: event.pointerId,
+        nodeId: handleHit.node.id,
+        handle: handleHit.handle,
+        grabOffsetXMm: offset.xMm,
+        grabOffsetYMm: offset.yMm,
+      };
       ownGesture(event.pointerId, "internal-path");
       return true;
     }
@@ -805,6 +824,26 @@ function PatternCanvasComponent({
     return best?.id ?? null;
   }
 
+  function startPatternHandleDrag(
+    event: PointerEvent<HTMLCanvasElement>,
+    controlHandle: { pointId: string; handle: "in" | "out" },
+  ) {
+    const piece = currentActivePiece();
+    const anchor = piece?.points.find((point) => point.id === controlHandle.pointId);
+    if (!anchor) return;
+    const pointerLocal = screenToActivePieceLocal(event.clientX, event.clientY);
+    const offset = curveHandleGrabOffset(anchor, controlHandle.handle, pointerLocal);
+    onEditStartRef.current("Ajustar curva");
+    ownGesture(event.pointerId, "handle");
+    dragRef.current = {
+      type: "handle",
+      pointerId: event.pointerId,
+      ...controlHandle,
+      grabOffsetXMm: offset.xMm,
+      grabOffsetYMm: offset.yMm,
+    };
+  }
+
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.stopPropagation();
     event.currentTarget.focus({ preventScroll: true });
@@ -905,15 +944,9 @@ function PatternCanvasComponent({
         return;
       }
 
-      const controlHandle = findHandle(event.clientX, event.clientY);
+      const controlHandle = findHandle(event.clientX, event.clientY, event.pointerType);
       if (controlHandle) {
-        onEditStartRef.current("Ajustar curva");
-        ownGesture(event.pointerId, "handle");
-        dragRef.current = {
-          type: "handle",
-          pointerId: event.pointerId,
-          ...controlHandle,
-        };
+        startPatternHandleDrag(event, controlHandle);
         return;
       }
 
@@ -1011,19 +1044,24 @@ function PatternCanvasComponent({
     }
 
     if (toolRef.current === "select") {
-      const seamHit = findNearestSeamHit(
-        currentGarment,
-        screenToWorld(event.clientX, event.clientY),
-        12 / cameraRef.current.zoom,
-      );
-      if (seamHit) {
-        useEditorStore.getState().selectSeam(seamHit.seam.id);
-        dragRef.current = null;
-        scheduleDraw();
-        return;
+      const protectedHandle = findHandle(event.clientX, event.clientY, event.pointerType)
+        || findInternalPathHandleAt(event.clientX, event.clientY, event.pointerType);
+      const protectedPoint = findPoint(event.clientX, event.clientY);
+      if (!protectedHandle && !protectedPoint) {
+        const seamHit = findNearestSeamHit(
+          currentGarment,
+          screenToWorld(event.clientX, event.clientY),
+          12 / cameraRef.current.zoom,
+        );
+        if (seamHit) {
+          useEditorStore.getState().selectSeam(seamHit.seam.id);
+          dragRef.current = null;
+          scheduleDraw();
+          return;
+        }
+        const dartId = findDartAt(event.clientX, event.clientY);
+        if (dartId) { useEditorStore.getState().selectDart(dartId); dragRef.current = null; return; }
       }
-      const dartId = findDartAt(event.clientX, event.clientY);
-      if (dartId) { useEditorStore.getState().selectDart(dartId); dragRef.current = null; return; }
     }
 
     if (handleInternalPathPointerDown(event)) return;
@@ -1054,15 +1092,9 @@ function PatternCanvasComponent({
       return;
     }
 
-    const controlHandle = findHandle(event.clientX, event.clientY);
+    const controlHandle = findHandle(event.clientX, event.clientY, event.pointerType);
     if (controlHandle) {
-      onEditStartRef.current("Ajustar curva");
-      ownGesture(event.pointerId, "handle");
-      dragRef.current = {
-        type: "handle",
-        pointerId: event.pointerId,
-        ...controlHandle,
-      };
+      startPatternHandleDrag(event, controlHandle);
       return;
     }
 
@@ -1227,7 +1259,11 @@ function PatternCanvasComponent({
     }
 
     if (drag.type === "internal-handle") {
-      const local = screenToActivePieceLocal(event.clientX, event.clientY);
+      const pointerLocal = screenToActivePieceLocal(event.clientX, event.clientY);
+      const local = {
+        xMm: pointerLocal.xMm + drag.grabOffsetXMm,
+        yMm: pointerLocal.yMm + drag.grabOffsetYMm,
+      };
       const state = useInternalPathEditorStore.getState();
       const path = internalPathsForActivePiece().find((candidate) => candidate.id === state.selectedPathId);
       const node = path?.nodes.find((candidate) => candidate.id === drag.nodeId);
@@ -1356,7 +1392,11 @@ function PatternCanvasComponent({
       return;
     }
 
-    const world = screenToActivePieceLocal(event.clientX, event.clientY);
+    const pointerLocal = screenToActivePieceLocal(event.clientX, event.clientY);
+    const world = {
+      xMm: pointerLocal.xMm + drag.grabOffsetXMm,
+      yMm: pointerLocal.yMm + drag.grabOffsetYMm,
+    };
     const piece = currentActivePiece();
     const anchor = piece?.points.find(
       (point) => point.id === drag.pointId,
@@ -1447,7 +1487,7 @@ function PatternCanvasComponent({
     if (!dimension) return;
     selectPiece(dimension.piece.id);
     if (dimension.start.handleOut || dimension.end.handleIn) {
-      setDimensionError("Para curvas, selecione o segmento e edite seus handles no painel numérico.");
+      setDimensionError("Arraste os handles no Canvas ou use o painel numérico para valores exatos.");
       return;
     }
     setDimensionError(null);
@@ -1962,25 +2002,31 @@ function draw(
       if (points.length < 2) continue;
       context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.xMm, point.yMm) : context.moveTo(point.xMm, point.yMm));
       context.setLineDash(line.purpose === "fold" ? [8 / camera.zoom, 5 / camera.zoom] : line.purpose === "reference" ? [3 / camera.zoom, 3 / camera.zoom] : []);
-      const selectedPath = richPath?.id === useInternalPathEditorStore.getState().selectedPathId;
+      const internalState = useInternalPathEditorStore.getState();
+      const selectedPath = richPath?.id === internalState.selectedPathId;
       context.strokeStyle = line.purpose === "dart" ? "#b06084" : line.purpose === "cut" || line.purpose === "cut-and-sew" ? "#b3442e" : "#59636c";
       context.lineWidth = (selectedPath ? 3 : 1.5) / camera.zoom; context.stroke(); context.setLineDash([]);
       if (selectedPath && richPath) {
-        const selectedNodeId = useInternalPathEditorStore.getState().selectedNodeId;
+        const selectedNodeId = internalState.selectedNodeId;
+        const selectedSegmentId = internalState.selectedSegmentId;
+        const visibleHandles = internalCurveHandleTargets(richPath, selectedNodeId, selectedSegmentId);
         for (const node of richPath.nodes) {
           const point = pieceLocalToWorld(node, transform);
           const selectedNode = node.id === selectedNodeId;
           context.beginPath(); context.arc(point.xMm, point.yMm, (selectedNode ? 7 : 5) / camera.zoom, 0, Math.PI * 2);
           context.fillStyle = selectedNode ? "#fff" : "#f6d8cc"; context.fill(); context.strokeStyle = "#b3442e"; context.lineWidth = 2 / camera.zoom; context.stroke();
-          if (selectedNode) for (const handle of ["in", "out"] as const) {
-            const vector = handle === "in" ? node.handleIn : node.handleOut;
-            if (!vector) continue;
-            const endpoint = pieceLocalToWorld({ xMm: node.xMm + vector.xMm, yMm: node.yMm + vector.yMm }, transform);
-            context.beginPath(); context.moveTo(point.xMm, point.yMm); context.lineTo(endpoint.xMm, endpoint.yMm); context.strokeStyle = "#8a6d63"; context.lineWidth = 1 / camera.zoom; context.stroke();
-            context.beginPath(); context.arc(endpoint.xMm, endpoint.yMm, 4 / camera.zoom, 0, Math.PI * 2); context.fillStyle = "#fff"; context.fill(); context.strokeStyle = "#8a6d63"; context.stroke();
-          }
         }
-        for (const hit of useInternalPathEditorStore.getState().analysis?.intersections ?? []) {
+        for (const target of visibleHandles) {
+          const node = richPath.nodes.find((candidate) => candidate.id === target.nodeId);
+          if (!node) continue;
+          const vector = target.handle === "in" ? node.handleIn : node.handleOut;
+          if (!vector) continue;
+          const point = pieceLocalToWorld(node, transform);
+          const endpoint = pieceLocalToWorld({ xMm: node.xMm + vector.xMm, yMm: node.yMm + vector.yMm }, transform);
+          context.beginPath(); context.moveTo(point.xMm, point.yMm); context.lineTo(endpoint.xMm, endpoint.yMm); context.strokeStyle = "#8a6d63"; context.lineWidth = 1 / camera.zoom; context.stroke();
+          context.beginPath(); context.arc(endpoint.xMm, endpoint.yMm, 4 / camera.zoom, 0, Math.PI * 2); context.fillStyle = "#fff"; context.fill(); context.strokeStyle = "#8a6d63"; context.stroke();
+        }
+        for (const hit of internalState.analysis?.intersections ?? []) {
           const point = pieceLocalToWorld(hit, transform);
           context.beginPath(); context.arc(point.xMm, point.yMm, 6 / camera.zoom, 0, Math.PI * 2); context.fillStyle = hit.tangent ? "#d9a400" : "#b51f1f"; context.fill();
         }
@@ -2053,10 +2099,9 @@ function draw(
         context.restore();
       }
 
-      const selectedPoint = transformedPoints.find((point) => point.id === selectedPointId);
-      if (selectedPoint) {
-        drawControlHandle(context, selectedPoint, "in", camera.zoom);
-        drawControlHandle(context, selectedPoint, "out", camera.zoom);
+      for (const target of patternCurveHandleTargets(piece, selectedPointId, selectedEdgeId)) {
+        const point = transformedPoints.find((candidate) => candidate.id === target.pointId);
+        if (point) drawControlHandle(context, point, target.handle, camera.zoom);
       }
 
       for (const point of transformedPoints) {

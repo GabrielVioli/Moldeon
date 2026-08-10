@@ -15,12 +15,16 @@ on:
       - "apps/web/src/domain/modelingCut.test.ts"
       - "apps/web/src/domain/modelingOperations.ts"
       - "apps/web/src/domain/modelingOperations.test.ts"
+      - "apps/web/src/editor/PatternCanvasLegacy.tsx"
+      - "apps/web/src/editor/curveHandleInteraction.ts"
+      - "apps/web/src/editor/curveHandleInteraction.test.ts"
       - "apps/web/src/state/internalPathEditorStore.ts"
       - "apps/web/src/state/modelingAppliedCutAutosave.test.ts"
       - "apps/web/src/state/modelingOperationsStore.ts"
       - "apps/web/src/state/modelingOperationsStore.test.ts"
       - "scripts/recovery-modeling-operations-live-regression.mjs"
       - "scripts/recovery-modeling-operations-mobile-regression.mjs"
+      - "scripts/recovery-curve-canvas-regression.mjs"
       - ".github/workflows/recovery-modeling-operations-validation.yml"
   workflow_dispatch:
 
@@ -81,6 +85,8 @@ jobs:
           DESKTOP_STATUS=$?
           node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
           MOBILE_STATUS=$?
+          node scripts/recovery-curve-canvas-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
+          CURVE_STATUS=$?
           set -e
 
           cp /tmp/moldeon-recovery-9-5-05.log "$RECOVERY_ARTIFACT_DIR/server.log"
@@ -88,11 +94,16 @@ jobs:
           cat "$RECOVERY_ARTIFACT_DIR/report-desktop.log"
           echo "--- mobile ---"
           cat "$RECOVERY_ARTIFACT_DIR/report-mobile.log"
+          echo "--- curves ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-curves.log"
 
           if [ "$DESKTOP_STATUS" -ne 0 ]; then
             exit "$DESKTOP_STATUS"
           fi
-          exit "$MOBILE_STATUS"
+          if [ "$MOBILE_STATUS" -ne 0 ]; then
+            exit "$MOBILE_STATUS"
+          fi
+          exit "$CURVE_STATUS"
 
       - name: Upload browser evidence
         if: always()
