@@ -21,8 +21,20 @@ export function ModelingOperationsControls() {
     <>
       <span><strong>Operações de modelagem</strong> · {selected.length} peça(s)</span>
       <button type="button" onClick={() => duplicate()}>Duplicar</button>
-      <button type="button" onClick={() => duplicate("horizontal")}>Espelhar H</button>
-      <button type="button" onClick={() => duplicate("vertical")}>Espelhar V</button>
+      <button
+        type="button"
+        title="Espelhar em torno do eixo vertical da peça"
+        onClick={() => duplicate("horizontal")}
+      >
+        Espelhar no eixo vertical
+      </button>
+      <button
+        type="button"
+        title="Espelhar em torno do eixo horizontal da peça"
+        onClick={() => duplicate("vertical")}
+      >
+        Espelhar no eixo horizontal
+      </button>
 
       {selected.length >= 2 ? <>
         <button type="button" onClick={() => align("left")}>Alinhar esquerda</button>
