@@ -107,6 +107,16 @@ export interface PatternGenerationRecord {
     minimumCurveSeparationMm: number;
   };
   manualReview?: boolean;
+  methodology?: PatternMethodologyRecord;
+}
+
+export interface PatternMethodologyRecord {
+  id: string;
+  version: string;
+  name: string;
+  sourceType: "moldeon-original" | "pending";
+  documentationPath: string;
+  references: string[];
 }
 
 export interface ParametricProjectMetadata {

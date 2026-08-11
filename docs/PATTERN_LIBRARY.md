@@ -9,8 +9,8 @@ A palavra **validado geometricamente** significa apenas que o gerador passou pel
 | Template | Versão | Sistema | Estado | Revisão manual |
 |---|---|---|---|---|
 | Corpo básico | `bodice-block@2` | Moldeon Reference Upper Block 2026 | validado geometricamente | pendente |
-| Camiseta | `tshirt@2` | derivação da base superior | corpo validado; manga legada experimental; substituição guiada disponível | pendente |
-| Blusa | `blouse@2` | derivação da base superior | corpo validado; manga legada experimental; substituição guiada disponível | pendente |
+| Camiseta | `tshirt@3` | bloco superior Moldeon + `guided-sleeve@1` | validado geometricamente | pendente |
+| Blusa | `blouse@3` | bloco superior Moldeon + `guided-sleeve@1` | validado geometricamente | pendente |
 | Saia reta | `straight-skirt@2` | Moldeon Reference Skirt Block 2026 | validado geometricamente | pendente |
 | Minissaia | `mini-skirt@2` | derivação da base de saia | validado geometricamente | pendente |
 | Calça reta | `straight-pants@2` | Moldeon Reference Trouser Block 2026 | validado geometricamente; montagem lógica validada | pendente |
@@ -81,7 +81,7 @@ Esses valores são regras estéticas versionadas. Eles não são apresentados co
 
 Frente e costas possuem centro na dobra, decote, ombro, cava frontal ou traseira, lateral, cintura, quadril, barra e fio. O V3 gera landmarks de início/fim, marca de ombro, um pique frontal e dois piques traseiros a partir do papel semântico do conector, sem consultar nome de template.
 
-A camiseta e a blusa preservam suas mangas legadas para compatibilidade de projetos. O assistente `guided-sleeve@1` pode substituí-las explicitamente por uma manga derivada dos arcos reais das cavas, com cabeça frontal/traseira independente, ápice, piques, duas instâncias e diagnóstico de encaixe. Consulte `docs/SLEEVE_SYSTEM.md`.
+A camiseta `tshirt@3` e a blusa `blouse@3` já nascem com uma manga `guided-sleeve@1` derivada dos arcos reais das cavas. A cabeça possui frente e costas independentes, ápice, um pique frontal, dois piques traseiros e duas instâncias espelhadas. Projetos `@2` já salvos preservam a geometria legada; a troca continua exigindo confirmação explícita no assistente. Consulte `docs/SLEEVE_SYSTEM.md`.
 
 ## Saia reta e minissaia
 
@@ -126,10 +126,10 @@ Snapshots visuais 2D mostram frente e costas lado a lado e comparam as cinco pro
 
 ## Limitações registradas
 
-- Nenhum dos templates `@2` foi provado em toile por esta execução.
+- Nenhum dos templates atuais foi provado em toile por esta execução.
 - Nenhum recebeu comparação dimensional contra um bloco comercial ou industrial externo.
 - Não há alegação de equivalência com FreeSewing ou com qualquer método editorial.
-- Manga, calça, jaqueta, cós, vistas, revel, forro, gradação industrial e aberturas funcionais permanecem em fases próprias.
+- Jaqueta, cós, vistas, revel, forro, gradação industrial e aberturas funcionais permanecem em fases próprias.
 - As curvas são plausíveis e geometricamente testadas, mas ajuste de cava, balanço e distribuição de pence ainda precisam de revisão humana em corpos reais.
 - Alterações livres feitas pelo usuário continuam pertencendo à geometria do projeto existente; uma nova versão de template não reescreve essas alterações.
 

@@ -19,8 +19,10 @@ import type {
   BodyMeasurementKey,
   ParametricConstructionGraphRecord,
   ParametricVariableRecord,
+  PatternMethodologyRecord,
 } from "../domain/parametricMeasurements";
 import type { PatternValidationStatus } from "./basePatternDrafting";
+import { TROUSER_BLOCK_METHODOLOGY } from "./templateMethodology";
 
 export interface TrouserPatternLimits {
   minimumAreaMm2: number;
@@ -33,6 +35,7 @@ export interface TrouserPatternMetadata {
   templateId: "straight-pants";
   templateVersion: string;
   constructionSystem: string;
+  methodology: PatternMethodologyRecord;
   validationStatus: PatternValidationStatus;
   componentStatus: { body: PatternValidationStatus };
   requiredMeasurements: BodyMeasurementKey[];
@@ -63,6 +66,7 @@ export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
   templateId: "straight-pants",
   templateVersion: TEMPLATE_VERSION,
   constructionSystem: "Moldeon Reference Trouser Block 2026",
+  methodology: TROUSER_BLOCK_METHODOLOGY,
   validationStatus: "geometrically-validated",
   componentStatus: { body: "geometrically-validated" },
   requiredMeasurements: [

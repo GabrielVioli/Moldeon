@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { initializeEngine } from "./core/engineRuntime";
@@ -100,6 +101,8 @@ export function App() {
   const simulate = useEditorStore((state) => state.simulate);
   const addGuidedSleeve = useEditorStore((state) => state.addGuidedSleeve);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
+  const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const autosaveRevisionRef = useRef(0);
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
@@ -292,14 +295,23 @@ export function App() {
 
   useEffect(() => {
     if (!persistenceReady) return;
+    const revision = autosaveRevisionRef.current + 1;
+    autosaveRevisionRef.current = revision;
 
     const timeout = window.setTimeout(() => {
-      void saveAutosave(garment, activePieceId)
-        .then((method) => setAutosaveStatus(`Salvo localmente · ${method}`))
-        .catch((error: unknown) => {
-          console.warn("Autosave falhou", error);
+      setAutosaveStatus("Salvando alterações…");
+      const request = autosaveQueueRef.current.then(async () => {
+        const method = await saveAutosave(garment, activePieceId);
+        if (autosaveRevisionRef.current === revision) {
+          setAutosaveStatus(`Salvo localmente · ${method}`);
+        }
+      });
+      autosaveQueueRef.current = request.catch((error: unknown) => {
+        console.warn("Autosave falhou", error);
+        if (autosaveRevisionRef.current === revision) {
           setAutosaveStatus("Falha no autosave");
-        });
+        }
+      });
     }, 500);
 
     return () => window.clearTimeout(timeout);
@@ -307,6 +319,7 @@ export function App() {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (!persistenceReady) return;
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
         event.preventDefault();
         const pathState = useInternalPathEditorStore.getState();
@@ -397,10 +410,11 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, redo, removeDraftPoint, selectAllPieces, undo]);
+  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, persistenceReady, redo, removeDraftPoint, selectAllPieces, undo]);
 
   useEffect(() => {
     const handleDelete = (event: KeyboardEvent) => {
+      if (!persistenceReady) return;
       if (
         isEditableTarget(event.target) ||
         useEditorStore.getState().draftContour !== null ||
@@ -434,14 +448,14 @@ export function App() {
     };
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
-  }, [deletePiece, deleteSelectedPieces, removePoint]);
+  }, [deletePiece, deleteSelectedPieces, persistenceReady, removePoint]);
 
   useEffect(() => {
     if (activeTool === "draft" && draftContour === null) setActiveTool("select");
   }, [activeTool, draftContour]);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" aria-busy={!persistenceReady}>
       <Toolbar
         garmentName={garment.name}
         onOpenLibrary={() => setLibraryOpen(true)}
@@ -694,6 +708,8 @@ export function App() {
           />
         </Suspense>
       ) : null}
+
+      {!persistenceReady ? <DialogPlaceholder label="Preparando sua bancada" /> : null}
     </div>
   );
 }

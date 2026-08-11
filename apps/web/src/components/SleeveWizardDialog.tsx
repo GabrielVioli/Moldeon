@@ -246,7 +246,7 @@ function BodyStep({
     <div className="sleeve-body-step">
       <div>
         <h2>Confirme o corpo e as cavas</h2>
-        <p>A detecção usa papéis semânticos, não o nome ou a proximidade das peças na bancada.</p>
+        <p>Encontramos frente e costas pela forma e pelos pontos de costura, mesmo que as peças tenham outro nome.</p>
       </div>
       <div className="sleeve-source-grid">
         <CandidateSelect label="Frente do corpo" value={frontPieceId} candidates={detection.frontCandidates} onChange={onFrontChange} testId="sleeve-front-select" />
@@ -300,9 +300,9 @@ function SourceCard({ title, candidate, accent }: { title: string; candidate?: S
           <strong>{candidate.pieceName}</strong>
           <small>{candidate.armholeLengthMm.toFixed(1)} mm de arco</small>
           <dl>
-            <div><dt>Conector</dt><dd>{candidate.armholeEdgeIds.join(" + ")}</dd></div>
-            <div><dt>Ombro</dt><dd>{candidate.shoulderEdgeId ?? "ausente"}</dd></div>
-            <div><dt>Axila</dt><dd>{candidate.sideEdgeId ?? "ausente"}</dd></div>
+            <div><dt>Cava</dt><dd>{candidate.armholeEdgeIds.length > 0 ? "Identificada" : "Não identificada"}</dd></div>
+            <div><dt>Ombro</dt><dd>{candidate.shoulderEdgeId ? "Identificado" : "Não identificado"}</dd></div>
+            <div><dt>Axila</dt><dd>{candidate.sideEdgeId ? "Identificada" : "Não identificada"}</dd></div>
           </dl>
         </>
       ) : <em>Não detectada</em>}
@@ -360,8 +360,8 @@ function FitStep({ draft, autoZoom, onAutoZoomChange }: { draft: GuidedSleeveDra
   return (
     <div className="sleeve-fit-step" data-testid="sleeve-fit-step">
       <div className="sleeve-fit-copy">
-        <h2>Encaixe 2D por landmarks</h2>
-        <p>As peças podem estar em qualquer posição na bancada. O pareamento usa arco e semântica.</p>
+        <h2>Encaixe entre cava e manga</h2>
+        <p>As peças podem estar em qualquer posição na bancada. O encaixe usa os arcos e os pontos de referência.</p>
         <label className="sleeve-confirm-row compact">
           <input type="checkbox" checked={autoZoom} onChange={(event) => onAutoZoomChange(event.currentTarget.checked)} />
           <span>Enquadrar automaticamente o mini diagrama</span>
@@ -374,7 +374,7 @@ function FitStep({ draft, autoZoom, onAutoZoomChange }: { draft: GuidedSleeveDra
           <div key={pair.id}>
             <span className={`landmark-dot ${pair.bodyConnectorRole === "frontArmhole" ? "front" : "back"}`} />
             <strong>{pair.label}</strong>
-            <small>{pair.bodyConnectorRole} {Math.round(pair.bodyArcPosition * 100)}% ↔ {pair.sleeveConnectorRole} {Math.round(pair.sleeveArcPosition * 100)}%</small>
+            <small>Posição na cava: {Math.round(pair.bodyArcPosition * 100)}% · na manga: {Math.round(pair.sleeveArcPosition * 100)}%</small>
           </div>
         ))}
       </div>

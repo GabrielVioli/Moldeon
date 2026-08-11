@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getPatternEdges } from "../domain/pattern";
+import { garmentDraftToPatternDocumentV3, validatePatternDocumentV3 } from "../domain/patternDocumentV3";
 import { createDefaultSleeveSettings, detectSleeveBody, isSleevePiece } from "../domain/sleeveSystem";
+import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import { createGarmentFromTemplate } from "../patterns/templateCatalog";
 import { createParametricBodyFixture } from "../testFixtures/parametricBodyFixtures";
 import { useEditorStore } from "./editorStore";
@@ -95,6 +97,30 @@ describe("guided sleeve editor command", () => {
       Math.max(...firstSleeve.points.map((point) => point.yMm)),
     );
     expect(after.pieces.filter((piece) => !isSleevePiece(piece)).map((piece) => [piece.id, geometrySignature(piece)])).toEqual(bodyBefore);
+  });
+
+  it("replaces a library sleeve without duplicating the existing shoulder and side seams", () => {
+    const fixture = createParametricBodyFixture("medium");
+    const tshirt = resolveTemplateAssemblyGarment(
+      createGarmentFromTemplate("tshirt", fixture.supplied, fixture.bodyType, fixture.profile),
+    );
+    useEditorStore.getState().loadGarment(tshirt);
+    const detection = detectSleeveBody(tshirt.pieces);
+    const frontPieceId = detection.frontCandidates[0].pieceId;
+    const backPieceId = detection.backCandidates[0].pieceId;
+    const settings = createDefaultSleeveSettings(tshirt, frontPieceId, backPieceId, "long");
+
+    expect(useEditorStore.getState().addGuidedSleeve({
+      frontPieceId,
+      backPieceId,
+      settings,
+      replaceExisting: true,
+    }).accepted).toBe(true);
+
+    const document = garmentDraftToPatternDocumentV3(useEditorStore.getState().garment);
+    expect(validatePatternDocumentV3(document).filter((issue) => issue.severity === "error")).toEqual([]);
+    expect(document.seamGroups.filter((group) => group.id.includes("shoulder"))).toHaveLength(1);
+    expect(document.seamGroups.filter((group) => group.id.includes("body-side"))).toHaveLength(1);
   });
 });
 

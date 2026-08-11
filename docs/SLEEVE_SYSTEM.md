@@ -134,6 +134,8 @@ As costuras são explícitas:
 - ombro frontal ↔ ombro traseiro;
 - lateral frontal ↔ lateral traseira.
 
+Quando ombros ou laterais já possuem uma costura estrutural do molde-base, o assistente a reutiliza em vez de criar um grupo duplicado. Essa deduplicação é necessária para que substituição, exportação V3 e autosave permaneçam válidos.
+
 Os conectores que atravessam vários segmentos são particionados por comprimento acumulado. Testes somam todas as faixas e comprovam que cada milímetro das cavas e da cabeça participa exatamente uma vez, sem lacunas ou sobreposição lógica.
 
 O runtime preserva os grupos `guided-sleeve:*` e não os substitui pelo auto-sewing genérico dos templates. O modelo 3D continua fora da aprovação desta etapa.
@@ -167,7 +169,8 @@ A suíte cobre:
 - cabeça excessivamente maior ou menor;
 - documento V3 válido;
 - criação, substituição, undo e redo;
-- fluxo real em Chrome desktop e mobile;
+- fluxo real em Chrome desktop e mobile, incluindo cancelar, voltar, fechar e substituição explícita;
+- persistência da manga substituída, medidas, versão e metodologia após recarregar;
 - ausência de overflow horizontal e erros de console no assistente.
 
 As evidências ficam em `docs/evidence/prompt08-sleeves/`.

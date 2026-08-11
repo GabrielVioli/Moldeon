@@ -987,6 +987,112 @@ button {
   font-weight: 800;
 }
 
+.template-version {
+  color: #7b7b75 !important;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 600 !important;
+}
+
+.pattern-library-scroll {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.template-first-heading h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.template-first-heading p {
+  margin: 0;
+  color: #6f706c;
+  font-size: 11px;
+}
+
+.library-measurements {
+  display: grid;
+  gap: 12px;
+}
+
+.template-contract {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(300px, 1.4fr);
+  gap: 8px 18px;
+  padding: 12px;
+  color: #4d4b45;
+  background: #ebe7dc;
+  border: 1px solid #cbc3af;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.template-contract > div {
+  display: grid;
+  gap: 4px;
+}
+
+.template-contract strong {
+  color: #3e3320;
+  font-size: 12px;
+}
+
+.template-contract dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.template-contract dl div {
+  min-width: 0;
+}
+
+.template-contract dt {
+  color: #7d776c;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.template-contract dd {
+  overflow: hidden;
+  margin: 2px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+}
+
+.template-contract p,
+.template-contract ul {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.template-contract ul {
+  display: grid;
+  gap: 3px;
+  padding-left: 18px;
+}
+
+.library-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.library-actions > span {
+  color: #666761;
+  font-size: 11px;
+}
+
+.library-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
 .dialog-note,
 .dialog-error {
   padding: 9px 11px;
@@ -1537,6 +1643,24 @@ button {
 
   .template-card {
     min-height: 168px;
+  }
+
+  .template-contract {
+    grid-template-columns: 1fr;
+  }
+
+  .template-contract dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .library-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-actions > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .fitting-section-heading,
@@ -2237,10 +2361,25 @@ button {
   .sleeve-wizard-dialog { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; border: 0; }
   .sleeve-wizard-header { padding: calc(14px + env(safe-area-inset-top)) 16px 10px; }
   .sleeve-wizard-header p { font-size: 12px; }
-  .sleeve-wizard-steps { padding: 0 16px 10px; gap: 4px; }
-  .sleeve-wizard-steps li { font-size: 0; gap: 4px; }
+  .sleeve-wizard-steps { padding: 0 16px 14px; gap: 4px; }
+  .sleeve-wizard-steps li {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    overflow: visible;
+    font-size: 10px;
+  }
+  .sleeve-wizard-steps li::after {
+    position: absolute;
+    z-index: 0;
+    top: 12px;
+    left: calc(50% + 17px);
+    width: calc(100% - 30px);
+  }
   .sleeve-wizard-steps li span { font-size: 12px; }
-  .sleeve-wizard-content { padding: 4px 16px 18px; }
+  .sleeve-wizard-steps li span { position: relative; z-index: 1; }
+  .sleeve-wizard-content { padding: 8px 16px 18px; }
   .sleeve-source-grid, .sleeve-source-details, .sleeve-settings-grid, .sleeve-type-grid, .sleeve-fit-step { grid-template-columns: 1fr; }
   .sleeve-type-grid button { min-height: 155px; grid-template-columns: auto 1fr; justify-items: start; text-align: left; }
   .sleeve-type-icon { width: 54px; height: 84px; grid-row: 1 / 3; }
@@ -2248,6 +2387,7 @@ button {
   .sleeve-metric-grid { grid-template-columns: 1fr 1fr; }
   .sleeve-compatibility-summary header { display: grid; }
   .sleeve-fit-diagram { min-height: 300px; }
+  .sleeve-fit-diagram .fit-label, .sleeve-fit-diagram .fit-caption { font-size: 15px; }
   .sleeve-landmark-list { grid-template-columns: 1fr; }
   .sleeve-wizard-actions { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .sleeve-wizard-actions button { min-width: 0; flex: 1; }

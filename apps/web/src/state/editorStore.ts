@@ -988,6 +988,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           && !removableIds.has(seam.first.pieceId)
           && !removableIds.has(seam.second.pieceId),
         );
+        const retainedSeamKeys = new Set(retainedSeams.map(seamRangePairKey));
+        const newGuidedSeams = guided.seams.filter(
+          (seam) => !retainedSeamKeys.has(seamRangePairKey(seam)),
+        );
         const retainedPlacements = (document.garment.assemblyPlacements ?? []).filter(
           (placement) => !removableIds.has(placement.pieceId),
         );
@@ -996,7 +1000,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           garment: syncLegacyTransforms({
             ...document.garment,
             pieces: [...retainedPieces, guided.sleevePiece],
-            seams: [...retainedSeams, ...guided.seams],
+            seams: [...retainedSeams, ...newGuidedSeams],
             workspaceStates: [...retainedStates, workspace],
             assemblyPlacements: [
               ...retainedPlacements,
@@ -1172,6 +1176,16 @@ type StoreGetter = () => EditorState;
 function captureDocument(get: StoreGetter): EditorDocumentState {
   const state = get();
   return { garment: structuredClone(state.garment), activePieceId: state.activePieceId };
+}
+
+function seamRangePairKey(seam: Seam): string {
+  const first = edgeRangeKey(seam.first);
+  const second = edgeRangeKey(seam.second);
+  return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
+function edgeRangeKey(range: EdgeRange): string {
+  return `${range.pieceId}/${range.edgeId}/${range.startT.toFixed(7)}/${range.endT.toFixed(7)}`;
 }
 
 function applyDocumentState(

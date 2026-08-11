@@ -139,7 +139,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                     <strong>{template.name}</strong>
                     <span>{template.description}</span>
                     <small>{template.pieces}</small>
-                    <small className="template-status">{template.status === "development" ? "Em desenvolvimento" : validationLabel(template.validationStatus)}</small>
+                    <small className="template-status">{template.status === "development" ? "Indisponível · em desenvolvimento" : validationLabel(template.validationStatus)}</small>
+                    <small className="template-version">{template.formulaVersion}</small>
+                    {template.status === "development" ? <small>{template.reviewNotes[0]}</small> : null}
                   </span>
                 </button>
               ))}
@@ -147,6 +149,23 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
 
             {choice && choice !== "blank" ? (
               <section className="library-measurements" aria-label="Medidas do molde selecionado">
+                <div className="template-contract" aria-label="Informações técnicas do molde">
+                  <div>
+                    <strong>{validationLabel(selectedTemplate?.validationStatus ?? "experimental")}</strong>
+                    <span>{selectedTemplate?.methodology.name}</span>
+                  </div>
+                  <dl>
+                    <div><dt>ID</dt><dd>{selectedTemplate?.id}</dd></div>
+                    <div><dt>Versão</dt><dd>{selectedTemplate?.formulaVersion}</dd></div>
+                    <div><dt>Método</dt><dd>{selectedTemplate?.methodology.version}</dd></div>
+                  </dl>
+                  {selectedTemplate?.reviewNotes[0] ? <p>{selectedTemplate.reviewNotes[0]}</p> : null}
+                  {selectedTemplate?.instanceExpansion?.length ? (
+                    <ul>
+                      {selectedTemplate.instanceExpansion.map((instance) => <li key={instance}>{instance}</li>)}
+                    </ul>
+                  ) : null}
+                </div>
                 <div className="template-first-heading">
                   <h2>Medidas para {selectedTemplate?.name}</h2>
                   <p>Os valores informados têm prioridade. Estimativas ficam claramente marcadas.</p>

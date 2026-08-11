@@ -22,7 +22,18 @@ import type {
   BodyMeasurementKey,
   ParametricConstructionGraphRecord,
   ParametricVariableRecord,
+  PatternMethodologyRecord,
 } from "../domain/parametricMeasurements";
+import {
+  createDefaultSleeveSettings,
+  draftGuidedSleeve,
+  SLEEVE_SYSTEM_VERSION,
+  type SleeveDraftSettings,
+} from "../domain/sleeveSystem";
+import {
+  SKIRT_BLOCK_METHODOLOGY,
+  UPPER_BLOCK_METHODOLOGY,
+} from "./templateMethodology";
 
 export type BasePatternTemplateId =
   | "bodice-block"
@@ -52,6 +63,7 @@ export interface BasePatternMetadata {
   templateId: BasePatternTemplateId;
   templateVersion: string;
   constructionSystem: string;
+  methodology: PatternMethodologyRecord;
   validationStatus: PatternValidationStatus;
   componentStatus: BasePatternComponentStatus;
   requiredMeasurements: BodyMeasurementKey[];
@@ -83,12 +95,7 @@ interface UpperStyle {
   frontNeckDepthMm: number;
   backNeckDepthMm: number;
   hemFactor: number;
-  sleeve: null | {
-    lengthRatio: number;
-    bicepEaseMm: number;
-    cuffEaseMm: number;
-    capHeightRatio: number;
-  };
+  sleeve: "short" | "long" | null;
 }
 
 interface SkirtStyle {
@@ -120,12 +127,7 @@ const UPPER_STYLE: Record<"bodice-block" | "tshirt" | "blouse", UpperStyle> = {
     frontNeckDepthMm: 88,
     backNeckDepthMm: 28,
     hemFactor: 1.01,
-    sleeve: {
-      lengthRatio: 0.28,
-      bicepEaseMm: 55,
-      cuffEaseMm: 80,
-      capHeightRatio: 0.58,
-    },
+    sleeve: "short",
   },
   blouse: {
     bustEaseMm: 160,
@@ -135,12 +137,7 @@ const UPPER_STYLE: Record<"bodice-block" | "tshirt" | "blouse", UpperStyle> = {
     frontNeckDepthMm: 118,
     backNeckDepthMm: 34,
     hemFactor: 1.04,
-    sleeve: {
-      lengthRatio: 0.98,
-      bicepEaseMm: 95,
-      cuffEaseMm: 55,
-      capHeightRatio: 0.62,
-    },
+    sleeve: "long",
   },
 };
 
@@ -175,29 +172,31 @@ export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMet
     "Base de referência para transformações posteriores, não um molde final de produção.",
     "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
-  tshirt: metadata("tshirt", "tshirt@2", {
+  tshirt: metadata("tshirt", "tshirt@3", {
     bustMm: 100,
     waistMm: 120,
     hipMm: 100,
     sleeveMm: 55,
-  }, "experimental", {
+  }, "geometrically-validated", {
     body: "geometrically-validated",
-    sleeve: "experimental",
+    sleeve: "geometrically-validated",
   }, [
     "Corpo reconstruído a partir da base superior versionada.",
-    "A manga preserva conectores e piques, mas permanece experimental até a etapa própria de mangas.",
+    `Manga curta gerada por ${SLEEVE_SYSTEM_VERSION} a partir dos arcos reais das cavas.`,
+    "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
-  blouse: metadata("blouse", "blouse@2", {
+  blouse: metadata("blouse", "blouse@3", {
     bustMm: 160,
     waistMm: 180,
     hipMm: 160,
     sleeveMm: 95,
-  }, "experimental", {
+  }, "geometrically-validated", {
     body: "geometrically-validated",
-    sleeve: "experimental",
+    sleeve: "geometrically-validated",
   }, [
     "Regra estética de decote e comprimento é separada das fórmulas estruturais.",
-    "A manga longa permanece experimental até comparação manual de cava e cabeça de manga.",
+    `Manga longa gerada por ${SLEEVE_SYSTEM_VERSION} a partir dos arcos reais das cavas.`,
+    "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
   "straight-skirt": metadata("straight-skirt", "straight-skirt@2", {
     bustMm: 0,
@@ -248,11 +247,23 @@ function draftUpper(
     createUpperPiece(`${templateId}-back`, "Costas", "back", values),
   ];
   if (style.sleeve) {
-    const sleeveDefinitions = createSleeveDefinitions(style.sleeve);
-    const sleeveInputs = measurementInputs(measurements);
-    const sleeveValues = evaluateDefinitions(sleeveDefinitions, sleeveInputs);
-    pieces.push(createSleevePiece(`${templateId}-sleeve`, sleeveValues));
-    definitions.push(...sleeveDefinitions);
+    const settings = createDefaultSleeveSettings(
+      { pieces, measurements, ease: metadataValue.ease },
+      pieces[0].id,
+      pieces[1].id,
+      style.sleeve,
+    );
+    const guided = draftGuidedSleeve(
+      { pieces, measurements, ease: metadataValue.ease, fabrics: [] },
+      pieces[0].id,
+      pieces[1].id,
+      settings,
+    );
+    if (guided.compatibility.status === "error") {
+      throw new RangeError(`A manga de ${templateId} não atingiu compatibilidade geométrica.`);
+    }
+    pieces.push(guided.sleevePiece);
+    definitions.push(...guidedSleeveDefinitions(settings));
   }
   return {
     pieces,
@@ -327,18 +338,14 @@ function upperDefinitions(style: UpperStyle): FormulaDefinition[] {
   ];
 }
 
-function createSleeveDefinitions(style: NonNullable<UpperStyle["sleeve"]>): FormulaDefinition[] {
+function guidedSleeveDefinitions(settings: SleeveDraftSettings): FormulaDefinition[] {
   return [
-    formula("sleeveLengthRatio", `${style.lengthRatio}`, "ratio"),
-    formula("bicepEaseMm", `${style.bicepEaseMm}mm`, "mm"),
-    formula("cuffEaseMm", `${style.cuffEaseMm}mm`, "mm"),
-    formula("capHeightRatio", `${style.capHeightRatio}`, "ratio"),
-    formula("sleeveWidth", "max(280mm, bicepMm + bicepEaseMm)", "mm"),
-    formula("sleeveHalfWidth", "sleeveWidth / 2", "mm"),
-    formula("sleeveLength", "max(160mm, armLengthMm * sleeveLengthRatio)", "mm"),
-    formula("sleeveCapHeight", "clamp(armholeDepthMm * capHeightRatio, 105mm, 185mm)", "mm"),
-    formula("sleeveCuffWidth", "min(sleeveWidth * 0.82, max(wristMm + cuffEaseMm, sleeveWidth * 0.45))", "mm"),
-    formula("sleeveCuffInset", "(sleeveWidth - sleeveCuffWidth) / 2", "mm"),
+    formula("guidedSleeveLength", `${settings.lengthMm}mm`, "mm"),
+    formula("guidedSleeveBicep", `${settings.bicepCircumferenceMm}mm`, "mm"),
+    formula("guidedSleeveCuff", `${settings.cuffCircumferenceMm}mm`, "mm"),
+    formula("guidedSleeveCapHeight", `${settings.capHeightMm}mm`, "mm"),
+    formula("guidedSleeveCapEase", `${settings.capEaseMm}mm`, "mm"),
+    formula("guidedSleeveRotation", `${settings.rotationDeg}deg`, "degree"),
   ];
 }
 
@@ -472,71 +479,6 @@ function createUpperPiece(
   );
 }
 
-function createSleevePiece(
-  id: string,
-  values: Readonly<Record<string, number>>,
-): PatternPiece {
-  const width = values.sleeveWidth;
-  const half = values.sleeveHalfWidth;
-  const cap = values.sleeveCapHeight;
-  const length = values.sleeveLength;
-  const cuffInset = values.sleeveCuffInset;
-  return piece(
-    id,
-    "Manga",
-    [
-      point("underarm-front", 0, cap, {
-        out: { xMm: width * 0.14, yMm: -cap * 0.48 },
-      }),
-      point("front-notch", half * 0.72, cap * 0.34, {
-        in: { xMm: -width * 0.10, yMm: cap * 0.10 },
-        out: { xMm: width * 0.08, yMm: -cap * 0.22 },
-      }),
-      point("cap", half, 0, {
-        in: { xMm: -width * 0.10, yMm: 0 },
-        out: { xMm: width * 0.12, yMm: 0 },
-      }),
-      point("back-notch", half * 1.34, cap * 0.28, {
-        in: { xMm: -width * 0.10, yMm: -cap * 0.14 },
-        out: { xMm: width * 0.12, yMm: cap * 0.18 },
-      }),
-      point("underarm-back", width, cap, {
-        in: { xMm: -width * 0.16, yMm: -cap * 0.52 },
-      }),
-      point("cuff-back", width - cuffInset, length),
-      point("cuff-front", cuffInset, length),
-    ],
-    {
-      cutQuantity: 2,
-      previewPlacements: [
-        placement("arm", "front", "left"),
-        placement("arm", "front", "right", true),
-      ],
-      segmentRoles: [
-        "sleeveCapFront",
-        "sleeveCapFront",
-        "sleeveCapBack",
-        "sleeveCapBack",
-        "sideSeam",
-        "hem",
-        "sideSeam",
-      ],
-      grainline: {
-        start: { xMm: half, yMm: cap + 25 },
-        end: { xMm: half, yMm: length - 25 },
-      },
-      internalLines: [
-        referenceLine(`${id}:bicep-line`, id, "Linha do bíceps", 0, cap, width, cap),
-      ],
-      annotations: [
-        { id: `${id}:front-notch`, label: "Pique frontal", xMm: half * 0.72, yMm: cap * 0.34 },
-        { id: `${id}:back-notch`, label: "Dois piques traseiros", xMm: half * 1.34, yMm: cap * 0.28 },
-        { id: `${id}:shoulder`, label: "Marca de ombro", xMm: half, yMm: 10 },
-      ],
-    },
-  );
-}
-
 function createSkirtPiece(
   id: string,
   name: string,
@@ -606,6 +548,7 @@ function metadata(
     constructionSystem: upper
       ? "Moldeon Reference Upper Block 2026"
       : "Moldeon Reference Skirt Block 2026",
+    methodology: upper ? UPPER_BLOCK_METHODOLOGY : SKIRT_BLOCK_METHODOLOGY,
     validationStatus,
     componentStatus,
     requiredMeasurements: upper
