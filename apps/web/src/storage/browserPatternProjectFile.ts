@@ -59,11 +59,11 @@ export class BrowserPatternProjectFileSession {
   }
 
   async openWithSystemPicker(): Promise<OpenedPatternProject | null> {
-    const picker = getPickerWindow()?.showOpenFilePicker;
-    if (!picker) return null;
+    const pickerWindow = getPickerWindow();
+    if (!pickerWindow?.showOpenFilePicker) return null;
 
     try {
-      const [handle] = await picker({
+      const [handle] = await pickerWindow.showOpenFilePicker({
         multiple: false,
         types: MOLDEON_PICKER_TYPES,
       });
@@ -86,45 +86,40 @@ export class BrowserPatternProjectFileSession {
   }
 
   async save(
-    document: PatternDocumentV3,
+    projectDocument: PatternDocumentV3,
     projectName: string,
   ): Promise<SavedPatternProject> {
     if (this.currentHandle) {
-      await writePatternProjectHandle(this.currentHandle, document);
+      await writePatternProjectHandle(this.currentHandle, projectDocument);
       return {
         fileName: this.currentHandle.name,
         method: "file-system-access",
       };
     }
-    return this.saveAs(document, projectName);
+    return this.saveAs(projectDocument, projectName);
   }
 
   async saveAs(
-    document: PatternDocumentV3,
+    projectDocument: PatternDocumentV3,
     projectName: string,
   ): Promise<SavedPatternProject> {
     const fileName = normalizeMoldeonFileName(projectName);
-    const picker = getPickerWindow()?.showSaveFilePicker;
+    const pickerWindow = getPickerWindow();
 
-    if (picker) {
-      try {
-        const handle = await picker({
-          suggestedName: fileName,
-          types: MOLDEON_PICKER_TYPES,
-        });
-        await writePatternProjectHandle(handle, document);
-        this.currentHandle = handle;
-        return {
-          fileName: handle.name,
-          method: "file-system-access",
-        };
-      } catch (error) {
-        if (isAbortError(error)) throw error;
-        throw error;
-      }
+    if (pickerWindow?.showSaveFilePicker) {
+      const handle = await pickerWindow.showSaveFilePicker({
+        suggestedName: fileName,
+        types: MOLDEON_PICKER_TYPES,
+      });
+      await writePatternProjectHandle(handle, projectDocument);
+      this.currentHandle = handle;
+      return {
+        fileName: handle.name,
+        method: "file-system-access",
+      };
     }
 
-    downloadPatternProject(document, fileName);
+    downloadPatternProject(projectDocument, fileName);
     this.currentHandle = null;
     return { fileName, method: "download" };
   }
@@ -154,25 +149,25 @@ export function normalizeMoldeonFileName(projectName: string): string {
 
 async function writePatternProjectHandle(
   handle: FileSystemFileHandle,
-  document: PatternDocumentV3,
+  projectDocument: PatternDocumentV3,
 ): Promise<void> {
   const writable = await handle.createWritable();
   try {
-    await writable.write(createPatternProjectBlob(document));
+    await writable.write(createPatternProjectBlob(projectDocument));
   } finally {
     await writable.close();
   }
 }
 
 function downloadPatternProject(
-  document: PatternDocumentV3,
+  projectDocument: PatternDocumentV3,
   fileName: string,
 ): void {
-  if (typeof window === "undefined" || typeof document === "undefined") {
+  if (typeof window === "undefined") {
     throw new Error("Download de projeto só está disponível no navegador.");
   }
 
-  const blobUrl = URL.createObjectURL(createPatternProjectBlob(document));
+  const blobUrl = URL.createObjectURL(createPatternProjectBlob(projectDocument));
   const anchor = window.document.createElement("a");
   anchor.href = blobUrl;
   anchor.download = fileName;
