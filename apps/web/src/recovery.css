@@ -46,7 +46,7 @@
   scrollbar-gutter: stable;
 }
 
-.pattern-library-scroll { padding: 4px 20px 20px; }
+.pattern-library-scroll { align-content: start; padding: 4px 20px 20px; }
 .pattern-library-dialog .dialog-header { position: relative; z-index: 2; }
 .pattern-library-dialog .dialog-note { position: sticky; bottom: 0; z-index: 2; margin: 0; background: #f3f1ec; }
 
@@ -56,6 +56,19 @@
 .template-grid.recovery-template-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 18px; }
 .template-card.is-selected { outline: 3px solid #6a5275; outline-offset: 2px; background: #fff; }
 .empty-project-card { border-style: dashed !important; }
+.empty-project-card .template-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-top: 9px;
+  color: #6a5275;
+  border: 1px solid #aaa29a;
+  border-radius: 50%;
+  font-size: 30px;
+  line-height: 1;
+}
+.empty-project-card .template-icon::before { display: none; }
 .library-measurements { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid #d5d0c7; }
 .library-actions { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid #d5d0c7; background: #f3f1ec; }
 .library-actions button { min-height: 44px; padding: 0 18px; border-radius: 8px; cursor: pointer; }

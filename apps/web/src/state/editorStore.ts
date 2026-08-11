@@ -62,6 +62,7 @@ import {
   type DocumentCommandType,
   type EditorDocumentState,
 } from "./documentCommandHistory";
+import { createBlankGarment } from "../domain/blankGarment";
 
 export interface EditorState {
   garment: GarmentDraft;
@@ -181,12 +182,12 @@ export interface EditorState {
 
 const initialSnapshot = currentEngine().snapshot();
 const history = new DocumentCommandHistory();
-const initialGarment = ensureWorkspaceState(createLegacyGarment(initialSnapshot.piece));
+const initialGarment = ensureWorkspaceState(createBlankGarment());
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   garment: initialGarment,
   baselinePieces: clonePieces(initialGarment.pieces),
-  activePieceId: initialSnapshot.piece.id,
+  activePieceId: "",
   snapshot: initialSnapshot,
   engineBackend: "typescript",
   selectedPointId: null,

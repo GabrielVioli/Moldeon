@@ -114,7 +114,7 @@ export interface PatternMethodologyRecord {
   id: string;
   version: string;
   name: string;
-  sourceType: "moldeon-original" | "pending";
+  sourceType: "documented-adaptation" | "moldeon-original" | "pending";
   documentationPath: string;
   references: string[];
 }
@@ -172,6 +172,10 @@ export const BODY_MEASUREMENT_CATALOG: readonly MeasurementCatalogEntry[] = [
   item("crotchDepthMm", "Profundidade do gancho", "hip", "mm", 140, 500, 5, "Profundidade horizontal de referência do gancho."),
   item("seatDepthMm", "Profundidade do assento", "hip", "mm", 120, 500, 5, "Profundidade frontal a traseira do quadril."),
   item("waistDropMm", "Queda de cintura", "hip", "mm", 0, 120, 1, "Diferença vertical entre linhas de cintura."),
+  item("waistFrontArcMm", "Semiarco frontal da cintura", "hip", "mm", 90, 450, 5, "Medida de uma lateral ao centro da frente da cintura."),
+  item("waistBackArcMm", "Semiarco traseiro da cintura", "hip", "mm", 90, 450, 5, "Medida de uma lateral ao centro das costas da cintura."),
+  item("hipFrontArcMm", "Semiarco frontal do quadril", "hip", "mm", 125, 500, 5, "Medida de uma lateral ao centro da frente do quadril/assento."),
+  item("hipBackArcMm", "Semiarco traseiro do quadril", "hip", "mm", 125, 500, 5, "Medida de uma lateral ao centro das costas do quadril/assento."),
   item("thighMm", "Coxa", "leg", "mm", 280, 1100, 5, "Circunferência da parte superior da coxa."),
   item("kneeCircumferenceMm", "Joelho", "leg", "mm", 220, 800, 5, "Circunferência do joelho."),
   item("calfMm", "Panturrilha", "leg", "mm", 180, 750, 5, "Circunferência da panturrilha."),
@@ -202,6 +206,10 @@ const COMMON_FORMULAS: readonly DefaultFormula[] = [
   formula("crotchDepthMm", "hipMm * 0.245", "estimated"),
   formula("seatDepthMm", "hipMm * 0.24", "estimated"),
   formula("waistDropMm", "hipHeightMm * 0.08", "estimated"),
+  formula("waistFrontArcMm", "waistMm * 0.24", "estimated"),
+  formula("waistBackArcMm", "waistMm / 2 - waistFrontArcMm", "derived"),
+  formula("hipFrontArcMm", "hipMm * 0.24", "estimated"),
+  formula("hipBackArcMm", "hipMm / 2 - hipFrontArcMm", "derived"),
   formula("kneeCircumferenceMm", "hipMm * 0.40", "estimated"),
   formula("ankleCircumferenceMm", "hipMm * 0.24", "estimated"),
   formula("kneeHeightMm", "inseamMm * 0.52", "derived"),

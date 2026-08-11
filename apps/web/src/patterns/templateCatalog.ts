@@ -48,6 +48,8 @@ export interface PatternTemplateSummary {
   description: string;
   pieces: string;
   status: "available" | "development";
+  visibility: "public" | "internal";
+  releaseStatus: "deferred" | "released";
   validationStatus: PatternValidationStatus;
   reviewNotes: string[];
   requiredMeasurements: string[];
@@ -97,6 +99,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Bloco de referência com frente e costas distintas.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["bodice-block"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["bodice-block"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["bodice-block"],
@@ -111,6 +115,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Frente, costas e manga curta calculada pelas cavas reais.",
     pieces: "Frente, costas e manga",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["tshirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["tshirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["tshirt"],
@@ -125,6 +131,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base solta e manga longa calculada pelas cavas reais.",
     pieces: "Frente, costas e manga",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["blouse"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["blouse"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["blouse"],
@@ -139,6 +147,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base simples da cintura ao joelho.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["straight-skirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["straight-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-skirt"],
@@ -153,6 +163,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base curta com leve abertura na barra.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["mini-skirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["mini-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["mini-skirt"],
@@ -167,6 +179,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base paramétrica com frente, costas e ganchos construídos separadamente.",
     pieces: "2 definições editáveis · 4 instâncias físicas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: TROUSER_PATTERN_METADATA.validationStatus,
     reviewNotes: TROUSER_PATTERN_METADATA.notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-pants"],
@@ -185,6 +199,8 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Modelagem própria de casaco ainda em validação.",
     pieces: "Em desenvolvimento",
     status: "development",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: "experimental",
     reviewNotes: ["Indisponível até possuir bloco próprio e revisão manual."],
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["basic-jacket"],
@@ -193,6 +209,11 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     estimatedMeasurements: ["pescoço", "cava", "folga estrutural"],
   },
 ] as const;
+
+export const PUBLIC_PATTERN_TEMPLATES: readonly PatternTemplateSummary[] =
+  PATTERN_TEMPLATES.filter(
+    (template) => template.visibility === "public" && template.releaseStatus === "released",
+  );
 
 export function createGarmentFromTemplate(
   templateId: PatternTemplateId,

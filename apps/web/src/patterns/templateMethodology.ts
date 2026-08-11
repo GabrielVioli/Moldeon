@@ -3,38 +3,41 @@ import type { PatternMethodologyRecord } from "../domain/parametricMeasurements"
 const DOCUMENTATION_PATH = "docs/PATTERN_LIBRARY.md";
 
 export const UPPER_BLOCK_METHODOLOGY: PatternMethodologyRecord = {
-  id: "moldeon-upper-block",
-  version: "2026.2",
-  name: "Bloco superior de referência Moldeon",
-  sourceType: "moldeon-original",
+  id: "freesewing-brian-teagan-moldeon-adaptation",
+  version: "2026.3",
+  name: "Adaptação Moldeon dos blocos Brian e Teagan",
+  sourceType: "documented-adaptation",
   documentationPath: DOCUMENTATION_PATH,
   references: [
-    "https://freesewing.dev/guides/best-practices/",
-    "https://freesewing.org/docs/designs/teagan/",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/brian/src/base.mjs",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/teagan/src/shared.mjs",
+    "https://freesewing.org/docs/designs/teagan/options/",
   ],
 };
 
 export const SKIRT_BLOCK_METHODOLOGY: PatternMethodologyRecord = {
-  id: "moldeon-skirt-block",
-  version: "2026.2",
-  name: "Bloco de saia de referência Moldeon",
-  sourceType: "moldeon-original",
+  id: "freesewing-penelope-moldeon-adaptation",
+  version: "2026.3",
+  name: "Adaptação Moldeon do bloco Penelope",
+  sourceType: "documented-adaptation",
   documentationPath: DOCUMENTATION_PATH,
   references: [
-    "https://freesewing.dev/guides/best-practices/",
-    "https://freesewing.org/designs/penelope/",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/penelope/src/shape.mjs",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/penelope/src/utils.mjs",
+    "https://freesewing.org/docs/designs/penelope/",
   ],
 };
 
 export const TROUSER_BLOCK_METHODOLOGY: PatternMethodologyRecord = {
-  id: "moldeon-trouser-block",
-  version: "2026.2",
-  name: "Bloco de calça de referência Moldeon",
-  sourceType: "moldeon-original",
+  id: "freesewing-titan-moldeon-adaptation",
+  version: "2026.3",
+  name: "Adaptação Moldeon do bloco de calça Titan",
+  sourceType: "documented-adaptation",
   documentationPath: DOCUMENTATION_PATH,
   references: [
-    "https://freesewing.org/designs/titan/",
-    "https://freesewing.dev/reference/measurements/",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/titan/src/back.mjs",
+    "https://github.com/freesewing/freesewing/blob/develop/designs/titan/src/front.mjs",
+    "https://freesewing.org/docs/designs/titan/options/",
   ],
 };
 

@@ -9,6 +9,7 @@ import {
   type SeamTreatment,
   type SegmentRole,
 } from "./pattern";
+import { buildGuidedSleeveAssemblySeams } from "./sleeveSystem";
 
 interface SeamDefinition {
   key: string;
@@ -32,9 +33,6 @@ interface SeamDefinition {
 export function resolveTemplateAssemblyGarment(
   garment: GarmentDraft,
 ): GarmentDraft {
-  if ((garment.seams ?? []).some((seam) => seam.groupId?.startsWith("guided-sleeve:"))) {
-    return garment;
-  }
   const canonical = buildTemplateAssemblySeams(garment);
 
   if (canonical.length === 0) {
@@ -81,11 +79,8 @@ export function resolveTemplateAssemblyGarment(
 export function buildTemplateAssemblySeams(
   garment: Pick<GarmentDraft, "pieces">,
 ): Seam[] {
-  const topDefinitions = buildTopDefinitions(garment.pieces);
-
-  if (topDefinitions.length > 0) {
-    return topDefinitions.map(createSeam);
-  }
+  const topSeams = buildGuidedSleeveAssemblySeams(garment.pieces);
+  if (topSeams.length > 0) return topSeams;
 
   const trouserDefinitions = buildTrouserDefinitions(garment.pieces);
 
@@ -117,95 +112,22 @@ export function seamSetSignature(
     .join("|");
 }
 
-function buildTopDefinitions(
-  pieces: readonly PatternPiece[],
-): SeamDefinition[] {
-  const front = pieces.find((piece) => hasRole(piece, "frontArmhole"));
-  const back = pieces.find((piece) => hasRole(piece, "backArmhole"));
-  const sleeve = pieces.find(
-    (piece) => hasRole(piece, "sleeveCapFront") && hasRole(piece, "sleeveCapBack"),
-  );
-
-  if (!front || !back || !sleeve) return [];
-
-  const frontShoulder = firstEdge(front, "shoulder");
-  const backShoulder = firstEdge(back, "shoulder");
-  const frontSide = firstEdge(front, "sideSeam");
-  const backSide = firstEdge(back, "sideSeam");
-  const frontArmhole = firstEdge(front, "frontArmhole");
-  const backArmhole = firstEdge(back, "backArmhole");
-  const sleeveCapFront = firstEdge(sleeve, "sleeveCapFront");
-  const sleeveCapBack = firstEdge(sleeve, "sleeveCapBack");
-  const sleeveSides = edgesWithRole(sleeve, "sideSeam");
-
-  if (
-    !frontShoulder ||
-    !backShoulder ||
-    !frontSide ||
-    !backSide ||
-    !frontArmhole ||
-    !backArmhole ||
-    !sleeveCapFront ||
-    !sleeveCapBack ||
-    sleeveSides.length < 2
-  ) {
-    return [];
+export function groupSeamsByRelation(
+  seams: readonly Seam[] | undefined,
+): Seam[][] {
+  const groups = new Map<string, Seam[]>();
+  for (const seam of seams ?? []) {
+    const key = seam.groupId?.trim() || seam.id;
+    const group = groups.get(key);
+    if (group) group.push(seam);
+    else groups.set(key, [seam]);
   }
-
-  return [
-    {
-      key: "shoulder",
-      name: "Ombros",
-      firstPiece: front,
-      firstEdge: frontShoulder,
-      secondPiece: back,
-      secondEdge: backShoulder,
-      direction: "same",
-      treatment: "standard",
-    },
-    {
-      key: "body-side",
-      name: "Laterais do corpo",
-      firstPiece: front,
-      firstEdge: frontSide,
-      secondPiece: back,
-      secondEdge: backSide,
-      direction: "same",
-      treatment: "standard",
-    },
-    {
-      key: "sleeve-underarm",
-      name: "Costura inferior das mangas",
-      firstPiece: sleeve,
-      firstEdge: sleeveSides[0],
-      secondPiece: sleeve,
-      secondEdge: sleeveSides[1],
-      direction: "opposite",
-      treatment: "standard",
-    },
-    {
-      key: "front-armhole",
-      name: "Cava frontal",
-      firstPiece: front,
-      firstEdge: frontArmhole,
-      secondPiece: sleeve,
-      secondEdge: sleeveCapFront,
-      direction: "opposite",
-      treatment: "ease",
-    },
-    {
-      key: "back-armhole",
-      name: "Cava traseira",
-      firstPiece: back,
-      firstEdge: backArmhole,
-      secondPiece: sleeve,
-      secondEdge: sleeveCapBack,
-      direction: "same",
-      treatment: "ease",
-    },
-  ];
+  return [...groups.values()];
 }
 
+export function seamRelationLabel(group: readonly Seam[]): string {
+  return (group[0]?.name ?? "Costura").replace(/ · trecho \d+$/, "");
+}
 
 function buildTrouserDefinitions(
   pieces: readonly PatternPiece[],

@@ -26,6 +26,7 @@ import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import type { GarmentDraft } from "./domain/pattern";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
+import { createBlankGarment } from "./domain/blankGarment";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -271,12 +272,12 @@ export function App() {
               autosave.document.activePieceId,
               engine.backend,
             );
-          } else {
+          } else if (autosave?.document.kind === "snapshot") {
             const nextSnapshot =
-              autosave?.document.kind === "snapshot"
-                ? engine.restorePiece(autosave.document.snapshot.piece)
-                : engine.snapshot();
+              engine.restorePiece(autosave.document.snapshot.piece);
             setEngineSnapshot(nextSnapshot, engine.backend);
+          } else {
+            loadGarment(createBlankGarment());
           }
           if (autosave) setAutosaveStatus(`Restaurado · ${autosave.method}`);
         }
@@ -291,7 +292,7 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [restoreGarment, setEngineSnapshot]);
+  }, [loadGarment, restoreGarment, setEngineSnapshot]);
 
   useEffect(() => {
     if (!persistenceReady) return;
@@ -606,9 +607,9 @@ export function App() {
               {!hasPieces && draftContour === null ? (
                 <div className="empty-workspace" role="status">
                   <strong>A bancada está vazia</strong>
-                  <span>Escolha uma base ou desenhe a primeira peça diretamente nesta bancada.</span>
+                  <span>Desenhe a primeira peça diretamente ou abra a biblioteca para iniciar outro projeto vazio.</span>
                   <div>
-                    <button type="button" onClick={() => setLibraryOpen(true)}>Abrir moldes</button>
+                    <button type="button" onClick={() => setLibraryOpen(true)}>Abrir biblioteca</button>
                     <button type="button" onClick={handleCreateBlankPiece}>Desenhar primeira peça</button>
                   </div>
                 </div>

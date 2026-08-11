@@ -26,7 +26,7 @@ describe("versioned parametric trouser drafting", () => {
         fixture.bodyType,
         fixture.profile,
       );
-      expect(garment.parametric?.templateVersion).toBe("straight-pants@2");
+      expect(garment.parametric?.templateVersion).toBe("straight-pants@3");
       expect(garment.parametric?.variables.length).toBeGreaterThan(35);
       expect(garment.parametric?.constructionGraph.version).toBe(2);
       expect(garment.pieces).toHaveLength(2);
@@ -49,6 +49,10 @@ describe("versioned parametric trouser drafting", () => {
       }
 
       expect(roleLength(back, "backCrotch")).toBeGreaterThan(roleLength(front, "frontCrotch"));
+      expect(front.points.some((point) => point.id.endsWith(":fork"))).toBe(true);
+      expect(back.points.some((point) => point.id.endsWith(":fork"))).toBe(true);
+      expect(front.points.some((point) => /:(inseam-crotch|crotch-tip)$/.test(point.id))).toBe(false);
+      expect(back.points.some((point) => /:(inseam-crotch|crotch-tip)$/.test(point.id))).toBe(false);
       expect(minX(back)).toBeLessThan(minX(front));
       expect(back.points[0].yMm).toBeLessThan(front.points[0].yMm);
       expect(maxX(back)).not.toBe(maxX(front));

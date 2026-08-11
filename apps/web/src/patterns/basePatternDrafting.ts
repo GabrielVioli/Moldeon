@@ -88,12 +88,12 @@ export interface BasePatternDraftOptions {
 }
 
 interface UpperStyle {
-  bustEaseMm: number;
-  waistEaseMm: number;
-  hipEaseMm: number;
-  lowerExtensionMm: number;
-  frontNeckDepthMm: number;
-  backNeckDepthMm: number;
+  bustEaseRatio: number;
+  waistEaseRatio: number;
+  hipEaseRatio: number;
+  lengthBonusRatio: number;
+  frontNeckDepthRatio: number;
+  backNeckDepthRatio: number;
   hemFactor: number;
   sleeve: "short" | "long" | null;
 }
@@ -104,38 +104,36 @@ interface SkirtStyle {
   lengthRatio: number;
   minimumLengthMm: number;
   hemFactor: number;
-  frontHipShare: number;
-  frontWaistShare: number;
 }
 
 const UPPER_STYLE: Record<"bodice-block" | "tshirt" | "blouse", UpperStyle> = {
   "bodice-block": {
-    bustEaseMm: 40,
-    waistEaseMm: 20,
-    hipEaseMm: 35,
-    lowerExtensionMm: 110,
-    frontNeckDepthMm: 72,
-    backNeckDepthMm: 24,
+    bustEaseRatio: 0.04,
+    waistEaseRatio: 0.02,
+    hipEaseRatio: 0.035,
+    lengthBonusRatio: 0.04,
+    frontNeckDepthRatio: 0.17,
+    backNeckDepthRatio: 0.045,
     hemFactor: 1,
     sleeve: null,
   },
   tshirt: {
-    bustEaseMm: 100,
-    waistEaseMm: 120,
-    hipEaseMm: 100,
-    lowerExtensionMm: 225,
-    frontNeckDepthMm: 88,
-    backNeckDepthMm: 28,
+    bustEaseRatio: 0.12,
+    waistEaseRatio: 0.12,
+    hipEaseRatio: 0.18,
+    lengthBonusRatio: 0.03,
+    frontNeckDepthRatio: 0.25,
+    backNeckDepthRatio: 0.05,
     hemFactor: 1.01,
     sleeve: "short",
   },
   blouse: {
-    bustEaseMm: 160,
-    waistEaseMm: 180,
-    hipEaseMm: 160,
-    lowerExtensionMm: 285,
-    frontNeckDepthMm: 118,
-    backNeckDepthMm: 34,
+    bustEaseRatio: 0.18,
+    waistEaseRatio: 0.18,
+    hipEaseRatio: 0.18,
+    lengthBonusRatio: 0.12,
+    frontNeckDepthRatio: 0.30,
+    backNeckDepthRatio: 0.055,
     hemFactor: 1.04,
     sleeve: "long",
   },
@@ -148,8 +146,6 @@ const SKIRT_STYLE: Record<"straight-skirt" | "mini-skirt", SkirtStyle> = {
     lengthRatio: 0.36,
     minimumLengthMm: 500,
     hemFactor: 0.98,
-    frontHipShare: 0.49,
-    frontWaistShare: 0.48,
   },
   "mini-skirt": {
     waistEaseMm: 20,
@@ -157,13 +153,11 @@ const SKIRT_STYLE: Record<"straight-skirt" | "mini-skirt", SkirtStyle> = {
     lengthRatio: 0.245,
     minimumLengthMm: 350,
     hemFactor: 1.06,
-    frontHipShare: 0.49,
-    frontWaistShare: 0.48,
   },
 };
 
 export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMetadata> = {
-  "bodice-block": metadata("bodice-block", "bodice-block@2", {
+  "bodice-block": metadata("bodice-block", "bodice-block@3", {
     bustMm: 40,
     waistMm: 20,
     hipMm: 35,
@@ -172,8 +166,8 @@ export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMet
     "Base de referência para transformações posteriores, não um molde final de produção.",
     "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
-  tshirt: metadata("tshirt", "tshirt@3", {
-    bustMm: 100,
+  tshirt: metadata("tshirt", "tshirt@4", {
+    bustMm: 120,
     waistMm: 120,
     hipMm: 100,
     sleeveMm: 55,
@@ -185,8 +179,8 @@ export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMet
     `Manga curta gerada por ${SLEEVE_SYSTEM_VERSION} a partir dos arcos reais das cavas.`,
     "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
-  blouse: metadata("blouse", "blouse@3", {
-    bustMm: 160,
+  blouse: metadata("blouse", "blouse@4", {
+    bustMm: 180,
     waistMm: 180,
     hipMm: 160,
     sleeveMm: 95,
@@ -198,7 +192,7 @@ export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMet
     `Manga longa gerada por ${SLEEVE_SYSTEM_VERSION} a partir dos arcos reais das cavas.`,
     "Revisão em toile e ajuste manual ainda não foram registrados.",
   ]),
-  "straight-skirt": metadata("straight-skirt", "straight-skirt@2", {
+  "straight-skirt": metadata("straight-skirt", "straight-skirt@3", {
     bustMm: 0,
     waistMm: 20,
     hipMm: 45,
@@ -207,7 +201,7 @@ export const BASE_PATTERN_METADATA: Record<BasePatternTemplateId, BasePatternMet
     "Pences frontal e traseira participam da largura aberta da cintura.",
     "Abertura traseira futura está documentada, mas não é gerada nesta versão.",
   ]),
-  "mini-skirt": metadata("mini-skirt", "mini-skirt@2", {
+  "mini-skirt": metadata("mini-skirt", "mini-skirt@3", {
     bustMm: 0,
     waistMm: 20,
     hipMm: 45,
@@ -298,43 +292,44 @@ function draftSkirt(
 
 function upperDefinitions(style: UpperStyle): FormulaDefinition[] {
   return [
-    formula("bustEaseMm", `${style.bustEaseMm}mm`, "mm"),
-    formula("waistEaseMm", `${style.waistEaseMm}mm`, "mm"),
-    formula("hipEaseMm", `${style.hipEaseMm}mm`, "mm"),
-    formula("lowerExtensionMm", `${style.lowerExtensionMm}mm`, "mm"),
-    formula("frontNeckDepthStyleMm", `${style.frontNeckDepthMm}mm`, "mm"),
-    formula("backNeckDepthStyleMm", `${style.backNeckDepthMm}mm`, "mm"),
+    formula("bustEaseRatio", `${style.bustEaseRatio}`, "ratio"),
+    formula("waistEaseRatio", `${style.waistEaseRatio}`, "ratio"),
+    formula("hipEaseRatio", `${style.hipEaseRatio}`, "ratio"),
+    formula("lengthBonusRatio", `${style.lengthBonusRatio}`, "ratio"),
+    formula("frontNeckDepthRatio", `${style.frontNeckDepthRatio}`, "ratio"),
+    formula("backNeckDepthRatio", `${style.backNeckDepthRatio}`, "ratio"),
     formula("hemFactor", `${style.hemFactor}`, "ratio"),
-    formula("frontShare", "clamp(frontWidthMm / (frontWidthMm + backWidthMm), 0.46, 0.54)", "ratio"),
-    formula("frontWaistShare", "clamp(frontShare + 0.01, 0.47, 0.55)", "ratio"),
-    formula("frontHipShare", "clamp(frontShare + 0.005, 0.47, 0.54)", "ratio"),
-    formula("halfBustWithEase", "(bustMm + bustEaseMm) / 2", "mm"),
-    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),
-    formula("halfHipWithEase", "(hipMm + hipEaseMm) / 2", "mm"),
-    formula("frontBustWidth", "halfBustWithEase * frontShare", "mm"),
-    formula("backBustWidth", "halfBustWithEase - frontBustWidth", "mm"),
-    formula("frontWaistWidth", "halfWaistWithEase * frontWaistShare", "mm"),
-    formula("backWaistWidth", "halfWaistWithEase - frontWaistWidth", "mm"),
-    formula("frontHipWidth", "halfHipWithEase * frontHipShare", "mm"),
-    formula("backHipWidth", "halfHipWithEase - frontHipWidth", "mm"),
+    formula("quarterBustWithEase", "bustMm * (1 + bustEaseRatio) / 4", "mm"),
+    formula("quarterWaistWithEase", "waistMm * (1 + waistEaseRatio) / 4", "mm"),
+    formula("quarterHipWithEase", "hipMm * (1 + hipEaseRatio) / 4", "mm"),
+    formula("frontBustWidth", "quarterBustWithEase", "mm"),
+    formula("backBustWidth", "quarterBustWithEase", "mm"),
+    formula("frontWaistWidth", "quarterWaistWithEase", "mm"),
+    formula("backWaistWidth", "quarterWaistWithEase", "mm"),
+    formula("frontHipWidth", "quarterHipWithEase", "mm"),
+    formula("backHipWidth", "quarterHipWithEase", "mm"),
     formula("shoulderRun", "min(shoulderLengthMm * cos(shoulderSlopeDeg), min(frontBustWidth, backBustWidth) - neckWidthMm - 22mm)", "mm"),
     formula("shoulderDrop", "max(8mm, shoulderLengthMm * sin(shoulderSlopeDeg))", "mm"),
     formula("frontShoulderX", "neckWidthMm + shoulderRun", "mm"),
     formula("backShoulderX", "neckWidthMm + shoulderRun", "mm"),
     formula("armholeY", "armholeDepthMm", "mm"),
-    formula("frontArmholeNotchX", "frontBustWidth - max(12mm, frontBustWidth * 0.055)", "mm"),
-    formula("backArmholeNotchX", "backBustWidth - max(12mm, backBustWidth * 0.045)", "mm"),
-    formula("frontArmholeNotchY", "armholeY * 0.60", "mm"),
-    formula("backArmholeNotchY", "armholeY * 0.52", "mm"),
+    formula("frontArmholePitchX", "min(frontShoulderX - 8mm, frontWidthMm * 0.50)", "mm"),
+    formula("backArmholePitchX", "min(backShoulderX - 8mm, backWidthMm * 0.49)", "mm"),
+    formula("frontArmholePitchY", "shoulderDrop + (armholeY - shoulderDrop) * 0.54 + bustMm * 0.002", "mm"),
+    formula("backArmholePitchY", "shoulderDrop + (armholeY - shoulderDrop) * 0.50", "mm"),
+    formula("frontArmholeHollowX", "frontArmholePitchX + (frontBustWidth - frontArmholePitchX) * 0.39", "mm"),
+    formula("backArmholeHollowX", "backArmholePitchX + (backBustWidth - backArmholePitchX) * 0.47", "mm"),
+    formula("frontArmholeHollowY", "armholeY - (armholeY - frontArmholePitchY) * 0.23", "mm"),
+    formula("backArmholeHollowY", "armholeY - (armholeY - backArmholePitchY) * 0.28", "mm"),
     formula("sideWaistY", "(frontWaistLengthMm + backWaistLengthMm) / 2", "mm"),
     formula("frontCenterWaistY", "frontWaistLengthMm", "mm"),
     formula("backCenterWaistY", "backWaistLengthMm", "mm"),
     formula("hipY", "sideWaistY + hipHeightMm", "mm"),
-    formula("hemY", "hipY + lowerExtensionMm", "mm"),
+    formula("hemY", "hipY * (1 + lengthBonusRatio)", "mm"),
     formula("frontHemWidth", "frontHipWidth * hemFactor", "mm"),
     formula("backHemWidth", "backHipWidth * hemFactor", "mm"),
-    formula("frontNeckDepth", "min(frontNeckDepthStyleMm, armholeY * 0.66)", "mm"),
-    formula("backNeckDepth", "min(backNeckDepthStyleMm, armholeY * 0.28)", "mm"),
+    formula("frontNeckDepth", "min(backWaistLengthMm * frontNeckDepthRatio, armholeY * 0.66)", "mm"),
+    formula("backNeckDepth", "min(neckWidthMm * backNeckDepthRatio * 5, armholeY * 0.20)", "mm"),
   ];
 }
 
@@ -356,32 +351,33 @@ function skirtDefinitions(style: SkirtStyle, dartScale: number): FormulaDefiniti
     formula("skirtLengthRatio", `${style.lengthRatio}`, "ratio"),
     formula("minimumSkirtLengthMm", `${style.minimumLengthMm}mm`, "mm"),
     formula("hemFactor", `${style.hemFactor}`, "ratio"),
-    formula("frontHipShareRatio", `${style.frontHipShare}`, "ratio"),
-    formula("frontWaistShareRatio", `${style.frontWaistShare}`, "ratio"),
     formula("dartScale", `${dartScale}`, "ratio"),
-    formula("halfHipWithEase", "(hipMm + hipEaseMm) / 2", "mm"),
-    formula("halfWaistWithEase", "(waistMm + waistEaseMm) / 2", "mm"),
-    formula("frontHipWidth", "halfHipWithEase * frontHipShareRatio", "mm"),
-    formula("backHipWidth", "halfHipWithEase - frontHipWidth", "mm"),
-    formula("frontWaistWidth", "halfWaistWithEase * frontWaistShareRatio", "mm"),
-    formula("backWaistWidth", "halfWaistWithEase - frontWaistWidth", "mm"),
+    formula("waistWithEase", "waistMm + waistEaseMm", "mm"),
+    formula("hipWithEase", "hipMm + hipEaseMm", "mm"),
+    formula("waistHipDifference", "max(0mm, hipWithEase - waistWithEase)", "mm"),
+    formula("frontHipWidth", "hipFrontArcMm + hipEaseMm / 4", "mm"),
+    formula("backHipWidth", "hipBackArcMm + hipEaseMm / 4", "mm"),
+    formula("frontWaistWidth", "waistFrontArcMm + waistEaseMm / 4", "mm"),
+    formula("backWaistWidth", "waistBackArcMm + waistEaseMm / 4", "mm"),
     formula("frontSuppression", "max(0mm, frontHipWidth - frontWaistWidth)", "mm"),
     formula("backSuppression", "max(0mm, backHipWidth - backWaistWidth)", "mm"),
-    formula("frontDartWidth", "min(30mm, frontSuppression * 0.34) * dartScale", "mm"),
-    formula("backDartWidth", "min(40mm, backSuppression * 0.46) * dartScale", "mm"),
+    formula("frontDartMethodWidth", "waistWithEase * 0.006888 + (clamp(waistHipDifference, waistWithEase * 0.2, waistWithEase * 0.344) - waistWithEase * 0.2) / 4", "mm"),
+    formula("backDartMethodWidth", "waistWithEase * 0.006888 + (waistHipDifference - waistWithEase * 0.114 - (waistHipDifference - waistWithEase * 0.114) / 5) / 4", "mm"),
+    formula("frontDartWidth", "min(frontSuppression * 0.72, max(0mm, frontDartMethodWidth)) * dartScale", "mm"),
+    formula("backDartWidth", "min(backSuppression * 0.78, max(0mm, backDartMethodWidth)) * dartScale", "mm"),
     formula("frontWaistCutWidth", "frontWaistWidth + frontDartWidth", "mm"),
     formula("backWaistCutWidth", "backWaistWidth + backDartWidth", "mm"),
     formula("hipY", "hipHeightMm", "mm"),
     formula("skirtLength", "max(minimumSkirtLengthMm, heightMm * skirtLengthRatio)", "mm"),
     formula("frontHemWidth", "frontHipWidth * hemFactor", "mm"),
     formula("backHemWidth", "backHipWidth * hemFactor", "mm"),
-    formula("frontDartLength", "min(105mm, hipY * 0.54)", "mm"),
-    formula("backDartLength", "min(145mm, hipY * 0.72)", "mm"),
-    formula("frontDartX", "frontWaistCutWidth * 0.58", "mm"),
-    formula("backDartX", "backWaistCutWidth * 0.46", "mm"),
+    formula("frontDartLength", "hipY * 0.45", "mm"),
+    formula("backDartLength", "hipY * 0.50", "mm"),
+    formula("frontDartX", "frontHipWidth / 2.4", "mm"),
+    formula("backDartX", "backHipWidth / 2.4", "mm"),
     formula("centerFrontWaistY", "waistDropMm * 0.55", "mm"),
     formula("centerBackWaistY", "0mm", "mm"),
-    formula("sideWaistY", "waistDropMm * 0.30", "mm"),
+    formula("sideWaistY", "max(waistDropMm * 0.30, hipY * 0.0615)", "mm"),
   ];
 }
 
@@ -397,13 +393,16 @@ function createUpperPiece(
   const hipWidth = values[`${surface}HipWidth`];
   const hemWidth = values[`${surface}HemWidth`];
   const shoulderX = values[`${surface}ShoulderX`];
-  const notchX = values[`${surface}ArmholeNotchX`];
-  const notchY = values[`${surface}ArmholeNotchY`];
+  const pitchX = values[`${surface}ArmholePitchX`];
+  const pitchY = values[`${surface}ArmholePitchY`];
+  const hollowX = values[`${surface}ArmholeHollowX`];
+  const hollowY = values[`${surface}ArmholeHollowY`];
   const centerWaistY = values[`${surface}CenterWaistY`];
   const neckDepth = values[`${surface}NeckDepth`];
   const armholeRole: SegmentRole = isFront ? "frontArmhole" : "backArmhole";
-  const notchControl = isFront ? 0.34 : 0.27;
-  const underarmControl = isFront ? 0.24 : 0.31;
+  const shoulderToPitchY = Math.max(24, pitchY - values.shoulderDrop);
+  const pitchToHollowY = Math.max(18, hollowY - pitchY);
+  const hollowToUnderarmX = Math.max(18, bustWidth - hollowX);
   return piece(
     id,
     name,
@@ -416,24 +415,34 @@ function createUpperPiece(
       }),
       point("shoulder-tip", shoulderX, values.shoulderDrop, {
         out: {
-          xMm: Math.max(18, (notchX - shoulderX) * notchControl),
-          yMm: values.armholeY * (isFront ? 0.12 : 0.16),
+          xMm: -Math.max(3, (shoulderX - pitchX) * 0.16),
+          yMm: shoulderToPitchY * 0.42,
         },
       }),
-      point("armhole-notch", notchX, notchY, {
+      point("armhole-pitch", pitchX, pitchY, {
         in: {
-          xMm: -Math.max(12, (notchX - shoulderX) * 0.24),
-          yMm: -values.armholeY * (isFront ? 0.11 : 0.15),
+          xMm: Math.max(1, (shoulderX - pitchX) * 0.04),
+          yMm: -shoulderToPitchY * 0.48,
         },
         out: {
-          xMm: Math.max(8, (bustWidth - notchX) * 0.7),
-          yMm: values.armholeY * underarmControl,
+          xMm: -Math.max(1, (shoulderX - pitchX) * 0.035),
+          yMm: pitchToHollowY * 0.52,
+        },
+      }),
+      point("armhole-hollow", hollowX, hollowY, {
+        in: {
+          xMm: -Math.max(12, (hollowX - pitchX) * 0.42),
+          yMm: -Math.max(12, (values.armholeY - pitchY) * 0.19),
+        },
+        out: {
+          xMm: Math.max(16, hollowToUnderarmX * 0.34),
+          yMm: Math.max(16, (values.armholeY - pitchY) * 0.25),
         },
       }),
       point("underarm", bustWidth, values.armholeY, {
         in: {
-          xMm: -Math.max(16, (bustWidth - notchX) * 1.2),
-          yMm: -values.armholeY * (isFront ? 0.16 : 0.20),
+          xMm: -hollowToUnderarmX * 0.46,
+          yMm: 0,
         },
       }),
       point("side-waist", waistWidth, values.sideWaistY, {
@@ -455,6 +464,7 @@ function createUpperPiece(
         "shoulder",
         armholeRole,
         armholeRole,
+        armholeRole,
         "sideSeam",
         "sideSeam",
         "sideSeam",
@@ -472,7 +482,7 @@ function createUpperPiece(
       ],
       annotations: [
         { id: `${id}:center`, label: isFront ? "Centro frente na dobra" : "Centro costas na dobra", xMm: 8, yMm: values.hemY * 0.62 },
-        { id: `${id}:armhole-notch`, label: isFront ? "Pique frontal de cava" : "Piques traseiros de cava", xMm: notchX - 8, yMm: notchY - 8 },
+        { id: `${id}:armhole-notch`, label: isFront ? "Pique frontal de cava" : "Piques traseiros de cava", xMm: pitchX - 8, yMm: pitchY - 8 },
         { id: `${id}:shoulder-balance`, label: "Marca de ombro", xMm: (values.neckWidthMm + shoulderX) / 2, yMm: values.shoulderDrop * 0.5 - 8 },
       ],
     },
@@ -566,7 +576,17 @@ function metadata(
           "backWaistLengthMm",
           "hipHeightMm",
         ]
-      : ["heightMm", "waistMm", "hipMm", "hipHeightMm", "waistDropMm"],
+      : [
+          "heightMm",
+          "waistMm",
+          "hipMm",
+          "waistFrontArcMm",
+          "waistBackArcMm",
+          "hipFrontArcMm",
+          "hipBackArcMm",
+          "hipHeightMm",
+          "waistDropMm",
+        ],
     estimatedMeasurements: upper
       ? [
           "neckWidthMm",
@@ -579,7 +599,14 @@ function metadata(
           "backWaistLengthMm",
           "hipHeightMm",
         ]
-      : ["hipHeightMm", "waistDropMm"],
+      : [
+          "waistFrontArcMm",
+          "waistBackArcMm",
+          "hipFrontArcMm",
+          "hipBackArcMm",
+          "hipHeightMm",
+          "waistDropMm",
+        ],
     ease,
     limits: {
       minimumAreaMm2: 4_000,
@@ -633,6 +660,10 @@ function measurementInputs(
     "armLengthMm",
     "bicepMm",
     "wristMm",
+    "waistFrontArcMm",
+    "waistBackArcMm",
+    "hipFrontArcMm",
+    "hipBackArcMm",
   ] as const;
   const inputs: Record<string, FormulaQuantity> = {};
   for (const key of required) {

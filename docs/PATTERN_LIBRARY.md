@@ -1,20 +1,28 @@
 # Biblioteca de moldes-base
 
+## Decisão de produto para o fechamento do 9.5-06
+
+Nenhum molde automático desta biblioteca está disponível na experiência pública. Todos os itens possuem `visibility: internal` e `releaseStatus: deferred`. A biblioteca continua visível, mas oferece somente a criação de uma bancada vazia.
+
+Esta decisão é deliberada: os testes matemáticos e computacionais confirmam integridade da geometria, não validade de modelagem para corte, costura ou vestibilidade. A revisão visual manual reprovou as formas disponíveis, em especial camiseta e calça, e isso invalida qualquer apresentação delas como soluções prontas. Rótulos como “experimental” ou “validado geometricamente” não tornam um molde tecnicamente reconhecível.
+
+Os geradores, fórmulas, metadados, conectores, testes e registros metodológicos permanecem no código para pesquisa, compatibilidade e revisão futura. Projetos antigos preservam a geometria já salva; abrir um arquivo antigo não depende da visibilidade pública nem provoca regeneração silenciosa.
+
 ## Escopo e nível de confiança
 
-Esta biblioteca produz bases paramétricas editáveis em milímetros. Ela não substitui prova em toile, ajuste corporal, preparação industrial, revisão de margens ou conferência de montagem por profissional de modelagem.
+Internamente, esta biblioteca produz bases paramétricas editáveis em milímetros. Nenhuma delas está pronta para uso de produção. Ela não substitui prova em toile, ajuste corporal, preparação industrial, revisão de margens ou conferência de montagem por profissional de modelagem.
 
 A palavra **validado geometricamente** significa apenas que o gerador passou pelos invariantes automatizados descritos neste documento: contorno não degenerado, ausência de autointerseção detectável, dimensões-chave, compatibilidade entre bordas relacionadas, landmarks, fio, round trip V3, corpos de proporções variadas e snapshots 2D. Ela não significa validação de vestibilidade.
 
 | Template | Versão | Sistema | Estado | Revisão manual |
 |---|---|---|---|---|
-| Corpo básico | `bodice-block@2` | Moldeon Reference Upper Block 2026 | validado geometricamente | pendente |
-| Camiseta | `tshirt@3` | bloco superior Moldeon + `guided-sleeve@1` | validado geometricamente | pendente |
-| Blusa | `blouse@3` | bloco superior Moldeon + `guided-sleeve@1` | validado geometricamente | pendente |
-| Saia reta | `straight-skirt@2` | Moldeon Reference Skirt Block 2026 | validado geometricamente | pendente |
-| Minissaia | `mini-skirt@2` | derivação da base de saia | validado geometricamente | pendente |
-| Calça reta | `straight-pants@2` | Moldeon Reference Trouser Block 2026 | validado geometricamente; montagem lógica validada | pendente |
-| Jaqueta | `basic-jacket@1` | não disponível | em desenvolvimento | pendente |
+| Corpo básico | `bodice-block@3` | adaptação Brian/Teagan 2026.3 | interno e adiado | reprovado para publicação |
+| Camiseta | `tshirt@4` | adaptação Brian/Teagan + `guided-sleeve@1` | interno e adiado | reprovado para publicação |
+| Blusa | `blouse@4` | adaptação Brian/Teagan + `guided-sleeve@1` | interno e adiado | reprovado para publicação |
+| Saia reta | `straight-skirt@3` | adaptação Penelope 2026.3 | interno e adiado | não aprovada para publicação |
+| Minissaia | `mini-skirt@3` | adaptação Penelope 2026.3 | interno e adiado | não aprovada para publicação |
+| Calça reta | `straight-pants@3` | adaptação Titan 2026.3 | interno e adiado | reprovado para publicação |
+| Jaqueta | `basic-jacket@1` | método pendente | interno e adiado | indisponível |
 
 Projetos já gerados continuam armazenando a geometria e a versão usadas. Abrir um projeto antigo não troca `@1` por `@2` nem regenera o molde silenciosamente.
 
@@ -81,7 +89,7 @@ Esses valores são regras estéticas versionadas. Eles não são apresentados co
 
 Frente e costas possuem centro na dobra, decote, ombro, cava frontal ou traseira, lateral, cintura, quadril, barra e fio. O V3 gera landmarks de início/fim, marca de ombro, um pique frontal e dois piques traseiros a partir do papel semântico do conector, sem consultar nome de template.
 
-A camiseta `tshirt@3` e a blusa `blouse@3` já nascem com uma manga `guided-sleeve@1` derivada dos arcos reais das cavas. A cabeça possui frente e costas independentes, ápice, um pique frontal, dois piques traseiros e duas instâncias espelhadas. Projetos `@2` já salvos preservam a geometria legada; a troca continua exigindo confirmação explícita no assistente. Consulte `docs/SLEEVE_SYSTEM.md`.
+A camiseta `tshirt@4` e a blusa `blouse@4`, mantidas apenas internamente, nascem com uma manga `guided-sleeve@1` derivada dos arcos reais das cavas. A cabeça possui frente e costas independentes, ápice, um pique frontal, dois piques traseiros e duas instâncias espelhadas. Projetos de versões anteriores já salvos preservam a geometria legada; a troca continua exigindo confirmação explícita no assistente. Consulte `docs/SLEEVE_SYSTEM.md`.
 
 ## Saia reta e minissaia
 
@@ -135,7 +143,7 @@ Snapshots visuais 2D mostram frente e costas lado a lado e comparam as cinco pro
 
 <!-- PROMPT07_TROUSERS_START -->
 
-## Calça reta paramétrica `straight-pants@2`
+## Calça reta paramétrica `straight-pants@3` (infraestrutura interna adiada)
 
 ### Estado e escopo
 

@@ -5,11 +5,12 @@ import { analyzeSleeveCompatibility, createDefaultSleeveSettings, isSleevePiece 
 import {
   DEFAULT_BODY_MEASUREMENTS,
   PATTERN_TEMPLATES,
+  PUBLIC_PATTERN_TEMPLATES,
   createGarmentFromTemplate,
 } from "./templateCatalog";
 
 describe("pattern template catalog", () => {
-  it("offers the seven essential editable bases", () => {
+  it("keeps the seven deferred generators in the internal catalog", () => {
     expect(PATTERN_TEMPLATES.map((template) => template.id)).toEqual([
       "bodice-block",
       "tshirt",
@@ -19,6 +20,12 @@ describe("pattern template catalog", () => {
       "straight-pants",
       "basic-jacket",
     ]);
+    expect(PATTERN_TEMPLATES.every((template) => template.visibility === "internal")).toBe(true);
+    expect(PATTERN_TEMPLATES.every((template) => template.releaseStatus === "deferred")).toBe(true);
+  });
+
+  it("does not expose an automatic template in the public library", () => {
+    expect(PUBLIC_PATTERN_TEMPLATES).toEqual([]);
   });
 
   it("documents an id, version, confidence state and methodology for every library entry", () => {
@@ -30,7 +37,7 @@ describe("pattern template catalog", () => {
       expect(template.methodology.version).toBeTruthy();
       expect(template.methodology.documentationPath).toBe("docs/PATTERN_LIBRARY.md");
       if (template.status === "available") {
-        expect(template.methodology.sourceType).toBe("moldeon-original");
+        expect(template.methodology.sourceType).toBe("documented-adaptation");
         expect(template.methodology.references.length).toBeGreaterThan(0);
       }
     }
@@ -97,9 +104,9 @@ describe("pattern template catalog", () => {
     const sleeve = top.pieces.find(isSleevePiece)!;
     expect(sleeve.segments?.map((segment) => segment.role)).toContain("sleeveCapFront");
     expect(top.pieces.every((piece) => piece.grainline)).toBe(true);
-    expect(top.parametric?.templateVersion).toBe("tshirt@3");
+    expect(top.parametric?.templateVersion).toBe("tshirt@4");
     expect(top.parametric?.variables.length).toBeGreaterThan(10);
-    expect(top.parametric?.generations.every((generation) => generation.methodology?.id === "moldeon-upper-block")).toBe(true);
+    expect(top.parametric?.generations.every((generation) => generation.methodology?.id === "freesewing-brian-teagan-moldeon-adaptation")).toBe(true);
 
     const topFront = top.pieces.find((piece) => piece.segments?.some((segment) => segment.role === "frontArmhole"))!;
     const topBack = top.pieces.find((piece) => piece.segments?.some((segment) => segment.role === "backArmhole"))!;
@@ -123,7 +130,7 @@ describe("pattern template catalog", () => {
     const pants = createGarmentFromTemplate("straight-pants", DEFAULT_BODY_MEASUREMENTS);
     expect(pants.pieces.every((piece) => piece.internalLines?.some((line) => line.id.includes("knee-line")))).toBe(true);
     expect(pants.pieces.every((piece) => piece.darts?.length === 1)).toBe(true);
-    expect(pants.parametric?.templateVersion).toBe("straight-pants@2");
+    expect(pants.parametric?.templateVersion).toBe("straight-pants@3");
     expect(PATTERN_TEMPLATES.find((template) => template.id === "straight-pants")?.instanceExpansion).toHaveLength(2);
   });
 

@@ -10,7 +10,9 @@ import {
   type SeamTreatment,
 } from "../domain/pattern";
 import {
+  groupSeamsByRelation,
   resolveTemplateAssemblyGarment,
+  seamRelationLabel,
   templateAssemblyNeedsRepair,
 } from "../domain/templateAssemblySeams";
 import { useEditorStore } from "../state/editorStore";
@@ -74,6 +76,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const placement = garment.assemblyPlacements?.find(
     (candidate) => candidate.pieceId === activePiece.id,
   );
+  const seamGroups = groupSeamsByRelation(garment.seams);
 
   const repairTemplateAssembly = () => {
     useEditorStore.setState((state) => {
@@ -139,39 +142,46 @@ export const AssemblyPanel = memo(function AssemblyPanel({
 
       <section className="assembly-section">
         <h3>Costuras</h3>
-        {(garment.seams ?? []).length === 0 ? (
+        {seamGroups.length === 0 ? (
           <p>Nenhuma costura confirmada.</p>
         ) : (
-          (garment.seams ?? []).map((seam) => (
-            <div className={`assembly-row seam-editor-row${selectedSeamId === seam.id ? " is-selected" : ""}${seam.active === false ? " is-inactive" : ""}`} key={seam.id} onClick={() => selectSeam(seam.id)}>
+          seamGroups.map((group) => {
+            const representative = group[0];
+            const selected = group.some((seam) => seam.id === selectedSeamId);
+            const inactive = group.every((seam) => seam.active === false);
+            return (
+            <div className={`assembly-row seam-editor-row${selected ? " is-selected" : ""}${inactive ? " is-inactive" : ""}`} key={representative.groupId ?? representative.id} onClick={() => selectSeam(representative.id)}>
               <button
                 type="button"
                 className="seam-select-button"
-                aria-label={"Selecionar costura " + (seam.name ?? seam.id)}
-                aria-pressed={selectedSeamId === seam.id}
+                aria-label={"Selecionar costura " + seamRelationLabel(group)}
+                aria-pressed={selected}
                 onClick={(event) => {
                   event.stopPropagation();
-                  selectSeam(seam.id);
+                  selectSeam(representative.id);
                 }}
               >
-                {selectedSeamId === seam.id ? "✓" : "○"}
+                {selected ? "✓" : "○"}
               </button>
               <input
                 aria-label="Nome da costura"
-                value={seam.name ?? seam.id}
+                value={seamRelationLabel(group)}
                 onClick={(event) => event.stopPropagation()}
-                onChange={(event) =>
-                  updateSeam(seam.id, { name: event.currentTarget.value })
-                }
+                onChange={(event) => {
+                  const label = event.currentTarget.value;
+                  group.forEach((seam, index) => updateSeam(seam.id, {
+                    name: group.length > 1 ? `${label} · trecho ${index + 1}` : label,
+                  }));
+                }}
               />
               <select
                 aria-label="Tratamento"
-                value={seam.treatment ?? "standard"}
-                onChange={(event) =>
-                  updateSeam(seam.id, {
+                value={representative.treatment ?? "standard"}
+                onChange={(event) => {
+                  for (const seam of group) updateSeam(seam.id, {
                     treatment: event.currentTarget.value as SeamTreatment,
-                  })
-                }
+                  });
+                }}
               >
                 {TREATMENTS.map((treatment) => (
                   <option key={treatment.value} value={treatment.value}>
@@ -179,17 +189,18 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamActive(seam.id); }}>
-                {seam.active === false ? "Reativar" : "Desativar"}
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) if ((seam.active === false) === inactive) toggleSeamActive(seam.id); }}>
+                {inactive ? "Reativar" : "Desativar"}
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamDirection(seam.id); }}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) toggleSeamDirection(seam.id); }}>
                 Inverter
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); removeSeam(seam.id); }}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) removeSeam(seam.id); }}>
                 Excluir
               </button>
             </div>
-          ))
+            );
+          })
         )}
       </section>
 

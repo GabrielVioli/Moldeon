@@ -1,95 +1,48 @@
 # Recovery 9.5-06 — moldes-base e assistente de manga
 
-## Resultado
+## Decisão de fechamento
 
-A biblioteca deixa de oferecer camiseta e blusa com manga genérica. `tshirt@3` e `blouse@3` usam o sistema `guided-sleeve@1`, calculado a partir dos arcos reais das cavas frontal e traseira. A jaqueta continua indisponível e explica o motivo; ela não é apresentada como solução pronta.
+O 9.5-06 é fechado sem publicar moldes automáticos. A validação manual demonstrou que integridade computacional não basta para afirmar validade de modelagem: uma peça pode não ter `NaN`, autointerseção ou triangulação inválida e ainda assim não representar um molde real reconhecível e costurável.
 
-O trabalho parou na biblioteca e no fluxo guiado de manga. Montagem final, avatar e física não foram ampliados.
+Todos os templates atuais estão marcados como `visibility: internal` e `releaseStatus: deferred`. A biblioteca permanece na interface com um único caminho público: **Bancada vazia — comece sem nenhuma peça e desenhe do zero**. Uma instalação sem autosave também inicia vazia.
 
-## Experiência do usuário
+## Infraestrutura preservada
 
-O percurso foi executado no Chrome como usuário novo, em desktop e viewport móvel:
+Permanecem no repositório, sem exclusão:
 
-1. abrir a biblioteca;
-2. entender quais bases estão disponíveis e por quê;
-3. selecionar camiseta, alterar o busto e criar;
-4. abrir e cancelar o assistente sem alterar o corpo;
-5. reabrir, confirmar frente/costas e a substituição da manga existente;
-6. escolher manga longa, editar comprimento e bíceps;
-7. voltar, avançar novamente e confirmar que os valores continuam presentes;
-8. conferir o encaixe antes de criar;
-9. substituir, desfazer e refazer;
-10. aguardar o autosave, recarregar e confirmar a restauração.
+- geradores versionados de corpo, camiseta, blusa, saia, minissaia e calça;
+- diagnóstico explícito da jaqueta pendente;
+- fórmulas, perfis corporais, metadados, landmarks e conectores;
+- definições de quantidade de corte, dobra, fio, espelhamento e instâncias;
+- relações de costura e expansão lógica da calça;
+- sistema guiado de manga e seus testes;
+- testes geométricos, snapshots e documentos metodológicos.
 
-O teste passou sem overflow horizontal ou erros de console em `1440 × 980` e `390 × 844`. Cancelar, voltar, fechar, undo e redo preservaram o estado esperado. A recarga restaurou busto de 980 mm, `tshirt@3`, metodologia e manga longa.
+O trabalho de reconstrução realizado antes desta decisão também foi preservado: adaptações documentadas de Brian/Teagan para a família superior, Penelope para saias e Titan para calça. Isso é material interno de pesquisa; não é uma declaração de que os resultados estão aprovados.
 
-Na revisão visual, termos internos como “landmarks”, papéis semânticos e IDs de conectores foram removidos da jornada principal. O assistente fala em cava, ombro, axila e pontos de referência. No mobile, as quatro etapas voltaram a ter nomes legíveis e separação do conteúdo.
+## Compatibilidade
 
-## Contrato dos templates
+A visibilidade atua somente sobre a lista pública. `createGarmentFromTemplate` e o catálogo interno continuam acessíveis para testes e manutenção. O carregamento de V3 usa as definições e a geometria persistidas no projeto, portanto:
 
-Cada item do catálogo declara:
+- um projeto salvo com template oculto continua abrindo;
+- as peças existentes não são filtradas nem apagadas;
+- a versão e o registro de geração sobrevivem ao round trip;
+- nenhuma abertura regenera ou substitui silenciosamente a geometria antiga.
 
-- ID e versão de fórmula;
-- estado `experimental`, `geometrically-validated` ou `manually-reviewed`;
-- metodologia com ID, versão, nome, tipo de fonte, documentação e referências;
-- medidas exigidas e estimadas;
-- folgas, limites, revisão manual e estado dos componentes quando aplicável.
+## Assistente de manga
 
-Esses dados são persistidos em `PatternGenerationRecord`; não dependem do nome visível da peça. A interface mostra confiança, versão e método após a seleção. Para a calça, mostra também a expansão das duas definições em quatro instâncias físicas e o espelhamento.
+O botão permanece visível, porém desabilitado até existirem simultaneamente uma cava frontal e uma cava traseira explicitamente classificadas por papéis semânticos. O sistema não usa nome de peça nem tenta inferir cava a partir da silhueta. Em projetos criados ou importados pelo usuário que possuam esses conectores, o fluxo guiado continua disponível; em bancada vazia, o diagnóstico informa que são necessárias cavas semânticas.
 
-Metodologias documentadas:
+## Critério para retorno público
 
-| Família | ID | Versão | Documento |
-|---|---|---|---|
-| corpo, camiseta e blusa | `moldeon-upper-block` | `2026.2` | `docs/PATTERN_LIBRARY.md` |
-| saia e minissaia | `moldeon-skirt-block` | `2026.2` | `docs/PATTERN_LIBRARY.md` |
-| calça | `moldeon-trouser-block` | `2026.2` | `docs/PATTERN_LIBRARY.md` |
-| jaqueta indisponível | `moldeon-jacket-pending` | `0` | método pendente |
+Nenhum template pode voltar à biblioteca apenas por passar testes geométricos. O retorno exige, no mínimo:
 
-## Geometria e manga
+1. método de modelagem documentado e rastreável;
+2. forma 2D imediatamente reconhecível por profissional de modelagem sem depender do nome;
+3. relações de costura e medidas conferidas;
+4. revisão manual registrada e, quando pertinente, prova física/toile;
+5. testes computacionais e de persistência continuando verdes.
 
-A camiseta e a blusa preservam frente e costas distintas, decotes diferentes, ombro inclinado, cavas próprias, laterais, cintura, quadril, barra, fio e centros na dobra. A manga nasce das duas cavas e fornece:
+## Limites desta entrega
 
-- cabeça frontal e traseira diferentes;
-- ápice e marca de ombro;
-- um pique frontal e dois traseiros;
-- linha de bíceps e, na manga longa, linha de cotovelo;
-- quantidade de corte 2;
-- instância esquerda e direita espelhada;
-- conectores e costuras de cava;
-- diagnóstico de compatibilidade antes da confirmação.
-
-O motor continua detectando a função pelos papéis geométricos dos segmentos. Renomear frente, costas ou manga não é usado para reconhecer o template.
-
-## Defeitos encontrados pelo uso real
-
-Dois problemas que não apareciam como falha visual imediata foram corrigidos:
-
-- a bancada podia receber interação durante a inicialização; agora há um estado curto e explícito de “Preparando sua bancada”, e atalhos ficam suspensos até o restauro terminar;
-- substituir uma manga mantinha as costuras estruturais de ombro/lateral e criava cópias nos grupos guiados. O documento V3 ficava inválido e o autosave falhava. A fusão agora reutiliza costuras com os mesmos intervalos, e as gravações são serializadas para a versão mais recente sempre vencer.
-
-## Validação executada
-
-- invariantes de geometria em cinco corpos paramétricos;
-- golden snapshot atualizado para `tshirt@3` e `blouse@3`;
-- cavas e cabeças medidas por arco;
-- conectores, piques, fio, quantidade de corte e espelhamento;
-- documento V3 sem grupos de costura duplicados;
-- alteração de medidas;
-- substituição explícita;
-- cancelar, voltar, fechar, undo e redo;
-- autosave e restauração após reload;
-- browser desktop e mobile;
-- typecheck, suíte completa e build de produção.
-
-Script reproduzível: `scripts/recovery-patterns-sleeve-regression.mjs`.
-
-## Limites de confiança
-
-“Validado geometricamente” não significa pronto para produção. Não houve toile, impressão 1:1, prova em corpos reais ou revisão presencial por modelista. Nenhum template recebeu o estado `manually-reviewed`.
-
-A jaqueta permanece bloqueada. Blazer, punho estruturado, carcela, manga raglan, manga de duas folhas, gradação, montagem final, avatar e física ficam fora desta entrega.
-
-## Preview
-
-URL: a preencher após a publicação desta branch.
+Não houve avanço para montagem final, avatar ou física. Nenhum template automático atual é declarado pronto para produção ou oferecido ao usuário como solução pronta. O código fica preservado para uma futura rodada de validação técnica, fora do fluxo público.

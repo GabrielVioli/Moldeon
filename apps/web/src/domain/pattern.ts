@@ -60,6 +60,10 @@ export interface BodyMeasurements {
   insideLegLengthMm?: number;
   seatDepthMm?: number;
   waistDropMm?: number;
+  waistFrontArcMm?: number;
+  waistBackArcMm?: number;
+  hipFrontArcMm?: number;
+  hipBackArcMm?: number;
   headCircumferenceMm?: number;
 }
 
@@ -990,11 +994,29 @@ export function sampleEdgeRange(piece: PatternPiece, edgeRange: EdgeRange): Patt
   const samples = samplePatternSegment(p0, p1);
   const n = samples.length;
   if (edgeRange.startT === 0 && edgeRange.endT === 1) return samples;
-  const si = Math.floor(edgeRange.startT * (n - 1));
-  const ei = Math.ceil(edgeRange.endT * (n - 1));
-  const seg = samples.slice(si, ei + 1);
-  // For better endpoints, interpolate at fractional positions
-  return seg;
+  const startT = Math.max(0, Math.min(1, edgeRange.startT));
+  const endT = Math.max(startT, Math.min(1, edgeRange.endT));
+  const pointAt = (t: number): PatternPoint => {
+    const scaled = t * (n - 1);
+    const leftIndex = Math.floor(scaled);
+    const rightIndex = Math.min(n - 1, leftIndex + 1);
+    const ratio = scaled - leftIndex;
+    const left = samples[leftIndex];
+    const right = samples[rightIndex];
+    return {
+      id: `${edge.id}:sample:${t.toFixed(9)}`,
+      xMm: left.xMm + (right.xMm - left.xMm) * ratio,
+      yMm: left.yMm + (right.yMm - left.yMm) * ratio,
+    };
+  };
+  const result = [pointAt(startT)];
+  const firstInterior = Math.floor(startT * (n - 1)) + 1;
+  const lastInterior = Math.ceil(endT * (n - 1)) - 1;
+  for (let index = firstInterior; index <= lastInterior; index += 1) {
+    result.push(samples[index]);
+  }
+  if (endT > startT) result.push(pointAt(endT));
+  return result;
 }
 
 export function edgeRangeLength(piece: PatternPiece, edgeRange: EdgeRange): number {
