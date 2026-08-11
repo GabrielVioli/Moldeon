@@ -25,12 +25,19 @@ export function createProjectDocumentSignature(
 ): string {
   const canonical = parsePatternDocumentV3(document);
   const { updatedAt: _updatedAt, ...stableMetadata } = canonical.metadata;
-  const serialized = exportPatternProject({
-    ...canonical,
-    metadata: stableMetadata,
-  });
+  return checksumSerializedProject(
+    exportPatternProject({
+      ...canonical,
+      metadata: stableMetadata,
+    }),
+  );
+}
 
-  return `fnv1a32:${serialized.length}:${fnv1a32(serialized)}`;
+/** Full payload checksum. Unlike the dirty-state signature, this includes updatedAt. */
+export function createProjectPayloadChecksum(
+  document: PatternDocumentV3,
+): string {
+  return checksumSerializedProject(exportPatternProject(document));
 }
 
 export class ProjectDirtyTracker {
@@ -196,6 +203,10 @@ export class LatestRevisionWriteQueue<T> {
     }
     this.waiters = unresolved;
   }
+}
+
+function checksumSerializedProject(value: string): string {
+  return `fnv1a32:${value.length}:${fnv1a32(value)}`;
 }
 
 function fnv1a32(value: string): string {
