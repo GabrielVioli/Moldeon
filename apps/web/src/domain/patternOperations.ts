@@ -101,14 +101,14 @@ export function createPatternPiecesFromSplit(piece: PatternPiece, cut: [PatternV
 
 export function createDart(pieceId: string, edgePoint: PatternVector, apex: PatternVector, widthMm = 20): PatternDart {
   const dx = apex.xMm - edgePoint.xMm; const dy = apex.yMm - edgePoint.yMm;
-  const length = Math.max(0.01, Math.hypot(dx, dy)); const nx = -dy / length; const ny = dx / length;
+  const length = Math.max(Number.EPSILON, Math.hypot(dx, dy)); const nx = -dy / length; const ny = dx / length;
   const legA = { xMm: edgePoint.xMm + nx * widthMm / 2, yMm: edgePoint.yMm + ny * widthMm / 2 };
   const legB = { xMm: edgePoint.xMm - nx * widthMm / 2, yMm: edgePoint.yMm - ny * widthMm / 2 };
   return { id: createDocumentId("dart"), pieceId, apex: { ...apex }, legA, legB, centerLine: { start: { ...edgePoint }, end: { ...apex } }, widthMm, lengthMm: length, directionDeg: Math.atan2(dy, dx) * 180 / Math.PI, closed: false };
 }
 
 export function updateDart(dart: PatternDart, update: Partial<Pick<PatternDart, "widthMm" | "lengthMm" | "directionDeg">>): PatternDart {
-  const widthMm = Math.max(1, update.widthMm ?? dart.widthMm); const lengthMm = Math.max(1, update.lengthMm ?? dart.lengthMm);
+  const widthMm = Math.max(Number.EPSILON, update.widthMm ?? dart.widthMm); const lengthMm = Math.max(Number.EPSILON, update.lengthMm ?? dart.lengthMm);
   const directionDeg = update.directionDeg ?? dart.directionDeg; const angle = directionDeg * Math.PI / 180;
   const start = dart.centerLine.start; const apex = { xMm: start.xMm + Math.cos(angle) * lengthMm, yMm: start.yMm + Math.sin(angle) * lengthMm };
   return createDartFromValues(dart, start, apex, widthMm, lengthMm, directionDeg);

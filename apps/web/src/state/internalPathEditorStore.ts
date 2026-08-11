@@ -5,11 +5,13 @@ import {
   createInternalPath,
   moveInternalPathHandle,
   moveInternalPathNode,
+  normalizeDartPathGeometry,
   normalizeInternalPath,
   removeLastInternalPathNode,
   setInternalPathPurpose,
   setInternalPathSegmentKind,
   type InternalPathAnalysis,
+  type NormalizedDartGeometry,
 } from "../domain/internalPaths";
 import {
   analyzeMultiPieceCut,
@@ -20,7 +22,6 @@ import {
   finalizeBoundaryAnchors,
   moveAnchoredDraftCursor,
   moveAnchoredInternalPathNode,
-  snapInternalPathPointToContour,
   startAnchoredInternalPath,
   type MultiPieceCutAnalysis,
   type MultiPieceCutOperationResult,
@@ -80,9 +81,7 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     if (!piece) return;
     if (get().draftPathId) get().cancelDraft();
     editor.beginEdit(purpose === "dart" ? "Desenhar pence" : "Desenhar caminho interno", "geometry");
-    const initialPoint = purpose === "dart"
-      ? snapInternalPathPointToContour(piece, point, 18)?.point ?? point
-      : point;
+    const initialPoint = point;
     let path = createInternalPath(pieceId, purpose, [initialPoint, initialPoint]);
     path = startAnchoredInternalPath(path, piece);
     const first = path.nodes[0];
@@ -144,8 +143,13 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     const selectedPieceIds = [...useEditorStore.getState().selectedPieceIds];
     const multiPieceCut = purposeUsesMultiplePieces(path, selectedPieceIds);
     let next = removeLastInternalPathNode(path);
-    if (next.nodes.length < 2 || next.segments.length < 1) return false;
+    const minimumNodes = next.purpose === "dart" ? 3 : 2;
+    if (next.nodes.length < minimumNodes || next.segments.length < minimumNodes - 1) return false;
     if (!multiPieceCut) next = finalizeBoundaryAnchors(next, piece);
+    if (next.purpose === "dart") {
+      const normalized = normalizeDartPathGeometry(piece, next);
+      if (normalized.valid && normalized.geometry) next = normalized.geometry.path;
+    }
     next = { ...next, metadata: { ...next.metadata, draft: false } };
     replacePathWithoutHistory(next, selectedPieceIds);
     useEditorStore.getState().commitEdit();
@@ -196,8 +200,14 @@ export const useInternalPathEditorStore = create<InternalPathEditorState>((set, 
     const path = activePath(state.selectedPathId);
     const piece = path ? activePiece(path.pieceId) : null;
     if (!path || !piece || !state.selectedNodeId || path.locked) return;
-    const next = moveAnchoredInternalPathNode(path, piece, state.selectedNodeId, point);
-    replacePathWithoutHistory(next);
+    let next = moveAnchoredInternalPathNode(path, piece, state.selectedNodeId, point);
+    if (next.purpose === "dart") {
+      const normalized = normalizeDartPathGeometry(piece, next);
+      if (normalized.valid && normalized.geometry) next = normalized.geometry.path;
+      replaceDartPathWithoutHistory(next, normalized.geometry);
+    } else {
+      replacePathWithoutHistory(next);
+    }
     set({ analysis: analyzePath(next), multiCutAnalysis: analyzeMultiPath(next) });
   },
 
@@ -409,4 +419,38 @@ function updateEditorGarment(
     selectedPieceIds: validSelectedPieceIds,
     pieceSelectionActive: validSelectedPieceIds.length > 0,
   });
+}
+
+function replaceDartPathWithoutHistory(path: InternalPath, geometry?: NormalizedDartGeometry): void {
+  const editor = useEditorStore.getState();
+  let garment = addOrReplacePath(editor.garment, path.pieceId, path);
+  if (geometry) {
+    garment = {
+      ...garment,
+      pieces: garment.pieces.map((piece) => piece.id === path.pieceId
+        ? {
+            ...piece,
+            darts: (piece.darts ?? []).map((dart) => dart.pathId === path.id
+              ? {
+                  ...dart,
+                  apex: { xMm: geometry.apex.xMm, yMm: geometry.apex.yMm },
+                  legA: { xMm: geometry.legA.xMm, yMm: geometry.legA.yMm },
+                  legB: { xMm: geometry.legB.xMm, yMm: geometry.legB.yMm },
+                  centerLine: {
+                    start: { xMm: geometry.center.xMm, yMm: geometry.center.yMm },
+                    end: { xMm: geometry.apex.xMm, yMm: geometry.apex.yMm },
+                  },
+                  widthMm: geometry.widthMm,
+                  lengthMm: geometry.lengthMm,
+                  directionDeg: Math.atan2(
+                    geometry.apex.yMm - geometry.center.yMm,
+                    geometry.apex.xMm - geometry.center.xMm,
+                  ) * 180 / Math.PI,
+                }
+              : dart),
+          }
+        : piece),
+    };
+  }
+  updateEditorGarment(garment, path.pieceId, editor.selectedPieceIds);
 }

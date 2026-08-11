@@ -168,6 +168,9 @@ export function App() {
   }, [startDraft]);
   const handleSelectTool = useCallback((tool: EditorTool) => {
     cancelIntent();
+    const pathState = useInternalPathEditorStore.getState();
+    if (pathState.draftPathId) pathState.cancelDraft();
+    else if (pathState.selectedPathId) pathState.selectPath(null);
     if (tool !== "select") clearEditorSelection({ preservePieces: tool === "cut" });
     if (tool === "draft") handleCreateBlankPiece();
     else setActiveTool(tool);

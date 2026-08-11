@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditorTool } from "../editor/PatternCanvas";
 import {
   edgeLength,
@@ -76,8 +77,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     : undefined;
   const effectiveCutAnalysis = multiCutAnalysis ?? pathAnalysis;
   const cutTargetCount = multiCutAnalysis?.targetPieceIds.length ?? 0;
-  const finish = () => { cancel(); selectPath(null); onDone(); };
-  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0);
+  const hasContext = Boolean(seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0));
   const showModelingControls = tool === "select"
     && !draftPath
     && !selectedPath
@@ -86,12 +86,69 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     && !seam
     && !seamFirstEdge
     && !measure;
+  const [dismissed, setDismissed] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closingRef = useRef(false);
+
+  const closePanel = useCallback(() => {
+    const editor = useEditorStore.getState();
+    const pathState = useInternalPathEditorStore.getState();
+    closingRef.current = Boolean(
+      editor.seamProposal
+      || editor.seamFirstEdge
+      || editor.nearbySeamSuggestion
+      || editor.measureDraft
+      || pathState.draftPathId,
+    );
+    cancel();
+    if (pathState.draftPathId) pathState.cancelDraft();
+    setDismissed(true);
+  }, [cancel]);
+  const finishOperation = useCallback(() => {
+    cancel();
+    selectPath(null);
+    onDone();
+  }, [cancel, onDone, selectPath]);
+
+  useEffect(() => {
+    if (closingRef.current) {
+      closingRef.current = false;
+      return;
+    }
+    setDismissed(false);
+  }, [tool, selected, selectedPathId, selectedDartId, selectedEdgeId, seam, seamFirstEdge, nearbySeam, measure, pathAnalysis]);
+
+  useEffect(() => {
+    if (!hasContext || dismissed) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closePanel();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        !draftPath
+        && event.target instanceof Element
+        && event.target.closest(".canvas-stack")
+        && !panelRef.current?.contains(event.target)
+      ) closePanel();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [closePanel, dismissed, draftPath, hasContext]);
 
   const confirmCurrentSeam = () => {
     if (!seam) return;
     confirmSeam({ name: "Costura", direction: seam.compatibility.recommendedDirection, treatment: seam.compatibility.recommendedTreatment });
-    if (!useEditorStore.getState().seamProposal && useEditorStore.getState().seamIssues.length === 0) onDone();
+    if (!useEditorStore.getState().seamProposal && useEditorStore.getState().seamIssues.length === 0) finishOperation();
   };
+
+  if (dismissed) return null;
 
   if (!hasContext) {
     const hint = tool === "seam"
@@ -101,15 +158,15 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
           ? "Clique e arraste uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções ao soltar; Escape cancela."
           : "Clique e arraste de borda a borda, ou clique para criar nós internos. Enter confirma, Backspace volta e Escape cancela."
         : tool === "dart"
-          ? "Comece na borda, adicione o ápice e pressione Enter."
+          ? "Desenhe os três pontos do V. Enter confirma e Escape cancela."
           : tool === "measure"
             ? "Clique em dois pontos para medir."
             : null;
-    return hint ? <div className="context-bar"><span>{hint}</span><button onClick={finish}>Cancelar</button></div> : null;
+    return hint ? <div ref={panelRef} className="context-bar"><span>{hint}</span><button type="button" onClick={finishOperation}>Cancelar</button></div> : null;
   }
 
   return (
-    <div className="context-bar" role="region" aria-label="Concluir ação">
+    <div ref={panelRef} className="context-bar" role="region" aria-label="Concluir ação">
       {nearbySeam && !seam ? <>
         <span><strong>Bordas próximas</strong> · deseja costurá-las?</span>
         <button className="primary-button" onClick={() => proposeSeam(nearbySeam.first, nearbySeam.second)}>Costurar</button>
@@ -125,8 +182,8 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       {draftPath ? <>
         <span><strong>{draftPath.purpose === "dart" ? "Desenhando pence" : "Desenhando caminho"}</strong> · {Math.max(1, draftPath.nodes.length - 1)} nó(s) fixos</span>
         <span className="context-shortcuts">Enter confirma · Backspace volta · Escape cancela</span>
-        <button className="primary-button" disabled={draftPath.nodes.length < 3} onClick={() => confirmPath()}>Concluir caminho</button>
-        <button onClick={() => { cancelPath(); onDone(); }}>Cancelar desenho</button>
+        <button type="button" className="primary-button" disabled={draftPath.nodes.length < (draftPath.purpose === "dart" ? 4 : 3)} onClick={() => confirmPath()}>Concluir caminho</button>
+        <button type="button" onClick={() => { cancelPath(); onDone(); }}>Cancelar desenho</button>
       </> : null}
 
       {selectedPath && !draftPath ? <>
@@ -152,16 +209,16 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
             {diagnostic.message}
           </span>
         ))}
-        {selectedPath.purpose === "cut" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>{multiCutAnalysis ? `Aplicar corte em ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"}` : "Aplicar corte"}</button> : null}
-        {selectedPath.purpose === "cut-and-sew" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(true)) finish(); }}>{multiCutAnalysis ? `Cortar ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"} e manter costuradas` : "Cortar e manter costurado"}</button> : null}
-        {selectedPath.purpose === "dart" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>Fechar pence</button> : null}
+        {selectedPath.purpose === "cut" ? <button type="button" className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(false)) finishOperation(); }}>{multiCutAnalysis ? `Aplicar corte em ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"}` : "Aplicar corte"}</button> : null}
+        {selectedPath.purpose === "cut-and-sew" ? <button type="button" className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(true)) finishOperation(); }}>{multiCutAnalysis ? `Cortar ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"} e manter costuradas` : "Cortar e manter costurado"}</button> : null}
+        {selectedPath.purpose === "dart" ? <button type="button" className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => { if (applyPath(false)) finishOperation(); }}>Fechar pence</button> : null}
         <button onClick={deletePath}>Excluir caminho</button>
       </> : null}
 
       {selectedDart ? <>
         <span><strong>Pence estrutural selecionada</strong></span>
-        <label>Largura <input aria-label="Largura da pence" type="number" min="1" step="1" value={Math.round(selectedDart.widthMm)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) updateDart(selectedDart.id, { widthMm: value }); }} /> mm</label>
-        <label>Profundidade <input aria-label="Profundidade da pence" type="number" min="1" step="1" value={Math.round(selectedDart.lengthMm)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) updateDart(selectedDart.id, { lengthMm: value }); }} /> mm</label>
+        <label>Largura <input aria-label="Largura da pence" type="number" step="0.1" value={Number(selectedDart.widthMm.toFixed(1))} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value) && value > 0) updateDart(selectedDart.id, { widthMm: value }); }} /> mm</label>
+        <label>Profundidade <input aria-label="Profundidade da pence" type="number" step="0.1" value={Number(selectedDart.lengthMm.toFixed(1))} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value) && value > 0) updateDart(selectedDart.id, { lengthMm: value }); }} /> mm</label>
         <label>Direção <input aria-label="Direção da pence" type="number" step="1" value={Math.round(selectedDart.directionDeg)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) updateDart(selectedDart.id, { directionDeg: value }); }} />°</label>
         <button onClick={() => invertDart(selectedDart.id)}>Inverter</button>
         <button onClick={() => removeDart(selectedDart.id)}>Excluir</button>
@@ -178,7 +235,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         <button onClick={() => rotateSelected(90)}>Girar seleção 90°</button>
         <button onClick={deleteSelected}>Excluir desbloqueadas</button>
       </> : null}
-      {!draftPath ? <button onClick={finish}>Fechar</button> : null}
+      {!draftPath ? <button type="button" onClick={closePanel}>Fechar</button> : null}
     </div>
   );
 }

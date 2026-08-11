@@ -46,3 +46,13 @@ Nenhum template pode voltar à biblioteca apenas por passar testes geométricos.
 ## Limites desta entrega
 
 Não houve avanço para montagem final, avatar ou física. Nenhum template automático atual é declarado pronto para produção ou oferecido ao usuário como solução pronta. O código fica preservado para uma futura rodada de validação técnica, fora do fluxo público.
+
+## Correção bloqueadora — painéis e pence livre
+
+O botão **Fechar** não encerrava alguns painéis porque a visibilidade era derivada novamente da seleção persistente: o handler limpava intenções, mas a mesma peça selecionada recriava o painel no render seguinte. O `ContextBar` agora mantém um estado explícito de dispensa, preserva a seleção, fecha por botão, Escape e clique no Canvas fora do painel, e reabre quando o usuário seleciona novamente o contexto. Rascunhos ativos mantêm os cliques do Canvas; Escape cancela o rascunho sem criar comando.
+
+A pence dependia de `nodes[0]` como centro de borda e do último nó como ápice. O ponto intermediário era ignorado e as pernas eram sintetizadas por uma largura padrão. A normalização atual examina os três pontos, identifica duas projeções próximas ao contorno e um ápice interno, ordena as pernas deterministicamente pelo contorno, faz snapping e persiste referências topológicas. As sequências perna–ápice–perna, perna invertida–ápice–perna e ápice–perna–perna geram a mesma estrutura.
+
+Não existem limites estéticos de largura ou comprimento. Permanecem somente impossibilidades estruturais: menos de três pontos, ausência de duas pernas associáveis ao contorno, ápice não identificável e região matematicamente degenerada. Após o fechamento, mover ápice ou pernas recalcula largura, comprimento, direção, centro e a relação estrutural; pernas próximas continuam aderindo ao contorno.
+
+O smoke de regressão preserva o corte em V sem overshoot. A auditoria reproduzível está em `scripts/audit-dart-panel-ux.mjs` e cobre desktop, mobile/touch, Fechar, Escape, clique fora, reabertura repetida, cancelamento sem operação, undo/redo, autosave/reload, zoom e pan.
