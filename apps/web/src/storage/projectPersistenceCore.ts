@@ -121,6 +121,7 @@ export class LatestRevisionWriteQueue<T> {
     reject: (reason?: unknown) => void;
   }> = [];
   private lastPersistedRevisionValue = -1;
+  private lastFailure: unknown | null = null;
 
   constructor(
     private readonly writer: (entry: RevisionedPayload<T>) => Promise<void>,
@@ -141,6 +142,7 @@ export class LatestRevisionWriteQueue<T> {
       return Promise.resolve(this.lastPersistedRevisionValue);
     }
 
+    this.lastFailure = null;
     if (this.pending === null || entry.revision >= this.pending.revision) {
       this.pending = entry;
     }
@@ -158,7 +160,23 @@ export class LatestRevisionWriteQueue<T> {
       const currentRun = this.running;
       if (currentRun) await currentRun;
     }
+    if (this.lastFailure !== null) throw this.lastFailure;
     return this.lastPersistedRevisionValue;
+  }
+
+  /** Adopt a known persisted revision after load, or reset to -1 after clear. */
+  reset(lastPersistedRevision = -1): void {
+    if (!this.isIdle || this.waiters.length > 0) {
+      throw new Error("Não é possível resetar a fila de autosave durante uma gravação.");
+    }
+    if (
+      !Number.isSafeInteger(lastPersistedRevision) ||
+      lastPersistedRevision < -1
+    ) {
+      throw new TypeError("A revisão persistida precisa ser -1 ou um inteiro não negativo.");
+    }
+    this.lastPersistedRevisionValue = lastPersistedRevision;
+    this.lastFailure = null;
   }
 
   private ensureRunning(): void {
@@ -166,6 +184,7 @@ export class LatestRevisionWriteQueue<T> {
 
     this.running = this.drain()
       .catch((error: unknown) => {
+        this.lastFailure = error;
         this.pending = null;
         const waiters = this.waiters.splice(0);
         for (const waiter of waiters) waiter.reject(error);
