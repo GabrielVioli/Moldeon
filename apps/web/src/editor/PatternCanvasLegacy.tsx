@@ -236,6 +236,7 @@ function PatternCanvasComponent({
 
   const snapRef = useRef<{ xMm: number; yMm: number; type: string } | null>(null);
   const intentPointerRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const cutLineDragRef = useRef<GestureOrigin | null>(null);
 
   const garment = useEditorStore((s) => s.garment);
   const activePieceId = useEditorStore((s) => s.activePieceId);
@@ -694,6 +695,14 @@ function PatternCanvasComponent({
       const editor = useEditorStore.getState();
       const local = screenToActivePieceLocal(event.clientX, event.clientY);
       session.startPath(editor.activePieceId, toolRef.current === "dart" ? "dart" : "cut", local);
+      if (toolRef.current === "cut") {
+        cutLineDragRef.current = createGestureOrigin(
+          event.pointerId,
+          event.pointerType,
+          event.clientX,
+          event.clientY,
+        );
+      }
       dragRef.current = null;
       scheduleDraw();
       ownGesture(event.pointerId, "internal-path");
@@ -1556,6 +1565,8 @@ function PatternCanvasComponent({
   function beginPinch() {
     pointTapRef.current = null;
     touchPieceCandidateRef.current = null;
+    if (cutLineDragRef.current) useInternalPathEditorStore.getState().cancelDraft();
+    cutLineDragRef.current = null;
     const canvas = canvasRef.current;
     const pointers = [...activePointersRef.current.entries()];
     if (!canvas || pointers.length < 2) return;
@@ -1577,6 +1588,20 @@ function PatternCanvasComponent({
     const finishedDrag = dragRef.current;
     const pointerCountBeforeRelease = Math.max(1, activePointersRef.current.size);
     const pendingPointTap = pointTapRef.current;
+    const cutLineDrag = cutLineDragRef.current;
+    if (cutLineDrag?.pointerId === event.pointerId) {
+      const finish = finishGesture(cutLineDrag, event.clientX, event.clientY);
+      const session = useInternalPathEditorStore.getState();
+      if (event.type === "pointercancel") {
+        session.cancelDraft();
+      } else if (!finish.isClick && toolRef.current === "cut") {
+        if (session.draftPathId) {
+          session.appendDraftPoint(screenToActivePieceLocal(event.clientX, event.clientY));
+          session.confirmDraft();
+        }
+      }
+      cutLineDragRef.current = null;
+    }
     if (pendingPointTap?.pointerId === event.pointerId) {
       const finish = finishGesture(
         pendingPointTap,

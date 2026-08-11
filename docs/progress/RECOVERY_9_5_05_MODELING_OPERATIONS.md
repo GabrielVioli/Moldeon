@@ -12,6 +12,20 @@
 
 ## Continuação de UX — 10/08/2026
 
+### Correção após validação manual — 11/08/2026
+
+A validação manual revelou que o gesto mais natural — pressionar e arrastar a linha sobre peças selecionadas — deixava apenas um ponto fixo em rascunho. Ao soltar, o traço não era confirmado e o botão de aplicação não aparecia. Além disso, uma linha longa atravessando peças separadas podia receber um falso diagnóstico de região degenerada porque linhas retas eram amostradas somente nos dois extremos.
+
+O fluxo foi corrigido para:
+
+- fixar a segunda extremidade e confirmar a linha ao soltar o arraste;
+- manter o fluxo anterior por cliques para cortes com nós intermediários;
+- amostrar linhas retas longas ao longo do segmento para analisar corretamente regiões e prévias;
+- informar explicitamente na interface que o usuário pode clicar e arrastar;
+- aplicar o recorte múltiplo e desfazê-lo normalmente após o gesto.
+
+O roteiro `scripts/recovery-cut-drag-regression.mjs` reproduz a falha e valida a correção na saia real: Frente e Costas selecionadas, arraste único atravessando ambas, duas peças-alvo detectadas, aplicação gerando quatro peças e Undo restaurando duas. Resultado aprovado sem erros de página ou console. A suíte completa passou com **59 arquivos / 350 testes**; typecheck, build e a sessão completa por cliques também foram aprovados.
+
 Esta continuação mantém o gate em **validação manual** e prioriza irritações observadas no uso real, sem iniciar 9.5-06:
 
 - ao ativar **Recortar**, a seleção de peças é preservada;

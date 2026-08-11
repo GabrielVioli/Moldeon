@@ -101,6 +101,27 @@ describe("9.5-05 anchored cut topology", () => {
     expect(result.garment.pieces.some((piece) => piece.id === front.id || piece.id === back.id)).toBe(false);
   });
 
+  it("accepts a long two-node drag across separated selected pieces", () => {
+    const front = rectangle("front-drag");
+    const back = rectangle("back-drag");
+    const path = createInternalPath(back.id, "cut", [
+      { xMm: -520, yMm: 50 },
+      { xMm: 120, yMm: 50 },
+    ]);
+    const source = garment(front, [withPath(back, path)]);
+    source.workspaceStates = [
+      { pieceId: front.id, transform: { pieceId: front.id, xMm: 0, yMm: 0, rotationDeg: 0 }, visible: true, locked: false },
+      { pieceId: back.id, transform: { pieceId: back.id, xMm: 500, yMm: 0, rotationDeg: 0 }, visible: true, locked: false },
+    ];
+
+    const analysis = analyzeMultiPieceCut(source, back.id, path, [front.id, back.id]);
+    expect(analysis.valid).toBe(true);
+    expect(analysis.targetPieceIds).toEqual([front.id, back.id]);
+    const result = applyMultiPieceCutOperation(source, back.id, path.id, [front.id, back.id]);
+    expect(result.ok).toBe(true);
+    expect(result.garment.pieces).toHaveLength(4);
+  });
+
   it("cuts only intersected pieces and keeps selected pieces outside the stroke selected", () => {
     const crossed = rectangle("crossed");
     const outside = rectangle("outside");

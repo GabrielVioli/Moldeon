@@ -98,8 +98,8 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       ? "Clique na primeira borda e depois na segunda."
       : tool === "cut"
         ? selected.length > 1
-          ? "Trace uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções; Enter confirma, Backspace volta e Escape cancela."
-          : "Comece na borda, crie os nós internos e termine na borda. Enter confirma, Backspace volta e Escape cancela."
+          ? "Clique e arraste uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções ao soltar; Escape cancela."
+          : "Clique e arraste de borda a borda, ou clique para criar nós internos. Enter confirma, Backspace volta e Escape cancela."
         : tool === "dart"
           ? "Comece na borda, adicione o ápice e pressione Enter."
           : tool === "measure"
