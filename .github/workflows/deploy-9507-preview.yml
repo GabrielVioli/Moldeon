@@ -1,4 +1,4 @@
-name: Build Recovery 9.5-07 Preview Artifact
+name: Publish Recovery 9.5-07 Preview Assets
 
 on:
   push:
@@ -9,10 +9,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build-preview:
+  publish-assets:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -31,10 +31,20 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Upload built site
-        uses: actions/upload-artifact@v4
-        with:
-          name: moldeon-9507-dist
-          path: apps/web/dist
-          if-no-files-found: error
-          retention-days: 1
+      - name: Publish dist to isolated static branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/moldeon-static
+          mkdir -p /tmp/moldeon-static
+          cp -a apps/web/dist/. /tmp/moldeon-static/
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan deploy-static-9507
+          git rm -rf .
+          cp -a /tmp/moldeon-static/. .
+          touch .nojekyll
+          git add -A
+          git commit -m "deploy: recovery 9.5-07 static build"
+          git push origin HEAD:deploy-static-9507 --force
