@@ -32,6 +32,7 @@ const MIN_REGION_AREA_MM2 = 4;
 const TANGENCY_SINE = 0.035;
 const PATH_CURVE_STEPS = 32;
 const CONTOUR_CURVE_STEPS = 48;
+const PATH_LINE_SAMPLE_SPACING_MM = 18;
 
 export interface InternalPathAnalysis {
   valid: boolean;
@@ -280,10 +281,26 @@ export function sampleInternalPath(pathValue: InternalPath): PatternPoint[] {
       yMm: end.yMm,
       ...(segment.kind === "cubic" && end.handleIn ? { handleIn: end.handleIn } : {}),
     };
-    const sampled = samplePatternSegment(startPoint, endPoint);
+    const sampled = segment.kind === "line"
+      ? sampleStraightInternalSegment(startPoint, endPoint)
+      : samplePatternSegment(startPoint, endPoint);
     points.push(...(points.length === 0 ? sampled : sampled.slice(1)));
   }
   return points;
+}
+
+function sampleStraightInternalSegment(start: PatternPoint, end: PatternPoint): PatternPoint[] {
+  const lengthMm = distance(start, end);
+  const steps = Math.min(256, Math.max(1, Math.ceil(lengthMm / PATH_LINE_SAMPLE_SPACING_MM)));
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    if (index === 0) return { ...start };
+    if (index === steps) return { ...end };
+    const t = index / steps;
+    return {
+      id: `${start.id}::${end.id}::line:${index}`,
+      ...lerp(start, end, t),
+    };
+  });
 }
 
 export function findNearestInternalPathSegment(

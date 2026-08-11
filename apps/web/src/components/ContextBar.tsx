@@ -6,6 +6,9 @@ import {
 } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
+import { CutRegionPreview } from "./CutRegionPreview";
+import { ModelingOperationsControls } from "./ModelingOperationsControls";
+import "../modelingOperations.css";
 
 const PURPOSES: Array<{ value: InternalPathPurpose; label: string }> = [
   { value: "reference", label: "Referência" },
@@ -36,12 +39,12 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const cancel = useEditorStore((state) => state.cancelIntent);
   const deleteSelected = useEditorStore((state) => state.deleteSelectedPieces);
   const rotateSelected = useEditorStore((state) => state.rotateSelectedPieces);
-  const duplicateSelected = useEditorStore((state) => state.duplicateSelectedPieces);
 
   const draftPathId = useInternalPathEditorStore((state) => state.draftPathId);
   const selectedPathId = useInternalPathEditorStore((state) => state.selectedPathId);
   const selectedPathSegmentId = useInternalPathEditorStore((state) => state.selectedSegmentId);
   const pathAnalysis = useInternalPathEditorStore((state) => state.analysis);
+  const multiCutAnalysis = useInternalPathEditorStore((state) => state.multiCutAnalysis);
   const confirmPath = useInternalPathEditorStore((state) => state.confirmDraft);
   const cancelPath = useInternalPathEditorStore((state) => state.cancelDraft);
   const selectPath = useInternalPathEditorStore((state) => state.selectPath);
@@ -61,6 +64,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const draftPath = draftPathId
     ? internalPaths.find((line) => line.id === draftPathId)
     : undefined;
+  const selectedPathPiece = selectedPath
+    ? garment.pieces.find((piece) => piece.id === selectedPath.pieceId)
+    : undefined;
   const selectedPathSegment = selectedPath?.segments.find((segment) => segment.id === selectedPathSegmentId)
     ?? selectedPath?.segments[0];
   const lengthCm = measure ? Math.hypot(measure.end.xMm - measure.start.xMm, measure.end.yMm - measure.start.yMm) / 10 : 0;
@@ -68,8 +74,18 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const selectedSegment = selectedEdgeId
     ? garment.pieces.flatMap((piece) => (piece.segments ?? []).map((segment) => ({ piece, segment }))).find(({ segment }) => segment.id === selectedEdgeId)
     : undefined;
+  const effectiveCutAnalysis = multiCutAnalysis ?? pathAnalysis;
+  const cutTargetCount = multiCutAnalysis?.targetPieceIds.length ?? 0;
   const finish = () => { cancel(); selectPath(null); onDone(); };
-  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || selected.length > 1;
+  const hasContext = seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0);
+  const showModelingControls = tool === "select"
+    && !draftPath
+    && !selectedPath
+    && !selectedDart
+    && !selectedSegment
+    && !seam
+    && !seamFirstEdge
+    && !measure;
 
   const confirmCurrentSeam = () => {
     if (!seam) return;
@@ -81,7 +97,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     const hint = tool === "seam"
       ? "Clique na primeira borda e depois na segunda."
       : tool === "cut"
-        ? "Clique para criar nós do caminho. Enter confirma, Backspace remove o último e Escape cancela."
+        ? selected.length > 1
+          ? "Clique e arraste uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções ao soltar; Escape cancela."
+          : "Clique e arraste de borda a borda, ou clique para criar nós internos. Enter confirma, Backspace volta e Escape cancela."
         : tool === "dart"
           ? "Comece na borda, adicione o ápice e pressione Enter."
           : tool === "measure"
@@ -121,14 +139,22 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         {selectedPathSegment ? <button onClick={() => setPathSegmentKind(selectedPathSegment.kind === "cubic" ? "line" : "cubic")}>Converter segmento para {selectedPathSegment.kind === "cubic" ? "reta" : "curva"}</button> : null}
         <button onClick={togglePathVisibility}>{selectedPath.visible ? "Ocultar" : "Mostrar"}</button>
         <button onClick={togglePathLocked}>{selectedPath.locked ? "Desbloquear" : "Bloquear"}</button>
-        {pathAnalysis?.diagnostics.map((diagnostic) => (
+        {selectedPathPiece && !multiCutAnalysis && (selectedPath.purpose === "cut" || selectedPath.purpose === "cut-and-sew") ? (
+          <CutRegionPreview piece={selectedPathPiece} path={selectedPath} analysis={pathAnalysis} />
+        ) : null}
+        {multiCutAnalysis && cutTargetCount > 0 ? (
+          <span className="context-diagnostic" role="status">
+            <strong>{cutTargetCount === 1 ? "1 peça atravessada." : `${cutTargetCount} peças atravessadas.`}</strong> Um único confirmar aplicará o corte a todas elas.
+          </span>
+        ) : null}
+        {effectiveCutAnalysis?.diagnostics.map((diagnostic) => (
           <span key={`${diagnostic.code}:${diagnostic.message}`} className={diagnostic.severity === "error" ? "context-error" : "context-diagnostic"} role={diagnostic.severity === "error" ? "alert" : "status"}>
             {diagnostic.message}
           </span>
         ))}
-        {selectedPath.purpose === "cut" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(false)}>Aplicar corte</button> : null}
-        {selectedPath.purpose === "cut-and-sew" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(true)}>Cortar e manter costurado</button> : null}
-        {selectedPath.purpose === "dart" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => applyPath(false)}>Fechar pence</button> : null}
+        {selectedPath.purpose === "cut" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>{multiCutAnalysis ? `Aplicar corte em ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"}` : "Aplicar corte"}</button> : null}
+        {selectedPath.purpose === "cut-and-sew" ? <button className="primary-button" disabled={!effectiveCutAnalysis?.valid} onClick={() => { if (applyPath(true)) finish(); }}>{multiCutAnalysis ? `Cortar ${cutTargetCount} ${cutTargetCount === 1 ? "peça" : "peças"} e manter costuradas` : "Cortar e manter costurado"}</button> : null}
+        {selectedPath.purpose === "dart" ? <button className="primary-button" disabled={!pathAnalysis?.valid} onClick={() => { if (applyPath(false)) finish(); }}>Fechar pence</button> : null}
         <button onClick={deletePath}>Excluir caminho</button>
       </> : null}
 
@@ -146,7 +172,12 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         <button onClick={splitSegment}>Dividir segmento</button>
       </> : null}
       {measure ? <span><strong>Medida:</strong> {lengthCm.toFixed(1)} cm</span> : null}
-      {selected.length > 1 ? <><span><strong>{selected.length} peças selecionadas</strong></span><button onClick={() => rotateSelected(90)}>Girar 90°</button><button onClick={() => duplicateSelected(false)}>Duplicar</button><button onClick={() => duplicateSelected(true)}>Espelhar</button><button onClick={deleteSelected}>Excluir desbloqueadas</button></> : null}
+
+      {showModelingControls ? <ModelingOperationsControls /> : null}
+      {selected.length > 1 && tool === "select" ? <>
+        <button onClick={() => rotateSelected(90)}>Girar seleção 90°</button>
+        <button onClick={deleteSelected}>Excluir desbloqueadas</button>
+      </> : null}
       {!draftPath ? <button onClick={finish}>Fechar</button> : null}
     </div>
   );

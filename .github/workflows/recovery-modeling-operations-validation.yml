@@ -1,0 +1,143 @@
+name: Recovery 9.5-05 Modeling Operations
+# Final curve-canvas gate after removing superseded diagnostic scripts.
+
+on:
+  push:
+    branches:
+      - "recovery/9.5-05-modeling-operations"
+    paths:
+      - "apps/web/src/components/ContextBar.tsx"
+      - "apps/web/src/components/CutRegionPreview.tsx"
+      - "apps/web/src/components/ModelingOperationsControls.tsx"
+      - "apps/web/src/components/Toolbar.tsx"
+      - "apps/web/src/modelingOperations.css"
+      - "apps/web/src/recovery.css"
+      - "apps/web/src/domain/modelingCut.ts"
+      - "apps/web/src/domain/modelingCut.test.ts"
+      - "apps/web/src/domain/modelingOperations.ts"
+      - "apps/web/src/domain/modelingOperations.test.ts"
+      - "apps/web/src/editor/PatternCanvasLegacy.tsx"
+      - "apps/web/src/editor/curveHandleInteraction.ts"
+      - "apps/web/src/editor/curveHandleInteraction.test.ts"
+      - "apps/web/src/editor/curveHandleOrigins.test.ts"
+      - "apps/web/src/state/internalPathEditorStore.ts"
+      - "apps/web/src/state/modelingAppliedCutAutosave.test.ts"
+      - "apps/web/src/state/modelingOperationsStore.ts"
+      - "apps/web/src/state/modelingOperationsStore.test.ts"
+      - "scripts/recovery-modeling-operations-live-regression.mjs"
+      - "scripts/recovery-modeling-operations-mobile-regression.mjs"
+      - "scripts/recovery-curve-canvas-final-regression.mjs"
+      - ".github/workflows/recovery-modeling-operations-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-9-5-05-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RECOVERY_BASE_URL: http://127.0.0.1:4180
+      RECOVERY_ARTIFACT_DIR: artifacts/recovery-modeling-operations-live
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: "${{ github.sha }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install browser controller
+        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+
+      - name: Run modeling operations regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RECOVERY_ARTIFACT_DIR"
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 4180 --strictPort > /tmp/moldeon-recovery-9-5-05.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 3
+
+          set +e
+          node scripts/recovery-modeling-operations-live-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-desktop.log" 2>&1
+          DESKTOP_STATUS=$?
+          node scripts/recovery-modeling-operations-mobile-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-mobile.log" 2>&1
+          MOBILE_STATUS=$?
+          node scripts/recovery-curve-canvas-final-regression.mjs > "$RECOVERY_ARTIFACT_DIR/report-curves.log" 2>&1
+          CURVE_STATUS=$?
+          set -e
+
+          cp /tmp/moldeon-recovery-9-5-05.log "$RECOVERY_ARTIFACT_DIR/server.log"
+          echo "--- desktop ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-desktop.log"
+          echo "--- mobile ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-mobile.log"
+          echo "--- curves ---"
+          cat "$RECOVERY_ARTIFACT_DIR/report-curves.log"
+
+          if [ "$DESKTOP_STATUS" -ne 0 ]; then exit "$DESKTOP_STATUS"; fi
+          if [ "$MOBILE_STATUS" -ne 0 ]; then exit "$MOBILE_STATUS"; fi
+          exit "$CURVE_STATUS"
+
+      - name: Publish immutable preview build tag
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_TAG="recovery-9.5-05-preview-${GITHUB_SHA::12}"
+          echo "$PREVIEW_TAG" > "$RECOVERY_ARTIFACT_DIR/preview-tag.txt"
+          if git ls-remote --exit-code --tags origin "refs/tags/$PREVIEW_TAG" >/dev/null 2>&1; then
+            echo "Preview tag already exists: $PREVIEW_TAG"
+            exit 0
+          fi
+          rm -rf .preview/recovery-9-5-05
+          mkdir -p .preview/recovery-9-5-05
+          cp -R apps/web/dist/. .preview/recovery-9-5-05/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .preview/recovery-9-5-05
+          git commit -m "preview: recovery 9.5-05 $GITHUB_SHA"
+          git tag "$PREVIEW_TAG"
+          git push origin "$PREVIEW_TAG"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-05-${{ github.sha }}
+          path: artifacts/recovery-modeling-operations-live
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload validated preview build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-9-5-05-preview-${{ github.sha }}
+          path: apps/web/dist
+          retention-days: 2
+          if-no-files-found: error

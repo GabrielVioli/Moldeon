@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findEditablePatternPoint, normalizeRotation, parsePositiveLength, resizeStraightSegment, rotationFromPointer } from "./workspaceInteractions";
+import { findEditablePatternPoint, normalizeRotation, parsePositiveLength, patternSegmentLength, resizeCurvedSegment, resizeStraightSegment, rotationFromPointer } from "./workspaceInteractions";
 
 describe("workspace interactions", () => {
   it.each([[15, 15], [45, 45], [90, 90], [-30, -30], [450, 90], [-450, -90]])("normalizes %s degrees to %s", (input, expected) => expect(normalizeRotation(input)).toBe(expected));
@@ -18,6 +18,20 @@ describe("workspace interactions", () => {
 
   it("resizes only the end point while preserving direction", () => {
     expect(resizeStraightSegment({ xMm: 10, yMm: 20 }, { xMm: 110, yMm: 20 }, 310)).toEqual({ xMm: 320, yMm: 20 });
+  });
+
+  it("resizes a curved segment to an exact arc length without changing its shape proportions", () => {
+    const start = { id: "a", xMm: 0, yMm: 0, handleOut: { xMm: 30, yMm: -24 } };
+    const end = { id: "b", xMm: 100, yMm: 0, handleIn: { xMm: -28, yMm: -20 } };
+    const currentLength = patternSegmentLength(start, end);
+    const resized = resizeCurvedSegment(start, end, currentLength * 1.5);
+    expect(resized).not.toBeNull();
+    const resizedStart = { ...start, handleOut: resized!.startHandleOut };
+    const resizedEnd = { ...end, ...resized!.end, handleIn: resized!.endHandleIn };
+    expect(patternSegmentLength(resizedStart, resizedEnd)).toBeCloseTo(currentLength * 1.5, 5);
+    const scale = resized!.end.xMm / end.xMm;
+    expect(resized!.startHandleOut?.xMm).toBeCloseTo(start.handleOut.xMm * scale, 5);
+    expect(resized!.endHandleIn?.xMm).toBeCloseTo(end.handleIn.xMm * scale, 5);
   });
 
   it("finds a point on a visible non-active piece using its workspace transform", () => {
