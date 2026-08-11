@@ -40,8 +40,9 @@ const POSITION_EPSILON = 1e-8;
 export function buildPhysicalGarmentAssembly(
   snapshots: readonly PatternSnapshot[],
   garment: GarmentDraft,
+  geometrySignatures: ReadonlyMap<string, string> = new Map(),
 ): GarmentAssemblyState {
-  const base = buildGarmentAssembly(snapshots, garment);
+  const base = buildGarmentAssembly(snapshots, garment, geometrySignatures);
 
   if (base.instances.length === 0) {
     return base;
@@ -454,6 +455,11 @@ function buildFoldConstraints(
       result.push({
         id: `${groupId}:${sampleIndex}`,
         seamId: `fold:${groupId}`,
+        seamGroupId: `fold:${groupId}`,
+        treatment: "fold",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: directReference(first.instance.particleStart + localIndex),
         b: directReference(second.instance.particleStart + localIndex),
         restDistance: FOLD_REST_DISTANCE,

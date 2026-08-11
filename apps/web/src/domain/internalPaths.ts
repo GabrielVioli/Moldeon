@@ -1,5 +1,6 @@
 import {
   createDocumentId,
+  createUnclassifiedBodyPlacement,
   migrateLegacyPieceToSegments,
   syncLegacyPointsFromSegments,
   type EdgeRange,
@@ -882,11 +883,6 @@ function buildResultPiece(
     const finish = source.edgeFinishes?.[sourceEdgeId];
     if (finish) edgeFinishes[targetEdgeId] = finish;
   }
-  const previewPlacements = source.previewPlacements?.map((placement) => ({
-    ...placement,
-    id: `${placement.id}:cut:${index + 1}`,
-    pieceId: id,
-  }));
   const model: PatternPiece = {
     ...structuredClone(source),
     id,
@@ -900,7 +896,8 @@ function buildResultPiece(
     darts: inheritedDarts.map((dart) => ({ ...dart, pieceId: id })),
     annotations: inheritedAnnotations,
     edgeFinishes,
-    ...(previewPlacements ? { previewPlacements } : { previewPlacements: undefined }),
+    bodyPlacement: createUnclassifiedBodyPlacement(true, "migration"),
+    previewPlacements: undefined,
   };
   return {
     piece: syncLegacyPointsFromSegments(model),

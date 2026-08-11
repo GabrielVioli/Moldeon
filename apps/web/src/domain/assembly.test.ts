@@ -4,6 +4,7 @@ import {
   buildAssemblyGraph,
   evaluateGarment3DEligibility,
   shouldLoadThreeViewport,
+  suggestBodyPlacement,
 } from "./assembly";
 import { createDefaultFabricSource } from "./fabric";
 import {
@@ -63,7 +64,28 @@ function garment(widthA = 100, widthB = 100): GarmentDraft {
       inseamMm: 780,
     },
     fabrics: [fabric],
-    pieces: pieces.map((piece) => ({ ...piece, fabricId: fabric.id })),
+    pieces: pieces.map((piece, index) => ({
+      ...piece,
+      fabricId: fabric.id,
+      bodyPlacement: {
+        version: 1,
+        status: "confirmed",
+        includeIn3D: true,
+        role: index ? "back" : "front",
+        region: "torso",
+        surface: index ? "back" : "front",
+        bodySide: "center",
+        anchorId: index ? "torso-back" : "torso-front",
+        outwardFace: "normal",
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 25,
+        rotationXDeg: 0,
+        rotationYDeg: 0,
+        rotationZDeg: 0,
+        source: "manual",
+      },
+    })),
     assemblyPlacements: pieces.map((piece, index) => ({
       pieceId: piece.id,
       role: index ? "back" : "front",
@@ -139,6 +161,27 @@ describe("seam compatibility", () => {
 });
 
 describe("assembly graph and eligibility", () => {
+  it("blocks dressing for unclassified named pieces without mutating a suggestion into the document", () => {
+    const draft = garment();
+    draft.pieces = draft.pieces.map((piece, index) => ({
+      ...piece,
+      name: index === 0 ? "Costas" : "Calça",
+      bodyPlacement: undefined,
+      previewPlacements: undefined,
+    }));
+    draft.assemblyPlacements = [];
+
+    const before = structuredClone(draft);
+    expect(evaluateGarment3DEligibility(draft)).toMatchObject({
+      canOpenViewport: true,
+      canPreviewGarment: true,
+      canDressBody: false,
+      missingClassificationPieceIds: ["front", "back"],
+    });
+    expect(suggestBodyPlacement(draft.pieces[0])).toBeNull();
+    expect(draft).toEqual(before);
+  });
+
   it("round-trips assembly metadata through the document parser", () => {
     const draft = garment();
     draft.seams = [{ ...seamFor(draft), treatment: "ease", name: "Ombro" }];

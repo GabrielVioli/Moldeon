@@ -6,6 +6,7 @@ import type {
   PatternPreviewPlacement,
   PatternSnapshot,
   Seam,
+  SeamDistribution,
   SeamTreatment,
 } from "../domain/pattern";
 import {
@@ -16,7 +17,7 @@ import {
   recommendedPanelRefinement,
   refinePanelTopology,
 } from "./PanelRefinement";
-import type { PanelEdgePath } from "./types";
+import type { PanelEdgePath, PanelVertexSourceMapping } from "./types";
 
 export interface GlobalPointReference {
   particleIndices: number[];
@@ -33,6 +34,11 @@ export interface AssemblyDistanceConstraint {
 export interface AssemblyStitchConstraint {
   id: string;
   seamId: string;
+  seamGroupId: string;
+  treatment: string;
+  distribution: SeamDistribution;
+  targetRatio: number;
+  slackMm: number;
   a: GlobalPointReference;
   b: GlobalPointReference;
   restDistance: number;
@@ -62,10 +68,13 @@ export interface AssemblyInstanceArrangement {
 export interface AssemblyPanelInstance {
   id: string;
   pieceId: string;
+  sourcePatternId: string;
+  geometrySignature: string;
   placement: PatternPreviewPlacement;
   topology: PanelTopology;
   particleStart: number;
   vertexCount: number;
+  vertexSources: Array<PanelVertexSourceMapping & { panelInstanceId: string; meshVertexIndex: number }>;
   arrangement?: AssemblyInstanceArrangement;
 }
 
@@ -90,6 +99,7 @@ const DISTANCE_EPSILON = 1e-8;
 export function buildGarmentAssembly(
   snapshots: readonly PatternSnapshot[],
   garment: GarmentDraft,
+  geometrySignatures: ReadonlyMap<string, string> = new Map(),
 ): GarmentAssemblyState {
   const warnings: string[] = [];
   const instances: AssemblyPanelInstance[] = [];
@@ -98,7 +108,7 @@ export function buildGarmentAssembly(
     let topology: PanelTopology;
 
     try {
-      const baseTopology = buildPanelTopology(snapshot.piece);
+      const baseTopology = buildPanelTopology(snapshot.piece, METERS_PER_MM, geometrySignatures.get(snapshot.piece.id));
       topology = refinePanelTopology(
         baseTopology,
         recommendedPanelRefinement(baseTopology),
@@ -121,12 +131,19 @@ export function buildGarmentAssembly(
     for (const placement of placements) {
       const particleStart = positionValues.length / 3;
       const instance: AssemblyPanelInstance = {
-        id: `${snapshot.piece.id}/${placement.id}`,
+        id: placement.id,
         pieceId: snapshot.piece.id,
+        sourcePatternId: snapshot.piece.id,
+        geometrySignature: topology.geometrySignature,
         placement,
         topology,
         particleStart,
         vertexCount: topology.positions2DMm.length / 2,
+        vertexSources: topology.vertexSources.map((source) => ({
+          ...source,
+          panelInstanceId: placement.id,
+          meshVertexIndex: source.vertexIndex,
+        })),
       };
 
       appendInitialPositions(positionValues, instance);
@@ -186,7 +203,6 @@ function appendInitialPositions(
   const { topology, placement } = instance;
   const centerX = (topology.boundsMm.minX + topology.boundsMm.maxX) / 2;
   const topY = topology.boundsMm.minY;
-  const scale = validScale(placement.scale);
   const rotation = placement.rotationDeg * Math.PI / 180;
 
   for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
@@ -194,10 +210,8 @@ function appendInitialPositions(
     const yMm = topology.positions2DMm[localIndex * 2 + 1];
     const rawX = (xMm - centerX) * METERS_PER_MM * (placement.mirrorX ? -1 : 1);
     const rawY = -(yMm - topY) * METERS_PER_MM;
-    const scaledX = rawX * scale;
-    const scaledY = rawY * scale;
-    const rotatedX = scaledX * Math.cos(rotation) - scaledY * Math.sin(rotation);
-    const rotatedY = scaledX * Math.sin(rotation) + scaledY * Math.cos(rotation);
+    const rotatedX = rawX * Math.cos(rotation) - rawY * Math.sin(rotation);
+    const rotatedY = rawX * Math.sin(rotation) + rawY * Math.cos(rotation);
     target.push(rotatedX, rotatedY, 0);
   }
 }
@@ -239,7 +253,7 @@ function addStructuralEdge(
   target.push({
     a: instance.particleStart + localA,
     b: instance.particleStart + localB,
-    restLength: Math.hypot(dx, dy) * validScale(instance.placement.scale),
+    restLength: Math.hypot(dx, dy),
     stiffness: 0.86,
   });
 }
@@ -298,6 +312,14 @@ function buildGlobalStitchConstraints(
         ),
       );
       const stiffness = seamStiffness(seam.treatment);
+      const targetRatio = Number.isFinite(seam.targetRatio) && (seam.targetRatio ?? 0) > 0
+        ? seam.targetRatio!
+        : Math.max(0.000001, 1 + seam.easeRatio);
+      const slackMm = Number.isFinite(seam.slackMm) && (seam.slackMm ?? 0) >= 0
+        ? seam.slackMm!
+        : 0;
+      const distribution = seam.distribution ?? "uniform";
+      const mismatchMm = Math.abs(firstLength - secondLength * targetRatio);
 
       for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
         const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
@@ -312,9 +334,14 @@ function buildGlobalStitchConstraints(
         result.push({
           id: `${seam.id}/${firstInstance.id}/${secondInstance.id}/${sampleIndex}`,
           seamId: seam.id,
+          seamGroupId: seam.groupId ?? seam.id,
+          treatment: seam.canonicalTreatment ?? seam.treatment ?? "standard",
+          distribution,
+          targetRatio,
+          slackMm,
           a,
           b,
-          restDistance: 0.0015,
+          restDistance: 0.0015 + (mismatchMm + slackMm) * METERS_PER_MM / sampleCount,
           stiffness,
           instanceA: firstInstance.id,
           instanceB: secondInstance.id,
@@ -340,6 +367,11 @@ function buildDartConstraints(
       result.push({
         id: `dart/${instance.id}/${dart.dart.id}`,
         seamId: `dart:${dart.dart.id}`,
+        seamGroupId: `dart:${dart.dart.id}`,
+        treatment: "dart",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: directPoint(instance.particleStart + legA),
         b: directPoint(instance.particleStart + legB),
         restDistance: 0.001,
@@ -730,10 +762,6 @@ function sideOrder(side: PatternPreviewPlacement["bodySide"]): number {
   if (side === "left") return 0;
   if (side === "center") return 1;
   return 2;
-}
-
-function validScale(value: number): number {
-  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function clamp01(value: number): number {

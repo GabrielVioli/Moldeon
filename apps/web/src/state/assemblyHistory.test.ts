@@ -2,6 +2,26 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { getPatternEdges, type GarmentDraft, type PatternPiece } from "../domain/pattern";
 import { useEditorStore } from "./editorStore";
+import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+
+const torsoFrontPlacement = {
+  version: 1 as const,
+  status: "confirmed" as const,
+  includeIn3D: true,
+  role: "custom" as const,
+  region: "torso" as const,
+  surface: "front" as const,
+  bodySide: "center" as const,
+  anchorId: "torso-front" as const,
+  outwardFace: "normal" as const,
+  offsetXMm: 0,
+  offsetYMm: 0,
+  offsetZMm: 25,
+  rotationXDeg: 0,
+  rotationYDeg: 0,
+  rotationZDeg: 0,
+  source: "manual" as const,
+};
 
 function piece(id: string): PatternPiece {
   return { id, name: id, seamAllowanceMm: 10, points: [
@@ -13,7 +33,7 @@ function piece(id: string): PatternPiece {
 function draft(): GarmentDraft {
   const fabric = createDefaultFabricSource();
   const pieces = [piece("a"), piece("b")].map((candidate) => ({ ...candidate, fabricId: fabric.id }));
-  return { id: "history", templateId: "test", name: "History", description: "", bodyType: "feminine", measurements: { heightMm: 1680, bustMm: 920, waistMm: 760, hipMm: 1000, shoulderWidthMm: 400, torsoLengthMm: 440, armLengthMm: 590, inseamMm: 780 }, fabrics: [fabric], pieces };
+  return { id: "history", templateId: "test", name: "History", description: "Teste de histórico", bodyType: "feminine", measurements: { heightMm: 1680, bustMm: 920, waistMm: 760, hipMm: 1000, shoulderWidthMm: 400, torsoLengthMm: 440, armLengthMm: 590, inseamMm: 780 }, fabrics: [fabric], pieces };
 }
 
 function createSeam(name = "Lateral") {
@@ -122,6 +142,49 @@ describe("assembly document history", () => {
     expect(updated.pieces[0].edgeFinishes).toEqual({ [edge.id]: "hem" });
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().garment.ease).toBeUndefined();
+  });
+
+  it("undoes and redoes explicit body classification", () => {
+    useEditorStore.getState().setBodyPlacement("a", torsoFrontPlacement);
+    expect(useEditorStore.getState().garment.pieces[0].bodyPlacement).toMatchObject({
+      status: "confirmed",
+      anchorId: "torso-front",
+    });
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.pieces[0].bodyPlacement?.status).toBe("unclassified");
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.pieces[0].bodyPlacement?.status).toBe("confirmed");
+  });
+
+  it("invalidates canonical geometry on point edit and restores it through undo/redo", () => {
+    useEditorStore.getState().setBodyPlacement("a", torsoFrontPlacement);
+    const before = buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;
+    const point = useEditorStore.getState().snapshot.piece.points[0];
+    useEditorStore.getState().movePoint(point.id, point.xMm + 250, point.yMm);
+    const changed = buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;
+    expect(changed).not.toBe(before);
+    useEditorStore.getState().undo();
+    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).signature).toBe(before);
+    useEditorStore.getState().redo();
+    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).signature).toBe(changed);
+  });
+
+  it("keeps workspace transforms out of body placement and canonical assembly signatures", () => {
+    useEditorStore.getState().setBodyPlacement("a", torsoFrontPlacement);
+    const before = buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;
+    useEditorStore.getState().setPieceWorkspaceTransform("a", {
+      pieceId: "a",
+      xMm: 500,
+      yMm: -320,
+      rotationDeg: 90,
+    });
+    const after = buildResolvedAssemblyInput(useEditorStore.getState().garment);
+    expect(after.signature).toBe(before);
+    expect(after.panelInstances[0].arrangementAnchor).toMatchObject({
+      bodyAnchorId: "torso-front",
+      offsetXMm: 0,
+      offsetYMm: 0,
+    });
   });
 
   it("records a cut as one undoable command", () => {

@@ -1,5 +1,6 @@
 import type { PanelTopology } from "./PanelTopology";
 import type { PanelEdgePath } from "./types";
+import type { PanelVertexSourceMapping } from "./types";
 
 const DEFAULT_REFINEMENT_ITERATIONS = 2;
 const MAX_REFINEMENT_ITERATIONS = 3;
@@ -33,6 +34,7 @@ export function refinePanelTopology(
   let triangles = Array.from(topology.triangles);
   let boundaryVertices = [...topology.boundaryVertices];
   let edges = cloneEdgePaths(topology.edges);
+  const vertexSources: PanelVertexSourceMapping[] = topology.vertexSources.map((source) => structuredClone(source));
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
     const midpointByEdge = new Map<string, number>();
@@ -48,6 +50,29 @@ export function refinePanelTopology(
         (positions[first * 2] + positions[second * 2]) / 2,
         (positions[first * 2 + 1] + positions[second * 2 + 1]) / 2,
       );
+      const firstSource = vertexSources[first];
+      const secondSource = vertexSources[second];
+      const sameEdge = firstSource?.edgeId && firstSource.edgeId === secondSource?.edgeId;
+      const t = sameEdge && firstSource.t !== undefined && secondSource?.t !== undefined
+        ? (firstSource.t + secondSource.t) / 2
+        : undefined;
+      vertexSources.push({
+        vertexIndex: index,
+        sourcePatternId: topology.sourcePatternId,
+        ...(sameEdge ? { sourceSegmentId: firstSource.sourceSegmentId, edgeId: firstSource.edgeId } : {}),
+        ...(t === undefined ? {} : { t }),
+        ...(sameEdge && t !== undefined
+          ? { interpolation: {
+              startPointId: firstSource.interpolation?.startPointId,
+              endPointId: firstSource.interpolation?.endPointId,
+              t,
+            } }
+          : { derivedFromVertexIndices: [first, second] }),
+        restPosition2DMm: {
+          x: positions[index * 2],
+          y: positions[index * 2 + 1],
+        },
+      });
       midpointByEdge.set(key, index);
       return index;
     };
@@ -126,6 +151,7 @@ export function refinePanelTopology(
     edges,
     edgeVertices,
     sourcePointVertices,
+    vertexSources,
     sourcePointToVertices: sourcePointVertices,
   };
 }

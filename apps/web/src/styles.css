@@ -498,6 +498,43 @@ button {
 .assembly-readiness .warning { color: #875b13; }
 .assembly-readiness button { padding: 8px; }
 
+.body-position-notice {
+  padding: 10px 14px;
+  color: #5c4511;
+  background: #fff4ce;
+  border-bottom: 1px solid #d7bd67;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.body-position-section {
+  padding: 12px 0;
+  border-top: 1px solid #d5d1c9;
+}
+
+.body-position-section > details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.body-position-section summary small { font-size: 10px; font-weight: 700; }
+.body-position-section summary small.is-ready { color: #28613c; }
+.body-position-section summary small.is-pending { color: #8a5e11; }
+.body-position-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.body-position-grid label { display: grid; gap: 4px; min-width: 0; color: #62635f; font-size: 10px; font-weight: 700; }
+.body-position-grid select, .body-position-grid input { width: 100%; min-width: 0; min-height: 36px; }
+.body-position-grid select[aria-invalid="true"] { border-color: #b37b1d; background: #fff9e9; }
+.body-position-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; background: #edf3fa; border-radius: 7px; font-size: 11px; }
+.body-position-advanced > summary { margin: 10px 0; cursor: pointer; font-size: 11px; }
+.body-position-instances { display: grid; gap: 3px; padding: 9px; margin: 10px 0; background: #ebe8e1; border-radius: 7px; font-size: 10px; overflow-wrap: anywhere; }
+.body-position-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.body-position-missing { margin-top: 7px !important; color: #8a5e11; font-size: 10px !important; }
+
 .viewport-inspection { position: absolute; z-index: 4; top: 10px; right: 10px; display: flex; gap: 4px; }
 .viewport-inspection button { padding: 6px 8px; border: 1px solid #74736f; border-radius: 4px; background: rgba(245, 243, 238, 0.9); }
 .viewport-inspection button.active { color: white; background: #343632; }
@@ -1438,6 +1475,9 @@ button {
 }
 
 @media (max-width: 760px) {
+  .body-position-grid { grid-template-columns: 1fr; }
+  .body-position-section > details > summary { min-height: 44px; }
+  .body-position-grid select, .body-position-grid input, .body-position-actions button { min-height: 44px; }
   .app-shell {
     grid-template-rows: auto minmax(0, 1fr) 28px;
   }

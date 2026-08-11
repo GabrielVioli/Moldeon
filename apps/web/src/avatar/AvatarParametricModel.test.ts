@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
 import { buildAvatarCollisionModel } from "./AvatarCollisionModel";
-import { buildAvatarParametricModel, sampleTorsoAxes } from "./AvatarParametricModel";
+import { buildAvatarParametricModel, resolveAvatarAnchor, sampleTorsoAxes } from "./AvatarParametricModel";
 
 describe("AvatarParametricModel", () => {
   it("resolves independent regional measurements, neutral pose, anchors and collision proxies", () => {
@@ -16,6 +16,8 @@ describe("AvatarParametricModel", () => {
       "arm-right",
       "waist-front",
       "hip-back",
+      "hip-left",
+      "hip-right",
       "leg-left",
       "leg-right",
       "neck",
@@ -31,6 +33,12 @@ describe("AvatarParametricModel", () => {
     expect(model.legPoseAngleDeg).toBeGreaterThan(0);
     expect(collision.proxies.length).toBeGreaterThanOrEqual(12);
     expect(collision.proxies.every((proxy) => JSON.stringify(proxy).includes("NaN") === false)).toBe(true);
+    expect(resolveAvatarAnchor(model, {
+      region: "custom",
+      surface: "custom",
+      bodySide: "left",
+      bodyAnchorId: "hip-left",
+    })?.id).toBe("hip-left");
   });
 
   it("changes bust region without uniformly scaling stature or legs", () => {

@@ -13,6 +13,7 @@ import type {
   DartTopology,
   PanelEdgePath,
   PanelTopology as CanonicalPanelTopology,
+  PanelVertexSourceMapping,
 } from "./types";
 
 /**
@@ -67,6 +68,7 @@ const DEFAULT_METERS_PER_MM = 0.001;
 export function buildPanelTopology(
   piece: PatternPiece,
   metersPerMm = DEFAULT_METERS_PER_MM,
+  geometrySignature = pieceGeometrySignature(piece),
 ): PanelTopology {
   if (!Number.isFinite(metersPerMm) || metersPerMm <= 0) {
     throw new RangeError(
@@ -83,6 +85,7 @@ export function buildPanelTopology(
   }
 
   const contour: PatternPoint[] = [];
+  const vertexSources: PanelVertexSourceMapping[] = [];
   const pendingPaths: PendingEdgePath[] = [];
 
   for (const edge of orderedEdges) {
@@ -113,7 +116,21 @@ export function buildPanelTopology(
      * O último ponto não é adicionado aqui porque ele também é o primeiro
      * ponto da próxima borda. Isso evita coordenadas duplicadas.
      */
-    contour.push(...samples.slice(0, -1));
+    samples.slice(0, -1).forEach((sample, sampleIndex) => {
+      const vertexIndex = contour.length;
+      const t = sampleIndex / Math.max(1, samples.length - 1);
+      contour.push(sample);
+      vertexSources.push({
+        vertexIndex,
+        sourcePatternId: piece.id,
+        ...(sampleIndex === 0 ? { sourcePointId: start.id } : {}),
+        sourceSegmentId: edge.id,
+        edgeId: edge.id,
+        t,
+        interpolation: { startPointId: start.id, endPointId: end.id, t },
+        restPosition2DMm: { x: sample.xMm, y: sample.yMm },
+      });
+    });
 
     pendingPaths.push({
       edge,
@@ -217,7 +234,9 @@ export function buildPanelTopology(
 
   return {
     pieceId: piece.id,
+    sourcePatternId: piece.id,
     pieceName: piece.name,
+    geometrySignature,
     sourcePiece: structuredClone(piece),
 
     positions2DMm,
@@ -228,6 +247,7 @@ export function buildPanelTopology(
     ),
     edges,
     sourcePointVertices,
+    vertexSources,
     darts,
     boundsMm,
 
@@ -693,4 +713,22 @@ function findClosestCumulativeIndex(
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+function pieceGeometrySignature(piece: PatternPiece): string {
+  const value = JSON.stringify({
+    id: piece.id,
+    points: piece.points,
+    nodes: piece.nodes,
+    segments: piece.segments,
+    contours: piece.contours,
+    internalLines: piece.internalLines,
+    darts: piece.darts,
+  });
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }

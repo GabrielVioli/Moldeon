@@ -68,9 +68,84 @@ export interface BodyMeasurements {
 }
 
 export type BodyType = "feminine" | "masculine";
-export type PreviewRegion = "torso" | "waist" | "hip" | "arm" | "leg";
-export type PreviewSurface = "front" | "back" | "side";
+export type PreviewRegion = "torso" | "waist" | "hip" | "arm" | "leg" | "neck" | "custom";
+export type PreviewSurface = "front" | "back" | "side" | "custom";
 export type PreviewBodySide = "center" | "left" | "right";
+
+export type BodyPlacementStatus = "unclassified" | "confirmed";
+export type BodyPlacementRole =
+  | "front"
+  | "back"
+  | "sleeve"
+  | "waistband"
+  | "leg-front"
+  | "leg-back"
+  | "collar"
+  | "panel"
+  | "custom";
+export type BodyPlacementRegion = PreviewRegion | "neck" | "custom";
+export type BodyPlacementSurface = PreviewSurface | "custom";
+export type BodyPlacementSide = PreviewBodySide | "paired" | "not-applicable";
+export type BodyAnchorId =
+  | "torso-front"
+  | "torso-back"
+  | "shoulder-left"
+  | "shoulder-right"
+  | "arm-left"
+  | "arm-right"
+  | "waist-front"
+  | "waist-back"
+  | "hip-front"
+  | "hip-back"
+  | "hip-left"
+  | "hip-right"
+  | "leg-left"
+  | "leg-right"
+  | "neck";
+
+/**
+ * Classificação corporal explicitamente confirmada pelo usuário.
+ *
+ * Sugestões são calculadas em memória e nunca são persistidas aqui antes da
+ * confirmação. A ausência do objeto equivale ao estado unclassified.
+ */
+export interface PatternBodyPlacement {
+  version: 1;
+  status: BodyPlacementStatus;
+  includeIn3D: boolean;
+  role?: BodyPlacementRole;
+  region?: BodyPlacementRegion;
+  surface?: BodyPlacementSurface;
+  bodySide?: BodyPlacementSide;
+  anchorId?: BodyAnchorId;
+  outwardFace: "normal" | "flipped";
+  offsetXMm: number;
+  offsetYMm: number;
+  offsetZMm: number;
+  rotationXDeg: number;
+  rotationYDeg: number;
+  rotationZDeg: number;
+  source: "manual" | "migration";
+}
+
+export function createUnclassifiedBodyPlacement(
+  includeIn3D = true,
+  source: PatternBodyPlacement["source"] = "manual",
+): PatternBodyPlacement {
+  return {
+    version: 1,
+    status: "unclassified",
+    includeIn3D,
+    outwardFace: "normal",
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 25,
+    rotationXDeg: 0,
+    rotationYDeg: 0,
+    rotationZDeg: 0,
+    source,
+  };
+}
 
 export interface PatternPreviewPlacement {
   id: string;
@@ -78,6 +153,7 @@ export interface PatternPreviewPlacement {
   region: PreviewRegion;
   surface: PreviewSurface;
   bodySide: PreviewBodySide;
+  bodyAnchorId?: BodyAnchorId;
   rotationDeg: number;
   offsetXMm: number;
   offsetYMm: number;
@@ -96,6 +172,8 @@ export interface EdgeRange {
 
 export type SeamDirection = "same" | "opposite";
 export type SeamTreatment = "standard" | "ease" | "gather" | "stretch" | "intentional-mismatch";
+export type SeamDistribution = "uniform" | "proportional" | "center-biased" | "custom";
+export type CanonicalSeamTreatment = SeamTreatment | "elastic" | "zipper";
 
 export interface Seam {
   id: string;
@@ -109,6 +187,11 @@ export interface Seam {
   type: string; // e.g. 'standard'
   name?: string;
   treatment?: SeamTreatment;
+  /** Campos canônicos V3 preservados também na projeção temporária do runtime. */
+  canonicalTreatment?: CanonicalSeamTreatment;
+  distribution?: SeamDistribution;
+  targetRatio?: number;
+  slackMm?: number;
   active?: boolean;
 }
 
@@ -259,6 +342,7 @@ export interface PatternPiece {
   cutOnFold?: boolean;
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
+  bodyPlacement?: PatternBodyPlacement;
   edgeFinishes?: Record<string, EdgeFinish>;
   points: PatternPoint[];
   formatVersion?: 2;
@@ -377,12 +461,22 @@ export function duplicatePatternPiece(
   const newId = options.newId ?? createDocumentId("piece");
   const newName = options.name ?? `${piece.name} – cópia`;
   const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
-  const { previewPlacements: _placements, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
+  const { previewPlacements: _placements, bodyPlacement: sourceBodyPlacement, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
+  const bodyPlacement = sourceBodyPlacement
+    ? {
+        ...sourceBodyPlacement,
+        status: "unclassified" as const,
+        bodySide: undefined,
+        anchorId: undefined,
+        source: "manual" as const,
+      }
+    : undefined;
 
   return migrateLegacyPieceToSegments({
     ...copyable,
     id: newId,
     name: newName,
+    ...(bodyPlacement === undefined ? {} : { bodyPlacement }),
     points: points.map((point, index) => ({
       ...point,
       id: createDocumentId(`${newId}:point-${index + 1}`),
@@ -465,6 +559,9 @@ export function parsePatternPiece(value: unknown): PatternPiece {
           ...placement,
           pieceId: placement.pieceId === "legacy-piece" ? id : placement.pieceId,
         }));
+  const bodyPlacement = value.bodyPlacement === undefined
+    ? undefined
+    : parsePatternBodyPlacement(value.bodyPlacement);
   let edgeFinishes: Record<string, EdgeFinish> | undefined;
   if (value.edgeFinishes !== undefined) {
     if (!isRecord(value.edgeFinishes)) throw new TypeError("Os acabamentos de borda são inválidos.");
@@ -501,6 +598,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(cutOnFold === undefined ? {} : { cutOnFold }),
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
+    ...(bodyPlacement === undefined ? {} : { bodyPlacement }),
     ...(edgeFinishes === undefined ? {} : { edgeFinishes }),
     points,
     ...(internalLines === undefined ? {} : { internalLines }),
@@ -510,6 +608,43 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(guides === undefined ? {} : { guides }),
     ...segmentModel,
   }));
+}
+
+function parsePatternBodyPlacement(value: unknown): PatternBodyPlacement {
+  if (!isRecord(value)) throw new TypeError("A posição corporal da peça é inválida.");
+  const status = readEnum(
+    value.status ?? "unclassified",
+    ["unclassified", "confirmed"] as const,
+    "O estado da posição corporal",
+  );
+  const optionalEnum = <T extends string>(
+    raw: unknown,
+    values: readonly T[],
+    label: string,
+  ): T | undefined => raw === undefined ? undefined : readEnum(raw, values, label);
+  const role = optionalEnum(value.role, ["front", "back", "sleeve", "waistband", "leg-front", "leg-back", "collar", "panel", "custom"] as const, "A função corporal");
+  const region = optionalEnum(value.region, ["torso", "waist", "hip", "arm", "leg", "neck", "custom"] as const, "A região corporal");
+  const surface = optionalEnum(value.surface, ["front", "back", "side", "custom"] as const, "A superfície corporal");
+  const bodySide = optionalEnum(value.bodySide, ["center", "left", "right", "paired", "not-applicable"] as const, "O lado corporal");
+  const anchorId = optionalEnum(value.anchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, "O anchor corporal");
+  return {
+    version: 1,
+    status,
+    includeIn3D: value.includeIn3D === undefined ? true : readBoolean(value.includeIn3D, "A inclusão da peça no 3D"),
+    ...(role === undefined ? {} : { role }),
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    ...(bodySide === undefined ? {} : { bodySide }),
+    ...(anchorId === undefined ? {} : { anchorId }),
+    outwardFace: readEnum(value.outwardFace ?? "normal", ["normal", "flipped"] as const, "A face externa"),
+    offsetXMm: readFiniteNumber(value.offsetXMm ?? 0, "O deslocamento lateral"),
+    offsetYMm: readFiniteNumber(value.offsetYMm ?? 0, "O deslocamento vertical"),
+    offsetZMm: readFiniteNumber(value.offsetZMm ?? 25, "O afastamento da superfície"),
+    rotationXDeg: readFiniteNumber(value.rotationXDeg ?? 0, "A rotação X"),
+    rotationYDeg: readFiniteNumber(value.rotationYDeg ?? 0, "A rotação Y"),
+    rotationZDeg: readFiniteNumber(value.rotationZDeg ?? 0, "A rotação Z"),
+    source: readEnum(value.source ?? "manual", ["manual", "migration"] as const, "A origem da posição corporal"),
+  };
 }
 
 function parseSegmentModel(value: Record<string, unknown>, pieceId: string, points: PatternPoint[]): Partial<PatternPiece> {
@@ -659,8 +794,35 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         ? true
         : readBoolean(s.active, `O estado da costura ${i + 1}`);
       const groupId = s.groupId === undefined ? undefined : readString(s.groupId, `O grupo da costura ${i + 1}`);
+      const canonicalTreatment = s.canonicalTreatment === undefined ? undefined : readEnum(
+        s.canonicalTreatment,
+        ["standard", "ease", "gather", "stretch", "intentional-mismatch", "elastic", "zipper"] as const,
+        `O tratamento canônico da costura ${i + 1}`,
+      );
+      const distribution = s.distribution === undefined ? undefined : readEnum(
+        s.distribution,
+        ["uniform", "proportional", "center-biased", "custom"] as const,
+        `A distribuição da costura ${i + 1}`,
+      );
+      const targetRatio = s.targetRatio === undefined ? undefined : readFiniteNumber(s.targetRatio, `A proporção da costura ${i + 1}`);
+      const slackMm = s.slackMm === undefined ? undefined : readFiniteNumber(s.slackMm, `A folga da costura ${i + 1}`);
       if (!seamIds.has(id)) {
-        seams.push({ id, ...(groupId === undefined ? {} : { groupId }), first, second, direction, easeRatio, type, name, treatment, active });
+        seams.push({
+          id,
+          ...(groupId === undefined ? {} : { groupId }),
+          first,
+          second,
+          direction,
+          easeRatio,
+          type,
+          name,
+          treatment,
+          ...(canonicalTreatment === undefined ? {} : { canonicalTreatment }),
+          ...(distribution === undefined ? {} : { distribution }),
+          ...(targetRatio === undefined ? {} : { targetRatio }),
+          ...(slackMm === undefined ? {} : { slackMm }),
+          active,
+        });
         seamIds.add(id);
       }
     }
@@ -1167,7 +1329,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
     }
     const legacyRegion = readEnum(
       placement.region,
-      ["torso", "waist", "hip", "arm", "leg", "lower", "sleeve"] as const,
+      ["torso", "waist", "hip", "arm", "leg", "neck", "custom", "lower", "sleeve"] as const,
       `A região da posição ${index + 1}`,
     );
     const region: PreviewRegion =
@@ -1178,7 +1340,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
           : legacyRegion;
     const surface = readEnum(
       placement.surface,
-      ["front", "back", "side"] as const,
+      ["front", "back", "side", "custom"] as const,
       `A face da posição ${index + 1}`,
     );
     const bodySide = readEnum(
@@ -1190,6 +1352,13 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
       placement.mirrorX === undefined
         ? undefined
         : readBoolean(placement.mirrorX, `O espelhamento da posição ${index + 1}`);
+    const bodyAnchorId = placement.bodyAnchorId === undefined
+      ? undefined
+      : readEnum(
+        placement.bodyAnchorId,
+        ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const,
+        `O anchor corporal da posição ${index + 1}`,
+      );
     return {
       id:
         placement.id === undefined
@@ -1202,6 +1371,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
       region,
       surface,
       bodySide,
+      ...(bodyAnchorId === undefined ? {} : { bodyAnchorId }),
       rotationDeg:
         placement.rotationDeg === undefined
           ? 0

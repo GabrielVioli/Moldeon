@@ -1,0 +1,459 @@
+{
+  "baseline": {
+    "activeRafs": 0,
+    "activeResizeObservers": 2,
+    "canvases": 0,
+    "avatarRoots": 0,
+    "heap": 20187487
+  },
+  "final": {
+    "activeRafs": 0,
+    "activeResizeObservers": 2,
+    "canvases": 0,
+    "avatarRoots": 0,
+    "heap": 47591939
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 49284985
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 45420990
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 2,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 47934787
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 45712655
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 3,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54212711
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46075723
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 4,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54197935
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46141615
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 5,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54102627
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46406251
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 6,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54009127
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46495915
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 7,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54094015
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46591303
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 8,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54140335
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 46653759
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 9,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54440159
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47030455
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 10,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54545383
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47087279
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 11,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54565743
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47154423
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 12,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54607491
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47222343
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 13,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54537767
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47305263
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 14,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54567723
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47338411
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 15,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54571971
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47370815
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 16,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54669211
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47459147
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 17,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54674907
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47460271
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 18,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54702331
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47536159
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 19,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54775659
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47565703
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    },
+    {
+      "cycle": 20,
+      "open": {
+        "activeRafs": 1,
+        "activeResizeObservers": 3,
+        "canvases": 1,
+        "avatarRoots": 0,
+        "heap": 54859399
+      },
+      "closed": {
+        "activeRafs": 0,
+        "activeResizeObservers": 2,
+        "canvases": 0,
+        "avatarRoots": 0,
+        "heap": 47670915
+      },
+      "viewportData": {
+        "avatarVisible": "false",
+        "avatarStatus": "not-configured",
+        "garmentInstanceCount": "1"
+      }
+    }
+  ],
+  "consoleErrors": []
+}

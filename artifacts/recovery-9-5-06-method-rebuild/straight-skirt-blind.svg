@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1280" viewBox="0 0 1180 1280">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker>
+  </defs>
+  <style>
+    svg { background: #f7f4ee; font-family: Inter, Arial, sans-serif; }
+    .title { font-size: 28px; font-weight: 700; fill: #161616; }
+    .subtitle { font-size: 15px; fill: #555; }
+    .card { fill: #fff; stroke: #c8c2b8; stroke-width: 2; }
+    .card-title, .node-title { font-size: 20px; font-weight: 700; fill: #222; }
+    .small { font-size: 13px; fill: #555; }
+    .pattern { fill: #e7ddd0; fill-opacity: .72; stroke: #171717; stroke-width: 2.3; vector-effect: non-scaling-stroke; }
+    .reference { stroke: #777; stroke-width: 1.2; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; }
+    .grain { stroke: #111; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .dart { fill: none; stroke: #8a3f2e; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+    .node { fill: #fff; stroke: #272727; stroke-width: 2; }
+    .seam { stroke: #3f5a76; stroke-width: 4; }
+    .seam-label { font-size: 14px; font-weight: 700; fill: #23384e; paint-order: stroke; stroke: #f7f4ee; stroke-width: 6; }
+  </style>
+  <text x="60" y="54" class="title">Teste cego</text>
+     <text x="60" y="80" class="subtitle">Sem nomes de peça ou template</text>
+     <g>
+    <rect x="60" y="100" width="500" height="1120" rx="18" class="card"/>
+    
+    <g><path d="M 95 141.55078125 L 448.7421875 135 C 503.66796875 219.3203125 506.69140625 328.5 525 451.7890625 L 516.43359375 1143.1484375 L 95 1143.1484375 L 95 141.55078125 Z" class="pattern"/><line x1="95" y1="451.7890625" x2="525" y2="451.7890625" class="reference"/><line x1="292.8" y1="502.1796875" x2="288.859453125" y2="1084.359375" class="grain" marker-end="url(#arrow)"/><path d="M 280.4375 137.75282118055554 L 300.08984375 312.94422743055554 L 319.7421875 137.75282118055554" class="dart"/></g>
+  </g>
+<g>
+    <rect x="620" y="100" width="500" height="1120" rx="18" class="card"/>
+    
+    <g><path d="M 655 135 L 1029.4953095684803 142.42213883677297 C 1069.5103189493434 223.4202626641651 1071.607879924953 328.2983114446529 1085 446.72983114446527 L 1076.2870544090056 1110.8499061913694 L 655 1110.8499061913694 L 655 135 Z" class="pattern"/><line x1="655" y1="446.72983114446527" x2="1085" y2="446.72983114446527" class="reference"/><line x1="852.8" y1="495.1350844277673" x2="848.7920450281426" y2="1054.3771106941838" class="grain" marker-end="url(#arrow)"/><path d="M 803.6848030018762 138.41527112351295 L 827.3227016885553 362.8542955137568 L 850.9606003752345 138.41527112351295" class="dart"/></g>
+  </g>
+</svg>

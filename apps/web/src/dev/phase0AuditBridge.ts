@@ -54,6 +54,7 @@ export interface Phase0AuditBridge {
   state(): Phase0AuditState;
   assembly(): Phase0AssemblySummary;
   movePiece(pieceId: string, xMm: number, yMm: number): Phase0AuditState;
+  selectPoint(index: number): Phase0AuditState;
   resetSelection(): Phase0AuditState;
 }
 
@@ -66,11 +67,11 @@ declare global {
 export async function installPhase0AuditBridge(): Promise<void> {
   if (!import.meta.env.DEV || window.__moldeonPhase0) return;
 
-  const [{ useEditorStore }, fixtures, engine, assemblyModule] = await Promise.all([
+  const [{ useEditorStore }, fixtures, assemblyModule, inputModule] = await Promise.all([
     import("../state/editorStore"),
     import("../testFixtures/baselineGarments"),
-    import("../core/fallbackPatternEngine"),
     import("../garment3d/ResolvedGarmentAssembly"),
+    import("../garment3d/ResolvedAssemblyInput"),
   ]);
 
   const state = (): Phase0AuditState => {
@@ -126,10 +127,8 @@ export async function installPhase0AuditBridge(): Promise<void> {
 
   const assembly = (): Phase0AssemblySummary => {
     const current = useEditorStore.getState();
-    const snapshots = current.garment.pieces.map(engine.createPatternSnapshot);
     const built = assemblyModule.buildResolvedGarmentAssembly(
-      snapshots,
-      current.garment,
+      inputModule.buildResolvedAssemblyInput(current.garment),
     );
 
     return {
@@ -166,6 +165,13 @@ export async function installPhase0AuditBridge(): Promise<void> {
     assembly,
     movePiece(pieceId, xMm, yMm) {
       useEditorStore.getState().movePieceInWorkspace(pieceId, xMm, yMm);
+      return state();
+    },
+    selectPoint(index) {
+      const current = useEditorStore.getState();
+      const point = current.snapshot.piece.points[index];
+      if (!point) throw new RangeError(`O ponto ${index} não existe na peça ativa.`);
+      current.selectPoint(point.id);
       return state();
     },
     resetSelection() {

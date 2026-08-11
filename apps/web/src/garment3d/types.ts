@@ -64,6 +64,22 @@ export interface SourcePointVertexMapping {
   vertexIndices: number[];
 }
 
+export interface PanelVertexSourceMapping {
+  vertexIndex: number;
+  sourcePatternId: string;
+  sourcePointId?: string;
+  sourceSegmentId?: string;
+  edgeId?: string;
+  t?: number;
+  interpolation?: {
+    startPointId?: string;
+    endPointId?: string;
+    t: number;
+  };
+  derivedFromVertexIndices?: number[];
+  restPosition2DMm: Vector2Mm;
+}
+
 /**
  * Informações da pence que serão convertidas em topologia real na Fase 2.
  *
@@ -88,7 +104,9 @@ export interface DartTopology {
  */
 export interface PanelTopology {
   pieceId: string;
+  sourcePatternId: string;
   pieceName: string;
+  geometrySignature: string;
 
   /**
    * Cópia da peça que originou esta topologia.
@@ -123,6 +141,7 @@ export interface PanelTopology {
    * Relação entre pontos originais do molde e índices da malha.
    */
   sourcePointVertices: Map<string, number[]>;
+  vertexSources: PanelVertexSourceMapping[];
 
   /**
    * Pences preservadas para processamento posterior.

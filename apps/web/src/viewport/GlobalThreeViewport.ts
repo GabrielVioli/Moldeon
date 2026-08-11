@@ -1,14 +1,19 @@
 import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
+import {
+  approvedAvatarForBody,
+  AVATAR_NOT_CONFIGURED_MESSAGE,
+} from "../avatar/ApprovedAvatarAsset";
+import { loadApprovedAvatar } from "../avatar/ApprovedAvatarLoader";
+import type { BodyType } from "../domain/pattern";
 import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
 import {
   buildGarmentAssemblyMeshes,
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
-import { createAvatarVisual } from "./AvatarVisual";
+import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
 
 export type RenderBackend = "webgpu" | "webgl2";
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
@@ -17,7 +22,6 @@ interface PerformanceProfile {
   antialias: boolean;
   maxPixelRatio: number;
   shadows: boolean;
-  avatarRadialSegments: number;
 }
 
 export class ThreeViewport {
@@ -30,6 +34,9 @@ export class ThreeViewport {
   private readonly profile: PerformanceProfile;
   private readonly renderer: ViewportRenderer;
   private garmentMeshes: GarmentAssemblyMeshData[] = [];
+  private avatarSignature: string | null = null;
+  private avatarLoadController: AbortController | null = null;
+  private hasFramedScene = false;
   private frameId: number | null = null;
   private lastFrameAt = 0;
   private disposed = false;
@@ -90,30 +97,30 @@ export class ThreeViewport {
     }
   }
 
-  updateGarment(snapshots: readonly PatternSnapshot[], garment: GarmentDraft): string[] {
-    this.clearGarment();
-    this.clearAvatar();
+  updateGarment(input: ResolvedAssemblyInput): string[] {
+    const garment = input.garmentProjection;
+    const avatar = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
+    const arrangement = buildSemanticAvatarArrangement(input, avatar);
+    const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);
 
-    const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
-    const arrangement = buildSemanticAvatarArrangement(snapshots, garment, avatar);
-    const visual = createAvatarVisual(avatar, {
-      radialSegments: this.profile.avatarRadialSegments,
-      castShadow: this.profile.shadows,
-      receiveShadow: this.profile.shadows,
-    });
-    this.avatarGroup.add(visual);
-    this.garmentMeshes = buildGarmentAssemblyMeshes(arrangement.state, arrangement.garment, {
+    const nextMeshes = buildGarmentAssemblyMeshes(arrangement.state, arrangement.garment, {
       castShadow: this.profile.shadows,
       receiveShadow: this.profile.shadows,
       visibleInstanceIds: arrangement.visibleInstanceIds,
     });
-    for (const item of this.garmentMeshes) this.garmentGroup.add(item.mesh);
+    this.reconcileGarmentMeshes(nextMeshes);
 
-    this.frameDressedScene();
-    this.host.dataset.avatarVisible = "true";
+    if (!this.hasFramedScene || avatarConfiguration.changed) {
+      this.frameDressedScene();
+      this.hasFramedScene = true;
+    }
     this.host.dataset.avatarAnchorCount = String(avatar.anchors.length);
     this.host.dataset.collisionProxyCount = String(arrangement.collision.proxies.length);
     this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+    this.host.dataset.garmentInstanceIds = this.garmentMeshes.map((item) => item.key).join(",");
+    this.host.dataset.garmentGeometrySignatures = this.garmentMeshes
+      .map((item) => `${item.key}:${item.geometrySignature}`)
+      .join(",");
     this.host.dataset.coveredAvatarPartCount = String(arrangement.coveredAvatarPartNames.size);
     this.host.dataset.arrangementDiagnosticCount = String(arrangement.diagnostics.length);
     this.host.dataset.arrangementErrorCount = String(arrangement.diagnostics.filter((item) => item.severity === "error").length);
@@ -123,6 +130,7 @@ export class ThreeViewport {
     return [...new Set([
       ...arrangement.state.warnings,
       ...arrangement.diagnostics.map((diagnostic) => diagnostic.message),
+      ...(avatarConfiguration.warning ? [avatarConfiguration.warning] : []),
     ])];
   }
 
@@ -149,12 +157,22 @@ export class ThreeViewport {
     }
     this.controls.removeEventListener("change", this.requestRender);
     this.controls.dispose();
+    this.avatarLoadController?.abort();
+    this.avatarLoadController = null;
     this.clearGarment();
     this.clearAvatar();
+    disposeObject(this.scene);
     this.scene.clear();
+    if (this.renderer instanceof THREE.WebGLRenderer) {
+      this.renderer.renderLists.dispose();
+      this.renderer.forceContextLoss();
+    }
     this.renderer.dispose();
     this.renderer.domElement.remove();
     delete this.host.dataset.avatarVisible;
+    delete this.host.dataset.avatarStatus;
+    delete this.host.dataset.avatarAssetId;
+    delete this.host.dataset.avatarInspection;
     delete this.host.dataset.garmentInstanceCount;
   }
 
@@ -184,17 +202,113 @@ export class ThreeViewport {
   private clearGarment(): void {
     for (const item of this.garmentMeshes) {
       this.garmentGroup.remove(item.mesh);
-      item.mesh.geometry.dispose();
-      const material = item.mesh.material;
-      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-      else material.dispose();
+      disposeMesh(item.mesh);
     }
     this.garmentMeshes = [];
+  }
+
+  private reconcileGarmentMeshes(nextMeshes: GarmentAssemblyMeshData[]): void {
+    const previousByKey = new Map(this.garmentMeshes.map((item) => [item.key, item]));
+    const reconciled: GarmentAssemblyMeshData[] = [];
+
+    for (const next of nextMeshes) {
+      const previous = previousByKey.get(next.key);
+      previousByKey.delete(next.key);
+      const previousPositions = previous?.mesh.geometry.getAttribute("position");
+      const nextPositions = next.mesh.geometry.getAttribute("position");
+      const canReuse = previous !== undefined
+        && previousPositions !== undefined
+        && previous.geometrySignature === next.geometrySignature
+        && previousPositions.count === nextPositions.count;
+
+      if (!canReuse || !previous || !previousPositions) {
+        if (previous) {
+          this.garmentGroup.remove(previous.mesh);
+          disposeMesh(previous.mesh);
+        }
+        this.garmentGroup.add(next.mesh);
+        reconciled.push(next);
+        continue;
+      }
+
+      const target = previousPositions.array as Float32Array;
+      target.set(nextPositions.array as ArrayLike<number>);
+      previousPositions.needsUpdate = true;
+      previous.mesh.geometry.computeVertexNormals();
+      previous.mesh.geometry.computeBoundingBox();
+      previous.mesh.geometry.computeBoundingSphere();
+      disposeMaterial(previous.mesh.material);
+      previous.mesh.material = next.mesh.material;
+      next.mesh.geometry.dispose();
+      reconciled.push({
+        ...next,
+        mesh: previous.mesh,
+      });
+    }
+
+    for (const stale of previousByKey.values()) {
+      this.garmentGroup.remove(stale.mesh);
+      disposeMesh(stale.mesh);
+    }
+    this.garmentMeshes = reconciled;
   }
 
   private clearAvatar(): void {
     disposeObject(this.avatarGroup);
     this.avatarGroup.clear();
+  }
+
+  private configureApprovedAvatar(
+    bodyType: BodyType,
+  ): { changed: boolean; warning?: string } {
+    const descriptor = approvedAvatarForBody(bodyType);
+    if (!descriptor) {
+      const signature = `missing:${bodyType}`;
+      const changed = signature !== this.avatarSignature;
+      if (changed) {
+        this.avatarLoadController?.abort();
+        this.avatarLoadController = null;
+        this.clearAvatar();
+        this.avatarSignature = signature;
+      }
+      this.host.dataset.avatarVisible = "false";
+      this.host.dataset.avatarStatus = "not-configured";
+      return { changed, warning: AVATAR_NOT_CONFIGURED_MESSAGE };
+    }
+
+    const signature = `${descriptor.assetId}@${descriptor.version}`;
+    if (signature === this.avatarSignature) return { changed: false };
+    this.avatarLoadController?.abort();
+    const controller = new AbortController();
+    this.avatarLoadController = controller;
+    this.clearAvatar();
+    this.avatarSignature = signature;
+    this.host.dataset.avatarVisible = "false";
+    this.host.dataset.avatarStatus = "loading";
+
+    void loadApprovedAvatar(descriptor, controller.signal)
+      .then((loaded) => {
+        if (this.disposed || controller.signal.aborted || this.avatarSignature !== signature) {
+          disposeObject(loaded.root);
+          loaded.root.clear();
+          return;
+        }
+        this.avatarGroup.add(loaded.root);
+        this.host.dataset.avatarVisible = "true";
+        this.host.dataset.avatarStatus = "ready";
+        this.host.dataset.avatarAssetId = descriptor.assetId;
+        this.host.dataset.avatarInspection = JSON.stringify(loaded.inspection);
+        this.frameDressedScene();
+        this.requestRender();
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || this.disposed) return;
+        console.error("Falha ao carregar o manequim aprovado.", error);
+        this.host.dataset.avatarVisible = "false";
+        this.host.dataset.avatarStatus = "error";
+      });
+
+    return { changed: true, warning: "Carregando manequim humano aprovado…" };
   }
 
   private resize(): void {
@@ -255,9 +369,9 @@ function getPerformanceProfile(): PerformanceProfile {
   const compact = window.matchMedia("(max-width: 760px)").matches;
   const lowPower = navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
   if (compact || lowPower) {
-    return { antialias: false, maxPixelRatio: 1.25, shadows: false, avatarRadialSegments: 10 };
+    return { antialias: false, maxPixelRatio: 1.25, shadows: false };
   }
-  return { antialias: true, maxPixelRatio: 1.75, shadows: true, avatarRadialSegments: 18 };
+  return { antialias: true, maxPixelRatio: 1.75, shadows: true };
 }
 
 function createLights(): THREE.Group {
@@ -286,9 +400,25 @@ function createFloor(shadows: boolean): THREE.Mesh {
 function disposeObject(root: THREE.Object3D): void {
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
-    object.geometry.dispose();
-    const material = object.material;
-    if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-    else material.dispose();
+    disposeMesh(object);
   });
+}
+
+function disposeMesh(mesh: THREE.Mesh): void {
+  mesh.geometry.dispose();
+  disposeMaterial(mesh.material);
+}
+
+function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+  const entries = Array.isArray(material) ? material : [material];
+  const textures = new Set<THREE.Texture>();
+  for (const entry of entries) {
+    for (const value of Object.values(entry)) {
+      if (value instanceof THREE.Texture && !textures.has(value)) {
+        textures.add(value);
+        value.dispose();
+      }
+    }
+    entry.dispose();
+  }
 }

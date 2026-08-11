@@ -26,6 +26,7 @@ import {
   type PanelArrangementAnchorV3,
   type PanelInstanceV3,
   type PatternConnectorV3,
+  type PatternBodyPlacementV3,
   type PatternDefinitionV3,
   type PatternDocumentIssueSeverity,
   type PatternDocumentMigrationResult,
@@ -64,6 +65,7 @@ const SEMANTIC_ROLES = [
   "leg-front",
   "leg-back",
   "collar",
+  "panel",
   "custom",
 ] as const;
 const CONNECTOR_ROLES = [
@@ -100,8 +102,8 @@ const SEAM_DISTRIBUTIONS = [
   "center-biased",
   "custom",
 ] as const;
-const PREVIEW_REGIONS = ["torso", "waist", "hip", "arm", "leg"] as const;
-const PREVIEW_SURFACES = ["front", "back", "side"] as const;
+const PREVIEW_REGIONS = ["torso", "waist", "hip", "arm", "leg", "neck", "custom"] as const;
+const PREVIEW_SURFACES = ["front", "back", "side", "custom"] as const;
 const BODY_SIDES = ["center", "left", "right"] as const;
 const BODY_TYPES = ["feminine", "masculine"] as const;
 const SIMULATION_QUALITIES = ["draft", "normal", "fitting", "high"] as const;
@@ -360,7 +362,9 @@ export function patternDocumentV3ToGarmentDraft(
   }));
   const assemblyPlacements = document.patternDefinitions
     .map((definition) =>
-      firstAssemblyPlacementForDefinition(definition.id, document.panelInstances),
+      definition.bodyPlacement.status === "confirmed"
+        ? firstAssemblyPlacementForDefinition(definition.id, document.panelInstances)
+        : undefined,
     )
     .filter((placement): placement is AssemblyPlacement => placement !== undefined);
 
@@ -413,46 +417,40 @@ export function patternDocumentV3ToGarmentDraft(
 
 export function derivePanelInstances(
   definitions: readonly PatternDefinitionV3[],
-  garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
+  _garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
 ): PanelInstanceV3[] {
-  const assemblyByPattern = new Map(
-    (garment?.assemblyPlacements ?? []).map((placement) => [
-      placement.pieceId,
-      placement,
-    ]),
-  );
-  const pieceById = new Map((garment?.pieces ?? []).map((piece) => [piece.id, piece]));
   const result: PanelInstanceV3[] = [];
 
   for (const definition of definitions) {
-    const legacyPiece = pieceById.get(definition.id);
-    const previewPlacements = legacyPiece?.previewPlacements ?? [];
-    const assemblyPlacement = assemblyByPattern.get(definition.id);
+    const classification = definition.bodyPlacement;
+    const confirmed = classification.status === "confirmed"
+      && classification.role !== undefined
+      && classification.region !== undefined
+      && classification.surface !== undefined
+      && classification.bodySide !== undefined
+      && classification.anchorId !== undefined;
     for (let copyIndex = 0; copyIndex < definition.cutQuantity; copyIndex += 1) {
-      const preview = previewPlacements[copyIndex] ?? previewPlacements[0];
-      const bodySide = resolveBodySide(preview, definition, copyIndex);
-      const surface = preview?.surface ?? resolveSurface(assemblyPlacement);
+      const bodySide = confirmed
+        ? resolveClassifiedBodySide(classification.bodySide!, definition, copyIndex)
+        : undefined;
+      const surface = confirmed ? classification.surface : undefined;
       const mirrored =
-        preview?.mirrorX ??
-        assemblyPlacement?.flipped ??
-        (definition.mirrorRule === "paired" && copyIndex % 2 === 1);
-      const anchor = createArrangementAnchor(
-        definition,
-        copyIndex,
-        bodySide,
-        surface,
-        preview,
-        assemblyPlacement,
-      );
+        classification.outwardFace === "flipped"
+        || (definition.mirrorRule === "paired" && copyIndex % 2 === 1);
+      const anchor = confirmed && bodySide && surface
+        ? createArrangementAnchor(definition, copyIndex, bodySide, surface)
+        : undefined;
       result.push({
         id: createPanelInstanceId(definition.id, copyIndex),
         sourcePatternId: definition.id,
         copyIndex,
-        bodySide,
-        surface,
+        placementStatus: confirmed ? "confirmed" : "unclassified",
+        ...(bodySide === undefined ? {} : { bodySide }),
+        ...(surface === undefined ? {} : { surface }),
         mirrored,
         fabricId: definition.fabricId,
-        arrangementAnchor: anchor,
+        ...(anchor === undefined ? {} : { arrangementAnchor: anchor }),
+        includedIn3D: classification.includeIn3D,
         simulationEnabled: true,
         metadata: {},
       });
@@ -555,8 +553,14 @@ export function validatePatternDocumentV3(
     ) {
       issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} possui copyIndex inválido.`, instance.id));
     }
-    if (instance.arrangementAnchor.bodySide !== instance.bodySide) {
+    if (instance.placementStatus === "confirmed" && (!instance.arrangementAnchor || !instance.bodySide || !instance.surface)) {
+      issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} está confirmada sem posicionamento corporal completo.`, instance.id));
+    }
+    if (instance.arrangementAnchor && instance.arrangementAnchor.bodySide !== instance.bodySide) {
       issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} diverge do lado corporal do anchor.`, instance.id));
+    }
+    if (instance.arrangementAnchor && Math.abs(instance.arrangementAnchor.scale - 1) > 1e-9) {
+      issues.push(issue("invalid-panel-instance", "warning", `A instância ${instance.id} possui escala legada ${instance.arrangementAnchor.scale}; a montagem física usará escala 1.`, instance.id));
     }
   }
 
@@ -628,6 +632,7 @@ function patternPieceToDefinition(
     name: piece.name,
     sourceTemplateId: garment.templateId,
     semanticRole: inferSemanticRole(piece.id, garment),
+    bodyPlacement: bodyPlacementForPiece(piece, garment),
     geometry: {
       geometryVersion: 2,
       points: structuredClone(piece.points),
@@ -658,23 +663,25 @@ function definitionToPatternPiece(
   instances: readonly PanelInstanceV3[],
 ): PatternPiece {
   const previewPlacements = instances
-    .filter((instance) => instance.sourcePatternId === definition.id)
+    .filter((instance) => instance.sourcePatternId === definition.id && instance.placementStatus === "confirmed" && instance.arrangementAnchor)
     .sort((left, right) => left.copyIndex - right.copyIndex)
-    .map((instance): PatternPreviewPlacement => ({
-      id:
-        instance.arrangementAnchor.legacyPreviewPlacementId ??
-        `${instance.id}:preview`,
+    .map((instance): PatternPreviewPlacement => {
+      const anchor = instance.arrangementAnchor!;
+      return ({
+      id: instance.id,
       pieceId: definition.id,
-      region: instance.arrangementAnchor.region,
-      surface: instance.arrangementAnchor.surface,
-      bodySide: instance.bodySide,
-      rotationDeg: instance.arrangementAnchor.rotationDeg,
-      offsetXMm: instance.arrangementAnchor.offsetXMm,
-      offsetYMm: instance.arrangementAnchor.offsetYMm,
-      offsetZMm: instance.arrangementAnchor.offsetZMm,
-      scale: instance.arrangementAnchor.scale,
+      region: anchor.region,
+      surface: anchor.surface,
+      bodySide: instance.bodySide!,
+      bodyAnchorId: anchor.bodyAnchorId,
+      rotationDeg: anchor.rotationDeg,
+      offsetXMm: anchor.offsetXMm,
+      offsetYMm: anchor.offsetYMm,
+      offsetZMm: anchor.offsetZMm,
+      scale: 1,
       mirrorX: instance.mirrored,
-    }));
+    });
+    });
 
   return parsePatternPiece({
     id: definition.id,
@@ -683,6 +690,7 @@ function definitionToPatternPiece(
     cutQuantity: definition.cutQuantity,
     cutOnFold: definition.cutOnFold,
     fabricId: definition.fabricId,
+    bodyPlacement: structuredClone(definition.bodyPlacement),
     ...(previewPlacements.length === 0 ? {} : { previewPlacements }),
     edgeFinishes: definition.edgeFinishes,
     points: definition.geometry.points,
@@ -806,10 +814,12 @@ function inferSemanticRole(
   pieceId: string,
   garment: GarmentDraft,
 ): PatternSemanticRoleV3 {
+  const explicitRole = garment.pieces.find((piece) => piece.id === pieceId)?.bodyPlacement?.role;
+  if (explicitRole) return explicitRole;
   const placement = garment.assemblyPlacements?.find(
     (candidate) => candidate.pieceId === pieceId,
   );
-  if (!placement) return "custom";
+  if (!placement || placement.source === "inferred") return "custom";
   switch (placement.role) {
     case "front":
       return "front";
@@ -826,6 +836,83 @@ function inferSemanticRole(
     default:
       return "custom";
   }
+}
+
+function bodyPlacementForPiece(
+  piece: PatternPiece,
+  garment: GarmentDraft,
+): PatternDefinitionV3["bodyPlacement"] {
+  if (piece.bodyPlacement) return structuredClone(piece.bodyPlacement);
+  const preview = piece.previewPlacements?.[0];
+  const assembly = garment.assemblyPlacements?.find(
+    (candidate) => candidate.pieceId === piece.id && candidate.source !== "inferred",
+  );
+  if (!preview && !assembly) {
+    return {
+      version: 1,
+      status: "unclassified",
+      includeIn3D: true,
+      outwardFace: "normal",
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      rotationXDeg: 0,
+      rotationYDeg: 0,
+      rotationZDeg: 0,
+      source: "migration",
+    };
+  }
+  const role = inferSemanticRole(piece.id, garment);
+  const region = preview?.region ?? (assembly ? regionFromLegacyAssemblyRole(assembly.role) : undefined);
+  const surface = preview?.surface ?? assembly?.outwardSide;
+  const previewSides = new Set(piece.previewPlacements?.map((placement) => placement.bodySide) ?? []);
+  const bodySide = previewSides.has("left") && previewSides.has("right")
+    ? "paired"
+    : preview?.bodySide ?? "center";
+  return {
+    version: 1,
+    status: "confirmed",
+    includeIn3D: true,
+    role,
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    bodySide,
+    ...(anchorIdForPlacement(region, surface, preview?.bodySide ?? bodySide) === undefined ? {} : { anchorId: anchorIdForPlacement(region, surface, preview?.bodySide ?? bodySide) }),
+    outwardFace: preview?.mirrorX || assembly?.flipped ? "flipped" : "normal",
+    offsetXMm: preview?.offsetXMm ?? assembly?.positionMm[0] ?? 0,
+    offsetYMm: preview?.offsetYMm ?? assembly?.positionMm[1] ?? 0,
+    offsetZMm: preview?.offsetZMm ?? assembly?.positionMm[2] ?? 25,
+    rotationXDeg: assembly?.rotationDeg[0] ?? 0,
+    rotationYDeg: assembly?.rotationDeg[1] ?? 0,
+    rotationZDeg: preview?.rotationDeg ?? assembly?.rotationDeg[2] ?? 0,
+    source: "migration",
+  };
+}
+
+function regionFromLegacyAssemblyRole(role: AssemblyPlacement["role"]): PatternDefinitionV3["bodyPlacement"]["region"] {
+  if (role === "sleeve") return "arm";
+  if (role === "leg") return "leg";
+  if (role === "waist") return "waist";
+  if (role === "collar") return "neck";
+  return "torso";
+}
+
+function anchorIdForPlacement(
+  region: PatternDefinitionV3["bodyPlacement"]["region"],
+  surface: PatternDefinitionV3["bodyPlacement"]["surface"],
+  side: PatternDefinitionV3["bodyPlacement"]["bodySide"],
+): PatternDefinitionV3["bodyPlacement"]["anchorId"] {
+  if (region === "torso") return surface === "back" ? "torso-back" : surface === "front" ? "torso-front" : undefined;
+  if (region === "waist") return surface === "back" ? "waist-back" : surface === "front" ? "waist-front" : undefined;
+  if (region === "hip") {
+    if (side === "left") return "hip-left";
+    if (side === "right") return "hip-right";
+    return surface === "back" ? "hip-back" : surface === "front" ? "hip-front" : undefined;
+  }
+  if (region === "arm") return side === "left" ? "arm-left" : side === "right" ? "arm-right" : undefined;
+  if (region === "leg") return side === "left" ? "leg-left" : side === "right" ? "leg-right" : undefined;
+  if (region === "neck") return "neck";
+  return undefined;
 }
 
 function mirrorRuleForPiece(piece: PatternPiece): PatternMirrorRuleV3 {
@@ -870,12 +957,18 @@ function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams
     easeRatio: group.compatibility?.legacyEaseRatio ?? Math.abs(group.targetRatio - 1),
     type: group.compatibility?.legacyType ?? group.treatment,
     treatment: legacyTreatment(group),
+    canonicalTreatment: group.treatment,
+    distribution: group.distribution,
+    targetRatio: group.targetRatio,
+    slackMm: group.slackMm,
     active: group.active,
   }));
 }
 
 function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): SeamGroupV3 {
-  const treatment = legacyTreatmentToV3(seam.treatment, seam.type);
+  const treatment = seam.canonicalTreatment === "stretch"
+    ? "elastic"
+    : seam.canonicalTreatment ?? legacyTreatmentToV3(seam.treatment, seam.type);
   return {
     id: seam.id,
     name: seam.name ?? seam.id,
@@ -883,9 +976,9 @@ function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): Se
     second: [structuredClone(seam.second)],
     direction: seam.direction,
     treatment,
-    distribution: treatment === "ease" || treatment === "gather" ? "proportional" : "uniform",
-    targetRatio: Math.max(0.000001, 1 + seam.easeRatio),
-    slackMm: 0,
+    distribution: seam.distribution ?? (treatment === "ease" || treatment === "gather" ? "proportional" : "uniform"),
+    targetRatio: seam.targetRatio ?? Math.max(0.000001, 1 + seam.easeRatio),
+    slackMm: seam.slackMm ?? 0,
     active: seam.active !== false,
     compatibility: {
       legacyEaseRatio: seam.easeRatio,
@@ -968,68 +1061,51 @@ function createArrangementAnchor(
   definition: PatternDefinitionV3,
   copyIndex: number,
   bodySide: PanelInstanceV3["bodySide"],
-  surface: PanelInstanceV3["surface"],
-  preview: PatternPreviewPlacement | undefined,
-  assembly: AssemblyPlacement | undefined,
+  surface: NonNullable<PanelInstanceV3["surface"]>,
 ): PanelArrangementAnchorV3 {
+  const placement = definition.bodyPlacement;
+  if (!bodySide || !placement.region || !placement.anchorId) {
+    throw new Error(`A classificação de ${definition.id} não possui anchor completo.`);
+  }
   return {
     id: `${definition.id}:anchor:${copyIndex + 1}`,
-    region: preview?.region ?? regionFromSemanticRole(definition.semanticRole),
+    bodyAnchorId: resolvePairedAnchorId(placement.anchorId, bodySide),
+    region: placement.region,
     surface,
     bodySide,
-    rotationDeg: preview?.rotationDeg ?? 0,
-    offsetXMm: preview?.offsetXMm ?? 0,
-    offsetYMm: preview?.offsetYMm ?? 0,
-    offsetZMm: preview?.offsetZMm ?? 25,
-    scale: preview?.scale ?? 1,
-    ...(assembly === undefined
-      ? {}
-      : {
-          positionMm: structuredClone(assembly.positionMm),
-          orientationDeg: structuredClone(assembly.rotationDeg),
-          outwardSide: assembly.outwardSide,
-          legacyAssemblyRole: assembly.role,
-        }),
-    source: assembly?.source ?? "migration",
-    ...(preview?.id === undefined
-      ? {}
-      : { legacyPreviewPlacementId: preview.id }),
+    rotationDeg: placement.rotationZDeg,
+    offsetXMm: placement.offsetXMm,
+    offsetYMm: placement.offsetYMm,
+    offsetZMm: placement.offsetZMm,
+    scale: 1,
+    orientationDeg: [placement.rotationXDeg, placement.rotationYDeg, placement.rotationZDeg],
+    outwardSide: surface === "back" ? "back" : "front",
+    source: placement.source,
   };
 }
 
-function resolveBodySide(
-  preview: PatternPreviewPlacement | undefined,
+function resolveClassifiedBodySide(
+  configured: NonNullable<PatternDefinitionV3["bodyPlacement"]["bodySide"]>,
   definition: PatternDefinitionV3,
   copyIndex: number,
 ): PanelInstanceV3["bodySide"] {
-  if (preview?.bodySide && preview.bodySide !== "center") return preview.bodySide;
-  if (definition.cutQuantity === 2 || definition.mirrorRule === "paired") {
+  if (configured === "paired") {
     return copyIndex % 2 === 0 ? "left" : "right";
   }
-  return preview?.bodySide ?? "center";
-}
-
-function resolveSurface(
-  assembly: AssemblyPlacement | undefined,
-): PanelInstanceV3["surface"] {
-  if (!assembly) return "front";
-  return assembly.outwardSide;
-}
-
-function regionFromSemanticRole(
-  role: PatternSemanticRoleV3,
-): PanelArrangementAnchorV3["region"] {
-  switch (role) {
-    case "sleeve":
-      return "arm";
-    case "leg-front":
-    case "leg-back":
-      return "leg";
-    case "waistband":
-      return "waist";
-    default:
-      return "torso";
+  if (configured === "not-applicable") return "center";
+  if ((definition.mirrorRule === "paired" || definition.cutQuantity === 2) && configured === "center") {
+    return copyIndex % 2 === 0 ? "left" : "right";
   }
+  return configured;
+}
+
+function resolvePairedAnchorId(
+  anchorId: NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>,
+  bodySide: NonNullable<PanelInstanceV3["bodySide"]>,
+): NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]> {
+  if (bodySide === "left" && anchorId.endsWith("-right")) return anchorId.replace(/-right$/, "-left") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
+  if (bodySide === "right" && anchorId.endsWith("-left")) return anchorId.replace(/-left$/, "-right") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
+  return anchorId;
 }
 
 function firstAssemblyPlacementForDefinition(
@@ -1075,27 +1151,6 @@ function ensureLegacyRuntimeCompatibility(document: PatternDocumentV3): void {
     if (group.first.length !== group.second.length) {
       throw new PatternDocumentCompatibilityError(
         `A costura ${group.id} possui múltiplos intervalos com quantidades diferentes entre os lados.`,
-        group.id,
-      );
-    }
-    if (group.slackMm !== 0) {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} possui slack e não pode ser projetada no runtime legado sem perda.`,
-        group.id,
-      );
-    }
-    if (
-      group.distribution !== "uniform" &&
-      group.distribution !== "proportional"
-    ) {
-      throw new PatternDocumentCompatibilityError(
-        `A distribuição ${group.distribution} da costura ${group.id} ainda não é suportada pelo runtime legado.`,
-        group.id,
-      );
-    }
-    if (group.treatment === "zipper") {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} usa zíper, ainda não representável no runtime legado.`,
         group.id,
       );
     }
@@ -1297,6 +1352,7 @@ function parsePatternDefinition(value: unknown, index: number): PatternDefinitio
       ? {}
       : { sourceTemplateVersion: readString(value.sourceTemplateVersion, "A versão do template da definição") }),
     semanticRole: readEnum(value.semanticRole, SEMANTIC_ROLES, "O papel semântico da definição"),
+    bodyPlacement: parseBodyPlacementV3(value.bodyPlacement),
     geometry: {
       geometryVersion: 2,
       points: structuredClone(piece.points),
@@ -1317,6 +1373,50 @@ function parsePatternDefinition(value: unknown, index: number): PatternDefinitio
     fabricId: readString(value.fabricId, "O tecido da definição"),
     connectors,
     ...(value.generation === undefined ? {} : { generation: parsePatternGeneration(value.generation) }),
+  };
+}
+
+function parseBodyPlacementV3(value: unknown): PatternBodyPlacementV3 {
+  if (value === undefined) {
+    return {
+      version: 1,
+      status: "unclassified",
+      includeIn3D: true,
+      outwardFace: "normal",
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      rotationXDeg: 0,
+      rotationYDeg: 0,
+      rotationZDeg: 0,
+      source: "migration",
+    };
+  }
+  if (!isRecord(value)) throw new TypeError("A classificação corporal da definição é inválida.");
+  const optionalEnum = <T extends string>(raw: unknown, values: readonly T[], label: string): T | undefined =>
+    raw === undefined ? undefined : readEnum(raw, values, label);
+  const role = optionalEnum(value.role, ["front", "back", "sleeve", "waistband", "leg-front", "leg-back", "collar", "panel", "custom"] as const, "A função corporal");
+  const region = optionalEnum(value.region, PREVIEW_REGIONS, "A região corporal");
+  const surface = optionalEnum(value.surface, PREVIEW_SURFACES, "A superfície corporal");
+  const bodySide = optionalEnum(value.bodySide, ["center", "left", "right", "paired", "not-applicable"] as const, "O lado corporal");
+  const anchorId = optionalEnum(value.anchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, "O anchor corporal");
+  return {
+    version: 1,
+    status: readEnum(value.status ?? "unclassified", ["unclassified", "confirmed"] as const, "O estado da classificação corporal"),
+    includeIn3D: value.includeIn3D === undefined ? true : readBoolean(value.includeIn3D, "A inclusão da peça no 3D"),
+    ...(role === undefined ? {} : { role }),
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    ...(bodySide === undefined ? {} : { bodySide }),
+    ...(anchorId === undefined ? {} : { anchorId }),
+    outwardFace: readEnum(value.outwardFace ?? "normal", ["normal", "flipped"] as const, "A face externa"),
+    offsetXMm: readFiniteNumber(value.offsetXMm ?? 0, "O deslocamento lateral"),
+    offsetYMm: readFiniteNumber(value.offsetYMm ?? 0, "O deslocamento vertical"),
+    offsetZMm: readFiniteNumber(value.offsetZMm ?? 25, "O afastamento da superfície"),
+    rotationXDeg: readFiniteNumber(value.rotationXDeg ?? 0, "A rotação X"),
+    rotationYDeg: readFiniteNumber(value.rotationYDeg ?? 0, "A rotação Y"),
+    rotationZDeg: readFiniteNumber(value.rotationZDeg ?? 0, "A rotação Z"),
+    source: readEnum(value.source ?? "migration", ["manual", "migration"] as const, "A origem da classificação corporal"),
   };
 }
 
@@ -1361,19 +1461,28 @@ function parseConnectors(value: unknown, definitionIndex: number): PatternConnec
 function parsePanelInstances(value: unknown): PanelInstanceV3[] {
   if (!Array.isArray(value)) throw new TypeError("As instâncias físicas são inválidas.");
   return value.map((candidate, index) => {
-    if (!isRecord(candidate) || !isRecord(candidate.arrangementAnchor)) {
+    if (!isRecord(candidate)) {
       throw new TypeError(`A instância ${index + 1} é inválida.`);
     }
-    const anchor = parseArrangementAnchor(candidate.arrangementAnchor, index);
+    const anchor = candidate.arrangementAnchor === undefined
+      ? undefined
+      : isRecord(candidate.arrangementAnchor)
+        ? parseArrangementAnchor(candidate.arrangementAnchor, index)
+        : (() => { throw new TypeError(`O anchor da instância ${index + 1} é inválido.`); })();
+    const placementStatus = candidate.placementStatus === undefined
+      ? (anchor?.source === "manual" || anchor?.source === "template") && anchor.bodyAnchorId ? "confirmed" : "unclassified"
+      : readEnum(candidate.placementStatus, ["unclassified", "confirmed"] as const, `O estado da instância ${index + 1}`);
     return {
       id: readString(candidate.id, `O id da instância ${index + 1}`),
       sourcePatternId: readString(candidate.sourcePatternId, `O molde da instância ${index + 1}`),
       copyIndex: readNonNegativeInteger(candidate.copyIndex, `O índice da instância ${index + 1}`),
-      bodySide: readEnum(candidate.bodySide, BODY_SIDES, `O lado da instância ${index + 1}`),
-      surface: readEnum(candidate.surface, PREVIEW_SURFACES, `A superfície da instância ${index + 1}`),
+      placementStatus,
+      ...(candidate.bodySide === undefined ? {} : { bodySide: readEnum(candidate.bodySide, BODY_SIDES, `O lado da instância ${index + 1}`) }),
+      ...(candidate.surface === undefined ? {} : { surface: readEnum(candidate.surface, PREVIEW_SURFACES, `A superfície da instância ${index + 1}`) }),
       mirrored: readBoolean(candidate.mirrored, `O espelhamento da instância ${index + 1}`),
       fabricId: readString(candidate.fabricId, `O tecido da instância ${index + 1}`),
-      arrangementAnchor: anchor,
+      ...(anchor === undefined ? {} : { arrangementAnchor: anchor }),
+      includedIn3D: candidate.includedIn3D === undefined ? true : readBoolean(candidate.includedIn3D, `A inclusão da instância ${index + 1}`),
       simulationEnabled: readBoolean(candidate.simulationEnabled, `A simulação da instância ${index + 1}`),
       metadata: parsePrimitiveRecord(candidate.metadata, `Os metadados da instância ${index + 1}`),
     };
@@ -1395,11 +1504,20 @@ function parseArrangementAnchor(value: Record<string, unknown>, index: number): 
           ["front", "back", "sleeve", "waist", "leg", "collar", "custom"] as const,
           `O papel legado do anchor ${index + 1}`,
         );
+  const region = readEnum(value.region, PREVIEW_REGIONS, `A região do anchor ${index + 1}`);
+  const surface = readEnum(value.surface, PREVIEW_SURFACES, `A superfície do anchor ${index + 1}`);
+  const bodySide = readEnum(value.bodySide, BODY_SIDES, `O lado corporal do anchor ${index + 1}`);
+  const inferredAnchorId = anchorIdForPlacement(region, surface, bodySide);
   return {
     id: readString(value.id, `O id do anchor ${index + 1}`),
-    region: readEnum(value.region, PREVIEW_REGIONS, `A região do anchor ${index + 1}`),
-    surface: readEnum(value.surface, PREVIEW_SURFACES, `A superfície do anchor ${index + 1}`),
-    bodySide: readEnum(value.bodySide, BODY_SIDES, `O lado corporal do anchor ${index + 1}`),
+    ...(value.bodyAnchorId === undefined && inferredAnchorId === undefined
+      ? {}
+      : { bodyAnchorId: value.bodyAnchorId === undefined
+        ? inferredAnchorId!
+        : readEnum(value.bodyAnchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, `O anchor corporal ${index + 1}`) }),
+    region,
+    surface,
+    bodySide,
     rotationDeg: readFiniteNumber(value.rotationDeg, `A rotação do anchor ${index + 1}`),
     offsetXMm: readFiniteNumber(value.offsetXMm, `O deslocamento X do anchor ${index + 1}`),
     offsetYMm: readFiniteNumber(value.offsetYMm, `O deslocamento Y do anchor ${index + 1}`),

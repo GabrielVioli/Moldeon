@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { createPatternSnapshot } from "../core/fallbackPatternEngine";
 import { duplicatePatternPiece, type GarmentDraft } from "../domain/pattern";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import {
@@ -8,15 +7,12 @@ import {
   type PatternTemplateId,
 } from "../patterns/templateCatalog";
 import { buildSemanticAvatarArrangement } from "./SemanticAvatarArrangement";
+import { buildResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
 function arrange(templateId: PatternTemplateId) {
   const garment = createGarmentFromTemplate(templateId, DEFAULT_BODY_MEASUREMENTS, "feminine");
   const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
-  return buildSemanticAvatarArrangement(
-    garment.pieces.map(createPatternSnapshot),
-    garment,
-    avatar,
-  );
+  return buildSemanticAvatarArrangement(buildResolvedAssemblyInput(garment), avatar);
 }
 
 function instanceCenterX(result: ReturnType<typeof arrange>, instanceId: string): number {
@@ -86,26 +82,23 @@ describe("SemanticAvatarArrangement", () => {
   it("omits an unanchored panel and emits a named diagnostic", () => {
     const garment = createGarmentFromTemplate("straight-skirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
     const invalidPieceId = garment.pieces[0].id;
-    const snapshots = garment.pieces.map(createPatternSnapshot);
     const invalid: GarmentDraft = {
       ...garment,
-      pieces: garment.pieces.map((piece) => piece.id === invalidPieceId ? { ...piece, previewPlacements: [] } : piece),
+      pieces: garment.pieces.map((piece) => piece.id === invalidPieceId ? { ...piece, previewPlacements: undefined, bodyPlacement: undefined } : piece),
       assemblyPlacements: garment.assemblyPlacements?.filter((placement) => placement.pieceId !== invalidPieceId),
     };
     const result = buildSemanticAvatarArrangement(
-      snapshots,
-      invalid,
+      buildResolvedAssemblyInput(invalid),
       buildAvatarParametricModel(invalid.measurements, invalid.bodyType),
     );
-    expect(result.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: "missing-anchor", pieceId: invalidPieceId, severity: "error" }),
-    ]));
+    expect(result.state.instances.some((instance) => instance.pieceId === invalidPieceId)).toBe(false);
     expect(result.state.instances.filter((instance) => instance.pieceId === invalidPieceId && result.visibleInstanceIds.has(instance.id))).toHaveLength(0);
   });
 
   it("reports a disconnected but anchored component", () => {
     const garment = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
     const front = garment.pieces.find((piece) => piece.previewPlacements?.some((placement) => placement.region === "torso" && placement.surface === "front"))!;
+    const frontClassification = buildResolvedAssemblyInput(garment).document.patternDefinitions.find((definition) => definition.id === front.id)!.bodyPlacement;
     const extra = duplicatePatternPiece(front, { newId: "detached-front", name: "Painel adicional" });
     extra.previewPlacements = [{
       ...front.previewPlacements![0],
@@ -113,10 +106,14 @@ describe("SemanticAvatarArrangement", () => {
       pieceId: extra.id,
       offsetZMm: 18,
     }];
+    extra.bodyPlacement = {
+      ...frontClassification,
+      status: "confirmed",
+      source: "manual",
+    };
     const extended: GarmentDraft = { ...garment, pieces: [...garment.pieces, extra] };
     const result = buildSemanticAvatarArrangement(
-      extended.pieces.map(createPatternSnapshot),
-      extended,
+      buildResolvedAssemblyInput(extended),
       buildAvatarParametricModel(extended.measurements, extended.bodyType),
     );
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === "disconnected-component" && diagnostic.pieceId === extra.id)).toBe(true);

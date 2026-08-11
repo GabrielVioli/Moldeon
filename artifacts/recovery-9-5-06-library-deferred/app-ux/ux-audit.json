@@ -1,0 +1,20 @@
+{
+  "baseUrl": "http://localhost:5173",
+  "publicLibraryEntryPoints": 0,
+  "publicAutomaticTemplates": 0,
+  "hiddenTemplateNames": [
+    "Corpo básico",
+    "Camiseta básica",
+    "Blusa básica",
+    "Saia reta",
+    "Minissaia",
+    "Calça reta",
+    "Jaqueta básica"
+  ],
+  "newUserStartsBlank": true,
+  "drawFirstPieceStarted": true,
+  "cancelDrawingPreservedWorkspace": true,
+  "sleeveDisabledWithoutSemanticArmholes": true,
+  "mobileOverflowEditorPx": 0,
+  "consoleErrors": []
+}

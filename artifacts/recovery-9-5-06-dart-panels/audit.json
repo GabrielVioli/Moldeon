@@ -1,0 +1,32 @@
+[
+  {
+    "scenario": "desktop",
+    "closeButton": true,
+    "escape": true,
+    "outsideClick": true,
+    "reopenCycles": 3,
+    "selectionPreserved": true,
+    "dartV": true,
+    "closeDartPanelWithoutApplying": true,
+    "undoRedo": true,
+    "reload": true,
+    "cutVWithoutOvershoot": true,
+    "zoomAndPan": true,
+    "consoleErrors": []
+  },
+  {
+    "scenario": "mobile-touch",
+    "closeButton": true,
+    "escape": true,
+    "outsideClick": true,
+    "reopenCycles": 3,
+    "selectionPreserved": true,
+    "dartV": true,
+    "closeDartPanelWithoutApplying": true,
+    "undoRedo": true,
+    "reload": true,
+    "cutVWithoutOvershoot": true,
+    "zoomAndPan": true,
+    "consoleErrors": []
+  }
+]

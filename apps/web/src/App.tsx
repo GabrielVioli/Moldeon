@@ -26,6 +26,7 @@ import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
+import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -106,6 +107,7 @@ export function App() {
   const [sleeveWizardOpen, setSleeveWizardOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("modeling");
+  const [bodyPlacementNotice, setBodyPlacementNotice] = useState<string | null>(null);
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
@@ -113,31 +115,58 @@ export function App() {
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
   const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
-  const garmentSnapshots = useMemo(
-    () => (showViewport ? garment.pieces.map(createPatternSnapshot) : []),
-    [garment, showViewport],
-  );
+  const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
+  useEffect(() => {
+    if (eligibility.canDressBody) setBodyPlacementNotice(null);
+  }, [eligibility.canDressBody]);
+  const focusMissingBodyPlacement = useCallback(() => {
+    const pieceId = eligibility.missingClassificationPieceIds[0];
+    const piece = garment.pieces.find((candidate) => candidate.id === pieceId);
+    if (!piece) return;
+    selectPiece(piece.id);
+    setWorkspaceMode("modeling");
+    setIsRightPanelOpen(true);
+    setBodyPlacementNotice(`Defina onde “${piece.name}” deve ficar no corpo.`);
+    if (isCompactWorkspace) setMobileView("inspector");
+    window.requestAnimationFrame(() => {
+      const section = document.querySelector<HTMLElement>(`[data-body-position-piece="${CSS.escape(piece.id)}"]`);
+      section?.scrollIntoView({ block: "nearest" });
+      section?.querySelector<HTMLElement>("select[aria-invalid=true]")?.focus();
+    });
+  }, [eligibility.missingClassificationPieceIds, garment.pieces, isCompactWorkspace, selectPiece]);
   const handleSimulate = useCallback(() => {
+    if (!eligibility.canDressBody) {
+      focusMissingBodyPlacement();
+      return;
+    }
+    setBodyPlacementNotice(null);
     setWorkspaceMode("assembly");
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
     if (isCompactWorkspace) setMobileView("preview");
     simulate();
-  }, [isCompactWorkspace, simulate]);
+  }, [eligibility.canDressBody, focusMissingBodyPlacement, isCompactWorkspace, simulate]);
   const handleDressBody = useCallback(() => {
+    if (!eligibility.canDressBody) {
+      focusMissingBodyPlacement();
+      return;
+    }
+    setBodyPlacementNotice(null);
     setWorkspaceMode("fitting");
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
     if (isCompactWorkspace) setMobileView("preview");
-  }, [isCompactWorkspace]);
+  }, [eligibility.canDressBody, focusMissingBodyPlacement, isCompactWorkspace]);
   const closeRightPanel = useCallback(() => {
     setIsRightPanelOpen(false);
+    setPreviewRequested(false);
     if (isCompactWorkspace) setMobileView("editor");
   }, [isCompactWorkspace]);
   const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
     setIsRightPanelOpen(true);
+    if (view === "preview" && eligibility.canOpenViewport) setPreviewRequested(true);
     if (isCompactWorkspace) setMobileView(view);
-  }, [isCompactWorkspace]);
+  }, [eligibility.canOpenViewport, isCompactWorkspace]);
   const handleExportSvg = useCallback(() => {
     const currentGarment = useEditorStore.getState().garment;
     exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
@@ -488,10 +517,10 @@ export function App() {
             panelId="preview-panel"
             active={mobileView === "preview"}
             onPrepare={() => {
-              if (eligibility.canPreviewGarment) void loadGarmentViewport();
+              if (eligibility.canOpenViewport) void loadGarmentViewport();
             }}
             onSelect={() => {
-              if (eligibility.canPreviewGarment) setPreviewRequested(true);
+              if (eligibility.canOpenViewport) setPreviewRequested(true);
               openRightPanel("preview");
             }}
           >
@@ -602,6 +631,7 @@ export function App() {
         </section>
 
         <div id="workspace-right-panel" className="workspace-right-panel" hidden={!isRightPanelOpen} aria-hidden={!isRightPanelOpen}>
+        {bodyPlacementNotice ? <div className="body-position-notice" role="alert">{bodyPlacementNotice}</div> : null}
         <section
           className={`preview-panel workspace-view${mobileView === "preview" ? " is-mobile-active" : ""}`}
           id="preview-panel"
@@ -621,8 +651,7 @@ export function App() {
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder loading />}>
               <LazyGarmentViewport
-                garment={garment}
-                snapshots={garmentSnapshots}
+                assemblyInput={assemblyInput}
                 simulateVersion={simulateVersion}
                 active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
                 onBackendChange={setRenderBackend}

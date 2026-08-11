@@ -87,7 +87,7 @@ export const Toolbar = memo(function Toolbar({
       <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
         <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => onWorkspaceModeChange("modeling")}>Modelagem</button>
         <button type="button" className={workspaceMode === "assembly" ? "active" : ""} onClick={() => onWorkspaceModeChange("assembly")}>Montagem</button>
-        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
+        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} aria-disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
       </nav>
 
       <nav className="tool-buttons" aria-label="Ferramentas">

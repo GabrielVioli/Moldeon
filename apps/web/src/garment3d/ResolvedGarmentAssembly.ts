@@ -1,15 +1,13 @@
 import type {
-  GarmentDraft,
-  PatternSnapshot,
   PreviewBodySide,
 } from "../domain/pattern";
-import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import {
   type AssemblyPanelInstance,
   type AssemblyStitchConstraint,
   type GarmentAssemblyState,
 } from "./GarmentAssembly";
 import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
+import type { ResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
 /**
  * Entrada final da montagem usada pelo viewport.
@@ -18,11 +16,13 @@ import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
  * semânticas dos moldes-base e remove ligações cruzadas entre lados do corpo.
  */
 export function buildResolvedGarmentAssembly(
-  snapshots: readonly PatternSnapshot[],
-  garment: GarmentDraft,
+  input: ResolvedAssemblyInput,
 ): GarmentAssemblyState {
-  const resolvedGarment = resolveTemplateAssemblyGarment(garment);
-  const state = buildPhysicalGarmentAssembly(snapshots, resolvedGarment);
+  const state = buildPhysicalGarmentAssembly(
+    input.snapshots,
+    input.garmentProjection,
+    input.geometrySignatures,
+  );
   const instanceById = new Map(
     state.instances.map((instance) => [instance.id, instance]),
   );

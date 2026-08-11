@@ -3,12 +3,9 @@ import {
   type GarmentDraft,
   type PatternPiece,
   type PatternPreviewPlacement,
-  type PatternSnapshot,
   type PreviewBodySide,
-  type SegmentRole,
 } from "../domain/pattern";
 import { buildAssemblyGraph, validateSeamForAssembly } from "../domain/assembly";
-import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import {
   addScaled3,
   cross3,
@@ -24,6 +21,7 @@ import {
 import { buildAvatarCollisionModel, type AvatarCollisionModel } from "../avatar/AvatarCollisionModel";
 import type { AssemblyPanelInstance, GarmentAssemblyState, GlobalPointReference } from "./GarmentAssembly";
 import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
+import type { ResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
 export type ArrangementDiagnosticCode =
   | "missing-anchor"
@@ -54,17 +52,20 @@ export interface SemanticAvatarArrangementResult {
 const METERS_PER_MM = 0.001;
 
 export function buildSemanticAvatarArrangement(
-  snapshots: readonly PatternSnapshot[],
-  garment: GarmentDraft,
+  input: ResolvedAssemblyInput,
   avatar: AvatarParametricModel,
 ): SemanticAvatarArrangementResult {
-  const resolvedGarment = resolveTemplateAssemblyGarment(garment);
+  const resolvedGarment = input.garmentProjection;
   const diagnostics: ArrangementDiagnostic[] = [];
   const invalidPieceIds = validateSemanticMetadata(resolvedGarment, diagnostics);
   validateSeams(resolvedGarment, diagnostics);
   validateComponents(resolvedGarment, diagnostics);
 
-  const state = buildPhysicalGarmentAssembly(snapshots, resolvedGarment);
+  const state = buildPhysicalGarmentAssembly(
+    input.snapshots,
+    resolvedGarment,
+    input.geometrySignatures,
+  );
   const pieceById = new Map(resolvedGarment.pieces.map((piece) => [piece.id, piece]));
   const visibleInstanceIds = new Set<string>();
 
@@ -158,59 +159,9 @@ function validateSemanticMetadata(
       }
     }
 
-    const required = requiredRoles(placements);
-    const edges = getPatternEdges(piece);
-    for (const requirement of required) {
-      const found = edges.filter((edge) => edge.role === requirement.role).length;
-      if (found < requirement.minimum) {
-        diagnostics.push({
-          code: "missing-connector",
-          severity: "error",
-          pieceId: piece.id,
-          connectorId: requirement.role,
-          message: `${piece.name}: conector ${requirement.role} ausente ou incompleto (${found}/${requirement.minimum}).`,
-        });
-        invalid.add(piece.id);
-      }
-    }
   }
 
   return invalid;
-}
-
-function requiredRoles(
-  placements: readonly PatternPreviewPlacement[],
-): Array<{ role: SegmentRole; minimum: number }> {
-  const regions = new Set(placements.map((placement) => placement.region));
-  const surfaces = new Set(placements.map((placement) => placement.surface));
-  if (regions.has("arm")) {
-    return [
-      { role: "sleeveCapFront", minimum: 1 },
-      { role: "sleeveCapBack", minimum: 1 },
-      { role: "sideSeam", minimum: 2 },
-    ];
-  }
-  if (regions.has("leg")) {
-    return [
-      { role: "outseam", minimum: 1 },
-      { role: "inseam", minimum: 1 },
-    ];
-  }
-  if (regions.has("hip") || regions.has("waist")) {
-    return [
-      { role: "waist", minimum: 1 },
-      { role: "sideSeam", minimum: 1 },
-    ];
-  }
-  if (regions.has("torso")) {
-    return [
-      { role: "shoulder", minimum: 1 },
-      { role: "sideSeam", minimum: 1 },
-      ...(surfaces.has("front") ? [{ role: "frontArmhole" as const, minimum: 1 }] : []),
-      ...(surfaces.has("back") ? [{ role: "backArmhole" as const, minimum: 1 }] : []),
-    ];
-  }
-  return [];
 }
 
 function validateSeams(garment: GarmentDraft, diagnostics: ArrangementDiagnostic[]): void {
@@ -288,7 +239,7 @@ function resolveCoveredAvatarParts(
     if (!visibleInstanceIds.has(instance.id)) continue;
     const region = instance.placement.region;
     const side = instance.placement.bodySide;
-    const panelLength = instance.topology.boundsMm.height * validScale(instance.placement.scale) * METERS_PER_MM;
+    const panelLength = instance.topology.boundsMm.height * METERS_PER_MM;
 
     if (region === "torso") {
       covered.add("avatar:chest");
@@ -370,7 +321,6 @@ function mapTorsoSurface(
   const foldX = findFoldCoordinate(piece, instance);
   const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
   const surfaceSign = instance.placement.surface === "back" ? -1 : 1;
-  const scale = validScale(instance.placement.scale);
   const topY = instance.placement.region === "torso"
     ? avatar.landmarks.shoulderY + 0.012
     : avatar.landmarks.waistY + 0.008;
@@ -391,7 +341,7 @@ function mapTorsoSurface(
     const sourceY = yMm - bounds.minY;
     const rotatedX = sourceX * Math.cos(rotation) - sourceY * Math.sin(rotation);
     const rotatedY = sourceX * Math.sin(rotation) + sourceY * Math.cos(rotation);
-    const worldY = topY - rotatedY * METERS_PER_MM * scale - instance.placement.offsetYMm * METERS_PER_MM;
+    const worldY = topY - rotatedY * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM;
     const axes = sampleTorsoAxes(avatar, worldY);
     const normalizedAcross = clamp01(Math.abs(rotatedX) / patternHalfWidth);
     const angle = normalizedAcross * Math.PI * 0.5;
@@ -413,7 +363,6 @@ function mapArm(
 ): void {
   const bounds = instance.topology.boundsMm;
   const width = Math.max(1, bounds.width);
-  const scale = validScale(instance.placement.scale);
   const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
   const frontAxis: AvatarVector3 = [0, 0, 1];
   const radialOut = normalize3([
@@ -421,7 +370,7 @@ function mapArm(
     sideSign * (frontAxis[2] * anchor.axis[0] - frontAxis[0] * anchor.axis[2]),
     sideSign * (frontAxis[0] * anchor.axis[1] - frontAxis[1] * anchor.axis[0]),
   ]);
-  const patternRadius = width * METERS_PER_MM * scale / (Math.PI * 2);
+  const patternRadius = width * METERS_PER_MM / (Math.PI * 2);
   const rotation = instance.placement.rotationDeg * Math.PI / 180;
 
   for (let local = 0; local < instance.vertexCount; local += 1) {
@@ -429,7 +378,7 @@ function mapArm(
     const yMm = instance.topology.positions2DMm[local * 2 + 1];
     let u = clamp01((xMm - bounds.minX) / width);
     if (instance.placement.mirrorX) u = 1 - u;
-    const distance = Math.max(0, (yMm - bounds.minY) * METERS_PER_MM * scale - instance.placement.offsetYMm * METERS_PER_MM);
+    const distance = Math.max(0, (yMm - bounds.minY) * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM);
     const center = addScaled3(anchor.position, anchor.axis, distance);
     const radius = Math.max(sampleArmRadius(avatar, distance) + anchor.initialMarginM, patternRadius * 0.9);
     const angle = (u - 0.5) * Math.PI * 2 + rotation;
@@ -450,7 +399,6 @@ function mapLeg(
 ): void {
   const bounds = instance.topology.boundsMm;
   const width = Math.max(1, bounds.width);
-  const scale = validScale(instance.placement.scale);
   const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
   const baseLegX = anchor.position[0];
   const surfaceFront = instance.placement.surface !== "back";
@@ -460,7 +408,7 @@ function mapLeg(
     const yMm = instance.topology.positions2DMm[local * 2 + 1];
     let u = clamp01((xMm - bounds.minX) / width);
     if (instance.placement.mirrorX) u = 1 - u;
-    const worldY = avatar.landmarks.waistY - (yMm - bounds.minY) * METERS_PER_MM * scale - instance.placement.offsetYMm * METERS_PER_MM;
+    const worldY = avatar.landmarks.waistY - (yMm - bounds.minY) * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM;
     const aboveCrotch = worldY > avatar.landmarks.crotchY;
     const pelvisAxes = sampleTorsoAxes(avatar, worldY);
     const blend = aboveCrotch
@@ -470,7 +418,7 @@ function mapLeg(
       ? sideSign * lerp(Math.abs(baseLegX), pelvisAxes.halfWidth * 0.34, blend)
       : baseLegX;
     const legRadius = sampleLegRadius(avatar, worldY);
-    const halfPanelRadius = Math.max(legRadius + anchor.initialMarginM, width * METERS_PER_MM * scale / Math.PI * 0.44);
+    const halfPanelRadius = Math.max(legRadius + anchor.initialMarginM, width * METERS_PER_MM / Math.PI * 0.44);
     const radiusX = aboveCrotch ? lerp(halfPanelRadius, pelvisAxes.halfWidth * 0.62, blend) : halfPanelRadius;
     const radiusZ = aboveCrotch ? lerp(halfPanelRadius, pelvisAxes.halfDepth, blend) : halfPanelRadius * 0.9;
     const angle = surfaceFront ? Math.PI * (1 - u) : Math.PI + Math.PI * u;
@@ -571,10 +519,6 @@ function vertex(
 
 function placementLabel(placement: PatternPreviewPlacement): string {
   return `${placement.region}/${placement.surface}/${placement.bodySide}`;
-}
-
-function validScale(value: number): number {
-  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function clamp01(value: number): number {

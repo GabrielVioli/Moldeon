@@ -5,11 +5,18 @@ import type {
   AssemblyPanelInstance,
   GarmentAssemblyState,
 } from "./GarmentAssembly";
+import type { PanelVertexSourceMapping } from "./types";
 
 export interface GarmentAssemblyMeshData {
   key: string;
   pieceId: string;
+  sourcePatternId: string;
   placementId: string;
+  geometrySignature: string;
+  vertexSources: Array<PanelVertexSourceMapping & {
+    panelInstanceId: string;
+    meshVertexIndex: number;
+  }>;
   mesh: THREE.Mesh;
   flat: Float32Array;
   dressed: Float32Array;
@@ -54,7 +61,10 @@ export function buildGarmentAssemblyMeshes(
     meshes.push({
       key: instance.id,
       pieceId: instance.pieceId,
+      sourcePatternId: instance.sourcePatternId,
       placementId: instance.placement.id,
+      geometrySignature: instance.geometrySignature,
+      vertexSources: instance.vertexSources.map((source) => ({ ...source })),
       mesh,
       flat,
       dressed,

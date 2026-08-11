@@ -4,6 +4,7 @@ import { createBaselineFixture } from "../testFixtures/baselineGarments";
 import { fabricPreset, type FabricSource } from "./fabric";
 import {
   getPatternEdges,
+  duplicatePatternPiece,
   migrateLegacyPieceToSegments,
   type GarmentDraft,
   type PatternDart,
@@ -20,6 +21,74 @@ import {
 } from "./patternDocumentV3";
 
 describe("PatternDocumentV3", () => {
+  it.each(["Costas", "Calça", "qualquer nome"])("mantém a peça livre %s explicitamente não classificada", (name) => {
+    const garment = createBaselineFixture("free-simple-piece");
+    garment.templateId = "custom";
+    garment.assemblyPlacements = [];
+    garment.pieces = garment.pieces.slice(0, 1).map((piece) => ({
+      ...piece,
+      name,
+      previewPlacements: undefined,
+      bodyPlacement: undefined,
+    }));
+
+    const document = garmentDraftToPatternDocumentV3(garment);
+    expect(document.patternDefinitions[0].bodyPlacement).toMatchObject({
+      status: "unclassified",
+      includeIn3D: true,
+    });
+    expect(document.panelInstances[0]).toMatchObject({
+      sourcePatternId: garment.pieces[0].id,
+      placementStatus: "unclassified",
+      includedIn3D: true,
+    });
+    expect(document.panelInstances[0].arrangementAnchor).toBeUndefined();
+    expect(document.panelInstances[0].bodySide).toBeUndefined();
+    expect(document.panelInstances[0]).not.toHaveProperty("geometry");
+  });
+
+  it("preserva unclassified e confirmed no round-trip sem persistir sugestão", () => {
+    const garment = createBaselineFixture("free-simple-piece");
+    garment.templateId = "custom";
+    garment.assemblyPlacements = [];
+    garment.pieces = [
+      garment.pieces[0],
+      duplicatePatternPiece(garment.pieces[0], { newId: "confirmed-piece", name: "Confirmada" }),
+    ].map((piece, index) => ({
+      ...piece,
+      previewPlacements: undefined,
+      bodyPlacement: index === 0 ? undefined : {
+        version: 1 as const,
+        status: "confirmed" as const,
+        includeIn3D: true,
+        role: "custom" as const,
+        region: "torso" as const,
+        surface: "front" as const,
+        bodySide: "center" as const,
+        anchorId: "torso-front" as const,
+        outwardFace: "normal" as const,
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 25,
+        rotationXDeg: 0,
+        rotationYDeg: 0,
+        rotationZDeg: 0,
+        source: "manual" as const,
+      },
+    }));
+
+    const document = parsePatternDocumentV3(JSON.parse(serializePatternDocumentV3(garmentDraftToPatternDocumentV3(garment))));
+    const restored = patternDocumentV3ToGarmentDraft(document);
+    expect(restored.pieces[0].bodyPlacement?.status).toBe("unclassified");
+    expect(restored.pieces[1].bodyPlacement).toMatchObject({
+      status: "confirmed",
+      role: "custom",
+      anchorId: "torso-front",
+      source: "manual",
+    });
+    expect(JSON.stringify(document)).not.toContain("suggested");
+  });
+
   it("round trips curves, partial seams, darts, lines, fabrics and workspace", () => {
     const garment = richGarment();
     const document = garmentDraftToPatternDocumentV3(garment, {
@@ -37,8 +106,9 @@ describe("PatternDocumentV3", () => {
       first: [{ startT: 0.15, endT: 0.85 }],
       second: [{ startT: 0.1, endT: 0.9 }],
       active: true,
-      targetRatio: 1,
-      slackMm: 0,
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 4.5,
     });
     expect(restored.pieces[0].segments).toEqual(garment.pieces[0].segments);
     expect(restored.pieces[0].points).toEqual(garment.pieces[0].points);
@@ -50,6 +120,9 @@ describe("PatternDocumentV3", () => {
     expect(restored.seams?.[0]).toMatchObject({
       first: { startT: 0.15, endT: 0.85 },
       second: { startT: 0.1, endT: 0.9 },
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 4.5,
     });
   });
 
@@ -315,6 +388,9 @@ function richGarment(): GarmentDraft {
         easeRatio: 0,
         type: "standard",
         treatment: "standard",
+        distribution: "center-biased",
+        targetRatio: 1.08,
+        slackMm: 4.5,
       },
     ],
     workspaceStates: [

@@ -1,0 +1,124 @@
+{
+  "physicalDevicesValidated": false,
+  "threeDimensionalPreviewUsedAsEvidence": false,
+  "templateVersion": "straight-pants@3",
+  "definitions": [
+    {
+      "id": "straight-pants-front",
+      "name": "Frente",
+      "cutQuantity": 2,
+      "placementCount": 2,
+      "pointCount": 10,
+      "pathValid": true
+    },
+    {
+      "id": "straight-pants-back",
+      "name": "Costas",
+      "cutQuantity": 2,
+      "placementCount": 2,
+      "pointCount": 10,
+      "pathValid": true
+    }
+  ],
+  "instances": [
+    {
+      "id": "straight-pants-front:panel:1",
+      "sourcePatternId": "straight-pants-front",
+      "side": "left",
+      "surface": "front",
+      "mirrored": false
+    },
+    {
+      "id": "straight-pants-front:panel:2",
+      "sourcePatternId": "straight-pants-front",
+      "side": "right",
+      "surface": "front",
+      "mirrored": true
+    },
+    {
+      "id": "straight-pants-back:panel:1",
+      "sourcePatternId": "straight-pants-back",
+      "side": "left",
+      "surface": "back",
+      "mirrored": false
+    },
+    {
+      "id": "straight-pants-back:panel:2",
+      "sourcePatternId": "straight-pants-back",
+      "side": "right",
+      "surface": "back",
+      "mirrored": true
+    }
+  ],
+  "legs": [
+    {
+      "side": "left",
+      "instanceIds": [
+        "straight-pants-front:panel:1",
+        "straight-pants-back:panel:1"
+      ],
+      "seamIds": [
+        "trouser-seam:left-outseam",
+        "trouser-seam:left-inseam"
+      ],
+      "tubular": true
+    },
+    {
+      "side": "right",
+      "instanceIds": [
+        "straight-pants-front:panel:2",
+        "straight-pants-back:panel:2"
+      ],
+      "seamIds": [
+        "trouser-seam:right-outseam",
+        "trouser-seam:right-inseam"
+      ],
+      "tubular": true
+    }
+  ],
+  "crotch": {
+    "continuous": true,
+    "frontRiseSeamId": "trouser-seam:front-rise",
+    "backRiseSeamId": "trouser-seam:back-rise",
+    "lowerJunctions": [
+      {
+        "side": "left",
+        "frontInstanceId": "straight-pants-front:panel:1",
+        "backInstanceId": "straight-pants-back:panel:1",
+        "inseamId": "trouser-seam:left-inseam"
+      },
+      {
+        "side": "right",
+        "frontInstanceId": "straight-pants-front:panel:2",
+        "backInstanceId": "straight-pants-back:panel:2",
+        "inseamId": "trouser-seam:right-inseam"
+      }
+    ],
+    "orderedInstancePath": [
+      "straight-pants-back:panel:1",
+      "straight-pants-back:panel:2",
+      "straight-pants-front:panel:2",
+      "straight-pants-front:panel:1"
+    ]
+  },
+  "openConnectorCount": 8,
+  "diagnostics": [],
+  "scenarios": [
+    {
+      "name": "front-back-medium",
+      "status": "passed",
+      "paths": 2
+    },
+    {
+      "name": "five-body-comparison",
+      "status": "passed",
+      "cards": 5
+    },
+    {
+      "name": "four-instance-assembly-graph",
+      "status": "passed",
+      "nodes": 4,
+      "seams": 6
+    }
+  ]
+}

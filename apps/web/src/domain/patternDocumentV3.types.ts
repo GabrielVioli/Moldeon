@@ -3,6 +3,11 @@ import type { MeasurementProfile, PatternGenerationRecord } from "./parametricMe
 import type {
   AssemblyOutwardSide,
   AssemblyPieceRole,
+  BodyAnchorId,
+  BodyPlacementRegion,
+  BodyPlacementRole,
+  BodyPlacementSide,
+  BodyPlacementSurface,
   BodyMeasurements,
   BodyType,
   EdgeFinish,
@@ -89,6 +94,7 @@ export type PatternSemanticRoleV3 =
   | "leg-front"
   | "leg-back"
   | "collar"
+  | "panel"
   | "custom";
 
 export type PatternMirrorRuleV3 = "none" | "paired" | "cut-on-fold";
@@ -135,6 +141,7 @@ export interface PatternDefinitionV3 {
   sourceTemplateId?: string;
   sourceTemplateVersion?: string;
   semanticRole: PatternSemanticRoleV3;
+  bodyPlacement: PatternBodyPlacementV3;
   geometry: PatternGeometryV3;
   internalLines: PatternInternalLine[];
   darts: PatternDart[];
@@ -156,8 +163,28 @@ export interface PatternDefinitionV3 {
   generation?: PatternGenerationRecord;
 }
 
+export interface PatternBodyPlacementV3 {
+  version: 1;
+  status: "unclassified" | "confirmed";
+  includeIn3D: boolean;
+  role?: BodyPlacementRole;
+  region?: BodyPlacementRegion;
+  surface?: BodyPlacementSurface;
+  bodySide?: BodyPlacementSide;
+  anchorId?: BodyAnchorId;
+  outwardFace: "normal" | "flipped";
+  offsetXMm: number;
+  offsetYMm: number;
+  offsetZMm: number;
+  rotationXDeg: number;
+  rotationYDeg: number;
+  rotationZDeg: number;
+  source: "manual" | "migration";
+}
+
 export interface PanelArrangementAnchorV3 {
   id: string;
+  bodyAnchorId?: BodyAnchorId;
   region: PreviewRegion;
   surface: PreviewSurface;
   bodySide: PreviewBodySide;
@@ -178,11 +205,13 @@ export interface PanelInstanceV3 {
   id: string;
   sourcePatternId: string;
   copyIndex: number;
-  bodySide: PreviewBodySide;
-  surface: PreviewSurface;
+  placementStatus: "unclassified" | "confirmed";
+  bodySide?: PreviewBodySide;
+  surface?: PreviewSurface;
   mirrored: boolean;
   fabricId: string;
-  arrangementAnchor: PanelArrangementAnchorV3;
+  arrangementAnchor?: PanelArrangementAnchorV3;
+  includedIn3D: boolean;
   simulationEnabled: boolean;
   metadata: Record<string, string | number | boolean>;
 }

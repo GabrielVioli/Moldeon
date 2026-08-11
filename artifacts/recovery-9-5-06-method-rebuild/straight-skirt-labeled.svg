@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1280" viewBox="0 0 1180 1280">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker>
+  </defs>
+  <style>
+    svg { background: #f7f4ee; font-family: Inter, Arial, sans-serif; }
+    .title { font-size: 28px; font-weight: 700; fill: #161616; }
+    .subtitle { font-size: 15px; fill: #555; }
+    .card { fill: #fff; stroke: #c8c2b8; stroke-width: 2; }
+    .card-title, .node-title { font-size: 20px; font-weight: 700; fill: #222; }
+    .small { font-size: 13px; fill: #555; }
+    .pattern { fill: #e7ddd0; fill-opacity: .72; stroke: #171717; stroke-width: 2.3; vector-effect: non-scaling-stroke; }
+    .reference { stroke: #777; stroke-width: 1.2; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; }
+    .grain { stroke: #111; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .dart { fill: none; stroke: #8a3f2e; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+    .node { fill: #fff; stroke: #272727; stroke-width: 2; }
+    .seam { stroke: #3f5a76; stroke-width: 4; }
+    .seam-label { font-size: 14px; font-weight: 700; fill: #23384e; paint-order: stroke; stroke: #f7f4ee; stroke-width: 6; }
+  </style>
+  <text x="60" y="54" class="title">straight-skirt</text>
+     <text x="60" y="80" class="subtitle">straight-skirt@2 · geometria 2D</text>
+     <g>
+    <rect x="60" y="100" width="500" height="1120" rx="18" class="card"/>
+    <text x="84" y="142" class="card-title">Frente</text>
+    <text x="84" y="169" class="small">straight-skirt-front · cortar 1x</text>
+    <g><path d="M 95 196.40036654448517 L 440.6197934021993 190 C 494.28440519826734 272.3842052649117 497.2384205264912 379.0569810063312 515.1266244585139 499.5151616127958 L 506.75691436187947 1175 L 95 1175 L 95 196.40036654448517 Z" class="pattern"/><line x1="95" y1="499.5151616127958" x2="515.1266244585139" y2="499.5151616127958" class="reference"/><line x1="288.2582472509164" y1="548.7487504165279" x2="284.40818060646455" y2="1117.5608130623127" class="grain" marker-end="url(#arrow)"/><path d="M 276.1796067977341 192.68961272168536 L 295.38070643118965 363.85838979599396 L 314.5818060646451 192.68961272168536" class="dart"/></g>
+  </g>
+<g>
+    <rect x="620" y="100" width="500" height="1120" rx="18" class="card"/>
+    <text x="644" y="142" class="card-title">Costas</text>
+    <text x="644" y="169" class="small">straight-skirt-back · cortar 1x</text>
+    <g><path d="M 655 190 L 1029.4953095684803 197.42213883677297 C 1069.5103189493434 278.4202626641651 1071.607879924953 383.2983114446529 1085 501.72983114446527 L 1076.2870544090056 1165.8499061913694 L 655 1165.8499061913694 L 655 190 Z" class="pattern"/><line x1="655" y1="501.72983114446527" x2="1085" y2="501.72983114446527" class="reference"/><line x1="852.8" y1="550.1350844277673" x2="848.7920450281426" y2="1109.3771106941838" class="grain" marker-end="url(#arrow)"/><path d="M 803.6848030018762 193.41527112351295 L 827.3227016885553 417.8542955137568 L 850.9606003752345 193.41527112351295" class="dart"/></g>
+  </g>
+</svg>

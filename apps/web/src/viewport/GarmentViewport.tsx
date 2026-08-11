@@ -1,37 +1,37 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { GarmentDraft, PatternSnapshot } from "../domain/pattern";
+import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import {
+  approvedAvatarForBody,
+  AVATAR_NOT_CONFIGURED_MESSAGE,
+} from "../avatar/ApprovedAvatarAsset";
 import { ThreeViewport } from "./GlobalThreeViewport";
 
 interface GarmentViewportProps {
-  garment: GarmentDraft;
-  snapshots: PatternSnapshot[];
+  assemblyInput: ResolvedAssemblyInput;
   simulateVersion: number;
   active: boolean;
   onBackendChange(backend: "webgpu" | "webgl2"): void;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
-  garment,
-  snapshots,
+  assemblyInput,
   simulateVersion,
   active,
   onBackendChange,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
-  const latestSnapshotsRef = useRef(snapshots);
-  const latestGarmentRef = useRef(garment);
+  const latestInputRef = useRef(assemblyInput);
   const latestActiveRef = useRef(active);
   const latestSimulateVersionRef = useRef(simulateVersion);
   const lastDressedVersionRef = useRef(0);
-  const lastAppliedGarmentRef = useRef<GarmentDraft | null>(null);
-  const lastAppliedSnapshotsRef = useRef<PatternSnapshot[] | null>(null);
+  const lastAppliedSignatureRef = useRef<string | null>(null);
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
 
-  latestSnapshotsRef.current = snapshots;
-  latestGarmentRef.current = garment;
+  latestInputRef.current = assemblyInput;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
 
@@ -51,9 +51,8 @@ export const GarmentViewport = memo(function GarmentViewport({
         viewportRef.current = viewport;
         onBackendChange(viewport.backend);
         if (latestActiveRef.current) {
-          setWarnings(viewport.updateGarment(latestSnapshotsRef.current, latestGarmentRef.current));
-          lastAppliedGarmentRef.current = latestGarmentRef.current;
-          lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
+          setWarnings(viewport.updateGarment(latestInputRef.current));
+          lastAppliedSignatureRef.current = latestInputRef.current.signature;
         }
         if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
@@ -81,20 +80,19 @@ export const GarmentViewport = memo(function GarmentViewport({
 
   useEffect(() => {
     if (!active || updateFrameRef.current !== null) return;
-    if (lastAppliedGarmentRef.current === garment && lastAppliedSnapshotsRef.current === snapshots) return;
+    if (lastAppliedSignatureRef.current === assemblyInput.signature) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
       const viewport = viewportRef.current;
       if (!viewport) return;
-      setWarnings(viewport.updateGarment(latestSnapshotsRef.current, latestGarmentRef.current));
-      lastAppliedGarmentRef.current = latestGarmentRef.current;
-      lastAppliedSnapshotsRef.current = latestSnapshotsRef.current;
+      setWarnings(viewport.updateGarment(latestInputRef.current));
+      lastAppliedSignatureRef.current = latestInputRef.current.signature;
     });
     return () => {
       if (updateFrameRef.current !== null) window.cancelAnimationFrame(updateFrameRef.current);
       updateFrameRef.current = null;
     };
-  }, [active, garment, snapshots]);
+  }, [active, assemblyInput.signature]);
 
   useEffect(() => {
     if (!active) return;
@@ -117,8 +115,9 @@ export const GarmentViewport = memo(function GarmentViewport({
         </div>
       ) : null}
       <div className="viewport-label">
-        Manequim vestido · {garment.bodyType === "feminine" ? "Feminino" : "Masculino"} ·{" "}
-        {garment.fabrics.length > 1 ? `${garment.fabrics.length} tecidos` : garment.fabrics[0]?.name ?? "sem tecido"}
+        {approvedAvatar
+          ? `Manequim aprovado · ${approvedAvatar.assetId}`
+          : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
     </div>
   );

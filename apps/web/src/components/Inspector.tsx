@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { edgeRangeLength, type PatternSnapshot } from "../domain/pattern";
 import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
+import { BodyPositionPanel } from "./BodyPositionPanel";
 import { useEditorStore } from "../state/editorStore";
 import { groupSeamsByRelation, seamRelationLabel } from "../domain/templateAssemblySeams";
 
@@ -97,6 +98,8 @@ export const Inspector = memo(function Inspector({
           value={snapshot.piece.points.length.toString()}
         />
       </section>
+
+      <BodyPositionPanel key={snapshot.piece.id} piece={snapshot.piece} />
 
       <section>
         <label className="field-label" htmlFor="seam-allowance">Margem de costura</label>

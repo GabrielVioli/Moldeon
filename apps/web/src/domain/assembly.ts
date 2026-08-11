@@ -3,6 +3,11 @@ import {
   getPatternEdges,
   validateSeam,
   type AssemblyPlacement,
+  type BodyAnchorId,
+  type BodyPlacementRegion,
+  type BodyPlacementRole,
+  type BodyPlacementSide,
+  type BodyPlacementSurface,
   type EdgeRange,
   type GarmentDraft,
   type PatternPiece,
@@ -48,11 +53,23 @@ export interface AssemblyGraph {
 }
 
 export interface Garment3DEligibility {
+  canOpenViewport: boolean;
   canPreviewGarment: boolean;
   canDressBody: boolean;
   issues: string[];
   warnings: string[];
   connectedPieceIds: string[];
+  includedPieceIds: string[];
+  missingClassificationPieceIds: string[];
+}
+
+export interface BodyPlacementSuggestion {
+  role: BodyPlacementRole;
+  region: BodyPlacementRegion;
+  surface: BodyPlacementSurface;
+  bodySide: BodyPlacementSide;
+  anchorId: BodyAnchorId;
+  reason: string;
 }
 
 export type WorkspaceMode = "modeling" | "assembly" | "fitting";
@@ -268,7 +285,15 @@ export function evaluateGarment3DEligibility(
   const warnings: string[] = [];
   const triangulatable = new Set<string>();
 
-  for (const piece of garment.pieces) {
+  const visibleIds = new Set((garment.workspaceStates ?? [])
+    .filter((entry) => entry.visible)
+    .map((entry) => entry.pieceId));
+  const includedPieces = garment.pieces.filter((piece) =>
+    (garment.workspaceStates === undefined || visibleIds.has(piece.id))
+    && piece.bodyPlacement?.includeIn3D !== false,
+  );
+
+  for (const piece of includedPieces) {
     const result = triangulatePatternContour(
       samplePatternContour(piece.points),
     );
@@ -280,7 +305,11 @@ export function evaluateGarment3DEligibility(
     }
   }
 
-  const graph = buildAssemblyGraph(garment);
+  const includedIds = new Set(includedPieces.map((piece) => piece.id));
+  const graph = buildAssemblyGraph({
+    pieces: includedPieces,
+    seams: (garment.seams ?? []).filter((seam) => includedIds.has(seam.first.pieceId) && includedIds.has(seam.second.pieceId)),
+  });
   issues.push(...graph.issues);
   warnings.push(...graph.warnings);
 
@@ -288,7 +317,7 @@ export function evaluateGarment3DEligibility(
    * Toda peça válida participa do preview, mesmo que ainda esteja em um
    * componente desconectado. O nome do campo é mantido por compatibilidade.
    */
-  const connectedPieceIds = garment.pieces
+  const connectedPieceIds = includedPieces
     .filter((piece) => triangulatable.has(piece.id))
     .map((piece) => piece.id);
 
@@ -304,13 +333,16 @@ export function evaluateGarment3DEligibility(
     );
   }
 
-  const placementIds = new Set([
-    ...(garment.assemblyPlacements ?? []).map((placement) => placement.pieceId),
-    ...garment.pieces.filter((piece) => (piece.previewPlacements?.length ?? 0) > 0).map((piece) => piece.id),
-  ]);
-  const missingPlacements = connectedPieceIds.filter(
-    (pieceId) => !placementIds.has(pieceId),
-  );
+  const missingPlacements = connectedPieceIds.filter((pieceId) => {
+    const placement = garment.pieces.find((piece) => piece.id === pieceId)?.bodyPlacement;
+    return !placement
+      || placement.status !== "confirmed"
+      || !placement.role
+      || !placement.region
+      || !placement.surface
+      || !placement.bodySide
+      || !placement.anchorId;
+  });
 
   if (canPreviewGarment && missingPlacements.length > 0) {
     warnings.push(
@@ -319,11 +351,14 @@ export function evaluateGarment3DEligibility(
   }
 
   return {
+    canOpenViewport: true,
     canPreviewGarment,
-    canDressBody: canPreviewGarment,
+    canDressBody: canPreviewGarment && missingPlacements.length === 0 && issues.length === 0,
     issues: unique(issues),
     warnings: unique(warnings),
     connectedPieceIds,
+    includedPieceIds: includedPieces.map((piece) => piece.id),
+    missingClassificationPieceIds: missingPlacements,
   };
 }
 
@@ -333,7 +368,29 @@ export function shouldLoadThreeViewport(
   mode: WorkspaceMode,
 ): boolean {
   void mode;
-  return requested && eligibility.canPreviewGarment;
+  return requested && eligibility.canOpenViewport;
+}
+
+/**
+ * Sugestão efêmera baseada somente em semântica explícita de segmentos.
+ * O retorno nunca é gravado no documento por esta função.
+ */
+export function suggestBodyPlacement(piece: PatternPiece): BodyPlacementSuggestion | null {
+  const roles = new Set(piece.segments?.map((segment) => segment.role) ?? []);
+  if (roles.has("sleeveCapFront") || roles.has("sleeveCapBack")) {
+    return { role: "sleeve", region: "arm", surface: "side", bodySide: "left", anchorId: "arm-left", reason: "A peça possui conectores explícitos de cabeça de manga." };
+  }
+  if (roles.has("inseam") || roles.has("outseam")) {
+    const back = roles.has("backCrotch");
+    return { role: back ? "leg-back" : "leg-front", region: "leg", surface: back ? "back" : "front", bodySide: "left", anchorId: "leg-left", reason: "A peça possui conectores explícitos de perna." };
+  }
+  if (roles.has("backArmhole")) {
+    return { role: "back", region: "torso", surface: "back", bodySide: "center", anchorId: "torso-back", reason: "A peça possui conector explícito de cava traseira." };
+  }
+  if (roles.has("frontArmhole")) {
+    return { role: "front", region: "torso", surface: "front", bodySide: "center", anchorId: "torso-front", reason: "A peça possui conector explícito de cava frontal." };
+  }
+  return null;
 }
 
 export function inferAssemblyPlacement(

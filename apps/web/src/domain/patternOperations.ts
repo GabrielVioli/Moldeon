@@ -1,6 +1,7 @@
 import { samplePatternSegment } from "./polygonGeometry";
 import {
   createDocumentId,
+  createUnclassifiedBodyPlacement,
   edgeRangeLength,
   getEdgeById,
   getPatternEdges,
@@ -93,7 +94,7 @@ export function createPatternPiecesFromSplit(piece: PatternPiece, cut: [PatternV
     return migrateLegacyPieceToSegments({
       ...legacy, id: createDocumentId("piece"), name: `${piece.name} ${index + 1}`,
       points: points.map((point, pointIndex) => ({ ...point, id: createDocumentId(`cut-${pointIndex + 1}`) })),
-      darts: [], internalLines: [], previewPlacements: undefined, edgeFinishes: {},
+      darts: [], internalLines: [], previewPlacements: undefined, bodyPlacement: createUnclassifiedBodyPlacement(true, "migration"), edgeFinishes: {},
     });
   };
   return [makePiece(paths[0], 0), makePiece(paths[1], 1)];

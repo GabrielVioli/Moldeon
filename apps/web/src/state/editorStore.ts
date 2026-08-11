@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { currentEngine } from "../core/engineRuntime";
 import {
   createDocumentId,
+  createUnclassifiedBodyPlacement,
   createPatternPieceFromDraft,
   createPreviewPlacement,
   makeEdgeId,
@@ -9,11 +10,13 @@ import {
   validateSeam,
   type BodyMeasurements,
   type BodyType,
+  type AssemblyPlacement,
   type DraftContour,
   type EdgeRange,
   type GarmentDraft,
   type Guide,
   type PatternPiece,
+  type PatternBodyPlacement,
   type PatternDart,
   type PatternPoint,
   type PatternVector,
@@ -23,11 +26,12 @@ import {
   type PieceWorkspaceTransform,
   type Seam,
   type SeamDirection,
+  type SeamDistribution,
   type SeamTreatment,
   type SeamValidationIssue,
 } from "../domain/pattern";
 import { closeDart, createDart, createPatternPiecesFromSplit, extendCutLine } from "../domain/patternOperations";
-import { analyzeSeamCompatibility, inferAssemblyPlacement, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
+import { analyzeSeamCompatibility, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
 import { validatePatternContour } from "../domain/polygonGeometry";
 import {
   draftGuidedSleeve,
@@ -133,7 +137,15 @@ export interface EditorState {
   splitSelectedSegment(): void;
   setMeasureDraft(draft: EditorState["measureDraft"]): void;
   cancelIntent(): void;
-  updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment; active?: boolean }): void;
+  updateSeam(seamId: string, update: {
+    name?: string;
+    direction?: SeamDirection;
+    treatment?: SeamTreatment;
+    distribution?: SeamDistribution;
+    targetRatio?: number;
+    slackMm?: number;
+    active?: boolean;
+  }): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
   toggleSeamActive(seamId: string): void;
@@ -150,7 +162,8 @@ export interface EditorState {
   removeFabric(fabricId: string): void;
   assignFabricToActivePiece(fabricId: string): void;
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
-  setAssemblyPlacement(pieceId: string, placement: Partial<ReturnType<typeof inferAssemblyPlacement>>): void;
+  setAssemblyPlacement(pieceId: string, placement: Partial<AssemblyPlacement>): void;
+  setBodyPlacement(pieceId: string, placement: PatternBodyPlacement): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
   addGuidedSleeve(options: {
@@ -699,7 +712,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     changeDocument(set, get, "placement", "Posicionar peça na montagem", (document) => {
     const piece = document.garment.pieces.find((candidate) => candidate.id === pieceId)!;
     const current = document.garment.assemblyPlacements?.find((placement) => placement.pieceId === pieceId)
-      ?? inferAssemblyPlacement(piece, document.garment.assemblyPlacements?.length ?? 0);
+      ?? {
+        pieceId,
+        role: "custom" as const,
+        outwardSide: "front" as const,
+        positionMm: [0, 0, 25] as [number, number, number],
+        rotationDeg: [0, 0, 0] as [number, number, number],
+        flipped: false,
+        source: "manual" as const,
+      };
     const placement = { ...current, ...update, pieceId, source: "manual" as const };
     return {
       ...document,
@@ -712,6 +733,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
     };
     });
+  },
+  setBodyPlacement: (pieceId, placement) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    changeDocument(set, get, "placement", placement.status === "confirmed" ? "Confirmar posição no corpo" : "Remover posição do corpo", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => piece.id === pieceId
+          ? { ...piece, bodyPlacement: structuredClone(placement) }
+          : piece),
+      },
+    }));
   },
   setEdgeFinish: (pieceId, edgeId, finish) => changeDocument(set, get, "metadata", "Alterar acabamento", (document) => ({
     ...document,
@@ -1385,13 +1418,10 @@ function migrateLegacyDocument(garment: GarmentDraft): GarmentDraft {
   const withWorkspace = ensureWorkspaceState(garment);
   return {
     ...withWorkspace,
-    pieces: withWorkspace.pieces.map((piece) => {
-      if (piece.previewPlacements?.length) return piece;
-      const name = piece.name.toLowerCase();
-      const region = name.includes("saia") || name.includes("calça") ? "hip" : "torso";
-      const surface = name.includes("costas") ? "back" : "front";
-      return { ...piece, previewPlacements: [createPreviewPlacement(piece.id, { region, surface })] };
-    }),
+    pieces: withWorkspace.pieces.map((piece) => ({
+      ...piece,
+      bodyPlacement: piece.bodyPlacement ?? createUnclassifiedBodyPlacement(true, "migration"),
+    })),
   };
 }
 
