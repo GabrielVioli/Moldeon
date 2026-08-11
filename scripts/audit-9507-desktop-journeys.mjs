@@ -4,10 +4,12 @@ import { chromium } from "playwright-core";
 
 const baseUrl = process.argv[2] ?? "http://127.0.0.1:5178";
 const outputDir = resolve(process.argv[3] ?? "artifacts/recovery-9-5-07-journeys");
+const viewportWidth = Number(process.argv[4] ?? 1440);
+const viewportHeight = Number(process.argv[5] ?? 900);
 const chromePath = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 mkdirSync(outputDir, { recursive: true });
 const browser = await chromium.launch({ headless: true, executablePath: chromePath });
-const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const page = await (await browser.newContext({ viewport: { width: viewportWidth, height: viewportHeight } })).newPage();
 const errors = [];
 page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
 page.on("pageerror", (error) => errors.push(error.message));
@@ -45,10 +47,10 @@ const patternCanvas = page.locator("canvas.pattern-canvas");
 const initialBox = await patternCanvas.boundingBox();
 if (!initialBox) throw new Error("Canvas 2D indisponível.");
 const points = [
-  { x: initialBox.width * 0.30, y: initialBox.height * 0.26 },
-  { x: initialBox.width * 0.64, y: initialBox.height * 0.26 },
-  { x: initialBox.width * 0.64, y: initialBox.height * 0.68 },
-  { x: initialBox.width * 0.30, y: initialBox.height * 0.68 },
+  { x: initialBox.width * 0.08, y: initialBox.height * 0.26 },
+  { x: initialBox.width * 0.92, y: initialBox.height * 0.26 },
+  { x: initialBox.width * 0.92, y: initialBox.height * 0.68 },
+  { x: initialBox.width * 0.08, y: initialBox.height * 0.68 },
 ];
 for (const point of points) await patternCanvas.click({ position: point });
 await page.keyboard.press("Enter");
@@ -63,6 +65,7 @@ await page.locator("canvas.three-canvas").waitFor();
 await page.getByText("Manequim humano ainda não configurado.", { exact: true }).first().waitFor();
 assert(await garmentCount() === 1, "J3: a peça classificada não gerou uma instância.");
 const originalSignature = await viewportSignature();
+const originalAssemblySignature = await page.evaluate(() => window.__moldeonPhase0.assemblySignature());
 
 await closeViewport();
 await selectPoint(0);
@@ -70,15 +73,20 @@ const numeric = page.getByRole("region", { name: "Edição numérica do editor 2
 await numeric.waitFor();
 const xInput = numeric.locator("label").filter({ hasText: /^X/ }).locator("input").first();
 const originalX = Number(await xInput.inputValue());
+const nextPointBeforeEdit = await page.evaluate(() => window.__moldeonPhase0.point(1));
+assert(nextPointBeforeEdit.xMm - originalX > 250, `J4: fixture não comporta +250 mm sem cruzar a borda: ${JSON.stringify({ originalX, nextPointBeforeEdit })}`);
 await xInput.fill(String(originalX + 250));
 await xInput.press("Enter");
+const pointAfterEdit = await page.evaluate(() => window.__moldeonPhase0.point(0));
+const pointEditedAssemblySignature = await page.evaluate(() => window.__moldeonPhase0.assemblySignature());
+assert(Math.abs(pointAfterEdit.xMm - (originalX + 250)) < 0.01, `J4: campo X não alterou a geometria: ${JSON.stringify(pointAfterEdit)}`);
+assert(pointEditedAssemblySignature !== originalAssemblySignature, "J4: assinatura canônica não mudou após edição do ponto.");
 await reopenViewport();
-await page.waitForFunction((previous) => {
-  const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
-  return host?.dataset.garmentGeometrySignatures && host.dataset.garmentGeometrySignatures !== previous;
-}, originalSignature);
+await page.waitForTimeout(800);
 const pointEditedSignature = await viewportSignature();
-assert(pointEditedSignature !== originalSignature, "J4: edição do ponto não invalidou a mesh.");
+const pointEditedMeshCount = await garmentCount();
+const pointWarnings = await page.locator(".viewport-warnings").allTextContents();
+assert(pointEditedSignature !== originalSignature, `J4: edição do ponto não invalidou a mesh. ${JSON.stringify({ originalSignature, pointEditedSignature, pointEditedMeshCount, pointWarnings })}`);
 
 await closeViewport();
 await page.getByRole("button", { name: "Desfazer" }).click();
@@ -90,17 +98,23 @@ await reopenViewport();
 await page.waitForFunction((expected) => document.querySelector('[data-testid="dressed-avatar-viewport"]')?.dataset.garmentGeometrySignatures === expected, pointEditedSignature);
 
 await closeViewport();
+await page.getByRole("button", { name: "Modelagem", exact: true }).click();
 await selectPoint(1);
-await page.getByRole("button", { name: "Curvar segmento de saída", exact: true }).click();
-await numeric.getByRole("button", { name: "Handle saída", exact: true }).first().click();
-const handleY = numeric.locator("label").filter({ hasText: /^Handle Y/ }).locator("input").first();
-const originalHandleY = Number(await handleY.inputValue());
-await handleY.fill(String(originalHandleY + 80));
-await handleY.press("Enter");
 await reopenViewport();
-await page.waitForFunction((previous) => document.querySelector('[data-testid="dressed-avatar-viewport"]')?.dataset.garmentGeometrySignatures !== previous, pointEditedSignature);
+await page.getByRole("button", { name: "Curvar segmento de saída", exact: true }).click();
+await page.waitForTimeout(800);
+const curvedSignature = await viewportSignature();
+const curvedAssemblySignature = await page.evaluate(() => window.__moldeonPhase0.assemblySignature());
+assert(curvedAssemblySignature !== pointEditedAssemblySignature, "J5: converter o segmento não alterou o documento canônico.");
+assert(curvedSignature !== pointEditedSignature, `J5: converter o segmento não atualizou a mesh. ${JSON.stringify({ pointEditedSignature, curvedSignature, count: await garmentCount(), warnings: await page.locator(".viewport-warnings").allTextContents() })}`);
+await numeric.getByRole("button", { name: "Handle saída", exact: true }).first().click();
+const handleX = numeric.locator("label").filter({ hasText: /^Handle X/ }).locator("input").first();
+const originalHandleX = Number(await handleX.inputValue());
+await handleX.fill(String(originalHandleX + 30));
+await handleX.press("Enter");
+await page.waitForFunction((previous) => document.querySelector('[data-testid="dressed-avatar-viewport"]')?.dataset.garmentGeometrySignatures !== previous, curvedSignature);
 const curveEditedSignature = await viewportSignature();
-assert(curveEditedSignature !== pointEditedSignature, "J5: edição do handle não invalidou a mesh.");
+assert(curveEditedSignature !== curvedSignature, "J5: edição do handle não invalidou a mesh.");
 
 await closeViewport();
 await page.getByLabel("Mais ações para Painel canônico").click();
@@ -108,10 +122,10 @@ await page.getByRole("menuitem", { name: "Duplicar", exact: true }).click();
 const pieces = page.locator(".pieces-item");
 assert(await pieces.count() === 2, "J6: duplicação não criou a segunda peça.");
 await pieces.last().locator("button.pieces-name").click();
-await classifyActivePiece({ region: "torso", surface: "back", side: "center", anchor: "torso-back" });
-await page.getByRole("button", { name: "Vestir no manequim", exact: true }).click();
-await page.locator("canvas.three-canvas").waitFor();
-assert(await garmentCount() === 2, "J6: duas peças classificadas não geraram duas meshes.");
+await reopenViewport();
+await classifyActivePiece({ region: "leg", surface: "front", side: "right", anchor: "leg-right" });
+await page.waitForTimeout(800);
+assert(await garmentCount() === 2, `J6: duas peças classificadas não geraram duas meshes. ${JSON.stringify({ count: await garmentCount(), auditState: await page.evaluate(() => window.__moldeonPhase0.state()), assembly: await page.evaluate(() => window.__moldeonPhase0.assembly()), warnings: await page.locator(".viewport-warnings").allTextContents() })}`);
 
 page.once("dialog", (dialog) => dialog.accept());
 await pieces.last().locator("button.pieces-more").click();
@@ -139,11 +153,13 @@ const report = {
     4: "pass",
     5: "pass",
     6: "pass",
+    7: "pass",
     13: "pass",
   },
   signatures: { originalSignature, pointEditedSignature, curveEditedSignature },
   finalGarmentMeshCount: await garmentCount(),
   avatarConfigured: false,
+  viewport: { width: viewportWidth, height: viewportHeight },
   consoleErrors: errors,
 };
 assert(errors.length === 0, `Erros de console: ${errors.join(" | ")}`);

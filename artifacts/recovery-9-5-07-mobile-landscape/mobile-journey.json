@@ -1,0 +1,30 @@
+{
+  "journey16": "pass",
+  "created": true,
+  "classified": true,
+  "dressed": true,
+  "edited2D": true,
+  "simpleSeamCreated": true,
+  "orbitGesture": true,
+  "pinchGesture": true,
+  "closeReopen": true,
+  "reloadPersistence": true,
+  "layout": {
+    "innerWidth": 844,
+    "scrollWidth": 844,
+    "garmentCount": 2
+  },
+  "viewport": {
+    "width": 844,
+    "height": 390
+  },
+  "signatures": {
+    "beforeEdit": "piece-ac4cacb2-8d8b-4f25-ad21-87d8f8e08abc:panel:1:132459ad",
+    "afterEdit": "piece-ac4cacb2-8d8b-4f25-ad21-87d8f8e08abc:panel:1:182506a1"
+  },
+  "instanceIds": {
+    "beforeReload": "piece-ac4cacb2-8d8b-4f25-ad21-87d8f8e08abc:panel:1,piece-c5b5458c-181f-4906-96d4-5964e5278ea8:panel:1",
+    "afterReload": "piece-ac4cacb2-8d8b-4f25-ad21-87d8f8e08abc:panel:1,piece-c5b5458c-181f-4906-96d4-5964e5278ea8:panel:1"
+  },
+  "consoleErrors": []
+}

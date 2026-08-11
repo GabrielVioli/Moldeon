@@ -45,7 +45,7 @@ Invariantes:
 - Estado temporário do renderer, câmera, buffers e partículas não é persistido.
 - Migrações inválidas falham antes de substituir qualquer projeto existente.
 
-`GarmentDraft` continua como projeção temporária para o runtime atual. A projeção de V3 para esse formato rejeita recursos que sofreriam perda, como costuras com múltiplos intervalos, slack ou estado inativo.
+`GarmentDraft` continua como projeção temporária para partes do runtime atual, mas não é mais uma entrada independente da montagem. `ResolvedAssemblyInput` é criado imediatamente a partir do V3, recorta somente instâncias confirmadas/incluídas e produz uma projeção legada derivada. Campos canônicos de costura (`SeamGroup`, distribuição, proporção, slack e tratamento) são preservados nessa projeção e chegam às constraints.
 
 ## Migrações e arquivos
 
@@ -118,11 +118,29 @@ Responsabilidades pretendidas:
 
 A fronteira Rust/WASM atual ainda recebe `PatternPiece`. O documento V3 permanece autoritativo no TypeScript até que o schema equivalente seja implementado no núcleo sem perda.
 
+## Fluxo canônico 2D → 3D
+
+```text
+Zustand / GarmentDraft editável
+    ↓ conversão imediata
+PatternDocumentV3
+    ↓ buildResolvedAssemblyInput
+PatternDefinitionV3 + PanelInstanceV3 + SeamGroupV3
+    ↓ assinatura geométrica e mapeamento de origem
+PanelTopology
+    ↓ arrangement por anchor corporal confirmado
+GarmentAssemblyState
+    ↓ reconciliação por PanelInstance.id + geometrySignature
+Three meshes
+```
+
+`PatternDefinitionV3` é a única fonte da geometria. Cada vértice de topologia registra `sourcePatternId`, ponto/segmento/edge e parâmetro ou os vértices dos quais foi derivado. Transform da bancada nunca participa da assinatura ou da posição corporal. Alterar ponto ou controle Bézier muda a assinatura; excluir uma definição remove suas instâncias e meshes.
+
 ## Viewport 3D
 
-Antes do renderer existe uma camada de montagem pura: `analyzeSeamCompatibility`, `buildAssemblyGraph` e `evaluateGarment3DEligibility`. Ela é testável sem DOM/Three.js e decide quais componentes conectados podem ser exibidos.
+Antes do renderer existe uma camada de montagem pura: `analyzeSeamCompatibility`, `buildAssemblyGraph` e `evaluateGarment3DEligibility`. Abrir o viewport e vestir são decisões diferentes. O viewport pode abrir vazio, mas `canDressBody` exige classificação corporal completa para toda peça visível incluída no 3D.
 
-O modelo V3 prepara a substituição de `AssemblyPlacement` por `PanelInstanceV3.arrangementAnchor`. Enquanto a migração não termina, o adaptador projeta o primeiro anchor compatível de cada definição para o placement legado.
+`PanelInstanceV3.arrangementAnchor` é derivado exclusivamente da classificação confirmada. Peças livres começam `unclassified`; sugestões por papéis explícitos de segmentos são efêmeras e somente viram documento após confirmação do usuário. Nome, `templateId`, geometria e transform da bancada não inferem posição corporal.
 
 Three.js é responsável por:
 
@@ -177,16 +195,16 @@ React não entra no loop por partícula. Three.js não decide a semântica de co
 
 ## Avatar e arranjo semântico
 
-A camada 3D visível é dividida em quatro partes:
+A camada 3D é dividida em quatro partes:
 
 1. `avatar/AvatarParametricModel.ts`: medidas, landmarks, articulações e anchors, sem Three.js.
 2. `avatar/AvatarCollisionModel.ts`: elipsoides e cápsulas futuros, sem renderização.
-3. `viewport/AvatarVisual.ts`: LOD visual procedural e materiais do manequim.
+3. `avatar/ApprovedAvatarAsset.ts` + `ApprovedAvatarLoader.ts`: contrato, carregamento e calibração de GLB/glTF explicitamente aprovado.
 4. `garment3d/SemanticAvatarArrangement.ts`: expansão, validação, associação aos anchors e estabilização geométrica limitada.
 
-`GlobalThreeViewport` apenas coordena renderer, avatar visual, malhas de roupa, câmera e descarte. React recebe diagnósticos agregados e não participa de qualquer loop por vértice.
+`GlobalThreeViewport` coordena renderer, asset visual aprovado, malhas de roupa, câmera e descarte. O antigo `AvatarVisual.ts` permanece apenas isolado por testes legados e não é importado pelo caminho público. Sem asset aprovado, a interface informa “Manequim humano ainda não configurado.” e o gate permanece pendente.
 
 O pipeline ativo não contém projeção cilíndrica global, modo explodido ou corpo ocultável. `previewPlacements` são metadados de arranjo; transforms da bancada 2D não determinam a posição no corpo.
 
-Nenhum asset externo de avatar é usado. A geometria procedural pertence ao código MIT do projeto.
+Nenhum asset externo de avatar é usado nesta branch. Proxies de colisão continuam descritores internos invisíveis e nunca entram na scene pública. O lifecycle cancela RAF/carregamento, desconecta observer/listeners, descarta controles, geometrias, materiais, texturas, listas/contexto do renderer e remove o canvas.
 

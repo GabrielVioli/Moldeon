@@ -1,61 +1,37 @@
 # Avatar humano e montagem semântica
 
-## Estado
+## Estado do gate 9.5-07
 
-O pipeline `avatar-parametric@1` + `avatar-collision@1` substitui a apresentação flutuante por um único estado público: manequim humano vestido. Esta etapa é uma montagem geométrica determinística, não uma simulação de tecido.
+A montagem estática usa geometria 2D atual, classificação corporal explícita e anchors paramétricos. Não há asset GLB/glTF aprovado no repositório. Portanto o avatar visual final não está configurado e a interface informa:
 
-## Separação de responsabilidades
+> Manequim humano ainda não configurado.
 
-### Modelo paramétrico
+O boneco procedural de esferas/cápsulas não é importado pelo caminho público. Nenhum modelo externo foi baixado ou escolhido automaticamente. O gate permanece pendente de validação visual quando o usuário fornecer um asset aprovado.
 
-`apps/web/src/avatar/AvatarParametricModel.ts` resolve medidas, landmarks, articulações, pose neutra e anchors. O domínio trabalha em metros após receber as medidas autoritativas do projeto em milímetros.
+## Separação obrigatória
 
-Medidas usadas:
+1. `AvatarParametricModel`: medidas, landmarks, joints, regiões, pose e anchors em metros.
+2. `ApprovedAvatarAsset`/`ApprovedAvatarLoader`: descritor, GLB/glTF aprovado, inspeção, calibração e lifecycle visual.
+3. `AvatarCollisionModel`: proxies simplificados internos, invisíveis por padrão.
+4. `SemanticAvatarArrangement`: posicionamento estático das instâncias confirmadas.
 
-- altura;
-- busto ou tórax;
-- cintura;
-- quadril;
-- largura de ombros;
-- comprimento de torso;
-- comprimento de braço;
-- bíceps e punho;
-- entreperna;
-- coxa, panturrilha e tornozelo.
+O GLB visual não se torna fonte das medidas. Anchors e proxies continuam derivados do modelo paramétrico e precisam ser calibrados para o mesmo sistema do asset aprovado.
 
-As regiões são dimensionadas separadamente. Aumentar busto não altera automaticamente altura, entreperna ou comprimento de braço.
+## Contrato do asset aprovado
 
-### Avatar visual
+Cada descritor registra:
 
-`apps/web/src/viewport/AvatarVisual.ts` cria uma representação low-poly com cabeça, pescoço, torso, pelve, braços, mãos, pernas e pés. Os braços ficam aproximadamente 14° afastados do torso e as pernas aproximadamente 4° afastadas do eixo central.
+- `assetId`, URL/origem e perfil corporal disponível;
+- unidade de origem e escala explícita para metros;
+- eixos vertical e frontal;
+- offset do piso e transform raiz;
+- versão, licença e autor/atribuição.
 
-O nível de detalhe é selecionado pelo perfil de desempenho do viewport. Celulares usam menos segmentos e não usam sombras.
+O loader usa `GLTFLoader`, fetch cancelável e inspeciona scene/nodes, skins, skeleton/bones, morph targets, materiais, texturas e bounding box. Nomes de bones não são codificados antes dessa inspeção. Trocar perfil cancela carregamento anterior e mantém somente um root visual.
 
-### Proxies de colisão
+## Anchors
 
-`apps/web/src/avatar/AvatarCollisionModel.ts` produz elipsoides para cabeça, torso e pelve, além de cápsulas para braços e pernas. Esses proxies são descritores de domínio e não participam de uma alegação de física nesta etapa. O Prompt seguinte poderá consumi-los no XPBD.
-
-## Origem e licença do avatar
-
-Nenhum asset 3D externo, morph target ou malha de terceiros foi incorporado. O avatar é gerado integralmente pelo código do Moldeon e está coberto pela licença MIT do repositório. Portanto não existe arquivo externo, atribuição adicional ou licença de modelo humano a redistribuir.
-
-A opção por geometria procedural evita dependência pesada no carregamento inicial e permite que medidas regionais permaneçam rastreáveis. Uma futura troca por malha com morph targets deverá registrar origem, versão, autor, licença, alterações e compatibilidade de redistribuição antes de entrar em `main`.
-
-## Anchors corporais
-
-Cada anchor contém:
-
-- identificador estável;
-- região;
-- superfície;
-- lado corporal;
-- posição;
-- normal externa;
-- eixo principal;
-- tangente;
-- margem inicial.
-
-Anchors disponíveis:
+Cada anchor contém ID estável, posição, outward normal, eixo, tangente e margem inicial. Catálogo atual:
 
 ```text
 torso-front      torso-back
@@ -63,92 +39,38 @@ shoulder-left    shoulder-right
 arm-left         arm-right
 waist-front      waist-back
 hip-front        hip-back
+hip-left         hip-right
 leg-left         leg-right
-neck             head
+neck             head (interno)
 ```
 
-Os templates fornecem `previewPlacements` explícitos com região, superfície e lado. Placements legados em `assemblyPlacements` são convertidos somente porque já possuem metadados estruturados. O motor não consulta nomes de templates ou peças para decidir onde vestir um painel.
+O usuário escolhe um rótulo compreensível em **Posição no corpo**. O documento guarda o ID técnico. Uma peça personalizada pode usar qualquer anchor coerente sem possuir conectores de camiseta ou calça.
 
-## Pipeline de montagem
+## Arrangement estático
 
-`buildSemanticAvatarArrangement` executa:
+`ResolvedAssemblyInput` contém apenas `PanelInstanceV3` confirmadas e incluídas. Para cada instância, o arrangement:
 
-1. reparo compatível das costuras semânticas conhecidas;
-2. validação de placements e conectores;
-3. expansão física de dobra e quantidade de corte já descrita pelos placements;
-4. resolução de lado e espelhamento;
-5. geração das topologias 3D a partir do molde 2D;
-6. associação de cada instância a um anchor corporal;
-7. transformação para superfície de torso/quadril, tubo local de braço ou meia superfície anatômica de perna;
-8. orientação da face externa por instância;
-9. resolução das partes visuais do manequim totalmente cobertas por cada instância semântica;
-10. uma passagem limitada de relaxamento de costura, com correção máxima de 1,5 mm;
-11. renderização apenas das instâncias válidas, mantendo cabeça, mãos, pés e demais regiões expostas do avatar.
+- resolve exatamente o `bodyAnchorId` confirmado;
+- preserva dimensão física (`scale = 1`);
+- aplica lado, superfície, outward normal, eixo, margem, offsets e rotação;
+- posiciona torso/quadril por superfície corporal e braços/pernas por eixos locais;
+- não usa nome, template, geometria ou transform da bancada para descobrir semântica.
 
-Partes internas do manequim que ficam integralmente sob uma roupa são omitidas do avatar visual, prática equivalente à ocultação de superfícies cobertas em personagens vestidos. Essa máscara é derivada de região, lado e comprimento da instância, nunca do nome da peça. Cabeça, mãos, pés e regiões expostas permanecem visíveis. A estabilização não possui massa, velocidade, gravidade, integração temporal, colisão ou autocolisão. Ela existe somente para reduzir pequenas aberturas geométricas entre bordas já posicionadas semanticamente.
+Conectores enriquecem costura e alinhamento, mas não são pré-requisito para posicionar uma peça custom.
 
-## Mapeamentos
+## Proxies de colisão
 
-### Torso, cintura e quadril
+`AvatarCollisionModel` produz elipsoides e cápsulas finitos e alinhados ao modelo paramétrico. Eles não são adicionados à scene pública e não alegam colisão/física nesta etapa. Uma visualização futura só pode existir sob flag DEBUG explícita.
 
-O eixo vertical do molde permanece ligado ao eixo vertical corporal. Peças cortadas na dobra são expandidas em metades esquerda e direita. A profundidade é obtida pela seção elíptica paramétrica do corpo na altura de cada vértice, acrescida da margem do anchor.
+## Lifecycle e reconciliação
 
-### Braços
+Meshes usam `PanelInstance.id` + assinatura da geometria fonte. Geometria igual pode reutilizar mesh; geometria alterada recria/atualiza; instância removida é descartada. Câmera, controles, iluminação e avatar não são recriados em edição de roupa.
 
-Uma manga declarada para `arm-left` ou `arm-right` é organizada ao redor do eixo real entre ombro e punho. A largura 2D controla a volta local; o comprimento acompanha o braço. Este fechamento tubular é local e semântico, não a antiga projeção cilíndrica global.
-
-### Pernas
-
-Frente e costas da calça ocupam metades distintas da seção da perna. O centro corporal é escolhido pelo lado explícito da instância. Acima do gancho, a seção transita para cintura e quadril; abaixo, interpola coxa, panturrilha e tornozelo.
-
-## Diagnósticos
-
-Códigos públicos:
-
-| Código | Condição |
-|---|---|
-| `missing-anchor` | peça ou instância sem região/superfície/lado resolvível |
-| `missing-connector` | papel estrutural obrigatório ausente |
-| `incompatible-seam` | costura referencia borda ou faixa inválida |
-| `ambiguous-instance` | quantidade, lado ou placement duplicado/inconsistente |
-| `disconnected-component` | componente sem ligação semântica com o principal |
-
-As mensagens incluem peça e, quando disponível, instância e conector. Instâncias com erro não são mostradas em posição arbitrária. O avatar continua visível e o usuário recebe o diagnóstico.
-
-## Interface pública
-
-Foram removidos:
-
-- controle `showBody`;
-- botão **Explodida**;
-- alternância **Montada/Explodida**;
-- deslocamento visual de painéis;
-- inicialização tubular genérica;
-- fallback por nome de peça.
-
-**Vestir no manequim** sempre abre o avatar visível com as peças válidas vestidas.
-
-## Validação
-
-A suíte cobre:
-
-- medidas regionais independentes;
-- anchors e proxies finitos;
-- camiseta com mangas nos braços corretos;
-- saia na cintura e quadril;
-- quatro painéis de calça nas pernas corretas;
-- omissão de peça sem anchor;
-- diagnóstico de componente desconectado;
-- ausência dos caminhos públicos de corpo ocultável e explosão;
-- ausência da inicialização tubular genérica no pipeline ativo;
-- auditoria Chromium desktop e mobile com enquadramento de avatar e roupa.
-
-As evidências ficam em `docs/evidence/prompt09-avatar-assembly/`.
+Ao fechar, o viewport cancela RAF e carregamento, desconecta `ResizeObserver`, remove listeners, descarta `OrbitControls`, garment/GLTF, geometrias, materiais, texturas, listas/contexto e renderer, e remove o canvas. A auditoria automatizada de 20 ciclos retornou canvases, RAFs e observers ao baseline sem erros de console.
 
 ## Limitações
 
-- Não há XPBD completo, gravidade, colisão, autocolisão ou caimento real.
-- Não houve aparelho móvel físico, Safari, impressão 1:1 ou prova em toile.
-- O avatar procedural é uma representação funcional low-poly, não um scan anatômico.
-- Placements de peças personalizadas ainda precisam declarar região, superfície e lado manualmente.
-- Camadas complexas, sobreposição de várias roupas e ordenação por espessura permanecem para evolução posterior.
+- Asset humano visual aprovado ausente; não há validação de pose, aparência, licença ou alinhamento visual final.
+- Não há XPBD, gravidade, colisão de tecido, autocolisão ou física de pence/prega.
+- Proxies são somente contrato para etapa futura.
+- WebGPU é opcional; WebGL 2 é o fallback validado nesta branch.

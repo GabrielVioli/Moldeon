@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import { createBlankGarment } from "../domain/blankGarment";
 import { createDefaultFabricSource } from "../domain/fabric";
-import type { BodyAnchorId, GarmentDraft, PatternPiece } from "../domain/pattern";
+import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternPiece } from "../domain/pattern";
 import { buildGarmentAssemblyMeshes } from "./GarmentThreeBridge";
 import { buildResolvedGarmentAssembly } from "./ResolvedGarmentAssembly";
 import { buildResolvedAssemblyInput } from "./ResolvedAssemblyInput";
@@ -121,5 +121,45 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     expect(instanceA.arrangement?.anchorId).toBe("torso-front");
     expect(instanceB.arrangement?.anchorId).toBe("leg-right");
     expect(firstPosition).not.toEqual(secondPosition);
+  });
+
+  it("consumes canonical SeamGroup treatment, distribution, ratio and slack in constraints", () => {
+    const first = square("seam-a", placement("torso", "front", "center", "torso-front"));
+    const second = square("seam-b", placement("torso", "back", "center", "torso-back"));
+    const garment = draft([first, second]);
+    garment.seams = [{
+      id: "group-part-1",
+      groupId: "canonical-group",
+      name: "Costura canônica",
+      first: { pieceId: first.id, edgeId: getPatternEdges(first)[0].id, startT: 0.1, endT: 0.9 },
+      second: { pieceId: second.id, edgeId: getPatternEdges(second)[0].id, startT: 0.2, endT: 0.8 },
+      direction: "opposite",
+      easeRatio: 0.08,
+      type: "ease",
+      treatment: "ease",
+      canonicalTreatment: "ease",
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 6,
+      active: true,
+    }];
+    const input = buildResolvedAssemblyInput(garment);
+    const state = buildResolvedGarmentAssembly(input);
+
+    expect(input.seamGroups[0]).toMatchObject({
+      id: "canonical-group",
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 6,
+    });
+    expect(state.stitchConstraints.length).toBeGreaterThan(0);
+    expect(state.stitchConstraints.every((constraint) =>
+      constraint.seamGroupId === "canonical-group"
+      && constraint.treatment === "ease"
+      && constraint.distribution === "center-biased"
+      && constraint.targetRatio === 1.08
+      && constraint.slackMm === 6
+      && constraint.restDistance > 0.0015,
+    )).toBe(true);
   });
 });

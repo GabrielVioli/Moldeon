@@ -1,4 +1,5 @@
 import type { BaselineFixtureId } from "../testFixtures/baselineGarments";
+import { getPatternEdges } from "../domain/pattern";
 
 export interface Phase0AuditState {
   garmentId: string;
@@ -53,6 +54,9 @@ export interface Phase0AuditBridge {
   loadFixture(id: BaselineFixtureId): Phase0AuditState;
   state(): Phase0AuditState;
   assembly(): Phase0AssemblySummary;
+  assemblySignature(): string;
+  point(index: number): { id: string; xMm: number; yMm: number };
+  createSimpleSeam(): Phase0AuditState;
   movePiece(pieceId: string, xMm: number, yMm: number): Phase0AuditState;
   selectPoint(index: number): Phase0AuditState;
   resetSelection(): Phase0AuditState;
@@ -163,6 +167,32 @@ export async function installPhase0AuditBridge(): Promise<void> {
     },
     state,
     assembly,
+    assemblySignature() {
+      return inputModule.buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;
+    },
+    point(index) {
+      const point = useEditorStore.getState().snapshot.piece.points[index];
+      if (!point) throw new RangeError(`O ponto ${index} não existe na peça ativa.`);
+      return { id: point.id, xMm: point.xMm, yMm: point.yMm };
+    },
+    createSimpleSeam() {
+      const current = useEditorStore.getState();
+      const firstPiece = current.garment.pieces[0];
+      const secondPiece = current.garment.pieces[1];
+      const firstEdge = firstPiece ? getPatternEdges(firstPiece)[0] : undefined;
+      const secondEdge = secondPiece ? getPatternEdges(secondPiece)[0] : undefined;
+      if (!firstEdge || !secondEdge) throw new Error("Duas peças com bordas válidas são necessárias.");
+      current.proposeSeam(
+        { pieceId: firstPiece.id, edgeId: firstEdge.id, startT: 0.15, endT: 0.85 },
+        { pieceId: secondPiece.id, edgeId: secondEdge.id, startT: 0.15, endT: 0.85 },
+      );
+      useEditorStore.getState().confirmSeamProposal({
+        name: "Costura mobile",
+        direction: "opposite",
+        treatment: "standard",
+      });
+      return state();
+    },
     movePiece(pieceId, xMm, yMm) {
       useEditorStore.getState().movePieceInWorkspace(pieceId, xMm, yMm);
       return state();

@@ -16,6 +16,8 @@ import { parseAutosaveOrThrow } from "../storage/opfs";
 import { useEditorStore } from "./editorStore";
 import { useInternalPathEditorStore } from "./internalPathEditorStore";
 import { useModelingOperationsStore } from "./modelingOperationsStore";
+import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import { buildPanelTopology } from "../garment3d/PanelTopology";
 
 function rectangle(id: string): PatternPiece {
   return migrateLegacyPieceToSegments({
@@ -182,6 +184,8 @@ describe("recovery 9.5-05 modeling transactions", () => {
     expect(useInternalPathEditorStore.getState().applySelectedPath(false)).toBe(true);
     const cutPieceIds = useEditorStore.getState().garment.pieces.map((candidate) => candidate.id);
     expect(cutPieceIds).toHaveLength(2);
+    expect(useEditorStore.getState().garment.pieces.every((candidate) => candidate.bodyPlacement?.status === "unclassified")).toBe(true);
+    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).panelInstances).toEqual([]);
 
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().garment.pieces).toHaveLength(1);
@@ -248,6 +252,11 @@ describe("recovery 9.5-05 modeling transactions", () => {
     expect(dart?.legSegmentIds).toHaveLength(2);
     expect(structuralLine.segments).toHaveLength(3);
     expect(structuralLine.nodes).toHaveLength(4);
+    const topology = buildPanelTopology(updated);
+    expect(topology.darts[0]?.dart.closure).toMatchObject({
+      state: "closed",
+      targetDistanceMm: 0,
+    });
   });
 
   it("round-trips anchored cuts and pleat metadata through the real V3 autosave parser", () => {

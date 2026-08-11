@@ -78,6 +78,7 @@ Ela possui:
 - regra de espelhamento;
 - tecido padrão;
 - conectores semânticos.
+- `bodyPlacement` com estado explícito `unclassified | confirmed`.
 
 A geometria de uma definição existe uma única vez. Nenhuma `PanelInstanceV3` pode copiar ou substituir essa geometria.
 
@@ -94,6 +95,8 @@ Campos essenciais:
 - `mirrored`: espelhamento físico;
 - `fabricId`: tecido efetivamente usado pela cópia;
 - `arrangementAnchor`: posição inicial semântica ou manual;
+- `placementStatus`: `unclassified` ou `confirmed`;
+- `includedIn3D`: decisão explícita, independente da presença de anchor;
 - `simulationEnabled`: participação futura no solver.
 
 O identificador determinístico usado por testes e migrações é:
@@ -112,6 +115,14 @@ straight-pants-back:panel:2
 ```
 
 Uma manga com quantidade de corte 2 produz uma instância esquerda e uma direita. Uma calça com duas definições, frente e costas, cada uma com quantidade 2, produz quatro instâncias.
+
+Uma definição sem classificação também gera IDs determinísticos para persistência, mas suas instâncias não possuem lado/superfície/anchor e são excluídas de `ResolvedAssemblyInput`. Duplicar ou recortar reabre a validação e deixa a nova definição não classificada.
+
+### Classificação corporal
+
+`PatternBodyPlacementV3` registra função, região, superfície, lado, anchor, face externa, offsets finos, rotações e a opção “incluir no 3D”. Peças livres começam `unclassified`, inclusive se forem chamadas “Costas” ou “Calça”. `templateId`, nome, silhueta e posição na bancada não participam da classificação.
+
+Uma sugestão pode ser calculada em memória somente a partir de papéis explícitos de segmentos/conectores. Ela não é serializada, não altera elegibilidade e só vira `confirmed` ao acionar **Confirmar posição**. Undo/redo e autosave tratam a confirmação como comando normal do documento.
 
 ### Conectores semânticos
 
@@ -192,7 +203,7 @@ center-biased
 custom
 ```
 
-`targetRatio` é positivo. `slackMm` é não negativo. Um grupo pode ter múltiplos intervalos em cada lado. O solver físico não usa esses campos ainda.
+`targetRatio` é positivo. `slackMm` é não negativo. Um grupo pode ter múltiplos intervalos em cada lado. O runtime cria constraints por arco e preserva/consome tratamento, distribuição, proporção e slack; referências órfãs geram diagnóstico e não viram constraint silenciosamente.
 
 Costuras V2 são migradas para um grupo ativo, com um intervalo de cada lado, `slackMm = 0` e metadados de compatibilidade que preservam `easeRatio`, `type` e `treatment` legados.
 
@@ -288,15 +299,7 @@ GarmentDraft → PatternDocumentV3
 PatternDocumentV3 → GarmentDraft
 ```
 
-A projeção V3 para o runtime legado é permitida somente quando não perde dados. Ela rejeita explicitamente:
-
-- grupos inativos;
-- mais de um intervalo em qualquer lado;
-- `slackMm` diferente de zero;
-- distribuição `center-biased` ou `custom`;
-- tratamento `zipper`.
-
-Essa restrição é deliberada. O sistema não reduz silenciosamente uma costura V3 avançada a uma costura simples.
+A projeção usada internamente por `ResolvedAssemblyInput` mantém `groupId`, tratamento canônico, distribuição, `targetRatio`, `slackMm` e estado ativo em cada trecho. Grupos com vários intervalos são projetados como trechos relacionados pelo mesmo ID. Quantidades diferentes entre os dois lados continuam rejeitadas porque não há pareamento inequívoco; nenhuma redução silenciosa é feita.
 
 ## Compatibilidade TypeScript e WASM
 
