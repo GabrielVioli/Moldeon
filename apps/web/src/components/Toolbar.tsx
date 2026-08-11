@@ -5,8 +5,6 @@ import { useEditorStore } from "../state/editorStore";
 
 interface ToolbarProps {
   garmentName: string;
-  onOpenLibrary(): void;
-  onPrepareLibrary(): void;
   onOpenSleeveWizard(): void;
   onPrepareSleeveWizard(): void;
   canAddSleeve: boolean;
@@ -32,8 +30,6 @@ interface ToolbarProps {
 
 export const Toolbar = memo(function Toolbar({
   garmentName,
-  onOpenLibrary,
-  onPrepareLibrary,
   onOpenSleeveWizard,
   onPrepareSleeveWizard,
   canAddSleeve,
@@ -137,15 +133,6 @@ export const Toolbar = memo(function Toolbar({
           data-testid="open-sleeve-wizard"
         >
           Adicionar manga
-        </button>
-        <button
-          className="library-button"
-          type="button"
-          onFocus={onPrepareLibrary}
-          onPointerEnter={onPrepareLibrary}
-          onClick={onOpenLibrary}
-        >
-          Moldes
         </button>
         <button
           className="fitting-button"

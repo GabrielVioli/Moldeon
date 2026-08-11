@@ -2,7 +2,7 @@
 
 ## Decisão de produto para o fechamento do 9.5-06
 
-Nenhum molde automático desta biblioteca está disponível na experiência pública. Todos os itens possuem `visibility: internal` e `releaseStatus: deferred`. A biblioteca continua visível, mas oferece somente a criação de uma bancada vazia.
+Nenhum molde automático desta biblioteca está disponível na experiência pública. Todos os itens possuem `visibility: internal` e `releaseStatus: deferred`. A entrada pública da biblioteca foi removida: a plataforma abre diretamente em uma bancada vazia e oferece somente a ação **Desenhar primeira peça**.
 
 Esta decisão é deliberada: os testes matemáticos e computacionais confirmam integridade da geometria, não validade de modelagem para corte, costura ou vestibilidade. A revisão visual manual reprovou as formas disponíveis, em especial camiseta e calça, e isso invalida qualquer apresentação delas como soluções prontas. Rótulos como “experimental” ou “validado geometricamente” não tornam um molde tecnicamente reconhecível.
 

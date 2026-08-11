@@ -4,7 +4,7 @@
 
 O 9.5-06 é fechado sem publicar moldes automáticos. A validação manual demonstrou que integridade computacional não basta para afirmar validade de modelagem: uma peça pode não ter `NaN`, autointerseção ou triangulação inválida e ainda assim não representar um molde real reconhecível e costurável.
 
-Todos os templates atuais estão marcados como `visibility: internal` e `releaseStatus: deferred`. A biblioteca permanece na interface com um único caminho público: **Bancada vazia — comece sem nenhuma peça e desenhe do zero**. Uma instalação sem autosave também inicia vazia.
+Todos os templates atuais estão marcados como `visibility: internal` e `releaseStatus: deferred`. Não existe entrada pública para a biblioteca nesta entrega. Uma instalação sem autosave inicia diretamente na bancada vazia, cuja única ação inicial de criação é **Desenhar primeira peça**.
 
 ## Infraestrutura preservada
 

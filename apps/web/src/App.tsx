@@ -23,7 +23,6 @@ import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
-import type { GarmentDraft } from "./domain/pattern";
 import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
@@ -34,16 +33,11 @@ type RenderBackend = "deferred" | "webgpu" | "webgl2";
 const MOBILE_QUERY = "(max-width: 760px)";
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1180px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
-const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
 const loadFittingRoom = () => import("./components/FittingRoomDialog");
 const loadSleeveWizard = () => import("./components/SleeveWizardDialog");
 const LazyGarmentViewport = lazy(async () => {
   const module = await loadGarmentViewport();
   return { default: module.GarmentViewport };
-});
-const LazyPatternLibraryDialog = lazy(async () => {
-  const module = await loadPatternLibrary();
-  return { default: module.PatternLibraryDialog };
 });
 const LazyFittingRoomDialog = lazy(async () => {
   const module = await loadFittingRoom();
@@ -108,7 +102,6 @@ export function App() {
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
   const [sleeveWizardOpen, setSleeveWizardOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
@@ -149,15 +142,6 @@ export function App() {
     const currentGarment = useEditorStore.getState().garment;
     exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
   }, []);
-  const handleChooseTemplate = useCallback(
-    (nextGarment: GarmentDraft) => {
-      loadGarment(nextGarment);
-      setActiveTool("select");
-      setLibraryOpen(false);
-      if (isCompactWorkspace) setMobileView("editor");
-    },
-    [isCompactWorkspace, loadGarment],
-  );
   const handleConfirmSleeve = useCallback((options: Parameters<typeof addGuidedSleeve>[0]) => {
     const result = addGuidedSleeve(options);
     if (!result.accepted) {
@@ -459,10 +443,6 @@ export function App() {
     <div className="app-shell" aria-busy={!persistenceReady}>
       <Toolbar
         garmentName={garment.name}
-        onOpenLibrary={() => setLibraryOpen(true)}
-        onPrepareLibrary={() => {
-          void loadPatternLibrary();
-        }}
         onOpenSleeveWizard={() => setSleeveWizardOpen(true)}
         onPrepareSleeveWizard={() => {
           if (canAddSleeve) void loadSleeveWizard();
@@ -607,9 +587,8 @@ export function App() {
               {!hasPieces && draftContour === null ? (
                 <div className="empty-workspace" role="status">
                   <strong>A bancada está vazia</strong>
-                  <span>Desenhe a primeira peça diretamente ou abra a biblioteca para iniciar outro projeto vazio.</span>
+                  <span>Desenhe a primeira peça diretamente nesta bancada.</span>
                   <div>
-                    <button type="button" onClick={() => setLibraryOpen(true)}>Abrir biblioteca</button>
                     <button type="button" onClick={handleCreateBlankPiece}>Desenhar primeira peça</button>
                   </div>
                 </div>
@@ -678,15 +657,6 @@ export function App() {
         renderBackend={renderBackend}
         autosaveStatus={autosaveStatus}
       />
-
-      {libraryOpen ? (
-        <Suspense fallback={<DialogPlaceholder />}>
-          <LazyPatternLibraryDialog
-            onClose={() => setLibraryOpen(false)}
-            onChoose={handleChooseTemplate}
-          />
-        </Suspense>
-      ) : null}
 
       {sleeveWizardOpen ? (
         <Suspense fallback={<DialogPlaceholder label="Preparando assistente de manga" />}>
@@ -769,7 +739,7 @@ function EmptyInspector({ mobileActive }: { mobileActive: boolean }) {
     >
       <span className="section-eyebrow">Propriedades</span>
       <strong>Nenhuma peça selecionada</strong>
-      <p>Desenhe uma peça ou abra a biblioteca de moldes para começar.</p>
+      <p>Desenhe a primeira peça para começar.</p>
     </aside>
   );
 }
@@ -785,7 +755,7 @@ function ViewportPlaceholder({ loading = false }: { loading?: boolean }) {
 }
 
 function DialogPlaceholder({
-  label = "Carregando moldes essenciais",
+  label = "Carregando",
 }: {
   label?: string;
 }) {

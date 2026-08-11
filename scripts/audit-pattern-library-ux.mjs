@@ -29,55 +29,37 @@ page.on("console", (message) => {
 });
 page.on("pageerror", (error) => consoleErrors.push(error.message));
 
-async function openLibrary() {
-  await page.getByRole("button", { name: "Moldes", exact: true }).click();
-  await page.getByRole("heading", { name: "Biblioteca de moldes" }).waitFor();
-}
-
 await page.goto(baseUrl, { waitUntil: "networkidle" });
 assert((await page.locator("body").innerText()).includes("Bancada vazia"), "Um usuário novo não iniciou na bancada vazia.");
 assert(await page.getByRole("button", { name: "Adicionar manga", exact: true }).isDisabled(), "Assistente de manga foi habilitado sem cavas semânticas.");
+assert(await page.getByRole("button", { name: "Moldes", exact: true }).count() === 0, "O botão Moldes ainda está visível.");
+assert(await page.getByRole("button", { name: "Abrir biblioteca", exact: true }).count() === 0, "A bancada vazia ainda oferece acesso à biblioteca.");
+assert(await page.getByRole("button", { name: "Desenhar primeira peça", exact: true }).isVisible(), "A ação principal para desenhar não está visível.");
 await page.screenshot({ path: resolve(outputDir, "01-empty-workspace-desktop.png"), fullPage: true });
 
-await openLibrary();
-const libraryText = await page.locator(".pattern-library-dialog").innerText();
-for (const name of hiddenTemplateNames) {
-  assert(!libraryText.includes(name), `${name} ainda está visível na biblioteca pública.`);
-}
-assert(libraryText.includes("Crie um molde do zero para começar."), "Estado vazio da biblioteca não explica o próximo passo.");
-await page.screenshot({ path: resolve(outputDir, "02-library-empty-desktop.png"), fullPage: true });
-
-await page.getByRole("button", { name: "Cancelar", exact: true }).click();
-assert((await page.locator("body").innerText()).includes("Bancada vazia"), "Cancelar alterou a bancada.");
-
-await openLibrary();
-await page.getByRole("button", { name: /Bancada vazia/ }).click();
-await page.getByRole("button", { name: "Criar bancada vazia", exact: true }).click();
-await page.getByRole("heading", { name: "Biblioteca de moldes" }).waitFor({ state: "hidden" });
-const blankBodyText = await page.locator("body").innerText();
-assert(blankBodyText.includes("Bancada vazia"), "Criar bancada vazia não retornou ao editor vazio.");
-assert(!blankBodyText.includes("Camiseta básica"), "O projeto vazio carregou conteúdo de template oculto.");
+page.once("dialog", (dialog) => dialog.accept("Primeira peça"));
+await page.getByRole("button", { name: "Desenhar primeira peça", exact: true }).click();
+assert((await page.locator("body").innerText()).includes("Desenhando Primeira peça"), "A ação principal não iniciou o desenho.");
+await page.keyboard.press("Escape");
+assert((await page.locator("body").innerText()).includes("A bancada está vazia"), "Cancelar o desenho não restaurou a bancada vazia.");
 
 await page.setViewportSize({ width: 390, height: 844 });
 const mobileOverflowBefore = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 assert(mobileOverflowBefore <= 1, `Editor vazio tem overflow horizontal móvel de ${mobileOverflowBefore}px.`);
-await openLibrary();
-const mobileOverflowLibrary = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-assert(mobileOverflowLibrary <= 1, `Biblioteca vazia tem overflow horizontal móvel de ${mobileOverflowLibrary}px.`);
-await page.screenshot({ path: resolve(outputDir, "03-library-empty-mobile.png"), fullPage: true });
-await page.getByRole("button", { name: "Fechar biblioteca" }).click();
+assert(await page.getByRole("button", { name: "Desenhar primeira peça", exact: true }).isVisible(), "A ação principal não está visível no mobile.");
+await page.screenshot({ path: resolve(outputDir, "02-empty-workspace-mobile.png"), fullPage: true });
 
 assert(consoleErrors.length === 0, `Erros de console: ${consoleErrors.join(" | ")}`);
 const audit = {
   baseUrl,
+  publicLibraryEntryPoints: 0,
   publicAutomaticTemplates: 0,
   hiddenTemplateNames,
   newUserStartsBlank: true,
-  blankProjectCreated: true,
-  cancelPreservedWorkspace: true,
+  drawFirstPieceStarted: true,
+  cancelDrawingPreservedWorkspace: true,
   sleeveDisabledWithoutSemanticArmholes: true,
   mobileOverflowEditorPx: mobileOverflowBefore,
-  mobileOverflowLibraryPx: mobileOverflowLibrary,
   consoleErrors,
 };
 writeFileSync(resolve(outputDir, "ux-audit.json"), JSON.stringify(audit, null, 2), "utf8");
