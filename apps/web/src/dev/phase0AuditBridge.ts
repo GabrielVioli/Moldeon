@@ -10,6 +10,8 @@ export interface Phase0AuditState {
   selectedPointId: string | null;
   selectedEdgeId: string | null;
   selectedSeamId: string | null;
+  seamFirstEdge: { pieceId: string; edgeId: string } | null;
+  seamProposal: { firstPieceId: string; secondPieceId: string } | null;
   seamCount: number;
   seams: Array<{ id: string; name: string; direction: string; active: boolean }>;
   simulateVersion: number;
@@ -89,6 +91,15 @@ export async function installPhase0AuditBridge(): Promise<void> {
       selectedPointId: current.selectedPointId,
       selectedEdgeId: current.selectedEdgeId,
       selectedSeamId: current.selectedSeamId,
+      seamFirstEdge: current.seamFirstEdge
+        ? { pieceId: current.seamFirstEdge.pieceId, edgeId: current.seamFirstEdge.edgeId }
+        : null,
+      seamProposal: current.seamProposal
+        ? {
+            firstPieceId: current.seamProposal.first.pieceId,
+            secondPieceId: current.seamProposal.second.pieceId,
+          }
+        : null,
       seamCount: current.garment.seams?.length ?? 0,
       seams: (current.garment.seams ?? []).map((seam) => ({
         id: seam.id,

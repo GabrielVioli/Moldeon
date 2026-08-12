@@ -318,6 +318,20 @@ export interface GarmentEase {
   sleeveMm: number;
 }
 
+export type GarmentDressingRegion =
+  | "upper"
+  | "lower"
+  | "full"
+  | "arm"
+  | "neck"
+  | "custom";
+
+/** DecisÃµes mÃ­nimas do conjunto para a prova; nunca descreve painÃ©is isolados. */
+export interface GarmentDressingSetup {
+  region?: GarmentDressingRegion;
+  frontReferencePieceId?: string;
+}
+
 export type EdgeFinish = "raw" | "hem" | "binding" | "facing" | "elastic";
 
 export interface Guide {
@@ -414,6 +428,7 @@ export interface GarmentDraft {
   workspaceStates?: PieceWorkspaceState[];
   assemblyPlacements?: AssemblyPlacement[];
   ease?: GarmentEase;
+  dressing?: GarmentDressingSetup;
   measurementProfile?: MeasurementProfile;
   parametric?: ParametricProjectMetadata;
 }
@@ -920,6 +935,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
 
   const assemblyPlacements = parseAssemblyPlacements(value.assemblyPlacements, pieceIds);
   const ease = parseGarmentEase(value.ease);
+  const dressing = parseGarmentDressing(value.dressing, pieceIds);
   const measurementProfile = value.measurementProfile === undefined
     ? undefined
     : parseMeasurementProfile(value.measurementProfile);
@@ -948,6 +964,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(workspaceStates === undefined ? {} : { workspaceStates }),
     ...(assemblyPlacements === undefined ? {} : { assemblyPlacements }),
     ...(ease === undefined ? {} : { ease }),
+    ...(dressing === undefined ? {} : { dressing }),
     ...(measurementProfile === undefined ? {} : { measurementProfile }),
     ...(parametric === undefined ? {} : { parametric }),
   };
@@ -1065,6 +1082,23 @@ function parseGarmentEase(value: unknown): GarmentEase | undefined {
     waistMm: readFiniteNumber(value.waistMm, "A folga de cintura"),
     hipMm: readFiniteNumber(value.hipMm, "A folga de quadril"),
     sleeveMm: readFiniteNumber(value.sleeveMm, "A folga de manga"),
+  };
+}
+
+function parseGarmentDressing(value: unknown, pieceIds: Set<string>): GarmentDressingSetup | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError("A configuraÃ§Ã£o de prova da roupa Ã© invÃ¡lida.");
+  const region = value.region === undefined
+    ? undefined
+    : readEnum(value.region, ["upper", "lower", "full", "arm", "neck", "custom"] as const, "A regiÃ£o de prova da roupa");
+  const frontReferencePieceId = value.frontReferencePieceId === undefined
+    ? undefined
+    : readString(value.frontReferencePieceId, "A peÃ§a de referÃªncia frontal");
+  return {
+    ...(region === undefined ? {} : { region }),
+    ...(frontReferencePieceId === undefined || !pieceIds.has(frontReferencePieceId)
+      ? {}
+      : { frontReferencePieceId }),
   };
 }
 

@@ -10,11 +10,13 @@ import {
   type BodyPlacementSurface,
   type EdgeRange,
   type GarmentDraft,
+  type GarmentDressingRegion,
   type PatternPiece,
   type Seam,
   type SeamDirection,
   type SeamTreatment,
 } from "./pattern";
+import type { PanelInstanceV3, PatternDocumentV3 } from "./patternDocumentV3.types";
 import {
   classifyPatternEdge,
   type ClassifiedPatternEdge,
@@ -61,6 +63,17 @@ export interface Garment3DEligibility {
   connectedPieceIds: string[];
   includedPieceIds: string[];
   missingClassificationPieceIds: string[];
+}
+
+export interface DressingPreflight {
+  canDress: boolean;
+  requiresRegion: boolean;
+  requiresFrontReference: boolean;
+  issues: string[];
+  warnings: string[];
+  includedPieceIds: string[];
+  frontCandidatePieceIds: string[];
+  resolvedFrontReferencePieceId?: string;
 }
 
 export interface BodyPlacementSuggestion {
@@ -278,9 +291,122 @@ export function buildAssemblyGraph(
   };
 }
 
+export function evaluateDressingPreflight(garment: GarmentDraft): DressingPreflight {
+  const includedPieces = visibleIncludedPieces(garment);
+  const includedIds = new Set(includedPieces.map((piece) => piece.id));
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (includedPieces.length === 0) {
+    issues.push("Desenhe pelo menos uma peça antes de provar.");
+  }
+
+  for (const piece of includedPieces) {
+    if (!triangulatePatternContour(samplePatternContour(piece.points)).ok) {
+      issues.push(`${piece.name}: o contorno precisa ser corrigido antes de provar.`);
+    }
+  }
+
+  const includedSeams = (garment.seams ?? []).filter(
+    (seam) => seam.active !== false
+      && includedIds.has(seam.first.pieceId)
+      && includedIds.has(seam.second.pieceId),
+  );
+  const graph = buildAssemblyGraph({ pieces: includedPieces, seams: includedSeams });
+  issues.push(...graph.issues);
+
+  if (includedPieces.length > 0 && graph.validSeamIds.length === 0) {
+    issues.push("Costure as bordas que formam a roupa antes de provar.");
+  }
+  if (graph.validSeamIds.length > 0 && graph.connectedComponents.length > 1) {
+    issues.push("Há peças sem conexão com o conjunto principal. Costure-as ou oculte-as antes de provar.");
+  }
+  warnings.push(...graph.warnings);
+
+  const requiresRegion = includedPieces.length > 0 && garment.dressing?.region === undefined;
+  const inferredFront = inferFrontReference(includedPieces);
+  const configuredFront = garment.dressing?.frontReferencePieceId;
+  const resolvedFrontReferencePieceId = configuredFront && includedIds.has(configuredFront)
+    ? configuredFront
+    : inferredFront;
+  const requiresFrontReference = includedPieces.length > 1
+    && graph.connectedComponents.length === 1
+    && resolvedFrontReferencePieceId === undefined;
+
+  return {
+    canDress: issues.length === 0 && !requiresRegion && !requiresFrontReference,
+    requiresRegion,
+    requiresFrontReference,
+    issues: unique(issues),
+    warnings: unique(warnings),
+    includedPieceIds: includedPieces.map((piece) => piece.id),
+    frontCandidatePieceIds: graph.connectedComponents[0] ?? includedPieces.map((piece) => piece.id),
+    ...(resolvedFrontReferencePieceId === undefined ? {} : { resolvedFrontReferencePieceId }),
+  };
+}
+
+/**
+ * Converte somente o conjunto de prova em placements derivados. A geometria e
+ * as decisões avançadas por painel continuam no documento V3 autoritativo.
+ */
+export function deriveDressingPanelInstances(
+  document: PatternDocumentV3,
+  garment: GarmentDraft,
+): PanelInstanceV3[] {
+  const preflight = evaluateDressingPreflight(garment);
+  const region = garment.dressing?.region;
+  const frontReference = preflight.resolvedFrontReferencePieceId;
+  if (!preflight.canDress || !region || !frontReference) return document.panelInstances;
+
+  const includedIds = new Set(preflight.includedPieceIds);
+  const orderedPieceIds = orderConnectedPieces(garment, frontReference, includedIds);
+  const surfaceByPieceId = new Map<string, "front" | "back">();
+  if (orderedPieceIds.length === 2) {
+    surfaceByPieceId.set(orderedPieceIds[0], "front");
+    surfaceByPieceId.set(orderedPieceIds[1], "back");
+  } else {
+    orderedPieceIds.forEach((pieceId, index) => {
+      surfaceByPieceId.set(pieceId, index === 0 || index < orderedPieceIds.length / 2 ? "front" : "back");
+    });
+  }
+
+  const placementRegion = previewRegionFor(region);
+  return document.panelInstances.map((instance) => {
+    if (!includedIds.has(instance.sourcePatternId)) return instance;
+    const definition = document.patternDefinitions.find((candidate) => candidate.id === instance.sourcePatternId);
+    if (!definition || definition.bodyPlacement.includeIn3D === false) return instance;
+    const surface = surfaceByPieceId.get(instance.sourcePatternId) ?? "front";
+    const bodySide = placementRegion === "arm"
+      ? instance.copyIndex % 2 === 0 ? "left" : "right"
+      : "center";
+    const bodyAnchorId = anchorFor(placementRegion, surface, bodySide);
+    return {
+      ...instance,
+      placementStatus: "confirmed",
+      bodySide,
+      surface,
+      includedIn3D: true,
+      arrangementAnchor: {
+        id: `${instance.id}:dressing`,
+        bodyAnchorId,
+        region: placementRegion,
+        surface,
+        bodySide,
+        rotationDeg: 0,
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 25,
+        scale: 1,
+        source: "inferred",
+      },
+    };
+  });
+}
+
 export function evaluateGarment3DEligibility(
   garment: GarmentDraft,
 ): Garment3DEligibility {
+  const preflight = evaluateDressingPreflight(garment);
   const issues: string[] = [];
   const warnings: string[] = [];
   const triangulatable = new Set<string>();
@@ -311,6 +437,7 @@ export function evaluateGarment3DEligibility(
     seams: (garment.seams ?? []).filter((seam) => includedIds.has(seam.first.pieceId) && includedIds.has(seam.second.pieceId)),
   });
   issues.push(...graph.issues);
+  issues.push(...preflight.issues);
   warnings.push(...graph.warnings);
 
   /*
@@ -333,32 +460,19 @@ export function evaluateGarment3DEligibility(
     );
   }
 
-  const missingPlacements = connectedPieceIds.filter((pieceId) => {
-    const placement = garment.pieces.find((piece) => piece.id === pieceId)?.bodyPlacement;
-    return !placement
-      || placement.status !== "confirmed"
-      || !placement.role
-      || !placement.region
-      || !placement.surface
-      || !placement.bodySide
-      || !placement.anchorId;
-  });
-
-  if (canPreviewGarment && missingPlacements.length > 0) {
-    warnings.push(
-      `Defina a posição de montagem de ${missingPlacements.length} peça(s) antes da Prova.`,
-    );
-  }
+  warnings.push(...preflight.warnings);
+  if (preflight.requiresRegion) warnings.push("Escolha onde esta roupa será vestida.");
+  if (preflight.requiresFrontReference) warnings.push("Selecione qual peça inicia na frente do corpo.");
 
   return {
     canOpenViewport: true,
     canPreviewGarment,
-    canDressBody: canPreviewGarment && missingPlacements.length === 0 && issues.length === 0,
+    canDressBody: canPreviewGarment && preflight.canDress && issues.length === 0,
     issues: unique(issues),
     warnings: unique(warnings),
     connectedPieceIds,
     includedPieceIds: includedPieces.map((piece) => piece.id),
-    missingClassificationPieceIds: missingPlacements,
+    missingClassificationPieceIds: [],
   };
 }
 
@@ -419,6 +533,69 @@ export function inferAssemblyPlacement(
     flipped: false,
     source: role === "custom" ? "manual" : "inferred",
   };
+}
+
+function visibleIncludedPieces(garment: GarmentDraft): PatternPiece[] {
+  const workspaceByPieceId = new Map((garment.workspaceStates ?? []).map((entry) => [entry.pieceId, entry]));
+  return garment.pieces.filter((piece) => {
+    const workspace = workspaceByPieceId.get(piece.id);
+    return (workspace?.visible ?? true) && piece.bodyPlacement?.includeIn3D !== false;
+  });
+}
+
+function inferFrontReference(pieces: readonly PatternPiece[]): string | undefined {
+  if (pieces.length === 1) return pieces[0]?.id;
+  const candidates = pieces.filter((piece) => {
+    const roles = new Set(piece.segments?.map((segment) => segment.role) ?? []);
+    return roles.has("frontArmhole") && !roles.has("backArmhole");
+  });
+  return candidates.length === 1 ? candidates[0].id : undefined;
+}
+
+function orderConnectedPieces(
+  garment: GarmentDraft,
+  firstPieceId: string,
+  includedIds: ReadonlySet<string>,
+): string[] {
+  const adjacency = new Map<string, Set<string>>([...includedIds].map((pieceId) => [pieceId, new Set()]));
+  for (const seam of garment.seams ?? []) {
+    if (seam.active === false || !includedIds.has(seam.first.pieceId) || !includedIds.has(seam.second.pieceId)) continue;
+    adjacency.get(seam.first.pieceId)?.add(seam.second.pieceId);
+    adjacency.get(seam.second.pieceId)?.add(seam.first.pieceId);
+  }
+  const result: string[] = [];
+  const visited = new Set<string>([firstPieceId]);
+  const queue = [firstPieceId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    result.push(current);
+    for (const next of adjacency.get(current) ?? []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      queue.push(next);
+    }
+  }
+  for (const pieceId of includedIds) if (!visited.has(pieceId)) result.push(pieceId);
+  return result;
+}
+
+function previewRegionFor(region: GarmentDressingRegion): "torso" | "hip" | "arm" | "neck" | "custom" {
+  if (region === "lower") return "hip";
+  if (region === "arm") return "arm";
+  if (region === "neck") return "neck";
+  if (region === "custom") return "custom";
+  return "torso";
+}
+
+function anchorFor(
+  region: "torso" | "hip" | "arm" | "neck" | "custom",
+  surface: "front" | "back",
+  bodySide: "center" | "left" | "right",
+): BodyAnchorId {
+  if (region === "arm") return bodySide === "right" ? "arm-right" : "arm-left";
+  if (region === "neck") return "neck";
+  if (region === "hip") return surface === "back" ? "hip-back" : "hip-front";
+  return surface === "back" ? "torso-back" : "torso-front";
 }
 
 function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {

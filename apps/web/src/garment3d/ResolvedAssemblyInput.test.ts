@@ -62,6 +62,36 @@ function draft(pieces: PatternPiece[]): GarmentDraft {
 }
 
 describe("ResolvedAssemblyInput canonical contract", () => {
+  it("derives front and back from the seam graph without classifying panels by name", () => {
+    const first = square("banana", undefined);
+    first.name = "Costas";
+    const second = square("panel-123", undefined);
+    second.name = "Calça";
+    const garment = draft([first, second]);
+    garment.dressing = { region: "upper", frontReferencePieceId: first.id };
+    garment.seams = [{
+      id: "side",
+      name: "Lateral",
+      first: { pieceId: first.id, edgeId: getPatternEdges(first)[0].id, startT: 0, endT: 1 },
+      second: { pieceId: second.id, edgeId: getPatternEdges(second)[0].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    }];
+
+    const input = buildResolvedAssemblyInput(garment);
+
+    expect(input.document.patternDefinitions.map((definition) => definition.bodyPlacement.status)).toEqual([
+      "unclassified",
+      "unclassified",
+    ]);
+    expect(input.panelInstances).toHaveLength(2);
+    expect(input.panelInstances.map((instance) => instance.surface)).toEqual(["front", "back"]);
+    expect(input.panelInstances.map((instance) => instance.sourcePatternId)).toEqual([first.id, second.id]);
+  });
+
   it("produces no panel instances or garment meshes for an empty project", () => {
     const garment = createBlankGarment();
     const input = buildResolvedAssemblyInput(garment);

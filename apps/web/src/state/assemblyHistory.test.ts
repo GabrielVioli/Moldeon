@@ -156,6 +156,23 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.pieces[0].bodyPlacement?.status).toBe("confirmed");
   });
 
+  it("undoes and redoes the garment-level dressing setup", () => {
+    createSeam();
+    useEditorStore.getState().setGarmentDressing({
+      region: "upper",
+      frontReferencePieceId: "a",
+    });
+    expect(useEditorStore.getState().garment.dressing).toEqual({
+      region: "upper",
+      frontReferencePieceId: "a",
+    });
+    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).panelInstances).toHaveLength(2);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.dressing).toBeUndefined();
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.dressing?.region).toBe("upper");
+  });
+
   it("invalidates canonical geometry on point edit and restores it through undo/redo", () => {
     useEditorStore.getState().setBodyPlacement("a", torsoFrontPlacement);
     const before = buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;

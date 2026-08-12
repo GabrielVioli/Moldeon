@@ -330,6 +330,7 @@ export function garmentDraftToPatternDocumentV3(
     workspace,
     garmentSettings: {
       ...(garment.ease === undefined ? {} : { ease: garment.ease }),
+      ...(garment.dressing === undefined ? {} : { dressing: garment.dressing }),
     },
     simulationSettings: defaultSimulationSettings(),
   });
@@ -412,6 +413,9 @@ export function patternDocumentV3ToGarmentDraft(
     ...(document.garmentSettings.ease === undefined
       ? {}
       : { ease: document.garmentSettings.ease }),
+    ...(document.garmentSettings.dressing === undefined
+      ? {}
+      : { dressing: document.garmentSettings.dressing }),
   });
 }
 
@@ -1618,7 +1622,22 @@ function parseWorkspace(value: unknown): WorkspaceStateV3 {
 
 function parseGarmentSettings(value: unknown): PatternDocumentV3["garmentSettings"] {
   if (!isRecord(value)) throw new TypeError("As configurações da roupa são inválidas.");
-  if (value.ease === undefined) return {};
+  const dressing = value.dressing === undefined
+    ? undefined
+    : (() => {
+        if (!isRecord(value.dressing)) throw new TypeError("A configuração de prova da roupa é inválida.");
+        const region = value.dressing.region === undefined
+          ? undefined
+          : readEnum(value.dressing.region, ["upper", "lower", "full", "arm", "neck", "custom"] as const, "A região de prova da roupa");
+        const frontReferencePieceId = value.dressing.frontReferencePieceId === undefined
+          ? undefined
+          : readString(value.dressing.frontReferencePieceId, "A peça de referência frontal");
+        return {
+          ...(region === undefined ? {} : { region }),
+          ...(frontReferencePieceId === undefined ? {} : { frontReferencePieceId }),
+        };
+      })();
+  if (value.ease === undefined) return dressing === undefined ? {} : { dressing };
   if (!isRecord(value.ease)) throw new TypeError("As folgas da roupa são inválidas.");
   return {
     ease: {
@@ -1627,6 +1646,7 @@ function parseGarmentSettings(value: unknown): PatternDocumentV3["garmentSetting
       hipMm: readFiniteNumber(value.ease.hipMm, "A folga de quadril"),
       sleeveMm: readFiniteNumber(value.ease.sleeveMm, "A folga de manga"),
     },
+    ...(dressing === undefined ? {} : { dressing }),
   };
 }
 

@@ -14,6 +14,7 @@ import {
   type DraftContour,
   type EdgeRange,
   type GarmentDraft,
+  type GarmentDressingSetup,
   type Guide,
   type PatternPiece,
   type PatternBodyPlacement,
@@ -166,6 +167,7 @@ export interface EditorState {
   setBodyPlacement(pieceId: string, placement: PatternBodyPlacement): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
+  setGarmentDressing(update: GarmentDressingSetup): void;
   addGuidedSleeve(options: {
     frontPieceId: string;
     backPieceId: string;
@@ -762,6 +764,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       garment: {
         ...document.garment,
         ease: { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50, ...(document.garment.ease ?? {}), [region]: valueMm },
+      },
+    }));
+  },
+  setGarmentDressing: (update) => {
+    changeDocument(set, get, "metadata", "Preparar prova", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        dressing: { ...(document.garment.dressing ?? {}), ...update },
       },
     }));
   },

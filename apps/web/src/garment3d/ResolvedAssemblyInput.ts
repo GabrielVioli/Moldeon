@@ -1,5 +1,6 @@
 import { createPatternSnapshot } from "../core/fallbackPatternEngine";
 import type { GarmentDraft } from "../domain/pattern";
+import { deriveDressingPanelInstances } from "../domain/assembly";
 import {
   garmentDraftToPatternDocumentV3,
   parsePatternDocumentV3,
@@ -32,7 +33,8 @@ export interface ResolvedAssemblyInput {
 
 export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssemblyInput {
   const document = garmentDraftToPatternDocumentV3(garment);
-  const includedInstances = document.panelInstances.filter((instance) =>
+  const resolvedInstances = deriveDressingPanelInstances(document, garment);
+  const includedInstances = resolvedInstances.filter((instance) =>
     instance.includedIn3D
     && instance.placementStatus === "confirmed"
     && instance.arrangementAnchor !== undefined,

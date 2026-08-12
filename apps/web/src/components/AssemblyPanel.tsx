@@ -199,10 +199,15 @@ export const AssemblyPanel = memo(function AssemblyPanel({
         )}
       </section>
 
-      {activePiece ? <BodyPositionPanel key={activePiece.id} piece={activePiece} /> : null}
-
       <details className="assembly-advanced">
         <summary>Ajustes avançados</summary>
+
+        {activePiece ? (
+          <details className="assembly-panel-classification">
+            <summary>Classificação técnica do painel ativo</summary>
+            <BodyPositionPanel key={activePiece.id} piece={activePiece} />
+          </details>
+        ) : null}
 
         <section className="assembly-section">
           <h3>Folga da roupa</h3>

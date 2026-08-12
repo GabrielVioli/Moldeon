@@ -13,6 +13,7 @@ import type {
   EdgeFinish,
   EdgeRange,
   GarmentEase,
+  GarmentDressingSetup,
   Guide,
   PatternContour,
   PatternDart,
@@ -279,6 +280,7 @@ export interface SimulationSettingsV3 {
 
 export interface GarmentSettingsV3 {
   ease?: GarmentEase;
+  dressing?: GarmentDressingSetup;
 }
 
 /**

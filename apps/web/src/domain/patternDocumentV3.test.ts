@@ -91,6 +91,10 @@ describe("PatternDocumentV3", () => {
 
   it("round trips curves, partial seams, darts, lines, fabrics and workspace", () => {
     const garment = richGarment();
+    garment.dressing = {
+      region: "upper",
+      frontReferencePieceId: garment.pieces[0].id,
+    };
     const document = garmentDraftToPatternDocumentV3(garment, {
       activePatternId: garment.pieces[0].id,
     });
@@ -117,6 +121,7 @@ describe("PatternDocumentV3", () => {
       garment.pieces[0].internalLines,
     );
     expect(restored.workspaceStates).toEqual(garment.workspaceStates);
+    expect(restored.dressing).toEqual(garment.dressing);
     expect(restored.seams?.[0]).toMatchObject({
       first: { startT: 0.15, endT: 0.85 },
       second: { startT: 0.1, endT: 0.9 },

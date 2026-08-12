@@ -129,6 +129,9 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     const handlePointerDown = (event: PointerEvent) => {
       if (
         !draftPath
+        && tool !== "seam"
+        && !seamFirstEdge
+        && !seam
         && event.target instanceof Element
         && event.target.closest(".canvas-stack")
         && !panelRef.current?.contains(event.target)
@@ -140,7 +143,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       window.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("pointerdown", handlePointerDown, true);
     };
-  }, [closePanel, dismissed, draftPath, hasContext]);
+  }, [closePanel, dismissed, draftPath, hasContext, seam, seamFirstEdge, tool]);
 
   const confirmCurrentSeam = () => {
     if (!seam) return;

@@ -182,14 +182,15 @@ export class ThreeViewport {
     const box = new THREE.Box3().setFromObject(this.avatarGroup);
     box.expandByObject(this.garmentGroup);
     if (box.isEmpty()) return;
+    const hasVisualAvatar = this.avatarGroup.children.length > 0;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const verticalRadius = Math.max(size.y * 0.57, 0.75);
+    const verticalRadius = Math.max(size.y * 0.57, hasVisualAvatar ? 0.75 : 0.12);
     const horizontalRadius = Math.max(size.x, size.z) * 0.72;
-    const radius = Math.max(verticalRadius, horizontalRadius, 0.55);
+    const radius = Math.max(verticalRadius, horizontalRadius, hasVisualAvatar ? 0.55 : 0.16);
     const halfFov = THREE.MathUtils.degToRad(this.camera.fov * 0.5);
     const aspectAllowance = this.camera.aspect < 0.8 ? 1.2 : 1;
-    const distance = Math.max(1.25, radius / Math.tan(halfFov) * aspectAllowance);
+    const distance = Math.max(hasVisualAvatar ? 1.25 : 0.5, radius / Math.tan(halfFov) * aspectAllowance);
     const direction = new THREE.Vector3(1.15, 0.3, 1.7).normalize();
     this.controls.target.copy(center).add(new THREE.Vector3(0, size.y * 0.02, 0));
     this.camera.position.copy(this.controls.target).addScaledVector(direction, distance);

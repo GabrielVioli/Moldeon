@@ -19,11 +19,12 @@ import { PiecesPanel } from "./components/PiecesPanel";
 import { PreviewPlacementPanel } from "./components/PreviewPlacementPanel";
 import { AssemblyPanel } from "./components/AssemblyPanel";
 import { ContextBar } from "./components/ContextBar";
+import { DressingPreflightDialog } from "./components/DressingPreflightDialog";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
-import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
+import { evaluateDressingPreflight, evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
 import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
@@ -95,6 +96,7 @@ export function App() {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const simulate = useEditorStore((state) => state.simulate);
+  const setGarmentDressing = useEditorStore((state) => state.setGarmentDressing);
   const addGuidedSleeve = useEditorStore((state) => state.addGuidedSleeve);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -107,56 +109,42 @@ export function App() {
   const [sleeveWizardOpen, setSleeveWizardOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("modeling");
-  const [bodyPlacementNotice, setBodyPlacementNotice] = useState<string | null>(null);
+  const [dressingPreflightOpen, setDressingPreflightOpen] = useState(false);
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
+  const dressingPreflight = useMemo(() => evaluateDressingPreflight(garment), [garment]);
   const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
-  useEffect(() => {
-    if (eligibility.canDressBody) setBodyPlacementNotice(null);
-  }, [eligibility.canDressBody]);
-  const focusMissingBodyPlacement = useCallback(() => {
-    const pieceId = eligibility.missingClassificationPieceIds[0];
-    const piece = garment.pieces.find((candidate) => candidate.id === pieceId);
-    if (!piece) return;
-    selectPiece(piece.id);
-    setWorkspaceMode("modeling");
+  const openDressedViewport = useCallback((mode: "assembly" | "fitting") => {
+    setWorkspaceMode(mode);
+    setPreviewRequested(true);
     setIsRightPanelOpen(true);
-    setBodyPlacementNotice(`Defina onde “${piece.name}” deve ficar no corpo.`);
-    if (isCompactWorkspace) setMobileView("inspector");
-    window.requestAnimationFrame(() => {
-      const section = document.querySelector<HTMLElement>(`[data-body-position-piece="${CSS.escape(piece.id)}"]`);
-      section?.scrollIntoView({ block: "nearest" });
-      section?.querySelector<HTMLElement>("select[aria-invalid=true]")?.focus();
-    });
-  }, [eligibility.missingClassificationPieceIds, garment.pieces, isCompactWorkspace, selectPiece]);
+    if (isCompactWorkspace) setMobileView("preview");
+    if (mode === "assembly") simulate();
+  }, [isCompactWorkspace, simulate]);
   const handleSimulate = useCallback(() => {
-    if (!eligibility.canDressBody) {
-      focusMissingBodyPlacement();
+    if (!dressingPreflight.canDress) {
+      setDressingPreflightOpen(true);
       return;
     }
-    setBodyPlacementNotice(null);
-    setWorkspaceMode("assembly");
-    setPreviewRequested(true);
-    setIsRightPanelOpen(true);
-    if (isCompactWorkspace) setMobileView("preview");
-    simulate();
-  }, [eligibility.canDressBody, focusMissingBodyPlacement, isCompactWorkspace, simulate]);
+    openDressedViewport("assembly");
+  }, [dressingPreflight.canDress, openDressedViewport]);
   const handleDressBody = useCallback(() => {
-    if (!eligibility.canDressBody) {
-      focusMissingBodyPlacement();
+    if (!dressingPreflight.canDress) {
+      setDressingPreflightOpen(true);
       return;
     }
-    setBodyPlacementNotice(null);
-    setWorkspaceMode("fitting");
-    setPreviewRequested(true);
-    setIsRightPanelOpen(true);
-    if (isCompactWorkspace) setMobileView("preview");
-  }, [eligibility.canDressBody, focusMissingBodyPlacement, isCompactWorkspace]);
+    openDressedViewport("fitting");
+  }, [dressingPreflight.canDress, openDressedViewport]);
+  useEffect(() => {
+    if (!dressingPreflightOpen || !dressingPreflight.canDress) return;
+    setDressingPreflightOpen(false);
+    openDressedViewport("fitting");
+  }, [dressingPreflight.canDress, dressingPreflightOpen, openDressedViewport]);
   const closeRightPanel = useCallback(() => {
     setIsRightPanelOpen(false);
     setPreviewRequested(false);
@@ -202,8 +190,19 @@ export function App() {
     else if (pathState.selectedPathId) pathState.selectPath(null);
     if (tool !== "select") clearEditorSelection({ preservePieces: tool === "cut" });
     if (tool === "draft") handleCreateBlankPiece();
-    else setActiveTool(tool);
-  }, [cancelIntent, handleCreateBlankPiece]);
+    else {
+      setActiveTool(tool);
+      if (tool === "seam") {
+        if (isCompactWorkspace) {
+          setWorkspaceMode("modeling");
+          setMobileView("editor");
+        } else {
+          setWorkspaceMode("assembly");
+          setIsRightPanelOpen(true);
+        }
+      }
+    }
+  }, [cancelIntent, handleCreateBlankPiece, isCompactWorkspace]);
   const handleDuplicatePiece = useCallback(
     (pieceId: string, mirrored = false) => {
       duplicatePiece(pieceId, mirrored);
@@ -484,7 +483,7 @@ export function App() {
         onPrepareFitting={() => {
           void loadFittingRoom();
         }}
-        onSimulate={handleSimulate}
+        onSimulate={handleDressBody}
         canAssemble3D={eligibility.canPreviewGarment}
         workspaceMode={workspaceMode}
         canDressBody={eligibility.canDressBody}
@@ -631,7 +630,6 @@ export function App() {
         </section>
 
         <div id="workspace-right-panel" className="workspace-right-panel" hidden={!isRightPanelOpen} aria-hidden={!isRightPanelOpen}>
-        {bodyPlacementNotice ? <div className="body-position-notice" role="alert">{bodyPlacementNotice}</div> : null}
         <section
           className={`preview-panel workspace-view${mobileView === "preview" ? " is-mobile-active" : ""}`}
           id="preview-panel"
@@ -667,7 +665,16 @@ export function App() {
           mobileActive={mobileView === "inspector"}
           onRequestPreview={handleSimulate}
           onDressBody={handleDressBody}
-        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel /> : hasPieces ? <Inspector
+        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel
+          onChangeRegion={() => {
+            setGarmentDressing({ region: undefined });
+            setDressingPreflightOpen(true);
+          }}
+          onBackToAssembly={() => {
+            setWorkspaceMode("assembly");
+            if (isCompactWorkspace) setMobileView("editor");
+          }}
+        /> : hasPieces ? <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}
@@ -710,6 +717,23 @@ export function App() {
             }}
           />
         </Suspense>
+      ) : null}
+
+      {dressingPreflightOpen ? (
+        <DressingPreflightDialog
+          garment={garment}
+          preflight={dressingPreflight}
+          onChooseRegion={(region) => setGarmentDressing({ region })}
+          onChooseFront={(frontReferencePieceId) => setGarmentDressing({ frontReferencePieceId })}
+          onFixSeams={() => {
+            setDressingPreflightOpen(false);
+            setWorkspaceMode("assembly");
+            setIsRightPanelOpen(true);
+            if ((garment.seams?.length ?? 0) === 0) setActiveTool("seam");
+            if (isCompactWorkspace) setMobileView("editor");
+          }}
+          onClose={() => setDressingPreflightOpen(false)}
+        />
       ) : null}
 
       {!persistenceReady ? <DialogPlaceholder label="Preparando sua bancada" /> : null}

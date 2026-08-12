@@ -1,0 +1,179 @@
+{
+  "afterFirst": {
+    "garmentId": "garment-empty-msqfjorg",
+    "templateId": "blank",
+    "activePieceId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": {
+      "pieceId": "piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa",
+      "edgeId": "piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa:edge:piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa:point-dfe25c1e-e2b2-48ed-b7db-f734da6a225f->piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa:point-de5a5a2c-6dea-41ba-9b0e-0b07a93468aa"
+    },
+    "seamProposal": null,
+    "seamCount": 0,
+    "seams": [],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "afterSecond": {
+    "garmentId": "garment-empty-msqfjorg",
+    "templateId": "blank",
+    "activePieceId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": {
+      "pieceId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+      "edgeId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:edge:piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:point-69687da7-56ca-4d3e-a93d-102433a43a8f->piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:point-68aa7a08-72e5-4949-a33e-e81f709d3032"
+    },
+    "seamProposal": null,
+    "seamCount": 0,
+    "seams": [],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "afterEnter": {
+    "garmentId": "garment-empty-msqfjorg",
+    "templateId": "blank",
+    "activePieceId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": {
+      "pieceId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+      "edgeId": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:edge:piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:point-69687da7-56ca-4d3e-a93d-102433a43a8f->piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b:point-68aa7a08-72e5-4949-a33e-e81f709d3032"
+    },
+    "seamProposal": null,
+    "seamCount": 0,
+    "seams": [],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-42bdb9f1-f13e-4de9-bd15-18decc9bb4fa",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-79b30a1d-0f69-438e-a5e8-3d8e33daac7b",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "proposalVisible": false,
+  "workspaceClass": "workspace mode-modeling",
+  "consoleErrors": []
+}

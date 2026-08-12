@@ -53,6 +53,26 @@ O visual usa somente GLB/glTF aprovado pelo usuário e só oferece os perfis cor
 
 ## Etapa 9.5-07 — fluxo canônico, classificação, montagem e avatar
 
+### Correção bloqueadora — costurar e provar sem taxonomia interna
+
+Em 12 de agosto de 2026, o fluxo público foi corrigido para **desenhar e editar → costurar → provar**.
+
+- Causa raiz de `Costurar`: a barra contextual cancelava `seamFirstEdge` na fase de captura do segundo clique, antes de o Canvas poder formar a proposta. Além disso, a confirmação detalhada ficava vinculada ao painel de Montagem.
+- Correção: duas bordas reais permanecem destacadas, a proposta é confirmável no próprio Canvas e a costura continua referenciando `pieceId + edgeId + faixa`. Seleção, inversão, exclusão e undo/redo usam o mesmo `SeamGroupV3`.
+- A classificação corporal detalhada por painel saiu do caminho principal e permanece somente em **Ajustes avançados**.
+- `Provar` executa preflight automático. O usuário escolhe somente a região da roupa; quando o grafo de costuras não resolve a orientação, escolhe visualmente uma única peça frontal.
+- Região e referência frontal pertencem ao conjunto (`garmentSettings.dressing`) e sobrevivem ao round-trip V3. Nomes como `banana`, `Costas`, `Calça` e `Painel 123` não participam da decisão.
+- A montagem derivada atribui uma instância por `PanelInstanceV3` válido e posiciona painéis conectados em superfícies opostas ao redor da região escolhida. Remover costura ou peça invalida imediatamente a montagem, sem mesh fantasma.
+- Sem asset humano aprovado, o viewport enquadra a roupa montada e informa explicitamente que o manequim não está configurado; não cria fallback humano falso.
+
+Validação desta correção:
+
+- `npm run typecheck`: PASS;
+- `npm test`: PASS, 63 arquivos / 382 testes;
+- navegador desktop 1440×900: duas bordas → proposta → costura → Parte superior → referência frontal → duas instâncias front/back; edição de 300 mm, undo/redo, inverter/remover costura e excluir/restaurar peça acompanhados pelo 3D;
+- navegador mobile 390×844: seleção de bordas, confirmação, preflight e duas instâncias, sem painel bloqueando a bancada;
+- evidências: `artifacts/recovery-9-5-07-blocking-flow-baseline/`, `artifacts/recovery-9-5-07-blocking-flow-desktop/` e `artifacts/recovery-9-5-07-blocking-flow-mobile/`.
+
 ### Identidade da entrega
 
 - Branch: `recovery/9.5-07-assembly-avatar-final`.

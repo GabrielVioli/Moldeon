@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeSeamCompatibility,
   buildAssemblyGraph,
+  evaluateDressingPreflight,
   evaluateGarment3DEligibility,
   shouldLoadThreeViewport,
   suggestBodyPlacement,
@@ -171,12 +172,17 @@ describe("assembly graph and eligibility", () => {
     }));
     draft.assemblyPlacements = [];
 
+    draft.seams = [seamFor(draft)];
     const before = structuredClone(draft);
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canOpenViewport: true,
       canPreviewGarment: true,
       canDressBody: false,
-      missingClassificationPieceIds: ["front", "back"],
+      missingClassificationPieceIds: [],
+    });
+    expect(evaluateDressingPreflight(draft)).toMatchObject({
+      requiresRegion: true,
+      requiresFrontReference: true,
     });
     expect(suggestBodyPlacement(draft.pieces[0])).toBeNull();
     expect(draft).toEqual(before);
@@ -186,6 +192,7 @@ describe("assembly graph and eligibility", () => {
     const draft = garment();
     draft.seams = [{ ...seamFor(draft), treatment: "ease", name: "Ombro" }];
     draft.ease = { bustMm: 90, waistMm: 70, hipMm: 85, sleeveMm: 45 };
+    draft.dressing = { region: "upper", frontReferencePieceId: "front" };
     draft.pieces[0].edgeFinishes = {
       [getPatternEdges(draft.pieces[0])[1].id]: "hem",
     };
@@ -195,6 +202,7 @@ describe("assembly graph and eligibility", () => {
       treatment: "ease",
     });
     expect(restored.ease).toEqual(draft.ease);
+    expect(restored.dressing).toEqual(draft.dressing);
     expect(restored.assemblyPlacements).toEqual(draft.assemblyPlacements);
     expect(restored.pieces[0].edgeFinishes).toEqual(
       draft.pieces[0].edgeFinishes,
@@ -247,14 +255,15 @@ describe("assembly graph and eligibility", () => {
     expect(graph.intentionalOpenEdges).toHaveLength(6);
   });
 
-  it("authorizes the always-dressed viewport for valid anchored pieces before and after sewing", () => {
+  it("authorizes dressing only after seams and the two minimal assembly answers", () => {
     const draft = garment();
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canPreviewGarment: true,
-      canDressBody: true,
+      canDressBody: false,
       connectedPieceIds: ["front", "back"],
     });
     draft.seams = [seamFor(draft)];
+    draft.dressing = { region: "upper", frontReferencePieceId: "front" };
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canPreviewGarment: true,
       canDressBody: true,
