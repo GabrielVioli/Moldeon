@@ -1,9 +1,13 @@
 import {
   getPatternEdges,
+  edgeRangeLength,
+  sampleEdgeRange,
   type GarmentDraft,
+  type EdgeRange,
   type PatternPiece,
   type PatternPreviewPlacement,
   type PreviewBodySide,
+  type Seam,
 } from "../domain/pattern";
 import { buildAssemblyGraph, validateSeamForAssembly } from "../domain/assembly";
 import {
@@ -51,6 +55,23 @@ export interface SemanticAvatarArrangementResult {
 
 const METERS_PER_MM = 0.001;
 
+interface PatternFrame2D {
+  axis: readonly [number, number];
+  across: readonly [number, number];
+  axialMinMm: number;
+  axialMaxMm: number;
+  acrossMinMm: number;
+  acrossMaxMm: number;
+}
+
+interface SeamDerivedTubeFrame extends PatternFrame2D {
+  worldAxis: AvatarVector3;
+  worldAcross: AvatarVector3;
+  center: AvatarVector3;
+  radiusM: number;
+  angularSpanRad: number;
+}
+
 export function buildSemanticAvatarArrangement(
   input: ResolvedAssemblyInput,
   avatar: AvatarParametricModel,
@@ -68,6 +89,7 @@ export function buildSemanticAvatarArrangement(
   );
   const pieceById = new Map(resolvedGarment.pieces.map((piece) => [piece.id, piece]));
   const visibleInstanceIds = new Set<string>();
+  const seamDerivedTubeFrames = buildSeamDerivedTubeFrames(state, resolvedGarment, avatar);
 
   for (const instance of state.instances) {
     const piece = pieceById.get(instance.pieceId);
@@ -84,7 +106,7 @@ export function buildSemanticAvatarArrangement(
       continue;
     }
 
-    arrangeInstance(state, instance, piece, avatar, anchor);
+    arrangeInstance(state, instance, piece, avatar, anchor, seamDerivedTubeFrames.get(instance.id));
     visibleInstanceIds.add(instance.id);
   }
 
@@ -289,8 +311,11 @@ function arrangeInstance(
   piece: PatternPiece,
   avatar: AvatarParametricModel,
   anchor: AvatarArrangementAnchor,
+  tubeFrame?: SeamDerivedTubeFrame,
 ): void {
-  if (instance.placement.region === "arm") {
+  if (tubeFrame) {
+    mapSeamDerivedTube(state.positions, instance, tubeFrame);
+  } else if (instance.placement.region === "arm") {
     mapArm(state.positions, instance, avatar, anchor);
   } else if (instance.placement.region === "leg") {
     mapLeg(state.positions, instance, avatar, anchor);
@@ -301,12 +326,347 @@ function arrangeInstance(
   instance.arrangement = {
     anchorId: anchor.id,
     outwardNormal: [...anchor.outwardNormal],
-    axis: [...anchor.axis],
+    axis: [...(tubeFrame?.worldAxis ?? anchor.axis)],
+    ...(tubeFrame ? { tubeCenter: [...tubeFrame.center] as AvatarVector3 } : {}),
     bodySide: instance.placement.bodySide,
     marginM: anchor.initialMarginM,
-    mapping: instance.placement.region === "arm" ? "local-tube" : instance.placement.region === "leg" ? "anatomical-half-tube" : "body-surface",
+    mapping: tubeFrame
+      ? "seam-derived-tube"
+      : instance.placement.region === "arm"
+        ? "local-tube"
+        : instance.placement.region === "leg"
+          ? "anatomical-half-tube"
+          : "body-surface",
     flipWinding: shouldFlipWinding(state.positions, instance, anchor.outwardNormal),
   };
+}
+
+/**
+ * Detecta somente loops inequÃ­vocos de dois painÃ©is. O eixo longitudinal vem
+ * das bordas costuradas; a bounding box nunca decide sozinha a orientaÃ§Ã£o.
+ */
+function buildSeamDerivedTubeFrames(
+  state: GarmentAssemblyState,
+  garment: GarmentDraft,
+  avatar: AvatarParametricModel,
+): Map<string, SeamDerivedTubeFrame> {
+  const result = new Map<string, SeamDerivedTubeFrame>();
+  const pieceById = new Map(garment.pieces.map((piece) => [piece.id, piece]));
+  const instanceByPieceId = new Map<string, AssemblyPanelInstance[]>();
+  for (const instance of state.instances) {
+    const current = instanceByPieceId.get(instance.pieceId) ?? [];
+    current.push(instance);
+    instanceByPieceId.set(instance.pieceId, current);
+  }
+
+  const graph = buildAssemblyGraph(garment);
+  for (const component of graph.connectedComponents) {
+    if (component.length !== 2) continue;
+    const [firstPieceId, secondPieceId] = component;
+    const firstInstances = instanceByPieceId.get(firstPieceId) ?? [];
+    const secondInstances = instanceByPieceId.get(secondPieceId) ?? [];
+    if (firstInstances.length !== 1 || secondInstances.length !== 1) continue;
+
+    const seams = (garment.seams ?? []).filter((seam) => {
+      if (seam.active === false) return false;
+      const ids = new Set([seam.first.pieceId, seam.second.pieceId]);
+      return ids.size === 2 && ids.has(firstPieceId) && ids.has(secondPieceId);
+    });
+    if (seams.length < 2) continue;
+
+    const firstPiece = pieceById.get(firstPieceId);
+    const secondPiece = pieceById.get(secondPieceId);
+    if (!firstPiece || !secondPiece) continue;
+    const firstBaseAxis = dominantSeamAxis(firstPiece, seams);
+    const secondBaseAxis = dominantSeamAxis(secondPiece, seams);
+    if (!firstBaseAxis || !secondBaseAxis) continue;
+
+    const rootIsFirst = firstInstances[0].placement.surface !== "back"
+      || secondInstances[0].placement.surface === "back";
+    const rootPiece = rootIsFirst ? firstPiece : secondPiece;
+    const otherPiece = rootIsFirst ? secondPiece : firstPiece;
+    const rootInstance = rootIsFirst ? firstInstances[0] : secondInstances[0];
+    const otherInstance = rootIsFirst ? secondInstances[0] : firstInstances[0];
+    const rootBaseAxis = rootIsFirst ? firstBaseAxis : secondBaseAxis;
+    const otherBaseAxis = rootIsFirst ? secondBaseAxis : firstBaseAxis;
+    const relation = resolveFrameRelation(
+      seams,
+      rootPiece,
+      otherPiece,
+      rootInstance,
+      otherInstance,
+      rootBaseAxis,
+      otherBaseAxis,
+    );
+    if (!relation) continue;
+
+    const rootFrame = projectedPatternFrame(rootInstance, rootBaseAxis, 1, 1);
+    const otherFrame = projectedPatternFrame(
+      otherInstance,
+      otherBaseAxis,
+      relation.axialSign,
+      relation.acrossSign,
+    );
+    if (!tubeSeamsCloseOppositeSides(seams, rootPiece, otherPiece, rootFrame, otherFrame)) continue;
+
+    const rootAxisSigned: readonly [number, number] = [rootFrame.axis[0], rootFrame.axis[1]];
+    const worldAxis = normalize3([rootAxisSigned[0], -rootAxisSigned[1], 0]);
+    const worldAcross = cross3([0, 0, 1], worldAxis);
+    const circumferenceM = (
+      rootFrame.acrossMaxMm - rootFrame.acrossMinMm
+      + otherFrame.acrossMaxMm - otherFrame.acrossMinMm
+    ) * METERS_PER_MM;
+    const radiusM = circumferenceM / (Math.PI * 2);
+    if (!Number.isFinite(radiusM) || radiusM <= 1e-6) continue;
+    const center = resolveTubeCenter(
+      [rootInstance, otherInstance],
+      avatar,
+      worldAxis,
+      Math.max(
+        rootFrame.axialMaxMm - rootFrame.axialMinMm,
+        otherFrame.axialMaxMm - otherFrame.axialMinMm,
+      ) * METERS_PER_MM,
+    );
+
+    result.set(rootInstance.id, {
+      ...rootFrame,
+      worldAxis,
+      worldAcross,
+      center,
+      radiusM,
+      angularSpanRad: (rootFrame.acrossMaxMm - rootFrame.acrossMinMm) * METERS_PER_MM / radiusM,
+    });
+    result.set(otherInstance.id, {
+      ...otherFrame,
+      worldAxis,
+      worldAcross,
+      center,
+      radiusM,
+      angularSpanRad: (otherFrame.acrossMaxMm - otherFrame.acrossMinMm) * METERS_PER_MM / radiusM,
+    });
+  }
+  return result;
+}
+
+function dominantSeamAxis(
+  piece: PatternPiece,
+  seams: readonly Seam[],
+): readonly [number, number] | undefined {
+  let xx = 0;
+  let xy = 0;
+  let yy = 0;
+  for (const seam of seams) {
+    for (const range of [seam.first, seam.second]) {
+      if (range.pieceId !== piece.id) continue;
+      const vector = edgeRangeVector(piece, range);
+      const length = edgeRangeLength(piece, range);
+      if (!vector || length <= 1e-6) continue;
+      const unitX = vector[0] / Math.hypot(vector[0], vector[1]);
+      const unitY = vector[1] / Math.hypot(vector[0], vector[1]);
+      xx += length * unitX * unitX;
+      xy += length * unitX * unitY;
+      yy += length * unitY * unitY;
+    }
+  }
+  const total = xx + yy;
+  if (total <= 1e-6) return undefined;
+  const discriminant = Math.hypot(xx - yy, 2 * xy);
+  const dominant = (total + discriminant) * 0.5;
+  if (dominant / total < 0.82) return undefined;
+  const angle = 0.5 * Math.atan2(2 * xy, xx - yy);
+  let axis: [number, number] = [Math.cos(angle), Math.sin(angle)];
+  const canonicalComponent = Math.abs(axis[0]) >= Math.abs(axis[1]) ? axis[0] : axis[1];
+  if (canonicalComponent < 0) axis = [-axis[0], -axis[1]];
+  return axis;
+}
+
+function resolveFrameRelation(
+  seams: readonly Seam[],
+  rootPiece: PatternPiece,
+  otherPiece: PatternPiece,
+  rootInstance: AssemblyPanelInstance,
+  otherInstance: AssemblyPanelInstance,
+  rootAxis: readonly [number, number],
+  otherAxis: readonly [number, number],
+): { axialSign: 1 | -1; acrossSign: 1 | -1 } | undefined {
+  const seam = seams[0];
+  const rootIsFirst = seam.first.pieceId === rootPiece.id;
+  const rootRange = rootIsFirst ? seam.first : seam.second;
+  const otherRange = rootIsFirst ? seam.second : seam.first;
+  const rootVector = edgeRangeVector(rootPiece, rootRange);
+  const otherVector = edgeRangeVector(otherPiece, otherRange);
+  if (!rootVector || !otherVector) return undefined;
+  const rootSequence = rootIsFirst && seam.direction === "opposite"
+    ? rootVector
+    : !rootIsFirst && seam.direction === "opposite"
+      ? [-rootVector[0], -rootVector[1]] as const
+      : rootVector;
+  const otherSequence = rootIsFirst && seam.direction === "opposite"
+    ? [-otherVector[0], -otherVector[1]] as const
+    : otherVector;
+  const rootAlong = dot2(rootSequence, rootAxis);
+  const otherAlong = dot2(otherSequence, otherAxis);
+  if (Math.abs(rootAlong) <= 1e-6 || Math.abs(otherAlong) <= 1e-6) return undefined;
+  const axialSign: 1 | -1 = rootAlong * otherAlong >= 0 ? 1 : -1;
+
+  const rootBaseFrame = projectedPatternFrame(rootInstance, rootAxis, 1, 1);
+  const otherBaseFrame = projectedPatternFrame(otherInstance, otherAxis, axialSign, 1);
+  const rootSide = seamRangeSide(rootPiece, rootRange, rootBaseFrame);
+  const otherSide = seamRangeSide(otherPiece, otherRange, otherBaseFrame);
+  if (rootSide === 0 || otherSide === 0) return undefined;
+  return { axialSign, acrossSign: rootSide === otherSide ? 1 : -1 };
+}
+
+function projectedPatternFrame(
+  instance: AssemblyPanelInstance,
+  baseAxis: readonly [number, number],
+  axialSign: 1 | -1,
+  acrossSign: 1 | -1,
+): PatternFrame2D {
+  const axis: readonly [number, number] = [baseAxis[0] * axialSign, baseAxis[1] * axialSign];
+  const baseAcross: readonly [number, number] = [-baseAxis[1], baseAxis[0]];
+  const across: readonly [number, number] = [baseAcross[0] * acrossSign, baseAcross[1] * acrossSign];
+  let axialMinMm = Number.POSITIVE_INFINITY;
+  let axialMaxMm = Number.NEGATIVE_INFINITY;
+  let acrossMinMm = Number.POSITIVE_INFINITY;
+  let acrossMaxMm = Number.NEGATIVE_INFINITY;
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const point: readonly [number, number] = [
+      instance.topology.positions2DMm[local * 2],
+      instance.topology.positions2DMm[local * 2 + 1],
+    ];
+    const axial = dot2(point, axis);
+    const transverse = dot2(point, across);
+    axialMinMm = Math.min(axialMinMm, axial);
+    axialMaxMm = Math.max(axialMaxMm, axial);
+    acrossMinMm = Math.min(acrossMinMm, transverse);
+    acrossMaxMm = Math.max(acrossMaxMm, transverse);
+  }
+  return { axis, across, axialMinMm, axialMaxMm, acrossMinMm, acrossMaxMm };
+}
+
+function tubeSeamsCloseOppositeSides(
+  seams: readonly Seam[],
+  firstPiece: PatternPiece,
+  secondPiece: PatternPiece,
+  firstFrame: PatternFrame2D,
+  secondFrame: PatternFrame2D,
+): boolean {
+  const firstSides = new Set<number>();
+  const secondSides = new Set<number>();
+  for (const seam of seams) {
+    const firstRange = seam.first.pieceId === firstPiece.id ? seam.first : seam.second;
+    const secondRange = seam.first.pieceId === secondPiece.id ? seam.first : seam.second;
+    const firstSide = seamRangeSide(firstPiece, firstRange, firstFrame);
+    const secondSide = seamRangeSide(secondPiece, secondRange, secondFrame);
+    if (firstSide === 0 || secondSide === 0 || firstSide !== secondSide) return false;
+    const canonicalFirstVector = edgeRangeVector(
+      seam.first.pieceId === firstPiece.id ? firstPiece : secondPiece,
+      seam.first,
+    );
+    const canonicalSecondVector = edgeRangeVector(
+      seam.second.pieceId === firstPiece.id ? firstPiece : secondPiece,
+      seam.second,
+    );
+    if (!canonicalFirstVector || !canonicalSecondVector) return false;
+    const firstSequence = seam.first.pieceId === firstPiece.id
+      ? canonicalFirstVector
+      : seam.direction === "opposite"
+        ? [-canonicalSecondVector[0], -canonicalSecondVector[1]] as const
+        : canonicalSecondVector;
+    const secondSequence = seam.first.pieceId === secondPiece.id
+      ? canonicalFirstVector
+      : seam.direction === "opposite"
+        ? [-canonicalSecondVector[0], -canonicalSecondVector[1]] as const
+        : canonicalSecondVector;
+    if (dot2(firstSequence, firstFrame.axis) * dot2(secondSequence, secondFrame.axis) <= 0) return false;
+    firstSides.add(firstSide);
+    secondSides.add(secondSide);
+  }
+  return firstSides.has(-1) && firstSides.has(1) && secondSides.has(-1) && secondSides.has(1);
+}
+
+function seamRangeSide(piece: PatternPiece, range: EdgeRange, frame: PatternFrame2D): -1 | 0 | 1 {
+  const samples = sampleEdgeRange(piece, range);
+  if (samples.length === 0) return 0;
+  const mean = samples.reduce((sum, point) => sum + dot2([point.xMm, point.yMm], frame.across), 0) / samples.length;
+  const middle = (frame.acrossMinMm + frame.acrossMaxMm) * 0.5;
+  const half = (frame.acrossMaxMm - frame.acrossMinMm) * 0.5;
+  if (half <= 1e-6 || Math.abs(mean - middle) < half * 0.55) return 0;
+  return mean < middle ? -1 : 1;
+}
+
+function edgeRangeVector(piece: PatternPiece, range: EdgeRange): readonly [number, number] | undefined {
+  const samples = sampleEdgeRange(piece, range);
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  if (!first || !last) return undefined;
+  const vector: readonly [number, number] = [last.xMm - first.xMm, last.yMm - first.yMm];
+  return Math.hypot(vector[0], vector[1]) <= 1e-6 ? undefined : vector;
+}
+
+function resolveTubeCenter(
+  instances: readonly AssemblyPanelInstance[],
+  avatar: AvatarParametricModel,
+  worldAxis: AvatarVector3,
+  axialLengthM: number,
+): AvatarVector3 {
+  const anchors = instances
+    .map((instance) => resolveAvatarAnchor(avatar, instance.placement))
+    .filter((anchor): anchor is AvatarArrangementAnchor => anchor !== undefined);
+  const count = Math.max(1, anchors.length);
+  const center: AvatarVector3 = anchors.reduce<AvatarVector3>(
+    (sum, anchor) => [sum[0] + anchor.position[0], sum[1] + anchor.position[1], sum[2] + anchor.position[2]],
+    [0, 0, 0],
+  ).map((value) => value / count) as AvatarVector3;
+  center[0] += instances.reduce((sum, instance) => sum + instance.placement.offsetXMm, 0) / instances.length * METERS_PER_MM;
+  center[1] -= instances.reduce((sum, instance) => sum + instance.placement.offsetYMm, 0) / instances.length * METERS_PER_MM;
+  center[2] += instances.reduce((sum, instance) => sum + instance.placement.offsetZMm, 0) / instances.length * METERS_PER_MM;
+
+  if (Math.abs(worldAxis[1]) > 0.82) {
+    const region = instances[0].placement.region;
+    const topY = region === "torso" ? avatar.landmarks.shoulderY + 0.012 : avatar.landmarks.waistY + 0.008;
+    center[1] = topY - axialLengthM * 0.5;
+  }
+  return center;
+}
+
+function mapSeamDerivedTube(
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+  frame: SeamDerivedTubeFrame,
+): void {
+  const axialCenter = (frame.axialMinMm + frame.axialMaxMm) * 0.5;
+  const acrossSpan = Math.max(1e-6, frame.acrossMaxMm - frame.acrossMinMm);
+  const surfaceNormal: AvatarVector3 = instance.placement.surface === "back" ? [0, 0, -1] : [0, 0, 1];
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const point: readonly [number, number] = [
+      instance.topology.positions2DMm[local * 2],
+      instance.topology.positions2DMm[local * 2 + 1],
+    ];
+    const axialM = (dot2(point, frame.axis) - axialCenter) * METERS_PER_MM;
+    const across = (dot2(point, frame.across) - frame.acrossMinMm) / acrossSpan;
+    const angle = (clamp01(across) - 0.5) * frame.angularSpanRad;
+    const radialNormal = Math.cos(angle) * frame.radiusM;
+    const radialAcross = Math.sin(angle) * frame.radiusM;
+    const offset = (instance.particleStart + local) * 3;
+    positions[offset] = frame.center[0]
+      + frame.worldAxis[0] * axialM
+      + surfaceNormal[0] * radialNormal
+      + frame.worldAcross[0] * radialAcross;
+    positions[offset + 1] = frame.center[1]
+      + frame.worldAxis[1] * axialM
+      + surfaceNormal[1] * radialNormal
+      + frame.worldAcross[1] * radialAcross;
+    positions[offset + 2] = frame.center[2]
+      + frame.worldAxis[2] * axialM
+      + surfaceNormal[2] * radialNormal
+      + frame.worldAcross[2] * radialAcross;
+  }
+}
+
+function dot2(first: readonly [number, number], second: readonly [number, number]): number {
+  return first[0] * second[0] + first[1] * second[1];
 }
 
 function mapTorsoSurface(
@@ -488,7 +848,6 @@ function applyReferenceDelta(
     positions[offset + 2] += dz * weight;
   }
 }
-
 function shouldFlipWinding(
   positions: Float32Array,
   instance: AssemblyPanelInstance,

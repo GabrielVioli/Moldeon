@@ -1,0 +1,911 @@
+{
+  "garment": {
+    "id": "garment-empty-msrrjz1n",
+    "templateId": "blank",
+    "name": "Projeto vazio",
+    "description": "Bancada vazia pronta para desenhar.",
+    "bodyType": "feminine",
+    "measurements": {
+      "heightMm": 1680,
+      "bustMm": 920,
+      "waistMm": 760,
+      "hipMm": 1000,
+      "shoulderWidthMm": 399.84,
+      "torsoLengthMm": 440.16,
+      "armLengthMm": 588,
+      "inseamMm": 781.2,
+      "neckCircumferenceMm": 358.8,
+      "neckWidthMm": 71.76,
+      "shoulderSlopeDeg": 14,
+      "shoulderLengthMm": 164.04,
+      "bustHeightMm": 264.096,
+      "bustSpanMm": 184,
+      "highBustMm": 855.6,
+      "frontWaistLengthMm": 448.96320000000003,
+      "backWaistLengthMm": 431.3568,
+      "armholeDepthMm": 223.33333333333334,
+      "backWidthMm": 349.6,
+      "frontWidthMm": 331.2,
+      "bicepMm": 303.6,
+      "elbowCircumferenceMm": 258.06,
+      "wristMm": 165.6,
+      "elbowLengthMm": 311.64000000000004,
+      "hipHeightMm": 193.20000000000002,
+      "sittingCrotchHeightMm": 260.4,
+      "crotchDepthMm": 245,
+      "seatDepthMm": 240,
+      "waistDropMm": 15.456000000000001,
+      "waistFrontArcMm": 182.4,
+      "waistBackArcMm": 197.6,
+      "hipFrontArcMm": 240,
+      "hipBackArcMm": 260,
+      "thighMm": 580,
+      "kneeCircumferenceMm": 400,
+      "calfMm": 380,
+      "ankleCircumferenceMm": 240,
+      "kneeHeightMm": 406.22400000000005,
+      "outseamLengthMm": 1041.6,
+      "insideLegLengthMm": 781.2,
+      "headCircumferenceMm": 562.8000000000001
+    },
+    "measurementProfile": {
+      "schemaVersion": 1,
+      "formulaSetId": "moldeon-body-defaults",
+      "formulaSetVersion": "2026.1",
+      "bodyType": "feminine",
+      "entries": {
+        "heightMm": {
+          "key": "heightMm",
+          "value": 1680,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "bustMm": {
+          "key": "bustMm",
+          "value": 920,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "waistMm": {
+          "key": "waistMm",
+          "value": 760,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "hipMm": {
+          "key": "hipMm",
+          "value": 1000,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "shoulderWidthMm": {
+          "key": "shoulderWidthMm",
+          "value": 399.84,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.238",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "torsoLengthMm": {
+          "key": "torsoLengthMm",
+          "value": 440.16,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.262",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "armLengthMm": {
+          "key": "armLengthMm",
+          "value": 588,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.35",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "inseamMm": {
+          "key": "inseamMm",
+          "value": 781.2,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.465",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "neckCircumferenceMm": {
+          "key": "neckCircumferenceMm",
+          "value": 358.8,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.39",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "neckWidthMm": {
+          "key": "neckWidthMm",
+          "value": 71.76,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "neckCircumferenceMm / 5",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "neckCircumferenceMm"
+          ],
+          "overridden": false
+        },
+        "shoulderSlopeDeg": {
+          "key": "shoulderSlopeDeg",
+          "value": 14,
+          "unit": "degree",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "14deg",
+          "formulaVersion": "2026.1",
+          "dependencies": [],
+          "overridden": false
+        },
+        "shoulderLengthMm": {
+          "key": "shoulderLengthMm",
+          "value": 164.04,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "max(70mm, shoulderWidthMm / 2 - neckWidthMm / 2)",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "neckWidthMm",
+            "shoulderWidthMm"
+          ],
+          "overridden": false
+        },
+        "bustHeightMm": {
+          "key": "bustHeightMm",
+          "value": 264.096,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 0.60",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "bustSpanMm": {
+          "key": "bustSpanMm",
+          "value": 184,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.20",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "highBustMm": {
+          "key": "highBustMm",
+          "value": 855.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.93",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "frontWaistLengthMm": {
+          "key": "frontWaistLengthMm",
+          "value": 448.96320000000003,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 1.02",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "backWaistLengthMm": {
+          "key": "backWaistLengthMm",
+          "value": 431.3568,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 0.98",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "armholeDepthMm": {
+          "key": "armholeDepthMm",
+          "value": 223.33333333333334,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm / 6 + 70mm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "backWidthMm": {
+          "key": "backWidthMm",
+          "value": 349.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.38",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "frontWidthMm": {
+          "key": "frontWidthMm",
+          "value": 331.2,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.36",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "bicepMm": {
+          "key": "bicepMm",
+          "value": 303.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.33",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "elbowCircumferenceMm": {
+          "key": "elbowCircumferenceMm",
+          "value": 258.06,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bicepMm * 0.85",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bicepMm"
+          ],
+          "overridden": false
+        },
+        "wristMm": {
+          "key": "wristMm",
+          "value": 165.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.18",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "elbowLengthMm": {
+          "key": "elbowLengthMm",
+          "value": 311.64000000000004,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "armLengthMm * 0.53",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "armLengthMm"
+          ],
+          "overridden": false
+        },
+        "hipHeightMm": {
+          "key": "hipHeightMm",
+          "value": 193.20000000000002,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.115",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "sittingCrotchHeightMm": {
+          "key": "sittingCrotchHeightMm",
+          "value": 260.4,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.155",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "crotchDepthMm": {
+          "key": "crotchDepthMm",
+          "value": 245,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.245",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "seatDepthMm": {
+          "key": "seatDepthMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "waistDropMm": {
+          "key": "waistDropMm",
+          "value": 15.456000000000001,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipHeightMm * 0.08",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipHeightMm"
+          ],
+          "overridden": false
+        },
+        "waistFrontArcMm": {
+          "key": "waistFrontArcMm",
+          "value": 182.4,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "waistMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "waistMm"
+          ],
+          "overridden": false
+        },
+        "waistBackArcMm": {
+          "key": "waistBackArcMm",
+          "value": 197.6,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "waistMm / 2 - waistFrontArcMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "waistFrontArcMm",
+            "waistMm"
+          ],
+          "overridden": false
+        },
+        "hipFrontArcMm": {
+          "key": "hipFrontArcMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "hipBackArcMm": {
+          "key": "hipBackArcMm",
+          "value": 260,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "hipMm / 2 - hipFrontArcMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipFrontArcMm",
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "thighMm": {
+          "key": "thighMm",
+          "value": 580,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.58",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "kneeCircumferenceMm": {
+          "key": "kneeCircumferenceMm",
+          "value": 400,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.40",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "calfMm": {
+          "key": "calfMm",
+          "value": 380,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.38",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "ankleCircumferenceMm": {
+          "key": "ankleCircumferenceMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "kneeHeightMm": {
+          "key": "kneeHeightMm",
+          "value": 406.22400000000005,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm * 0.52",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm"
+          ],
+          "overridden": false
+        },
+        "outseamLengthMm": {
+          "key": "outseamLengthMm",
+          "value": 1041.6,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm + sittingCrotchHeightMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm",
+            "sittingCrotchHeightMm"
+          ],
+          "overridden": false
+        },
+        "insideLegLengthMm": {
+          "key": "insideLegLengthMm",
+          "value": 781.2,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm"
+          ],
+          "overridden": false
+        },
+        "headCircumferenceMm": {
+          "key": "headCircumferenceMm",
+          "value": 562.8000000000001,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.335",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        }
+      }
+    },
+    "fabrics": [
+      {
+        "id": "fabric-primary",
+        "name": "Algodão plano",
+        "presetId": "cotton",
+        "color": "#c7ad79",
+        "widthMm": 1400,
+        "lengthMm": 1000,
+        "quantity": 1,
+        "physics": {
+          "weightGsm": 165,
+          "thicknessMm": 0.42,
+          "stretchWarpPercent": 2,
+          "stretchWeftPercent": 3,
+          "bending": 0.46,
+          "friction": 0.5
+        }
+      }
+    ],
+    "pieces": [
+      {
+        "id": "audit-panel-0",
+        "name": "Painel 1",
+        "seamAllowanceMm": 0,
+        "cutQuantity": 1,
+        "points": [
+          {
+            "id": "p0:a",
+            "xMm": 0,
+            "yMm": 0
+          },
+          {
+            "id": "p0:b",
+            "xMm": 80,
+            "yMm": 0
+          },
+          {
+            "id": "p0:c",
+            "xMm": 80,
+            "yMm": 140
+          },
+          {
+            "id": "p0:d",
+            "xMm": 0,
+            "yMm": 140
+          }
+        ],
+        "bodyPlacement": {
+          "version": 1,
+          "status": "confirmed",
+          "includeIn3D": true,
+          "role": "custom",
+          "region": "torso",
+          "surface": "front",
+          "bodySide": "center",
+          "anchorId": "torso-front",
+          "outwardFace": "normal",
+          "offsetXMm": -750,
+          "offsetYMm": 0,
+          "offsetZMm": 25,
+          "rotationXDeg": 0,
+          "rotationYDeg": 0,
+          "rotationZDeg": 0,
+          "source": "manual"
+        }
+      },
+      {
+        "id": "audit-panel-1",
+        "name": "Painel 2",
+        "seamAllowanceMm": 0,
+        "cutQuantity": 1,
+        "points": [
+          {
+            "id": "p1:a",
+            "xMm": 0,
+            "yMm": 0
+          },
+          {
+            "id": "p1:b",
+            "xMm": 80,
+            "yMm": 0
+          },
+          {
+            "id": "p1:c",
+            "xMm": 80,
+            "yMm": 140
+          },
+          {
+            "id": "p1:d",
+            "xMm": 0,
+            "yMm": 140
+          }
+        ],
+        "bodyPlacement": {
+          "version": 1,
+          "status": "confirmed",
+          "includeIn3D": true,
+          "role": "custom",
+          "region": "torso",
+          "surface": "back",
+          "bodySide": "center",
+          "anchorId": "torso-back",
+          "outwardFace": "normal",
+          "offsetXMm": -250,
+          "offsetYMm": 8,
+          "offsetZMm": 25,
+          "rotationXDeg": 0,
+          "rotationYDeg": 0,
+          "rotationZDeg": 0,
+          "source": "manual"
+        }
+      },
+      {
+        "id": "audit-panel-2",
+        "name": "Painel 3",
+        "seamAllowanceMm": 0,
+        "cutQuantity": 1,
+        "points": [
+          {
+            "id": "p2:a",
+            "xMm": 0,
+            "yMm": 0
+          },
+          {
+            "id": "p2:b",
+            "xMm": 80,
+            "yMm": 0
+          },
+          {
+            "id": "p2:c",
+            "xMm": 80,
+            "yMm": 140
+          },
+          {
+            "id": "p2:d",
+            "xMm": 0,
+            "yMm": 140
+          }
+        ],
+        "bodyPlacement": {
+          "version": 1,
+          "status": "confirmed",
+          "includeIn3D": true,
+          "role": "custom",
+          "region": "torso",
+          "surface": "front",
+          "bodySide": "center",
+          "anchorId": "torso-front",
+          "outwardFace": "normal",
+          "offsetXMm": 250,
+          "offsetYMm": 16,
+          "offsetZMm": 25,
+          "rotationXDeg": 0,
+          "rotationYDeg": 0,
+          "rotationZDeg": 0,
+          "source": "manual"
+        }
+      },
+      {
+        "id": "audit-panel-3",
+        "name": "Painel 4",
+        "seamAllowanceMm": 0,
+        "cutQuantity": 1,
+        "points": [
+          {
+            "id": "p3:a",
+            "xMm": 0,
+            "yMm": 0
+          },
+          {
+            "id": "p3:b",
+            "xMm": 80,
+            "yMm": 0
+          },
+          {
+            "id": "p3:c",
+            "xMm": 80,
+            "yMm": 140
+          },
+          {
+            "id": "p3:d",
+            "xMm": 0,
+            "yMm": 140
+          }
+        ],
+        "bodyPlacement": {
+          "version": 1,
+          "status": "confirmed",
+          "includeIn3D": true,
+          "role": "custom",
+          "region": "torso",
+          "surface": "back",
+          "bodySide": "center",
+          "anchorId": "torso-back",
+          "outwardFace": "normal",
+          "offsetXMm": 750,
+          "offsetYMm": 24,
+          "offsetZMm": 25,
+          "rotationXDeg": 0,
+          "rotationYDeg": 0,
+          "rotationZDeg": 0,
+          "source": "manual"
+        }
+      }
+    ],
+    "seams": [
+      {
+        "id": "audit-seam-0",
+        "groupId": "audit-group-0",
+        "first": {
+          "pieceId": "audit-panel-0",
+          "edgeId": "audit-panel-0:edge:p0:b->p0:c",
+          "startT": 0,
+          "endT": 1
+        },
+        "second": {
+          "pieceId": "audit-panel-1",
+          "edgeId": "audit-panel-1:edge:p1:d->p1:a",
+          "startT": 0,
+          "endT": 1
+        },
+        "direction": "opposite",
+        "easeRatio": 0,
+        "type": "standard",
+        "active": true
+      },
+      {
+        "id": "audit-seam-1",
+        "groupId": "audit-group-1",
+        "first": {
+          "pieceId": "audit-panel-1",
+          "edgeId": "audit-panel-1:edge:p1:b->p1:c",
+          "startT": 0,
+          "endT": 1
+        },
+        "second": {
+          "pieceId": "audit-panel-2",
+          "edgeId": "audit-panel-2:edge:p2:d->p2:a",
+          "startT": 0,
+          "endT": 1
+        },
+        "direction": "opposite",
+        "easeRatio": 0,
+        "type": "standard",
+        "active": true
+      },
+      {
+        "id": "audit-seam-2",
+        "groupId": "audit-group-2",
+        "first": {
+          "pieceId": "audit-panel-2",
+          "edgeId": "audit-panel-2:edge:p2:b->p2:c",
+          "startT": 0,
+          "endT": 1
+        },
+        "second": {
+          "pieceId": "audit-panel-3",
+          "edgeId": "audit-panel-3:edge:p3:d->p3:a",
+          "startT": 0,
+          "endT": 1
+        },
+        "direction": "opposite",
+        "easeRatio": 0,
+        "type": "standard",
+        "active": true
+      }
+    ],
+    "workspaceTransforms": [],
+    "workspaceStates": [],
+    "assemblyPlacements": []
+  },
+  "panels": [
+    {
+      "id": "audit-panel-0:panel:1",
+      "mapping": "body-surface",
+      "spansM": [
+        0.3947054147720337,
+        0.1400812864303589,
+        0.13543321751058102
+      ],
+      "center": [
+        -0.7859392520858021,
+        1.340053374592851,
+        0.08010291500789363
+      ]
+    },
+    {
+      "id": "audit-panel-1:panel:1",
+      "mapping": "body-surface",
+      "spansM": [
+        0.3962012529373169,
+        0.140191912651062,
+        0.13701673038303852
+      ],
+      "center": [
+        -0.2858008882076275,
+        1.3320586192898634,
+        -0.030678229532960115
+      ]
+    },
+    {
+      "id": "audit-panel-2:panel:1",
+      "mapping": "body-surface",
+      "spansM": [
+        0.3949684910476208,
+        0.1401902437210083,
+        0.13860025070607662
+      ],
+      "center": [
+        0.21443800820810038,
+        1.3240586315713279,
+        0.08136585723699594
+      ]
+    },
+    {
+      "id": "audit-panel-3:panel:1",
+      "mapping": "body-surface",
+      "spansM": [
+        0.3910067677497864,
+        0.14010953903198242,
+        0.14018377102911472
+      ],
+      "center": [
+        0.7145965657583098,
+        1.3160635151514193,
+        -0.03209269878011915
+      ]
+    }
+  ],
+  "seamGroups": [
+    "audit-group-0",
+    "audit-group-1",
+    "audit-group-2"
+  ],
+  "finite": true,
+  "warnings": [],
+  "consoleErrors": []
+}

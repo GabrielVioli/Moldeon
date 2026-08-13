@@ -381,6 +381,11 @@ function createLights(): THREE.Group {
   const key = new THREE.DirectionalLight(0xffffff, 3.2);
   key.position.set(3, 5, 4);
   key.castShadow = true;
+  // Evita que a própria superfície fina do tecido se sombreie em blocos
+  // seguindo os triângulos. O deslocamento é pequeno na escala em metros e
+  // preserva a sombra projetada no chão e no avatar.
+  key.shadow.bias = -0.0001;
+  key.shadow.normalBias = 0.002;
   const fill = new THREE.DirectionalLight(0xc8d2ff, 1.2);
   fill.position.set(-3, 2, 2);
   group.add(ambient, key, fill);

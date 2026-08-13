@@ -59,9 +59,11 @@ export interface AssemblyInstanceArrangement {
   anchorId: string;
   outwardNormal: [number, number, number];
   axis: [number, number, number];
+  /** Centro geométrico usado por mapeamentos tubulares analíticos. */
+  tubeCenter?: [number, number, number];
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
-  mapping: "body-surface" | "local-tube" | "anatomical-half-tube";
+  mapping: "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube";
   flipWinding: boolean;
 }
 
@@ -320,7 +322,6 @@ function buildGlobalStitchConstraints(
         : 0;
       const distribution = seam.distribution ?? "uniform";
       const mismatchMm = Math.abs(firstLength - secondLength * targetRatio);
-
       for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
         const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
         const firstT = interpolateRange(seam.first, progress);

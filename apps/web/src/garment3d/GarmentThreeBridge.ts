@@ -91,7 +91,7 @@ export function refreshMeshFromAssembly(
   const target = attribute.array as Float32Array;
   target.set(dressed);
   attribute.needsUpdate = true;
-  meshData.mesh.geometry.computeVertexNormals();
+  applyInstanceNormals(meshData.mesh.geometry, instance, dressed);
   meshData.mesh.geometry.computeBoundingBox();
   meshData.mesh.geometry.computeBoundingSphere();
 }
@@ -114,10 +114,63 @@ function buildInstanceGeometry(
     }
   }
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
+  applyInstanceNormals(geometry, instance, positions);
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/**
+ * Um tubo derivado das costuras possui uma normal radial exata. Usá-la evita
+ * que a média ponderada dos triângulos em leque apareça como falsas rugas no
+ * material. Os demais mapeamentos continuam usando as normais da topologia.
+ */
+function applyInstanceNormals(
+  geometry: THREE.BufferGeometry,
+  instance: AssemblyPanelInstance,
+  positions: Float32Array,
+): void {
+  const arrangement = instance.arrangement;
+  const center = arrangement?.tubeCenter;
+  if (arrangement?.mapping !== "seam-derived-tube" || !center) {
+    geometry.computeVertexNormals();
+    return;
+  }
+
+  const [axisX, axisY, axisZ] = normalizeVector(arrangement.axis);
+  const normals = new Float32Array(positions.length);
+
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const fromCenterX = positions[offset] - center[0];
+    const fromCenterY = positions[offset + 1] - center[1];
+    const fromCenterZ = positions[offset + 2] - center[2];
+    const alongAxis =
+      fromCenterX * axisX
+      + fromCenterY * axisY
+      + fromCenterZ * axisZ;
+    const radialX = fromCenterX - axisX * alongAxis;
+    const radialY = fromCenterY - axisY * alongAxis;
+    const radialZ = fromCenterZ - axisZ * alongAxis;
+    const [normalX, normalY, normalZ] = normalizeVector([
+      radialX,
+      radialY,
+      radialZ,
+    ]);
+
+    normals[offset] = normalX;
+    normals[offset + 1] = normalY;
+    normals[offset + 2] = normalZ;
+  }
+
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+}
+
+function normalizeVector(
+  vector: readonly [number, number, number],
+): [number, number, number] {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (length <= 1e-9) return [0, 0, 1];
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
 }
 
 function sliceInstancePositions(
