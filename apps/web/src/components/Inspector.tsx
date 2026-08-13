@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { edgeRangeLength, type PatternSnapshot } from "../domain/pattern";
+import { edgeRangeSequenceLength, seamSideRanges, type PatternSnapshot } from "../domain/pattern";
 import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
 import { BodyPositionPanel } from "./BodyPositionPanel";
 import { useEditorStore } from "../state/editorStore";
@@ -216,12 +216,10 @@ export const Inspector = memo(function Inspector({
             const firstPiece = garment.pieces.find((piece) => piece.id === representative.first.pieceId);
             const secondPiece = garment.pieces.find((piece) => piece.id === representative.second.pieceId);
             const firstLength = group.reduce((sum, seam) => {
-              const piece = garment.pieces.find((candidate) => candidate.id === seam.first.pieceId);
-              return sum + (piece ? edgeRangeLength(piece, seam.first) : 0);
+              return sum + edgeRangeSequenceLength(garment.pieces, seamSideRanges(seam, "first"));
             }, 0);
             const secondLength = group.reduce((sum, seam) => {
-              const piece = garment.pieces.find((candidate) => candidate.id === seam.second.pieceId);
-              return sum + (piece ? edgeRangeLength(piece, seam.second) : 0);
+              return sum + edgeRangeSequenceLength(garment.pieces, seamSideRanges(seam, "second"));
             }, 0);
             const issues = seamIssues.filter((item) => group.some((seam) => seam.id === item.seamId));
             const selected = group.some((seam) => seam.id === selectedSeamId);

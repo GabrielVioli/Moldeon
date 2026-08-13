@@ -2,6 +2,7 @@ import {
   getPatternEdges,
   edgeRangeLength,
   sampleEdgeRange,
+  seamSideRanges,
   type GarmentDraft,
   type EdgeRange,
   type PatternPiece,
@@ -11,19 +12,20 @@ import {
 } from "../domain/pattern";
 import { buildAssemblyGraph, validateSeamForAssembly } from "../domain/assembly";
 import {
-  addScaled3,
   cross3,
   normalize3,
   resolveAvatarAnchor,
-  sampleArmRadius,
-  sampleLegRadius,
-  sampleTorsoAxes,
   type AvatarArrangementAnchor,
   type AvatarParametricModel,
   type AvatarVector3,
 } from "../avatar/AvatarParametricModel";
 import { buildAvatarCollisionModel, type AvatarCollisionModel } from "../avatar/AvatarCollisionModel";
-import type { AssemblyPanelInstance, GarmentAssemblyState, GlobalPointReference } from "./GarmentAssembly";
+import type {
+  AssemblyPanelInstance,
+  AssemblyStitchConstraint,
+  GarmentAssemblyState,
+  GlobalPointReference,
+} from "./GarmentAssembly";
 import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
 import type { ResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
@@ -51,6 +53,32 @@ export interface SemanticAvatarArrangementResult {
   diagnostics: ArrangementDiagnostic[];
   visibleInstanceIds: Set<string>;
   coveredAvatarPartNames: Set<string>;
+  seamPlacementDiagnostics: SeamPlacementDiagnostic[];
+}
+
+export interface SeamPlacementDiagnostic {
+  seamGroupId: string;
+  parentInstanceId: string;
+  childInstanceId: string;
+  parentRange: EdgeRange;
+  childRange: EdgeRange;
+  parentRangeLengthMm: number;
+  childRangeLengthMm: number;
+  parentStart: AvatarVector3;
+  parentEnd: AvatarVector3;
+  parentMidpoint: AvatarVector3;
+  childStart: AvatarVector3;
+  childEnd: AvatarVector3;
+  childMidpoint: AvatarVector3;
+  seamTangent: AvatarVector3;
+  parentNormal: AvatarVector3;
+  developDirection: AvatarVector3;
+  transform: {
+    alignAxis: AvatarVector3;
+    alignAngleRad: number;
+    translation: AvatarVector3;
+    developAngleRad: number;
+  };
 }
 
 const METERS_PER_MM = 0.001;
@@ -70,6 +98,13 @@ interface SeamDerivedTubeFrame extends PatternFrame2D {
   center: AvatarVector3;
   radiusM: number;
   angularSpanRad: number;
+}
+
+interface SeamDerivedTubeCandidate {
+  pairKey: string;
+  componentKey: string;
+  scoreMm2: number;
+  frames: Array<readonly [string, SeamDerivedTubeFrame]>;
 }
 
 export function buildSemanticAvatarArrangement(
@@ -106,11 +141,11 @@ export function buildSemanticAvatarArrangement(
       continue;
     }
 
-    arrangeInstance(state, instance, piece, avatar, anchor, seamDerivedTubeFrames.get(instance.id));
+    arrangeInstance(state, instance, anchor, seamDerivedTubeFrames.get(instance.id));
     visibleInstanceIds.add(instance.id);
   }
 
-  applyMinimalSeamStabilization(state, visibleInstanceIds, 1, 0.0015);
+  const seamPlacementDiagnostics = placeConnectedPanelsRigidly(state, visibleInstanceIds);
   state.initialPositions.set(state.positions);
   state.previousPositions.set(state.positions);
   const coveredAvatarPartNames = resolveCoveredAvatarParts(state, visibleInstanceIds, avatar);
@@ -123,6 +158,7 @@ export function buildSemanticAvatarArrangement(
     diagnostics: uniqueDiagnostics(diagnostics),
     visibleInstanceIds,
     coveredAvatarPartNames,
+    seamPlacementDiagnostics,
   };
 }
 
@@ -308,19 +344,13 @@ function resolveCoveredAvatarParts(
 function arrangeInstance(
   state: GarmentAssemblyState,
   instance: AssemblyPanelInstance,
-  piece: PatternPiece,
-  avatar: AvatarParametricModel,
   anchor: AvatarArrangementAnchor,
   tubeFrame?: SeamDerivedTubeFrame,
 ): void {
   if (tubeFrame) {
     mapSeamDerivedTube(state.positions, instance, tubeFrame);
-  } else if (instance.placement.region === "arm") {
-    mapArm(state.positions, instance, avatar, anchor);
-  } else if (instance.placement.region === "leg") {
-    mapLeg(state.positions, instance, avatar, anchor);
   } else {
-    mapTorsoSurface(state.positions, instance, piece, avatar, anchor);
+    mapRigidPanel(state.positions, state.initialPositions, instance, anchor);
   }
 
   instance.arrangement = {
@@ -328,22 +358,20 @@ function arrangeInstance(
     outwardNormal: [...anchor.outwardNormal],
     axis: [...(tubeFrame?.worldAxis ?? anchor.axis)],
     ...(tubeFrame ? { tubeCenter: [...tubeFrame.center] as AvatarVector3 } : {}),
+    ...(tubeFrame ? { tubeRadiusM: tubeFrame.radiusM } : {}),
     bodySide: instance.placement.bodySide,
     marginM: anchor.initialMarginM,
     mapping: tubeFrame
       ? "seam-derived-tube"
-      : instance.placement.region === "arm"
-        ? "local-tube"
-        : instance.placement.region === "leg"
-          ? "anatomical-half-tube"
-          : "body-surface",
+      : "rigid-panel",
     flipWinding: shouldFlipWinding(state.positions, instance, anchor.outwardNormal),
   };
 }
 
 /**
- * Detecta somente loops inequÃ­vocos de dois painÃ©is. O eixo longitudinal vem
- * das bordas costuradas; a bounding box nunca decide sozinha a orientaÃ§Ã£o.
+ * Detecta a subestrutura tubular primária de cada connected component.
+ * Painéis anexados não invalidam o tubo já resolvido, mas um ciclo secundário
+ * também não pode promovê-los a outro tubo e substituir suas poses rígidas.
  */
 function buildSeamDerivedTubeFrames(
   state: GarmentAssemblyState,
@@ -351,6 +379,7 @@ function buildSeamDerivedTubeFrames(
   avatar: AvatarParametricModel,
 ): Map<string, SeamDerivedTubeFrame> {
   const result = new Map<string, SeamDerivedTubeFrame>();
+  const candidates: SeamDerivedTubeCandidate[] = [];
   const pieceById = new Map(garment.pieces.map((piece) => [piece.id, piece]));
   const instanceByPieceId = new Map<string, AssemblyPanelInstance[]>();
   for (const instance of state.instances) {
@@ -359,20 +388,38 @@ function buildSeamDerivedTubeFrames(
     instanceByPieceId.set(instance.pieceId, current);
   }
 
-  const graph = buildAssemblyGraph(garment);
-  for (const component of graph.connectedComponents) {
-    if (component.length !== 2) continue;
-    const [firstPieceId, secondPieceId] = component;
+  const seamsByPair = new Map<string, Seam[]>();
+  const pieceAdjacency = new Map<string, Set<string>>(
+    garment.pieces.map((piece) => [piece.id, new Set<string>()]),
+  );
+  for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
+    const firstRanges = seamSideRanges(seam, "first");
+    const secondRanges = seamSideRanges(seam, "second");
+    for (const first of firstRanges) {
+      for (const second of secondRanges) {
+        if (first.pieceId === second.pieceId) continue;
+        pieceAdjacency.get(first.pieceId)?.add(second.pieceId);
+        pieceAdjacency.get(second.pieceId)?.add(first.pieceId);
+      }
+    }
+    // A detecção analítica de tubo é deliberadamente restrita a
+    // costuras simples; sequências compostas seguem pelo placement rígido.
+    if (firstRanges.length !== 1 || secondRanges.length !== 1 || seam.first.pieceId === seam.second.pieceId) continue;
+    const ids = [seam.first.pieceId, seam.second.pieceId].sort();
+    const key = `${ids[0]}\u0000${ids[1]}`;
+    const current = seamsByPair.get(key) ?? [];
+    current.push(seam);
+    seamsByPair.set(key, current);
+  }
+  const componentByPieceId = connectedComponentKeys(pieceAdjacency);
+
+  for (const [key, seams] of [...seamsByPair].sort(([left], [right]) => left.localeCompare(right))) {
+    if (seams.length < 2) continue;
+    const [firstPieceId, secondPieceId] = key.split("\u0000");
     const firstInstances = instanceByPieceId.get(firstPieceId) ?? [];
     const secondInstances = instanceByPieceId.get(secondPieceId) ?? [];
     if (firstInstances.length !== 1 || secondInstances.length !== 1) continue;
-
-    const seams = (garment.seams ?? []).filter((seam) => {
-      if (seam.active === false) return false;
-      const ids = new Set([seam.first.pieceId, seam.second.pieceId]);
-      return ids.size === 2 && ids.has(firstPieceId) && ids.has(secondPieceId);
-    });
-    if (seams.length < 2) continue;
 
     const firstPiece = pieceById.get(firstPieceId);
     const secondPiece = pieceById.get(secondPieceId);
@@ -418,32 +465,87 @@ function buildSeamDerivedTubeFrames(
     ) * METERS_PER_MM;
     const radiusM = circumferenceM / (Math.PI * 2);
     if (!Number.isFinite(radiusM) || radiusM <= 1e-6) continue;
+    const axialSpanMm = Math.max(
+      rootFrame.axialMaxMm - rootFrame.axialMinMm,
+      otherFrame.axialMaxMm - otherFrame.axialMinMm,
+    );
     const center = resolveTubeCenter(
       [rootInstance, otherInstance],
       avatar,
       worldAxis,
-      Math.max(
-        rootFrame.axialMaxMm - rootFrame.axialMinMm,
-        otherFrame.axialMaxMm - otherFrame.axialMinMm,
-      ) * METERS_PER_MM,
+      axialSpanMm * METERS_PER_MM,
     );
 
-    result.set(rootInstance.id, {
+    const rootTubeFrame: SeamDerivedTubeFrame = {
       ...rootFrame,
       worldAxis,
       worldAcross,
       center,
       radiusM,
       angularSpanRad: (rootFrame.acrossMaxMm - rootFrame.acrossMinMm) * METERS_PER_MM / radiusM,
-    });
-    result.set(otherInstance.id, {
+    };
+    const otherTubeFrame: SeamDerivedTubeFrame = {
       ...otherFrame,
       worldAxis,
       worldAcross,
       center,
       radiusM,
       angularSpanRad: (otherFrame.acrossMaxMm - otherFrame.acrossMinMm) * METERS_PER_MM / radiusM,
+    };
+    candidates.push({
+      pairKey: key,
+      componentKey: componentByPieceId.get(firstPieceId) ?? firstPieceId,
+      scoreMm2: axialSpanMm * circumferenceM / METERS_PER_MM,
+      frames: [
+        [rootInstance.id, rootTubeFrame],
+        [otherInstance.id, otherTubeFrame],
+      ],
     });
+  }
+
+  /*
+   * Um segundo par tubular dentro do mesmo connected component normalmente
+   * aparece quando uma SeamGroup nova fecha um ciclo entre painéis já presos.
+   * Remapeá-lo como outro cilindro destruiria a pose estável anterior. Mantemos
+   * somente a maior subestrutura tubular como raiz analítica e deixamos as
+   * demais costuras como constraints com residual para o futuro XPBD.
+   */
+  const acceptedComponents = new Set<string>();
+  const assignedInstances = new Set<string>();
+  for (const candidate of [...candidates].sort(
+    (left, right) => right.scoreMm2 - left.scoreMm2 || left.pairKey.localeCompare(right.pairKey),
+  )) {
+    if (acceptedComponents.has(candidate.componentKey)) continue;
+    if (candidate.frames.some(([instanceId]) => assignedInstances.has(instanceId))) continue;
+    acceptedComponents.add(candidate.componentKey);
+    for (const [instanceId, frame] of candidate.frames) {
+      result.set(instanceId, frame);
+      assignedInstances.add(instanceId);
+    }
+  }
+  return result;
+}
+
+function connectedComponentKeys(
+  adjacency: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const start of [...adjacency.keys()].sort()) {
+    if (result.has(start)) continue;
+    const members: string[] = [];
+    const queue = [start];
+    result.set(start, start);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      members.push(current);
+      for (const neighbor of [...(adjacency.get(current) ?? [])].sort()) {
+        if (result.has(neighbor)) continue;
+        result.set(neighbor, start);
+        queue.push(neighbor);
+      }
+    }
+    const key = [...members].sort()[0];
+    for (const member of members) result.set(member, key);
   }
   return result;
 }
@@ -669,156 +771,412 @@ function dot2(first: readonly [number, number], second: readonly [number, number
   return first[0] * second[0] + first[1] * second[1];
 }
 
-function mapTorsoSurface(
+/**
+ * Embedding plano e isométrico para o estado inicial genérico. O painel usa
+ * somente uma base ortonormal do anchor; nenhuma coordenada local é escalada.
+ */
+function mapRigidPanel(
   positions: Float32Array,
+  planarSource: Float32Array,
   instance: AssemblyPanelInstance,
-  piece: PatternPiece,
-  avatar: AvatarParametricModel,
   anchor: AvatarArrangementAnchor,
 ): void {
-  const bounds = instance.topology.boundsMm;
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const foldX = findFoldCoordinate(piece, instance);
-  const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
-  const surfaceSign = instance.placement.surface === "back" ? -1 : 1;
-  const topY = instance.placement.region === "torso"
-    ? avatar.landmarks.shoulderY + 0.012
-    : avatar.landmarks.waistY + 0.008;
+  let centerX = 0;
+  let topY = Number.NEGATIVE_INFINITY;
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const offset = (instance.particleStart + local) * 3;
+    centerX += planarSource[offset];
+    topY = Math.max(topY, planarSource[offset + 1]);
+  }
+  centerX /= Math.max(1, instance.vertexCount);
+
   const rotation = instance.placement.rotationDeg * Math.PI / 180;
-  const patternHalfWidth = Math.max(
-    1,
-    ...Array.from({ length: instance.vertexCount }, (_, local) => {
-      const x = instance.topology.positions2DMm[local * 2];
-      return Math.abs(x - (piece.cutOnFold ? foldX : centerX));
-    }),
-  );
+  const tangent = normalize3(anchor.tangent);
+  const longitudinal = normalize3(anchor.axis);
+  const normal = normalize3(anchor.outwardNormal);
+  const origin = [
+    anchor.position[0]
+      + tangent[0] * instance.placement.offsetXMm * METERS_PER_MM
+      + longitudinal[0] * instance.placement.offsetYMm * METERS_PER_MM
+      + normal[0] * (anchor.initialMarginM + instance.placement.offsetZMm * METERS_PER_MM),
+    anchor.position[1]
+      + tangent[1] * instance.placement.offsetXMm * METERS_PER_MM
+      + longitudinal[1] * instance.placement.offsetYMm * METERS_PER_MM
+      + normal[1] * (anchor.initialMarginM + instance.placement.offsetZMm * METERS_PER_MM),
+    anchor.position[2]
+      + tangent[2] * instance.placement.offsetXMm * METERS_PER_MM
+      + longitudinal[2] * instance.placement.offsetYMm * METERS_PER_MM
+      + normal[2] * (anchor.initialMarginM + instance.placement.offsetZMm * METERS_PER_MM),
+  ] as const;
+
   for (let local = 0; local < instance.vertexCount; local += 1) {
-    const xMm = instance.topology.positions2DMm[local * 2];
-    const yMm = instance.topology.positions2DMm[local * 2 + 1];
-    const sourceX = piece.cutOnFold && instance.placement.bodySide !== "center"
-      ? sideSign * Math.abs(xMm - foldX)
-      : xMm - centerX;
-    const sourceY = yMm - bounds.minY;
-    const rotatedX = sourceX * Math.cos(rotation) - sourceY * Math.sin(rotation);
-    const rotatedY = sourceX * Math.sin(rotation) + sourceY * Math.cos(rotation);
-    const worldY = topY - rotatedY * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM;
-    const axes = sampleTorsoAxes(avatar, worldY);
-    const normalizedAcross = clamp01(Math.abs(rotatedX) / patternHalfWidth);
-    const angle = normalizedAcross * Math.PI * 0.5;
-    const xDirection = rotatedX < 0 ? -1 : rotatedX > 0 ? 1 : instance.placement.bodySide === "left" ? -1 : 1;
-    const radialWidth = axes.halfWidth + anchor.initialMarginM * 0.62;
-    const radialDepth = axes.halfDepth + anchor.initialMarginM;
     const offset = (instance.particleStart + local) * 3;
-    positions[offset] = xDirection * Math.sin(angle) * radialWidth + instance.placement.offsetXMm * METERS_PER_MM;
-    positions[offset + 1] = worldY;
-    positions[offset + 2] = surfaceSign * Math.cos(angle) * radialDepth + instance.placement.offsetZMm * METERS_PER_MM;
+    const across = planarSource[offset] - centerX;
+    const down = topY - planarSource[offset + 1];
+    const rotatedAcross = across * Math.cos(rotation) - down * Math.sin(rotation);
+    const rotatedDown = across * Math.sin(rotation) + down * Math.cos(rotation);
+    positions[offset] = origin[0] + tangent[0] * rotatedAcross + longitudinal[0] * rotatedDown;
+    positions[offset + 1] = origin[1] + tangent[1] * rotatedAcross + longitudinal[1] * rotatedDown;
+    positions[offset + 2] = origin[2] + tangent[2] * rotatedAcross + longitudinal[2] * rotatedDown;
   }
 }
 
-function mapArm(
-  positions: Float32Array,
-  instance: AssemblyPanelInstance,
-  avatar: AvatarParametricModel,
-  anchor: AvatarArrangementAnchor,
-): void {
-  const bounds = instance.topology.boundsMm;
-  const width = Math.max(1, bounds.width);
-  const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
-  const frontAxis: AvatarVector3 = [0, 0, 1];
-  const radialOut = normalize3([
-    sideSign * (frontAxis[1] * anchor.axis[2] - frontAxis[2] * anchor.axis[1]),
-    sideSign * (frontAxis[2] * anchor.axis[0] - frontAxis[0] * anchor.axis[2]),
-    sideSign * (frontAxis[0] * anchor.axis[1] - frontAxis[1] * anchor.axis[0]),
-  ]);
-  const patternRadius = width * METERS_PER_MM / (Math.PI * 2);
-  const rotation = instance.placement.rotationDeg * Math.PI / 180;
-
-  for (let local = 0; local < instance.vertexCount; local += 1) {
-    const xMm = instance.topology.positions2DMm[local * 2];
-    const yMm = instance.topology.positions2DMm[local * 2 + 1];
-    let u = clamp01((xMm - bounds.minX) / width);
-    if (instance.placement.mirrorX) u = 1 - u;
-    const distance = Math.max(0, (yMm - bounds.minY) * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM);
-    const center = addScaled3(anchor.position, anchor.axis, distance);
-    const radius = Math.max(sampleArmRadius(avatar, distance) + anchor.initialMarginM, patternRadius * 0.9);
-    const angle = (u - 0.5) * Math.PI * 2 + rotation;
-    const aroundOut = Math.cos(angle) * radius;
-    const aroundFront = Math.sin(angle) * radius;
-    const offset = (instance.particleStart + local) * 3;
-    positions[offset] = center[0] + radialOut[0] * aroundOut + frontAxis[0] * aroundFront + instance.placement.offsetXMm * METERS_PER_MM;
-    positions[offset + 1] = center[1] + radialOut[1] * aroundOut + frontAxis[1] * aroundFront;
-    positions[offset + 2] = center[2] + radialOut[2] * aroundOut + frontAxis[2] * aroundFront + instance.placement.offsetZMm * METERS_PER_MM;
-  }
-}
-
-function mapLeg(
-  positions: Float32Array,
-  instance: AssemblyPanelInstance,
-  avatar: AvatarParametricModel,
-  anchor: AvatarArrangementAnchor,
-): void {
-  const bounds = instance.topology.boundsMm;
-  const width = Math.max(1, bounds.width);
-  const sideSign = instance.placement.bodySide === "left" ? -1 : 1;
-  const baseLegX = anchor.position[0];
-  const surfaceFront = instance.placement.surface !== "back";
-
-  for (let local = 0; local < instance.vertexCount; local += 1) {
-    const xMm = instance.topology.positions2DMm[local * 2];
-    const yMm = instance.topology.positions2DMm[local * 2 + 1];
-    let u = clamp01((xMm - bounds.minX) / width);
-    if (instance.placement.mirrorX) u = 1 - u;
-    const worldY = avatar.landmarks.waistY - (yMm - bounds.minY) * METERS_PER_MM - instance.placement.offsetYMm * METERS_PER_MM;
-    const aboveCrotch = worldY > avatar.landmarks.crotchY;
-    const pelvisAxes = sampleTorsoAxes(avatar, worldY);
-    const blend = aboveCrotch
-      ? clamp01((worldY - avatar.landmarks.crotchY) / Math.max(0.001, avatar.landmarks.waistY - avatar.landmarks.crotchY))
-      : 0;
-    const centerX = aboveCrotch
-      ? sideSign * lerp(Math.abs(baseLegX), pelvisAxes.halfWidth * 0.34, blend)
-      : baseLegX;
-    const legRadius = sampleLegRadius(avatar, worldY);
-    const halfPanelRadius = Math.max(legRadius + anchor.initialMarginM, width * METERS_PER_MM / Math.PI * 0.44);
-    const radiusX = aboveCrotch ? lerp(halfPanelRadius, pelvisAxes.halfWidth * 0.62, blend) : halfPanelRadius;
-    const radiusZ = aboveCrotch ? lerp(halfPanelRadius, pelvisAxes.halfDepth, blend) : halfPanelRadius * 0.9;
-    const angle = surfaceFront ? Math.PI * (1 - u) : Math.PI + Math.PI * u;
-    const offset = (instance.particleStart + local) * 3;
-    positions[offset] = centerX + Math.cos(angle) * radiusX + instance.placement.offsetXMm * METERS_PER_MM;
-    positions[offset + 1] = worldY;
-    positions[offset + 2] = Math.sin(angle) * radiusZ + instance.placement.offsetZMm * METERS_PER_MM;
-  }
-}
-
-function findFoldCoordinate(piece: PatternPiece, instance: AssemblyPanelInstance): number {
-  const foldEdge = getPatternEdges(piece).find((edge) => edge.role === "fold");
-  const path = foldEdge ? instance.topology.edges.get(foldEdge.id) : undefined;
-  if (!path || path.vertexIndices.length === 0) return instance.topology.boundsMm.minX;
-  return path.vertexIndices.reduce((sum, vertex) => sum + instance.topology.positions2DMm[vertex * 2], 0) / path.vertexIndices.length;
-}
-
-function applyMinimalSeamStabilization(
+/**
+ * Propaga somente translações por painel. Costuras adicionais podem mudar a
+ * pose de um painel ainda não posicionado, mas nunca suas coordenadas locais.
+ * Subestruturas tubulares já resolvidas são raízes imóveis do componente.
+ */
+function placeConnectedPanelsRigidly(
   state: GarmentAssemblyState,
   visible: ReadonlySet<string>,
-  passes: number,
-  maximumCorrection: number,
-): void {
-  for (let pass = 0; pass < passes; pass += 1) {
-    for (const stitch of state.stitchConstraints) {
-      if (!stitch.instanceA || !stitch.instanceB) continue;
-      if (!visible.has(stitch.instanceA) || !visible.has(stitch.instanceB)) continue;
-      const a = evaluateReference(state.positions, stitch.a);
-      const b = evaluateReference(state.positions, stitch.b);
-      const dx = b[0] - a[0];
-      const dy = b[1] - a[1];
-      const dz = b[2] - a[2];
-      const length = Math.hypot(dx, dy, dz);
-      if (length <= stitch.restDistance + 1e-6) continue;
-      const correction = Math.min(maximumCorrection, (length - stitch.restDistance) * 0.18);
-      const scale = correction / Math.max(length, 1e-9);
-      applyReferenceDelta(state.positions, stitch.a, dx * scale, dy * scale, dz * scale);
-      applyReferenceDelta(state.positions, stitch.b, -dx * scale, -dy * scale, -dz * scale);
+): SeamPlacementDiagnostic[] {
+  const diagnostics: SeamPlacementDiagnostic[] = [];
+  const instanceById = new Map(
+    state.instances.filter((instance) => visible.has(instance.id)).map((instance) => [instance.id, instance]),
+  );
+  const adjacency = new Map<string, Set<string>>(
+    [...instanceById.keys()].map((id) => [id, new Set<string>()]),
+  );
+  const constraintsByPair = new Map<string, typeof state.stitchConstraints>();
+
+  for (const stitch of state.stitchConstraints) {
+    const first = stitch.instanceA;
+    const second = stitch.instanceB;
+    if (!first || !second || first === second || !instanceById.has(first) || !instanceById.has(second)) continue;
+    const key = instancePairKey(first, second);
+    const current = constraintsByPair.get(key) ?? [];
+    current.push(stitch);
+    constraintsByPair.set(key, current);
+    adjacency.get(first)?.add(second);
+    adjacency.get(second)?.add(first);
+  }
+
+  const componentVisited = new Set<string>();
+  for (const firstInstance of instanceById.values()) {
+    if (componentVisited.has(firstInstance.id)) continue;
+    const component: string[] = [];
+    const discoveryQueue = [firstInstance.id];
+    componentVisited.add(firstInstance.id);
+    while (discoveryQueue.length > 0) {
+      const current = discoveryQueue.shift()!;
+      component.push(current);
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (componentVisited.has(neighbor)) continue;
+        componentVisited.add(neighbor);
+        discoveryQueue.push(neighbor);
+      }
+    }
+
+    const tubeRoots = component.filter(
+      (id) => instanceById.get(id)?.arrangement?.mapping === "seam-derived-tube",
+    );
+    const roots = tubeRoots.length > 0 ? tubeRoots : component.slice(0, 1);
+    const placed = new Set(roots);
+    const queue = [...roots];
+    while (queue.length > 0) {
+      const fixedId = queue.shift()!;
+      for (const movingId of adjacency.get(fixedId) ?? []) {
+        if (placed.has(movingId)) continue;
+        const fixed = instanceById.get(fixedId);
+        const moving = instanceById.get(movingId);
+        if (!fixed || !moving) continue;
+        const constraints = constraintsByPair.get(instancePairKey(fixedId, movingId)) ?? [];
+        const diagnostic = alignRigidPanelToSeam(
+          state.positions,
+          constraints,
+          fixedId,
+          movingId,
+          fixed,
+          moving,
+        );
+        if (diagnostic) diagnostics.push(diagnostic);
+        placed.add(movingId);
+        queue.push(movingId);
+      }
     }
   }
+  return diagnostics;
+}
+
+function alignRigidPanelToSeam(
+  positions: Float32Array,
+  constraints: GarmentAssemblyState["stitchConstraints"],
+  fixedId: string,
+  movingId: string,
+  fixedInstance: AssemblyPanelInstance,
+  movingInstance: AssemblyPanelInstance,
+): SeamPlacementDiagnostic | undefined {
+  const fixedPoints: AvatarVector3[] = [];
+  const movingPoints: AvatarVector3[] = [];
+  for (const constraint of constraints) {
+    const first = evaluateReference(positions, constraint.a);
+    const second = evaluateReference(positions, constraint.b);
+    fixedPoints.push(constraint.instanceA === fixedId ? first : second);
+    movingPoints.push(constraint.instanceA === movingId ? first : second);
+  }
+  if (fixedPoints.length === 0) return undefined;
+
+  const fixedMidpoint = midpointOfCorrespondence(fixedPoints);
+  const movingMidpoint = midpointOfCorrespondence(movingPoints);
+  const fixedDirection = seamTangentAtMidpoint(fixedPoints);
+  const movingDirection = seamTangentAtMidpoint(movingPoints);
+  const alignment = rotateRigidPanelBetweenDirections(
+    positions,
+    movingInstance,
+    movingMidpoint,
+    movingDirection,
+    fixedDirection,
+  );
+  const translation = subtract3(fixedMidpoint, movingMidpoint);
+  translateRigidPanel(positions, movingInstance, translation);
+
+  const seamDirection = normalize3(fixedDirection);
+  const parentNormal = parentNormalAtSeam(fixedInstance, fixedMidpoint, seamDirection);
+  let developDirection = normalize3(perpendicularToAxis(
+    subtract3(panelCenter(positions, movingInstance), fixedMidpoint),
+    seamDirection,
+  ));
+  let developAngleRad = 0;
+
+  if (fixedInstance.arrangement?.mapping === "seam-derived-tube") {
+    const targetDirection = normalize3(perpendicularToAxis(parentNormal, seamDirection));
+    developAngleRad = signedAngleAroundAxis(developDirection, targetDirection, seamDirection);
+    rotateRigidPanelAroundLine(
+      positions,
+      movingInstance,
+      fixedMidpoint,
+      seamDirection,
+      developAngleRad,
+    );
+    developDirection = targetDirection;
+  }
+
+  if (
+    fixedInstance.arrangement?.mapping === "rigid-panel"
+    && movingInstance.arrangement?.mapping === "rigid-panel"
+    && fixedPoints.length > 1
+  ) {
+    const fixedInterior = perpendicularToAxis(
+      subtract3(panelCenter(positions, fixedInstance), fixedMidpoint),
+      seamDirection,
+    );
+    const movingInterior = perpendicularToAxis(
+      subtract3(panelCenter(positions, movingInstance), fixedMidpoint),
+      seamDirection,
+    );
+    if (dot3(fixedInterior, movingInterior) > 0) {
+      rotateRigidPanelAroundLine(
+        positions,
+        movingInstance,
+        fixedMidpoint,
+        seamDirection,
+        Math.PI,
+      );
+      developAngleRad = Math.PI;
+      developDirection = normalize3(perpendicularToAxis(
+        subtract3(panelCenter(positions, movingInstance), fixedMidpoint),
+        seamDirection,
+      ));
+    }
+  }
+
+  const representative = constraints.find((constraint) => constraint.rangeA && constraint.rangeB);
+  if (!representative?.rangeA || !representative.rangeB) return undefined;
+  const parentIsA = representative.instanceA === fixedId;
+  const finalChildPoints = constraints.map((constraint) => {
+    const first = evaluateReference(positions, constraint.a);
+    const second = evaluateReference(positions, constraint.b);
+    return constraint.instanceA === movingId ? first : second;
+  });
+  return {
+    seamGroupId: representative.seamGroupId,
+    parentInstanceId: fixedId,
+    childInstanceId: movingId,
+    parentRange: { ...(parentIsA ? representative.rangeA : representative.rangeB) },
+    childRange: { ...(parentIsA ? representative.rangeB : representative.rangeA) },
+    parentRangeLengthMm: parentIsA
+      ? representative.rangeLengthAMm ?? 0
+      : representative.rangeLengthBMm ?? 0,
+    childRangeLengthMm: parentIsA
+      ? representative.rangeLengthBMm ?? 0
+      : representative.rangeLengthAMm ?? 0,
+    parentStart: fixedPoints[0],
+    parentEnd: fixedPoints[fixedPoints.length - 1],
+    parentMidpoint: fixedMidpoint,
+    childStart: finalChildPoints[0],
+    childEnd: finalChildPoints[finalChildPoints.length - 1],
+    childMidpoint: midpointOfCorrespondence(finalChildPoints),
+    seamTangent: seamDirection,
+    parentNormal,
+    developDirection,
+    transform: {
+      alignAxis: alignment.axis,
+      alignAngleRad: alignment.angle,
+      translation,
+      developAngleRad,
+    },
+  };
+}
+
+function panelCenter(positions: Float32Array, instance: AssemblyPanelInstance): AvatarVector3 {
+  const center: AvatarVector3 = [0, 0, 0];
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const offset = (instance.particleStart + local) * 3;
+    center[0] += positions[offset];
+    center[1] += positions[offset + 1];
+    center[2] += positions[offset + 2];
+  }
+  return center.map((value) => value / Math.max(1, instance.vertexCount)) as AvatarVector3;
+}
+
+function perpendicularToAxis(vector: AvatarVector3, axis: AvatarVector3): AvatarVector3 {
+  const along = dot3(vector, axis);
+  return vector.map((value, index) => value - axis[index] * along) as AvatarVector3;
+}
+
+function rotateRigidPanelAroundLine(
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+  origin: AvatarVector3,
+  axis: AvatarVector3,
+  angle: number,
+): void {
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const offset = (instance.particleStart + local) * 3;
+    const relative: AvatarVector3 = [
+      positions[offset] - origin[0],
+      positions[offset + 1] - origin[1],
+      positions[offset + 2] - origin[2],
+    ];
+    const rotated = rotateAroundAxis(relative, axis, angle);
+    positions[offset] = origin[0] + rotated[0];
+    positions[offset + 1] = origin[1] + rotated[1];
+    positions[offset + 2] = origin[2] + rotated[2];
+  }
+}
+
+function rotateRigidPanelBetweenDirections(
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+  center: AvatarVector3,
+  sourceDirection: AvatarVector3,
+  targetDirection: AvatarVector3,
+): { axis: AvatarVector3; angle: number } {
+  const sourceLength = Math.hypot(...sourceDirection);
+  const targetLength = Math.hypot(...targetDirection);
+  if (sourceLength <= 1e-8 || targetLength <= 1e-8) return { axis: [0, 1, 0], angle: 0 };
+  const source = sourceDirection.map((value) => value / sourceLength) as AvatarVector3;
+  const target = targetDirection.map((value) => value / targetLength) as AvatarVector3;
+  const cosine = Math.min(1, Math.max(-1, dot3(source, target)));
+  if (cosine >= 1 - 1e-8) return { axis: [0, 1, 0], angle: 0 };
+  let axis = crossRaw3(source, target);
+  let sine = Math.hypot(...axis);
+  if (sine <= 1e-8) {
+    const fallback: AvatarVector3 = Math.abs(source[0]) < 0.8 ? [1, 0, 0] : [0, 1, 0];
+    axis = crossRaw3(source, fallback);
+    sine = Math.hypot(...axis);
+  }
+  axis = axis.map((value) => value / Math.max(sine, 1e-8)) as AvatarVector3;
+  const angle = Math.acos(cosine);
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const offset = (instance.particleStart + local) * 3;
+    const relative: AvatarVector3 = [
+      positions[offset] - center[0],
+      positions[offset + 1] - center[1],
+      positions[offset + 2] - center[2],
+    ];
+    const rotated = rotateAroundAxis(relative, axis, angle);
+    positions[offset] = center[0] + rotated[0];
+    positions[offset + 1] = center[1] + rotated[1];
+    positions[offset + 2] = center[2] + rotated[2];
+  }
+  return { axis, angle };
+}
+
+function rotateAroundAxis(vector: AvatarVector3, axis: AvatarVector3, angle: number): AvatarVector3 {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const cross = crossRaw3(axis, vector);
+  const along = dot3(axis, vector) * (1 - cosine);
+  return [
+    vector[0] * cosine + cross[0] * sine + axis[0] * along,
+    vector[1] * cosine + cross[1] * sine + axis[1] * along,
+    vector[2] * cosine + cross[2] * sine + axis[2] * along,
+  ];
+}
+
+function midpointOfCorrespondence(points: readonly AvatarVector3[]): AvatarVector3 {
+  const middle = (points.length - 1) / 2;
+  const lower = points[Math.floor(middle)];
+  const upper = points[Math.ceil(middle)];
+  return [
+    (lower[0] + upper[0]) * 0.5,
+    (lower[1] + upper[1]) * 0.5,
+    (lower[2] + upper[2]) * 0.5,
+  ];
+}
+
+function seamTangentAtMidpoint(points: readonly AvatarVector3[]): AvatarVector3 {
+  if (points.length < 2) return [0, 1, 0];
+  const middle = (points.length - 1) / 2;
+  const lower = Math.max(0, Math.floor(middle) - 1);
+  const upper = Math.min(points.length - 1, Math.ceil(middle) + 1);
+  return subtract3(points[upper], points[lower]);
+}
+
+function parentNormalAtSeam(
+  instance: AssemblyPanelInstance,
+  seamMidpoint: AvatarVector3,
+  seamTangent: AvatarVector3,
+): AvatarVector3 {
+  const center = instance.arrangement?.tubeCenter;
+  if (instance.arrangement?.mapping === "seam-derived-tube" && center) {
+    return normalize3(perpendicularToAxis(subtract3(seamMidpoint, center), seamTangent));
+  }
+  return normalize3(instance.arrangement?.outwardNormal ?? [0, 0, 1]);
+}
+
+function signedAngleAroundAxis(
+  from: AvatarVector3,
+  to: AvatarVector3,
+  axis: AvatarVector3,
+): number {
+  const cosine = Math.min(1, Math.max(-1, dot3(from, to)));
+  const sine = dot3(axis, crossRaw3(from, to));
+  return Math.atan2(sine, cosine);
+}
+
+function subtract3(first: AvatarVector3, second: AvatarVector3): AvatarVector3 {
+  return [first[0] - second[0], first[1] - second[1], first[2] - second[2]];
+}
+
+function dot3(first: AvatarVector3, second: AvatarVector3): number {
+  return first[0] * second[0] + first[1] * second[1] + first[2] * second[2];
+}
+
+function crossRaw3(first: AvatarVector3, second: AvatarVector3): AvatarVector3 {
+  return [
+    first[1] * second[2] - first[2] * second[1],
+    first[2] * second[0] - first[0] * second[2],
+    first[0] * second[1] - first[1] * second[0],
+  ];
+}
+
+function translateRigidPanel(
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+  delta: AvatarVector3,
+): void {
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const offset = (instance.particleStart + local) * 3;
+    positions[offset] += delta[0];
+    positions[offset + 1] += delta[1];
+    positions[offset + 2] += delta[2];
+  }
+}
+
+function instancePairKey(first: string, second: string): string {
+  return first < second ? `${first}\u0000${second}` : `${second}\u0000${first}`;
 }
 
 function evaluateReference(positions: Float32Array, reference: GlobalPointReference): AvatarVector3 {
@@ -833,21 +1191,6 @@ function evaluateReference(positions: Float32Array, reference: GlobalPointRefere
   return result;
 }
 
-function applyReferenceDelta(
-  positions: Float32Array,
-  reference: GlobalPointReference,
-  dx: number,
-  dy: number,
-  dz: number,
-): void {
-  for (let index = 0; index < reference.particleIndices.length; index += 1) {
-    const offset = reference.particleIndices[index] * 3;
-    const weight = reference.weights[index];
-    positions[offset] += dx * weight;
-    positions[offset + 1] += dy * weight;
-    positions[offset + 2] += dz * weight;
-  }
-}
 function shouldFlipWinding(
   positions: Float32Array,
   instance: AssemblyPanelInstance,
@@ -882,15 +1225,6 @@ function placementLabel(placement: PatternPreviewPlacement): string {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
-}
-
-function lerp(start: number, end: number, t: number): number {
-  return start + (end - start) * t;
-}
-
-function smoothstep(t: number): number {
-  const clamped = clamp01(t);
-  return clamped * clamped * (3 - 2 * clamped);
 }
 
 function uniqueDiagnostics(diagnostics: readonly ArrangementDiagnostic[]): ArrangementDiagnostic[] {

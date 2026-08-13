@@ -1,6 +1,7 @@
 import {
   getPatternEdges,
   sampleEdgeRange,
+  seamSideRanges,
   type EdgeRange,
   type GarmentDraft,
   type PatternPiece,
@@ -67,20 +68,21 @@ export function findNearestSeamHit(
   let nearest: SeamHit | null = null;
   for (const seam of garment.seams ?? []) {
     for (const side of ["first", "second"] as const) {
-      const range = seam[side];
-      const piece = garment.pieces.find(
-        (candidate) => candidate.id === range.pieceId,
-      );
-      if (!piece || !workspaceStateFor(garment, piece.id).visible) continue;
-      const distanceMm = distanceToRange(
-        piece,
-        range,
-        workspaceTransformFor(garment, piece.id),
-        world,
-      );
-      if (distanceMm > maxDistanceMm) continue;
-      if (!nearest || distanceMm < nearest.distanceMm) {
-        nearest = { seam, side, distanceMm };
+      for (const range of seamSideRanges(seam, side)) {
+        const piece = garment.pieces.find(
+          (candidate) => candidate.id === range.pieceId,
+        );
+        if (!piece || !workspaceStateFor(garment, piece.id).visible) continue;
+        const distanceMm = distanceToRange(
+          piece,
+          range,
+          workspaceTransformFor(garment, piece.id),
+          world,
+        );
+        if (distanceMm > maxDistanceMm) continue;
+        if (!nearest || distanceMm < nearest.distanceMm) {
+          nearest = { seam, side, distanceMm };
+        }
       }
     }
   }

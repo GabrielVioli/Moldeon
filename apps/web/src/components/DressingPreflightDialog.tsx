@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type {
   GarmentDraft,
   GarmentDressingRegion,
@@ -37,9 +37,11 @@ export const DressingPreflightDialog = memo(function DressingPreflightDialog({
   onFixSeams,
   onClose,
 }: DressingPreflightDialogProps) {
-  const candidates = preflight.frontCandidatePieceIds
-    .map((pieceId) => garment.pieces.find((piece) => piece.id === pieceId))
-    .filter((piece): piece is PatternPiece => piece !== undefined);
+  const [selectedReferencePieceId, setSelectedReferencePieceId] = useState<string | null>(null);
+  const candidates = preflight.frontCandidateGroups.flatMap((group) => {
+    const piece = garment.pieces.find((candidate) => candidate.id === group.referencePieceId);
+    return piece ? [{ group, piece }] : [];
+  });
   const hasBlockingIssue = preflight.issues.length > 0;
 
   return (
@@ -59,7 +61,7 @@ export const DressingPreflightDialog = memo(function DressingPreflightDialog({
                 : preflight.requiresRegion
                 ? "Onde esta roupa deve ser vestida?"
                 : preflight.requiresFrontReference
-                  ? "Qual peça deve iniciar na frente do corpo?"
+                  ? "Qual peça ou conjunto serve como referência frontal?"
                   : "Preparando a prova"}
             </h2>
           </div>
@@ -83,20 +85,51 @@ export const DressingPreflightDialog = memo(function DressingPreflightDialog({
         ) : preflight.requiresFrontReference ? (
           <>
             <p className="dressing-preflight-help">
-              Selecione uma única referência. O Moldeon posicionará as demais peças seguindo as costuras.
+              Escolha somente a referência frontal. Se ela possuir uma parte espelhada, o Moldeon selecionará o conjunto e orientará as demais peças pelas costuras.
             </p>
             <div className="dressing-piece-grid">
-              {candidates.map((piece) => (
-                <button
-                  type="button"
-                  key={piece.id}
-                  aria-label={`Usar ${piece.name} como referência frontal`}
-                  onClick={() => onChooseFront(piece.id)}
-                >
-                  <PieceThumbnail piece={piece} />
-                  <span>{piece.name}</span>
-                </button>
-              ))}
+              {candidates.map(({ group, piece }) => {
+                const selected = selectedReferencePieceId === group.referencePieceId;
+                const isSet = group.panelInstanceIds.length > 1;
+                return (
+                  <button
+                    type="button"
+                    key={group.referencePieceId}
+                    className={selected ? "is-selected" : undefined}
+                    aria-label={`Usar ${piece.name}${isSet ? " e sua parte espelhada" : ""} como referência frontal`}
+                    aria-pressed={selected}
+                    onClick={() => setSelectedReferencePieceId(group.referencePieceId)}
+                  >
+                    <span className="dressing-piece-thumbnails" aria-hidden="true">
+                      {group.panelInstanceIds.map((instanceId) => (
+                        <PieceThumbnail
+                          key={instanceId}
+                          piece={piece}
+                          mirrored={group.mirroredPanelInstanceIds.includes(instanceId)}
+                          label={isSet
+                            ? group.mirroredPanelInstanceIds.includes(instanceId)
+                              ? "Parte espelhada"
+                              : "Parte original"
+                            : piece.name}
+                        />
+                      ))}
+                    </span>
+                    <strong>{piece.name}</strong>
+                    <span>{isSet ? "Conjunto com parte espelhada" : "Peça única"}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="dressing-reference-actions">
+              <button type="button" onClick={onClose}>Cancelar</button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={selectedReferencePieceId === null}
+                onClick={() => selectedReferencePieceId && onChooseFront(selectedReferencePieceId)}
+              >
+                Usar como referência frontal
+              </button>
             </div>
           </>
         ) : null}
@@ -105,7 +138,15 @@ export const DressingPreflightDialog = memo(function DressingPreflightDialog({
   );
 });
 
-function PieceThumbnail({ piece }: { piece: PatternPiece }) {
+function PieceThumbnail({
+  piece,
+  mirrored,
+  label,
+}: {
+  piece: PatternPiece;
+  mirrored: boolean;
+  label: string;
+}) {
   const contour = samplePatternContour(piece.points);
   const minX = Math.min(...contour.map((point) => point.xMm));
   const maxX = Math.max(...contour.map((point) => point.xMm));
@@ -114,14 +155,18 @@ function PieceThumbnail({ piece }: { piece: PatternPiece }) {
   const width = Math.max(1, maxX - minX);
   const height = Math.max(1, maxY - minY);
   const padding = Math.max(width, height) * 0.08;
-  const points = contour.map((point) => `${point.xMm},${point.yMm}`).join(" ");
+  const points = contour
+    .map((point) => `${mirrored ? minX + maxX - point.xMm : point.xMm},${point.yMm}`)
+    .join(" ");
   return (
-    <svg
-      viewBox={`${minX - padding} ${minY - padding} ${width + padding * 2} ${height + padding * 2}`}
-      aria-hidden="true"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <polygon points={points} />
-    </svg>
+    <span className="dressing-piece-thumbnail">
+      <svg
+        viewBox={`${minX - padding} ${minY - padding} ${width + padding * 2} ${height + padding * 2}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <polygon points={points} />
+      </svg>
+      <small>{label}</small>
+    </span>
   );
 }

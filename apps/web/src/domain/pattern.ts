@@ -179,6 +179,9 @@ export interface Seam {
   id: string;
   /** Identificador estável do SeamGroup V3 quando a costura usa vários intervalos. */
   groupId?: string;
+  /** Sequências ordenadas; first/second preservam compatibilidade legada. */
+  firstRanges?: EdgeRange[];
+  secondRanges?: EdgeRange[];
   first: EdgeRange;
   second: EdgeRange;
   // direction: whether second is stitched in parametric same/opposite direction
@@ -798,6 +801,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const id = readString(s.id ?? `seam-${i + 1}`, `O identificador da costura ${i + 1}`);
       const first = parseEdgeRangeNew(s.first, `A primeira faixa da costura ${i + 1}`);
       const second = parseEdgeRangeNew(s.second, `A segunda faixa da costura ${i + 1}`);
+      const firstRanges = parseOptionalEdgeRangeSequence(s.firstRanges, `O primeiro lado da costura ${i + 1}`);
+      const secondRanges = parseOptionalEdgeRangeSequence(s.secondRanges, `O segundo lado da costura ${i + 1}`);
       const direction = s.direction === undefined ? "same" : readEnum(s.direction, ["same", "opposite"] as const, `A direção da costura ${i + 1}`);
       const easeRatio = s.easeRatio === undefined ? 0 : readFiniteNumber(s.easeRatio, `O easeRatio da costura ${i + 1}`);
       const type = s.type === undefined ? "standard" : readString(s.type, `O tipo da costura ${i + 1}`);
@@ -825,6 +830,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         seams.push({
           id,
           ...(groupId === undefined ? {} : { groupId }),
+          ...(firstRanges === undefined ? {} : { firstRanges }),
+          ...(secondRanges === undefined ? {} : { secondRanges }),
           first,
           second,
           direction,
@@ -1085,6 +1092,14 @@ function parseGarmentEase(value: unknown): GarmentEase | undefined {
   };
 }
 
+function parseOptionalEdgeRangeSequence(value: unknown, label: string): EdgeRange[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${label} precisa conter pelo menos uma faixa.`);
+  }
+  return value.map((range, index) => parseEdgeRangeNew(range, `${label}, faixa ${index + 1}`));
+}
+
 function parseGarmentDressing(value: unknown, pieceIds: Set<string>): GarmentDressingSetup | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw new TypeError("A configuraÃ§Ã£o de prova da roupa Ã© invÃ¡lida.");
@@ -1226,6 +1241,73 @@ export function edgeRangeLength(piece: PatternPiece, edgeRange: EdgeRange): numb
     len += Math.sqrt(dx * dx + dy * dy);
   }
   return len;
+}
+
+export function seamSideRanges(seam: Seam, side: "first" | "second"): readonly EdgeRange[] {
+  const composite = side === "first" ? seam.firstRanges : seam.secondRanges;
+  if (composite && composite.length > 0) return composite;
+  return [side === "first" ? seam.first : seam.second];
+}
+
+export function edgeRangeSequenceLength(
+  pieces: readonly PatternPiece[],
+  ranges: readonly EdgeRange[],
+): number {
+  return ranges.reduce((total, range) => {
+    const piece = pieces.find((candidate) => candidate.id === range.pieceId);
+    return total + (piece ? edgeRangeLength(piece, range) : 0);
+  }, 0);
+}
+
+export interface ResolvedEdgeRangeSequencePoint {
+  range: EdgeRange;
+  rangeIndex: number;
+  rangeLengthMm: number;
+  sideLengthMm: number;
+  localProgress: number;
+  t: number;
+}
+
+/** Resolve s global [0,1] no range correto pelo comprimento de arco acumulado. */
+export function resolveEdgeRangeSequenceProgress(
+  pieces: readonly PatternPiece[],
+  ranges: readonly EdgeRange[],
+  progress: number,
+): ResolvedEdgeRangeSequencePoint | null {
+  if (ranges.length === 0) return null;
+  const lengths = ranges.map((range) => {
+    const piece = pieces.find((candidate) => candidate.id === range.pieceId);
+    return piece ? edgeRangeLength(piece, range) : 0;
+  });
+  const sideLengthMm = lengths.reduce((total, length) => total + length, 0);
+  if (sideLengthMm <= 1e-9) return null;
+
+  const clamped = Math.max(0, Math.min(1, progress));
+  const targetLength = clamped * sideLengthMm;
+  let accumulated = 0;
+  let rangeIndex = ranges.length - 1;
+  for (let index = 0; index < ranges.length; index += 1) {
+    const next = accumulated + lengths[index];
+    if (targetLength <= next + 1e-9 || index === ranges.length - 1) {
+      rangeIndex = index;
+      break;
+    }
+    accumulated = next;
+  }
+
+  const range = ranges[rangeIndex];
+  const rangeLengthMm = lengths[rangeIndex];
+  const localProgress = rangeLengthMm <= 1e-9
+    ? 0
+    : Math.max(0, Math.min(1, (targetLength - accumulated) / rangeLengthMm));
+  return {
+    range,
+    rangeIndex,
+    rangeLengthMm,
+    sideLengthMm,
+    localProgress,
+    t: range.startT + (range.endT - range.startT) * localProgress,
+  };
 }
 
 export function parsePatternSnapshot(value: unknown): PatternSnapshot {
@@ -1436,19 +1518,19 @@ export function validateSeam(
   garment: Pick<GarmentDraft, "pieces" | "seams">,
 ): SeamValidationIssue[] {
   const issues: SeamValidationIssue[] = [];
-  const ranges = [seam.first, seam.second] as const;
-  const resolved: Array<{ piece: PatternPiece; range: EdgeRange } | null> = [];
+  const firstRanges = seamSideRanges(seam, "first");
+  const secondRanges = seamSideRanges(seam, "second");
+  const ranges = [...firstRanges, ...secondRanges];
+  const resolved = new Map<EdgeRange, PatternPiece>();
 
   for (const range of ranges) {
     const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId);
     if (!piece) {
       issues.push(issue("piece-not-found", seam.id, `A peça ${range.pieceId} não existe.`));
-      resolved.push(null);
       continue;
     }
     if (!getEdgeById(piece, range.edgeId)) {
       issues.push(issue("edge-not-found", seam.id, `A borda ${range.edgeId} não existe.`));
-      resolved.push(null);
       continue;
     }
     if (
@@ -1462,29 +1544,31 @@ export function validateSeam(
     } else if (range.endT - range.startT <= 1e-6) {
       issues.push(issue("empty-range", seam.id, "O intervalo da costura está vazio."));
     }
-    resolved.push({ piece, range });
+    resolved.set(range, piece);
   }
 
-  if (
-    seam.first.pieceId === seam.second.pieceId &&
-    seam.first.edgeId === seam.second.edgeId
-  ) {
+  if (rangeListsEqualInOrder(firstRanges, secondRanges)) {
     issues.push(issue("invalid-self-seam", seam.id, "Uma borda não pode ser costurada nela mesma."));
   }
 
   const duplicate = (garment.seams ?? []).some(
-    (candidate) =>
-      candidate.id !== seam.id &&
-      ((rangesEqual(candidate.first, seam.first) && rangesEqual(candidate.second, seam.second)) ||
-        (rangesEqual(candidate.first, seam.second) && rangesEqual(candidate.second, seam.first))),
+    (candidate) => {
+      if (candidate.id === seam.id) return false;
+      const candidateFirst = seamSideRanges(candidate, "first");
+      const candidateSecond = seamSideRanges(candidate, "second");
+      return (
+        (rangeListsEqualInOrder(candidateFirst, firstRanges) && rangeListsEqualInOrder(candidateSecond, secondRanges)) ||
+        (rangeListsEqualInOrder(candidateFirst, secondRanges) && rangeListsEqualInOrder(candidateSecond, firstRanges))
+      );
+    },
   );
   if (duplicate) {
     issues.push(issue("duplicate-seam", seam.id, "Esta costura já existe."));
   }
 
-  if (resolved[0] && resolved[1] && !issues.some((candidate) => candidate.code === "invalid-range")) {
-    const firstLength = edgeRangeLength(resolved[0].piece, resolved[0].range);
-    const secondLength = edgeRangeLength(resolved[1].piece, resolved[1].range);
+  if (resolved.size === ranges.length && !issues.some((candidate) => candidate.code === "invalid-range")) {
+    const firstLength = edgeRangeSequenceLength(garment.pieces, firstRanges);
+    const secondLength = edgeRangeSequenceLength(garment.pieces, secondRanges);
     const difference = Math.abs(firstLength - secondLength);
     const tolerance = Math.max(10, Math.max(firstLength, secondLength) * 0.15);
     if (difference > tolerance) {
@@ -1512,6 +1596,10 @@ function rangesEqual(left: EdgeRange, right: EdgeRange): boolean {
     left.startT === right.startT &&
     left.endT === right.endT
   );
+}
+
+function rangeListsEqualInOrder(left: readonly EdgeRange[], right: readonly EdgeRange[]): boolean {
+  return left.length === right.length && left.every((range, index) => rangesEqual(range, right[index]));
 }
 
 export function createPreviewPlacement(

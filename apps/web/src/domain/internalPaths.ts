@@ -2,6 +2,7 @@ import {
   createDocumentId,
   createUnclassifiedBodyPlacement,
   migrateLegacyPieceToSegments,
+  seamSideRanges,
   syncLegacyPointsFromSegments,
   type EdgeRange,
   type GarmentDraft,
@@ -362,7 +363,8 @@ export function analyzeInternalPath(
   const affectedSeamIds = [...new Set(
     seams
       .filter((seam) =>
-        seam.first.pieceId === piece.id || seam.second.pieceId === piece.id,
+        [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+          .some((range) => range.pieceId === piece.id),
       )
       .map((seam) => seam.id),
   )];
@@ -669,7 +671,8 @@ function applyCutPath(
   for (const seam of seams) {
     const remapped = remapSeamToCutResults(seam, source.id, mapping);
     if (remapped) remappedSeams.push(remapped);
-    else if (seam.first.pieceId === source.id || seam.second.pieceId === source.id) {
+    else if ([...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+      .some((range) => range.pieceId === source.id)) {
       diagnostics.push({
         code: "seam-invalidated",
         severity: "warning",
@@ -997,9 +1000,18 @@ function remapSeamToCutResults(
     const target = mapping.get(range.edgeId);
     return target ? { ...range, pieceId: target.pieceId, edgeId: target.edgeId } : null;
   };
-  const first = remap(seam.first);
-  const second = remap(seam.second);
-  return first && second ? { ...seam, first, second } : null;
+  const firstRanges = seamSideRanges(seam, "first").map(remap);
+  const secondRanges = seamSideRanges(seam, "second").map(remap);
+  if (firstRanges.some((range) => !range) || secondRanges.some((range) => !range)) return null;
+  const first = firstRanges as EdgeRange[];
+  const second = secondRanges as EdgeRange[];
+  return {
+    ...seam,
+    first: first[0],
+    second: second[0],
+    ...(first.length > 1 ? { firstRanges: first } : { firstRanges: undefined }),
+    ...(second.length > 1 ? { secondRanges: second } : { secondRanges: undefined }),
+  };
 }
 
 function collectIntersections(

@@ -1,6 +1,7 @@
 import {
-  edgeRangeLength,
+  edgeRangeSequenceLength,
   getPatternEdges,
+  seamSideRanges,
   validateSeam,
   type AssemblyPlacement,
   type BodyAnchorId,
@@ -17,6 +18,7 @@ import {
   type SeamTreatment,
 } from "./pattern";
 import type { PanelInstanceV3, PatternDocumentV3 } from "./patternDocumentV3.types";
+import { garmentDraftToPatternDocumentV3 } from "./patternDocumentV3";
 import {
   classifyPatternEdge,
   type ClassifiedPatternEdge,
@@ -73,7 +75,17 @@ export interface DressingPreflight {
   warnings: string[];
   includedPieceIds: string[];
   frontCandidatePieceIds: string[];
+  frontCandidateGroups: FrontReferenceGroup[];
   resolvedFrontReferencePieceId?: string;
+  resolvedFrontReferencePanelInstanceIds: string[];
+}
+
+export interface FrontReferenceGroup {
+  /** A definição canônica usada como âncora mínima da orientação. */
+  referencePieceId: string;
+  /** Instâncias que devem ser tratadas juntas ao escolher esta âncora. */
+  panelInstanceIds: string[];
+  mirroredPanelInstanceIds: string[];
 }
 
 export interface BodyPlacementSuggestion {
@@ -100,25 +112,17 @@ export function validateSeamForAssembly(
 
 export function analyzeSeamCompatibility(
   garment: Pick<GarmentDraft, "pieces">,
-  first: EdgeRange,
-  second: EdgeRange,
+  first: EdgeRange | readonly EdgeRange[],
+  second: EdgeRange | readonly EdgeRange[],
 ): SeamCompatibility {
-  const firstPiece = garment.pieces.find(
-    (piece) => piece.id === first.pieceId,
-  );
-  const secondPiece = garment.pieces.find(
-    (piece) => piece.id === second.pieceId,
-  );
-  const firstLengthMm = firstPiece
-    ? edgeRangeLength(firstPiece, first)
-    : 0;
-  const secondLengthMm = secondPiece
-    ? edgeRangeLength(secondPiece, second)
-    : 0;
+  const firstRanges = Array.isArray(first) ? first : [first];
+  const secondRanges = Array.isArray(second) ? second : [second];
+  const firstLengthMm = edgeRangeSequenceLength(garment.pieces, firstRanges);
+  const secondLengthMm = edgeRangeSequenceLength(garment.pieces, secondRanges);
   const differenceMm = Math.abs(firstLengthMm - secondLengthMm);
   const referenceLength = Math.max(firstLengthMm, secondLengthMm, 1);
   const differencePercent = (differenceMm / referenceLength) * 100;
-  const identicalRange = rangesAreIdentical(first, second);
+  const identicalRange = rangeSequencesAreIdentical(firstRanges, secondRanges);
 
   let recommendedTreatment: SeamTreatment = "standard";
   if (differenceMm > 5 && differencePercent > 2) {
@@ -175,7 +179,9 @@ export function buildAssemblyGraph(
 
   for (const seam of garment.seams ?? []) {
     if (seam.active === false) continue;
-    if (rangesAreIdentical(seam.first, seam.second)) {
+    const firstRanges = seamSideRanges(seam, "first");
+    const secondRanges = seamSideRanges(seam, "second");
+    if (rangeSequencesAreIdentical(firstRanges, secondRanges)) {
       issues.push(
         `${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`,
       );
@@ -195,23 +201,22 @@ export function buildAssemblyGraph(
       continue;
     }
 
-    if (
-      !pieceIds.has(seam.first.pieceId) ||
-      !pieceIds.has(seam.second.pieceId)
-    ) {
+    if ([...firstRanges, ...secondRanges].some((range) => !pieceIds.has(range.pieceId))) {
       continue;
     }
 
-    if (seam.first.pieceId !== seam.second.pieceId) {
-      adjacency.get(seam.first.pieceId)?.add(seam.second.pieceId);
-      adjacency.get(seam.second.pieceId)?.add(seam.first.pieceId);
+    for (const first of firstRanges) {
+      for (const second of secondRanges) {
+        if (first.pieceId === second.pieceId) continue;
+        adjacency.get(first.pieceId)?.add(second.pieceId);
+        adjacency.get(second.pieceId)?.add(first.pieceId);
+      }
     }
 
-    if (seam.first.startT === 0 && seam.first.endT === 1) {
-      usedEdges.add(`${seam.first.pieceId}/${seam.first.edgeId}`);
-    }
-    if (seam.second.startT === 0 && seam.second.endT === 1) {
-      usedEdges.add(`${seam.second.pieceId}/${seam.second.edgeId}`);
+    for (const range of [...firstRanges, ...secondRanges]) {
+      if (range.startT === 0 && range.endT === 1) {
+        usedEdges.add(`${range.pieceId}/${range.edgeId}`);
+      }
     }
 
     validSeamIds.push(seam.id);
@@ -294,6 +299,9 @@ export function buildAssemblyGraph(
 export function evaluateDressingPreflight(garment: GarmentDraft): DressingPreflight {
   const includedPieces = visibleIncludedPieces(garment);
   const includedIds = new Set(includedPieces.map((piece) => piece.id));
+  // O agrupamento frontal depende apenas das definições e instâncias. Costuras
+  // inválidas continuam sendo relatadas pelo preflight sem impedir sua abertura.
+  const document = garmentDraftToPatternDocumentV3({ ...garment, seams: [] });
   const issues: string[] = [];
   const warnings: string[] = [];
 
@@ -309,8 +317,8 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
 
   const includedSeams = (garment.seams ?? []).filter(
     (seam) => seam.active !== false
-      && includedIds.has(seam.first.pieceId)
-      && includedIds.has(seam.second.pieceId),
+      && [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+        .every((range) => includedIds.has(range.pieceId)),
   );
   const graph = buildAssemblyGraph({ pieces: includedPieces, seams: includedSeams });
   issues.push(...graph.issues);
@@ -329,6 +337,16 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
   const resolvedFrontReferencePieceId = configuredFront && includedIds.has(configuredFront)
     ? configuredFront
     : inferredFront;
+  const frontCandidatePieceIds = graph.connectedComponents[0] ?? includedPieces.map((piece) => piece.id);
+  const frontCandidateGroups = buildFrontReferenceGroups(
+    document,
+    new Set(frontCandidatePieceIds),
+  );
+  const resolvedFrontReferencePanelInstanceIds = resolvedFrontReferencePieceId === undefined
+    ? []
+    : frontCandidateGroups.find(
+      (group) => group.referencePieceId === resolvedFrontReferencePieceId,
+    )?.panelInstanceIds ?? [];
   const requiresFrontReference = includedPieces.length > 1
     && graph.connectedComponents.length === 1
     && resolvedFrontReferencePieceId === undefined;
@@ -340,9 +358,60 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
     issues: unique(issues),
     warnings: unique(warnings),
     includedPieceIds: includedPieces.map((piece) => piece.id),
-    frontCandidatePieceIds: graph.connectedComponents[0] ?? includedPieces.map((piece) => piece.id),
+    frontCandidatePieceIds,
+    frontCandidateGroups,
+    resolvedFrontReferencePanelInstanceIds,
     ...(resolvedFrontReferencePieceId === undefined ? {} : { resolvedFrontReferencePieceId }),
   };
+}
+
+/**
+ * Converte definições candidatas em opções de orientação. Uma definição
+ * continua sendo a única resposta persistida, enquanto suas instâncias de
+ * corte — inclusive a espelhada — formam um único grupo visual e espacial.
+ */
+export function buildFrontReferenceGroups(
+  document: PatternDocumentV3,
+  candidatePatternIds: ReadonlySet<string>,
+): FrontReferenceGroup[] {
+  const definitionOrder = new Map(
+    document.patternDefinitions.map((definition, index) => [definition.id, index]),
+  );
+  const instancesByPatternId = new Map<string, PanelInstanceV3[]>();
+
+  for (const instance of document.panelInstances) {
+    if (!candidatePatternIds.has(instance.sourcePatternId) || !instance.includedIn3D) continue;
+    const current = instancesByPatternId.get(instance.sourcePatternId) ?? [];
+    current.push(instance);
+    instancesByPatternId.set(instance.sourcePatternId, current);
+  }
+
+  return [...candidatePatternIds]
+    .sort((left, right) => (definitionOrder.get(left) ?? Number.MAX_SAFE_INTEGER)
+      - (definitionOrder.get(right) ?? Number.MAX_SAFE_INTEGER))
+    .flatMap((referencePieceId) => {
+      const definition = document.patternDefinitions.find(
+        (candidate) => candidate.id === referencePieceId,
+      );
+      if (!definition || definition.bodyPlacement.includeIn3D === false) return [];
+      const instances = (instancesByPatternId.get(referencePieceId) ?? [])
+        .sort((left, right) => left.copyIndex - right.copyIndex);
+      if (instances.length === 0) return [];
+
+      const hasRelatedMirroredInstance = definition.mirrorRule === "paired"
+        && definition.cutQuantity > 1;
+      const groupedInstances = hasRelatedMirroredInstance
+        ? instances
+        : instances.slice(0, 1);
+
+      return [{
+        referencePieceId,
+        panelInstanceIds: groupedInstances.map((instance) => instance.id),
+        mirroredPanelInstanceIds: groupedInstances
+          .filter((instance) => instance.mirrored)
+          .map((instance) => instance.id),
+      }];
+    });
 }
 
 /**
@@ -359,16 +428,7 @@ export function deriveDressingPanelInstances(
   if (!preflight.canDress || !region || !frontReference) return document.panelInstances;
 
   const includedIds = new Set(preflight.includedPieceIds);
-  const orderedPieceIds = orderConnectedPieces(garment, frontReference, includedIds);
-  const surfaceByPieceId = new Map<string, "front" | "back">();
-  if (orderedPieceIds.length === 2) {
-    surfaceByPieceId.set(orderedPieceIds[0], "front");
-    surfaceByPieceId.set(orderedPieceIds[1], "back");
-  } else {
-    orderedPieceIds.forEach((pieceId, index) => {
-      surfaceByPieceId.set(pieceId, index === 0 || index < orderedPieceIds.length / 2 ? "front" : "back");
-    });
-  }
+  const surfaceByPieceId = deriveSurfacesFromSeamGraph(document, frontReference, includedIds);
 
   const placementRegion = previewRegionFor(region);
   return document.panelInstances.map((instance) => {
@@ -376,7 +436,9 @@ export function deriveDressingPanelInstances(
     const definition = document.patternDefinitions.find((candidate) => candidate.id === instance.sourcePatternId);
     if (!definition || definition.bodyPlacement.includeIn3D === false) return instance;
     const surface = surfaceByPieceId.get(instance.sourcePatternId) ?? "front";
-    const bodySide = placementRegion === "arm"
+    const bodySide = definition.mirrorRule === "paired" && definition.cutQuantity > 1
+      ? instance.copyIndex % 2 === 0 ? "left" : "right"
+      : placementRegion === "arm"
       ? instance.copyIndex % 2 === 0 ? "left" : "right"
       : "center";
     const bodyAnchorId = anchorFor(placementRegion, surface, bodySide);
@@ -434,7 +496,9 @@ export function evaluateGarment3DEligibility(
   const includedIds = new Set(includedPieces.map((piece) => piece.id));
   const graph = buildAssemblyGraph({
     pieces: includedPieces,
-    seams: (garment.seams ?? []).filter((seam) => includedIds.has(seam.first.pieceId) && includedIds.has(seam.second.pieceId)),
+    seams: (garment.seams ?? []).filter((seam) =>
+      [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+        .every((range) => includedIds.has(range.pieceId))),
   });
   issues.push(...graph.issues);
   issues.push(...preflight.issues);
@@ -552,30 +616,50 @@ function inferFrontReference(pieces: readonly PatternPiece[]): string | undefine
   return candidates.length === 1 ? candidates[0].id : undefined;
 }
 
-function orderConnectedPieces(
-  garment: GarmentDraft,
-  firstPieceId: string,
+function deriveSurfacesFromSeamGraph(
+  document: PatternDocumentV3,
+  frontReferencePatternId: string,
   includedIds: ReadonlySet<string>,
-): string[] {
-  const adjacency = new Map<string, Set<string>>([...includedIds].map((pieceId) => [pieceId, new Set()]));
-  for (const seam of garment.seams ?? []) {
-    if (seam.active === false || !includedIds.has(seam.first.pieceId) || !includedIds.has(seam.second.pieceId)) continue;
-    adjacency.get(seam.first.pieceId)?.add(seam.second.pieceId);
-    adjacency.get(seam.second.pieceId)?.add(seam.first.pieceId);
-  }
-  const result: string[] = [];
-  const visited = new Set<string>([firstPieceId]);
-  const queue = [firstPieceId];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    result.push(current);
-    for (const next of adjacency.get(current) ?? []) {
-      if (visited.has(next)) continue;
-      visited.add(next);
-      queue.push(next);
+): Map<string, "front" | "back"> {
+  const adjacency = new Map<string, Set<string>>(
+    [...includedIds].map((patternId) => [patternId, new Set()]),
+  );
+  for (const seamGroup of document.seamGroups) {
+    if (!seamGroup.active) continue;
+    const firstIds = new Set(
+      seamGroup.first.map((range) => range.pieceId).filter((id) => includedIds.has(id)),
+    );
+    const secondIds = new Set(
+      seamGroup.second.map((range) => range.pieceId).filter((id) => includedIds.has(id)),
+    );
+    for (const firstId of firstIds) {
+      for (const secondId of secondIds) {
+        if (firstId === secondId) continue;
+        adjacency.get(firstId)?.add(secondId);
+        adjacency.get(secondId)?.add(firstId);
+      }
     }
   }
-  for (const pieceId of includedIds) if (!visited.has(pieceId)) result.push(pieceId);
+
+  const result = new Map<string, "front" | "back">();
+  const roots = [
+    frontReferencePatternId,
+    ...[...includedIds].filter((pieceId) => pieceId !== frontReferencePatternId).sort(),
+  ];
+  for (const root of roots) {
+    if (result.has(root)) continue;
+    result.set(root, "front");
+    const queue = [root];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const nextSurface = result.get(current) === "front" ? "back" : "front";
+      for (const next of [...(adjacency.get(current) ?? [])].sort()) {
+        if (result.has(next)) continue;
+        result.set(next, nextSurface);
+        queue.push(next);
+      }
+    }
+  }
   return result;
 }
 
@@ -605,6 +689,11 @@ function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
     Math.abs(first.startT - second.startT) <= 1e-7 &&
     Math.abs(first.endT - second.endT) <= 1e-7
   );
+}
+
+function rangeSequencesAreIdentical(first: readonly EdgeRange[], second: readonly EdgeRange[]): boolean {
+  return first.length === second.length
+    && first.every((range, index) => rangesAreIdentical(range, second[index]));
 }
 
 function unique(values: string[]): string[] {

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDefaultFabricSource } from "../domain/fabric";
-import { getPatternEdges, type GarmentDraft, type PatternPiece } from "../domain/pattern";
+import { getPatternEdges, seamSideRanges, type GarmentDraft, type PatternPiece } from "../domain/pattern";
 import { useEditorStore } from "./editorStore";
 import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
+import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 
 const torsoFrontPlacement = {
   version: 1 as const,
@@ -62,6 +64,52 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.seams).toBeUndefined();
     useEditorStore.getState().redo();
     expect(useEditorStore.getState().garment.seams?.[0]).toMatchObject({ name: "Lateral", direction: "opposite", treatment: "standard" });
+  });
+
+  it("preserves ordered composite sides through selection, undo and redo", () => {
+    const state = useEditorStore.getState();
+    const firstEdges = getPatternEdges(state.garment.pieces[0]);
+    const secondEdges = getPatternEdges(state.garment.pieces[1]);
+    const first = [firstEdges[0], firstEdges[1]].map((edge) => ({ pieceId: "a", edgeId: edge.id, startT: 0, endT: 1 }));
+    const second = [secondEdges[2], secondEdges[3]].map((edge) => ({ pieceId: "b", edgeId: edge.id, startT: 0, endT: 1 }));
+
+    first.forEach((range) => useEditorStore.getState().addSeamDraftRange(range));
+    useEditorStore.getState().finishSeamDraftSide();
+    second.forEach((range) => useEditorStore.getState().addSeamDraftRange(range));
+    useEditorStore.getState().reviewSeamDraft();
+    useEditorStore.getState().confirmSeamProposal({ name: "Composta", direction: "opposite", treatment: "standard" });
+
+    const created = structuredClone(useEditorStore.getState().garment.seams![0]);
+    expect(seamSideRanges(created, "first")).toEqual(first);
+    expect(seamSideRanges(created, "second")).toEqual(second);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams).toBeUndefined();
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.seams![0]).toEqual(created);
+  });
+
+  it("reproduces the exact initial assembly positions after seam undo and redo", () => {
+    useEditorStore.getState().setBodyPlacement("a", torsoFrontPlacement);
+    useEditorStore.getState().setBodyPlacement("b", {
+      ...torsoFrontPlacement,
+      role: "custom",
+      surface: "back",
+      anchorId: "torso-back",
+    });
+    createSeam();
+    const arrangeCurrent = () => {
+      const garment = useEditorStore.getState().garment;
+      return buildSemanticAvatarArrangement(
+        buildResolvedAssemblyInput(garment),
+        buildAvatarParametricModel(garment.measurements, garment.bodyType),
+      );
+    };
+    const sewn = Array.from(arrangeCurrent().state.positions);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams).toBeUndefined();
+    useEditorStore.getState().redo();
+    expect(Array.from(arrangeCurrent().state.positions)).toEqual(sewn);
   });
 
   it("removes, disables, reactivates and reverses a selected seam with undo and redo", () => {

@@ -19,7 +19,8 @@ import {
   type EdgeRange,
   getEdgeById,
   getPatternEdges,
-  edgeRangeLength,
+  edgeRangeSequenceLength,
+  seamSideRanges,
   type Seam,
   type PatternPiece,
   type GarmentDraft,
@@ -254,6 +255,7 @@ function PatternCanvasComponent({
   const selectedSeamId = useEditorStore((s) => s.selectedSeamId);
   const selectedDartId = useEditorStore((s) => s.selectedDartId);
   const seamFirstEdge = useEditorStore((s) => s.seamFirstEdge);
+  const seamDraft = useEditorStore((s) => s.seamDraft);
   const selectedPieceIds = useEditorStore((s) => s.selectedPieceIds);
   const cutDraft = useEditorStore((s) => s.cutDraft);
   const dartDraft = useEditorStore((s) => s.dartDraft);
@@ -301,7 +303,7 @@ function PatternCanvasComponent({
       editor.selectedPointId,
       cameraRef.current,
       snapRef.current,
-      editor.seamFirstEdge ? { first: editor.seamFirstEdge } : null,
+      editor.seamDraft ?? (editor.seamFirstEdge ? { first: [editor.seamFirstEdge], second: [] } : null),
       currentGarment.seams ?? [],
       currentGarment,
       editor.activePieceId,
@@ -423,7 +425,7 @@ function PatternCanvasComponent({
 
   useEffect(() => {
     scheduleDraw();
-  }, [garment, snapshot, selectedPointId, selectedEdgeId, selectedSeamId, selectedDartId, selectedPieceIds, pieceSelectionActive, seamFirstEdge, cutDraft, dartDraft, measureDraft, draftContour, draftCursor, scheduleDraw]);
+  }, [garment, snapshot, selectedPointId, selectedEdgeId, selectedSeamId, selectedDartId, selectedPieceIds, pieceSelectionActive, seamDraft, seamFirstEdge, cutDraft, dartDraft, measureDraft, draftContour, draftCursor, scheduleDraw]);
 
   function ownGesture(pointerId: number, owner: GestureOwnership["owner"]) {
     gestureOwnershipRef.current = claimGesture(gestureOwnershipRef.current, pointerId, owner);
@@ -942,13 +944,7 @@ function PatternCanvasComponent({
           dragRef.current = null;
           return;
         }
-        const first = useEditorStore.getState().seamFirstEdge;
-        if (!first) {
-          useEditorStore.getState().selectFirstSeamEdge(edge);
-          scheduleDraw();
-          return;
-        }
-        try { useEditorStore.getState().proposeSeam(first, edge); } catch (e) { console.warn("Falha ao criar costura", e); }
+        useEditorStore.getState().addSeamDraftRange(edge);
         scheduleDraw();
         return;
       }
@@ -1090,13 +1086,7 @@ function PatternCanvasComponent({
         dragRef.current = null;
         return;
       }
-      const first = useEditorStore.getState().seamFirstEdge;
-      if (!first) {
-        useEditorStore.getState().selectFirstSeamEdge(edge);
-        scheduleDraw();
-        return;
-      }
-      try { useEditorStore.getState().proposeSeam(first, edge); } catch (e) { console.warn("Falha ao criar costura", e); }
+      useEditorStore.getState().addSeamDraftRange(edge);
       scheduleDraw();
       return;
     }
@@ -1938,7 +1928,7 @@ function draw(
   selectedPointId: string | null,
   camera: Camera2D,
   snapOverlay: { xMm: number; yMm: number; type: string } | null,
-  seamSelection: | { first?: EdgeRange; second?: EdgeRange } | null,
+  seamSelection: { first: EdgeRange[]; second: EdgeRange[] } | null,
   seams: Seam[],
   garment: GarmentDraft,
   activePieceId: string,
@@ -2087,16 +2077,16 @@ function draw(
       const selected = seam.id === selectedSeamId;
       const inactive = seam.active === false;
       if (inactive) context.setLineDash([5 / camera.zoom, 5 / camera.zoom]);
-      drawSeamInterval(context, piece, seam.first, transform, camera.zoom, selected ? "#ff7a00" : inactive ? "#9b7d7d" : "#a23d3d", selected ? 5 : 3);
-      drawSeamInterval(context, piece, seam.second, transform, camera.zoom, selected ? "#ffb000" : inactive ? "#7d899b" : "#3d6aa2", selected ? 5 : 3);
+      for (const range of seamSideRanges(seam, "first")) drawSeamInterval(context, piece, range, transform, camera.zoom, selected ? "#ff7a00" : inactive ? "#9b7d7d" : "#a23d3d", selected ? 5 : 3);
+      for (const range of seamSideRanges(seam, "second")) drawSeamInterval(context, piece, range, transform, camera.zoom, selected ? "#ffb000" : inactive ? "#7d899b" : "#3d6aa2", selected ? 5 : 3);
       if (inactive) context.setLineDash([]);
     }
 
-    if (seamSelection?.first) {
-      drawSeamInterval(context, piece, seamSelection.first, transform, camera.zoom, "rgba(160,160,60,0.9)");
+    for (const range of seamSelection?.first ?? []) {
+      drawSeamInterval(context, piece, range, transform, camera.zoom, "rgba(160,160,60,0.9)");
     }
-    if (seamSelection?.second) {
-      drawSeamInterval(context, piece, seamSelection.second, transform, camera.zoom, "rgba(60,160,60,0.9)");
+    for (const range of seamSelection?.second ?? []) {
+      drawSeamInterval(context, piece, range, transform, camera.zoom, "rgba(60,160,60,0.9)");
     }
 
     if (isActivePiece) {
@@ -2270,11 +2260,9 @@ function draw(
     context.fillRect(left, top, boxWidth, boxHeight); context.strokeRect(left, top, boxWidth, boxHeight); context.restore();
   }
 
-  if (seamSelection?.first && seamSelection?.second) {
-    const firstPiece = garment.pieces.find((piece) => piece.id === seamSelection.first?.pieceId);
-    const secondPiece = garment.pieces.find((piece) => piece.id === seamSelection.second?.pieceId);
-    const firstLength = firstPiece ? edgeRangeLength(firstPiece, seamSelection.first) : 0;
-    const secondLength = secondPiece ? edgeRangeLength(secondPiece, seamSelection.second) : 0;
+  if (seamSelection && seamSelection.first.length > 0 && seamSelection.second.length > 0) {
+    const firstLength = edgeRangeSequenceLength(garment.pieces, seamSelection.first);
+    const secondLength = edgeRangeSequenceLength(garment.pieces, seamSelection.second);
     const diff = Math.abs(firstLength - secondLength);
 
     context.save();

@@ -266,8 +266,16 @@ button {
 .dressing-region-grid button:hover, .dressing-piece-grid button:hover { border-color: #9a6b16; background: #fffaf0; }
 .dressing-region-grid span, .dressing-piece-grid span, .dressing-preflight-help { color: #64605a; }
 .dressing-piece-grid button { align-items: center; text-align: center; }
-.dressing-piece-grid svg { width: 100%; height: 150px; }
+.dressing-piece-grid button.is-selected { border-color: #8a6419; background: #fff8e8; box-shadow: inset 0 0 0 2px rgba(138, 100, 25, .18); }
+.dressing-piece-thumbnails { display: flex; align-items: stretch; justify-content: center; gap: 8px; width: 100%; }
+.dressing-piece-thumbnail { display: grid; min-width: 0; flex: 1 1 0; gap: 4px; border: 2px solid transparent; border-radius: 9px; padding: 5px; }
+.dressing-piece-grid button.is-selected .dressing-piece-thumbnail { border-color: #b8862a; background: #fff; }
+.dressing-piece-thumbnail small { color: #716b61; font-size: 10px; }
+.dressing-piece-grid svg { width: 100%; height: 130px; }
 .dressing-piece-grid polygon { fill: rgba(154, 107, 22, 0.1); stroke: #34322f; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.dressing-reference-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.dressing-reference-actions button { min-height: 42px; padding: 0 16px; }
+.dressing-reference-actions button:disabled { cursor: not-allowed; opacity: .5; }
 .dressing-preflight-blocker { display: grid; gap: 14px; }
 .assembly-panel-classification { margin: 12px 0 18px; border: 1px solid #d5d0c6; border-radius: 10px; padding: 10px; }
 .fitting-summary-list { display: grid; gap: 8px; margin: 18px 0; }
@@ -280,7 +288,9 @@ button {
   .dressing-preflight-backdrop { align-items: end; padding: 0; }
   .dressing-preflight-dialog { width: 100%; max-height: 88vh; border-radius: 18px 18px 0 0; padding: 18px; }
   .dressing-region-grid { grid-template-columns: 1fr; }
-  .dressing-piece-grid svg { height: 110px; }
+  .dressing-piece-grid { grid-template-columns: 1fr; }
+  .dressing-piece-grid svg { height: 100px; }
+  .dressing-reference-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 .pieces-panel { min-width: 0; overflow: visible; background: #ebe8e1; border-right: 1px solid #cbc8c1; }
 .pieces-panel header { display: flex; align-items: center; justify-content: space-between; height: 42px; padding: 0 10px; font-size: 10px; }

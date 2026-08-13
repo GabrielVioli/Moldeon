@@ -1,0 +1,533 @@
+{
+  "seam": {
+    "seamGroupId": "partial-flap-group",
+    "parentInstanceId": "diagnostic-tube-front:panel:1",
+    "childInstanceId": "diagnostic-short-flap:panel:1",
+    "parentRange": {
+      "pieceId": "diagnostic-tube-front",
+      "edgeId": "diagnostic-tube-front:edge:diagnostic-tube-front:d->diagnostic-tube-front:a",
+      "startT": 0.2,
+      "endT": 0.8
+    },
+    "childRange": {
+      "pieceId": "diagnostic-short-flap",
+      "edgeId": "diagnostic-short-flap:edge:diagnostic-short-flap:b->diagnostic-short-flap:c",
+      "startT": 0,
+      "endT": 1
+    },
+    "parentRangeLengthMm": 156.00000000000003,
+    "childRangeLengthMm": 60,
+    "parentStart": [
+      0.03183098882436752,
+      1.198400044441223,
+      0.02500000037252903
+    ],
+    "parentEnd": [
+      0.03183098882436752,
+      1.3544000148773194,
+      0.02500000037252903
+    ],
+    "parentMidpoint": [
+      0.03183098882436752,
+      1.2763999700546265,
+      0.02500000037252903
+    ],
+    "childStart": [
+      0.03183098882436752,
+      1.246399998664856,
+      0.02500000037252903
+    ],
+    "childEnd": [
+      0.03183098882436752,
+      1.3064000606536865,
+      0.02500000037252903
+    ],
+    "childMidpoint": [
+      0.03183098882436752,
+      1.2763999700546265,
+      0.02500000037252903
+    ],
+    "seamTangent": [
+      0,
+      1,
+      0
+    ],
+    "parentNormal": [
+      1,
+      0,
+      1.1703344514802855e-8
+    ],
+    "developDirection": [
+      1,
+      0,
+      1.1703344514802855e-8
+    ],
+    "transform": {
+      "alignAxis": [
+        0,
+        0,
+        1
+      ],
+      "alignAngleRad": 3.141592653589793,
+      "translation": [
+        0.07783098891377449,
+        0.10079991817474365,
+        0.19746794737875462
+      ],
+      "developAngleRad": 3.1415926418864486
+    }
+  },
+  "intrinsic": {
+    "maxRelativeDistortion": 0.000022888183603270162,
+    "maxAbsoluteDistortionM": 1.1444091801635081e-7,
+    "evaluatedConstraintCount": 2092,
+    "byInstance": {
+      "diagnostic-tube-front:panel:1": {
+        "maxRelativeDistortion": 0.000022888183594423073,
+        "maxAbsoluteDistortionM": 1.1444091797211536e-7,
+        "evaluatedConstraintCount": 888
+      },
+      "diagnostic-tube-back:panel:1": {
+        "maxRelativeDistortion": 0.000022888183603270162,
+        "maxAbsoluteDistortionM": 1.1444091801635081e-7,
+        "evaluatedConstraintCount": 888
+      },
+      "diagnostic-short-flap:panel:1": {
+        "maxRelativeDistortion": 0.000022888183593729183,
+        "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+        "evaluatedConstraintCount": 316
+      }
+    }
+  },
+  "meshes": [
+    {
+      "id": "diagnostic-tube-front:panel:1",
+      "vertexCount": 345,
+      "triangleCount": 544,
+      "boundingBox": {
+        "min": [
+          -0.03183098882436752,
+          1.146399974822998,
+          0.02500000037252903
+        ],
+        "max": [
+          0.03183098882436752,
+          1.4063999652862549,
+          0.056830987334251404
+        ]
+      },
+      "centroid": [
+        0.006699153994196567,
+        1.282776805974435,
+        0.03821725808623908
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "72c13663",
+      "geometryRevision": "4127eb03-54d7-416d-93c5-f0c95cba2d06:0:0",
+      "meshCount": 1,
+      "meanNormal": [
+        0.45209420766628533,
+        8.590183445500267e-18,
+        0.8919701942299382
+      ],
+      "meanTriangleNormal": [
+        0,
+        3.172769596526081e-18,
+        1
+      ],
+      "materialSide": 2
+    },
+    {
+      "id": "diagnostic-tube-back:panel:1",
+      "vertexCount": 345,
+      "triangleCount": 544,
+      "boundingBox": {
+        "min": [
+          -0.03183098882436752,
+          1.146399974822998,
+          -0.006830988451838493
+        ],
+        "max": [
+          0.03183098882436752,
+          1.4063999652862549,
+          0.02500000037252903
+        ]
+      },
+      "centroid": [
+        0.006699153994196567,
+        1.2700231811274654,
+        0.011782741953578332
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "6bd3698d",
+      "geometryRevision": "bf8d1843-4651-48c2-9226-c9a680d3b906:0:0",
+      "meshCount": 1,
+      "meanNormal": [
+        0.45209420671554584,
+        8.590183234990968e-18,
+        -0.8919701947118197
+      ],
+      "meanTriangleNormal": [
+        0,
+        3.3774644092051828e-18,
+        -1
+      ],
+      "materialSide": 2
+    },
+    {
+      "id": "diagnostic-short-flap:panel:1",
+      "vertexCount": 125,
+      "triangleCount": 192,
+      "boundingBox": {
+        "min": [
+          0.03183098882436752,
+          1.246399998664856,
+          0.02500000037252903
+        ],
+        "max": [
+          0.11183097213506699,
+          1.3064000606536865,
+          0.02500000223517418
+        ]
+      },
+      "centroid": [
+        0.07783098542690277,
+        1.2752000255584717,
+        0.025000000566244126
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "77c85f4b",
+      "geometryRevision": "ea4cbaa9-79bd-4132-ad9d-910d7afda61d:0:1",
+      "meshCount": 1,
+      "meanNormal": [
+        -5.382857473534595e-8,
+        -1.19210608318098e-9,
+        0.9999999999999986
+      ],
+      "meanTriangleNormal": [
+        -2.32830692226137e-8,
+        0,
+        0.9999999999999997
+      ],
+      "materialSide": 2
+    }
+  ],
+  "viewportMeshes": [
+    {
+      "id": "diagnostic-tube-front:panel:1",
+      "vertexCount": 345,
+      "triangleCount": 544,
+      "boundingBox": {
+        "min": [
+          -0.03183098882436752,
+          1.146399974822998,
+          0.02500000037252903
+        ],
+        "max": [
+          0.03183098882436752,
+          1.4063999652862549,
+          0.056830987334251404
+        ]
+      },
+      "centroid": [
+        0.006699153994196567,
+        1.282776805974435,
+        0.03821725808623908
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "72c13663",
+      "geometryRevision": "fcbbe492-a8ef-4fa3-a03b-1113cec45943:0:0",
+      "meshCount": 1,
+      "meanNormal": [
+        0.45209420766628533,
+        8.590183445500267e-18,
+        0.8919701942299382
+      ],
+      "meanTriangleNormal": [
+        0,
+        3.172769596526081e-18,
+        1
+      ],
+      "materialSide": 2
+    },
+    {
+      "id": "diagnostic-tube-back:panel:1",
+      "vertexCount": 345,
+      "triangleCount": 544,
+      "boundingBox": {
+        "min": [
+          -0.03183098882436752,
+          1.146399974822998,
+          -0.006830988451838493
+        ],
+        "max": [
+          0.03183098882436752,
+          1.4063999652862549,
+          0.02500000037252903
+        ]
+      },
+      "centroid": [
+        0.006699153994196567,
+        1.2700231811274654,
+        0.011782741953578332
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "6bd3698d",
+      "geometryRevision": "f27d6e64-6acc-4582-b235-f228bf999060:0:0",
+      "meshCount": 1,
+      "meanNormal": [
+        0.45209420671554584,
+        8.590183234990968e-18,
+        -0.8919701947118197
+      ],
+      "meanTriangleNormal": [
+        0,
+        3.3774644092051828e-18,
+        -1
+      ],
+      "materialSide": 2
+    },
+    {
+      "id": "diagnostic-short-flap:panel:1",
+      "vertexCount": 125,
+      "triangleCount": 192,
+      "boundingBox": {
+        "min": [
+          0.03183098882436752,
+          1.246399998664856,
+          0.02500000037252903
+        ],
+        "max": [
+          0.11183097213506699,
+          1.3064000606536865,
+          0.02500000223517418
+        ]
+      },
+      "centroid": [
+        0.07783098542690277,
+        1.2752000255584717,
+        0.025000000566244126
+      ],
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "matrixWorld": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometrySignature": "77c85f4b",
+      "geometryRevision": "067100e4-1014-434f-9989-16e96f7d0ca1:0:1",
+      "meshCount": 1,
+      "meanNormal": [
+        -5.382857473534595e-8,
+        -1.19210608318098e-9,
+        0.9999999999999986
+      ],
+      "meanTriangleNormal": [
+        -2.32830692226137e-8,
+        0,
+        0.9999999999999997
+      ],
+      "materialSide": 2
+    }
+  ],
+  "consoleErrors": []
+}

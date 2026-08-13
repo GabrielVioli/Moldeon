@@ -1,5 +1,6 @@
 import {
   migrateLegacyPieceToSegments,
+  seamSideRanges,
   syncLegacyPointsFromSegments,
   type EdgeRange,
   type PatternNode,
@@ -241,6 +242,17 @@ function splitSeamAtEdgeParameter(
   seam: Seam,
   split: SegmentSplitMapping,
 ): Seam[] {
+  if (seam.firstRanges || seam.secondRanges) {
+    const firstRanges = seamSideRanges(seam, "first").flatMap((range) => splitRangeInSequence(range, split));
+    const secondRanges = seamSideRanges(seam, "second").flatMap((range) => splitRangeInSequence(range, split));
+    return [{
+      ...seam,
+      first: firstRanges[0],
+      second: secondRanges[0],
+      ...(firstRanges.length > 1 ? { firstRanges } : { firstRanges: undefined }),
+      ...(secondRanges.length > 1 ? { secondRanges } : { secondRanges: undefined }),
+    }];
+  }
   const cutParameters = [0, 1];
   const firstCut = traversalParameterForSplit(
     seam.first,
@@ -286,6 +298,15 @@ function splitSeamAtEdgeParameter(
     });
   }
   return parts.length > 0 ? parts : [structuredClone(seam)];
+}
+
+function splitRangeInSequence(range: EdgeRange, split: SegmentSplitMapping): EdgeRange[] {
+  const cut = traversalParameterForSplit(range, split, false);
+  if (cut === null) return [structuredClone(range)];
+  return [
+    mapTraversalInterval(range, split, 0, cut, false),
+    mapTraversalInterval(range, split, cut, 1, false),
+  ];
 }
 
 function traversalParameterForSplit(

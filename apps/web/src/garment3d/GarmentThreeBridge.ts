@@ -28,6 +28,26 @@ export interface GarmentThreeBridgeOptions {
   visibleInstanceIds?: ReadonlySet<string>;
 }
 
+export interface GarmentMeshDiagnostic {
+  id: string;
+  vertexCount: number;
+  triangleCount: number;
+  boundingBox: { min: [number, number, number]; max: [number, number, number] };
+  centroid: [number, number, number];
+  transform: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    matrixWorld: number[];
+  };
+  geometrySignature: string;
+  geometryRevision: string;
+  meshCount: number;
+  meanNormal: [number, number, number];
+  meanTriangleNormal: [number, number, number];
+  materialSide: number | "multiple";
+}
+
 export function buildGarmentAssemblyMeshes(
   state: GarmentAssemblyState,
   garment: GarmentDraft,
@@ -94,6 +114,83 @@ export function refreshMeshFromAssembly(
   applyInstanceNormals(meshData.mesh.geometry, instance, dressed);
   meshData.mesh.geometry.computeBoundingBox();
   meshData.mesh.geometry.computeBoundingSphere();
+}
+
+export function canReuseGarmentAssemblyMesh(
+  previous: GarmentAssemblyMeshData,
+  next: GarmentAssemblyMeshData,
+): boolean {
+  const previousPositions = previous.mesh.geometry.getAttribute("position");
+  const nextPositions = next.mesh.geometry.getAttribute("position");
+  return previous.geometrySignature === next.geometrySignature
+    && previousPositions.count === nextPositions.count
+    && sameGeometryIndex(previous.mesh.geometry, next.mesh.geometry);
+}
+
+/** Mantém a identidade da mesh sem perder winding ou as normais do embedding. */
+export function copyGarmentAssemblyGeometry(
+  target: THREE.BufferGeometry,
+  source: THREE.BufferGeometry,
+): void {
+  copyFloatAttribute(target, source, "position");
+  copyFloatAttribute(target, source, "normal");
+  target.computeBoundingBox();
+  target.computeBoundingSphere();
+}
+
+export function captureGarmentMeshDiagnostics(
+  meshes: readonly GarmentAssemblyMeshData[],
+): GarmentMeshDiagnostic[] {
+  const countById = new Map<string, number>();
+  for (const item of meshes) countById.set(item.key, (countById.get(item.key) ?? 0) + 1);
+
+  return meshes.map((item) => {
+    const mesh = item.mesh;
+    mesh.updateMatrixWorld(true);
+    const geometry = mesh.geometry;
+    const positions = geometry.getAttribute("position");
+    const normals = geometry.getAttribute("normal");
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    const centroid = new THREE.Vector3();
+    const point = new THREE.Vector3();
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+    const meanNormal = new THREE.Vector3();
+    for (let index = 0; index < positions.count; index += 1) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+      centroid.add(point);
+      if (normals) {
+        point.fromBufferAttribute(normals, index).applyNormalMatrix(normalMatrix);
+        meanNormal.add(point);
+      }
+    }
+    if (positions.count > 0) centroid.multiplyScalar(1 / positions.count);
+    if (meanNormal.lengthSq() > 1e-12) meanNormal.normalize();
+
+    const materialEntries = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const sides = new Set(materialEntries.map((material) => material.side));
+    return {
+      id: item.key,
+      vertexCount: positions.count,
+      triangleCount: geometry.index ? geometry.index.count / 3 : positions.count / 3,
+      boundingBox: {
+        min: vectorTuple(worldBox.min),
+        max: vectorTuple(worldBox.max),
+      },
+      centroid: vectorTuple(centroid),
+      transform: {
+        position: vectorTuple(mesh.position),
+        rotation: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z],
+        scale: vectorTuple(mesh.scale),
+        matrixWorld: mesh.matrixWorld.toArray(),
+      },
+      geometrySignature: item.geometrySignature,
+      geometryRevision: `${geometry.uuid}:${attributeRevision(positions)}:${attributeRevision(normals)}`,
+      meshCount: countById.get(item.key) ?? 0,
+      meanNormal: vectorTuple(meanNormal),
+      meanTriangleNormal: meanIndexedTriangleNormal(geometry, mesh.matrixWorld),
+      materialSide: sides.size === 1 ? [...sides][0] : "multiple",
+    };
+  });
 }
 
 function buildInstanceGeometry(
@@ -171,6 +268,71 @@ function normalizeVector(
   const length = Math.hypot(vector[0], vector[1], vector[2]);
   if (length <= 1e-9) return [0, 0, 1];
   return [vector[0] / length, vector[1] / length, vector[2] / length];
+}
+
+function copyFloatAttribute(
+  target: THREE.BufferGeometry,
+  source: THREE.BufferGeometry,
+  name: "position" | "normal",
+): void {
+  const sourceAttribute = source.getAttribute(name) as THREE.BufferAttribute | undefined;
+  if (!sourceAttribute) {
+    target.deleteAttribute(name);
+    return;
+  }
+  const targetAttribute = target.getAttribute(name) as THREE.BufferAttribute | undefined;
+  if (targetAttribute && targetAttribute.count === sourceAttribute.count) {
+    (targetAttribute.array as Float32Array).set(sourceAttribute.array as ArrayLike<number>);
+    targetAttribute.needsUpdate = true;
+    return;
+  }
+  target.setAttribute(name, sourceAttribute.clone());
+}
+
+function sameGeometryIndex(first: THREE.BufferGeometry, second: THREE.BufferGeometry): boolean {
+  if (!first.index || !second.index) return first.index === second.index;
+  if (first.index.count !== second.index.count) return false;
+  for (let index = 0; index < first.index.count; index += 1) {
+    if (first.index.getX(index) !== second.index.getX(index)) return false;
+  }
+  return true;
+}
+
+function meanIndexedTriangleNormal(
+  geometry: THREE.BufferGeometry,
+  matrixWorld: THREE.Matrix4,
+): [number, number, number] {
+  const positions = geometry.getAttribute("position");
+  const index = geometry.index;
+  const result = new THREE.Vector3();
+  const first = new THREE.Vector3();
+  const second = new THREE.Vector3();
+  const third = new THREE.Vector3();
+  const edgeA = new THREE.Vector3();
+  const edgeB = new THREE.Vector3();
+  const triangleCount = index ? index.count / 3 : positions.count / 3;
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    const a = index ? index.getX(triangle * 3) : triangle * 3;
+    const b = index ? index.getX(triangle * 3 + 1) : triangle * 3 + 1;
+    const c = index ? index.getX(triangle * 3 + 2) : triangle * 3 + 2;
+    first.fromBufferAttribute(positions, a).applyMatrix4(matrixWorld);
+    second.fromBufferAttribute(positions, b).applyMatrix4(matrixWorld);
+    third.fromBufferAttribute(positions, c).applyMatrix4(matrixWorld);
+    edgeA.subVectors(second, first);
+    edgeB.subVectors(third, first);
+    result.add(edgeA.cross(edgeB));
+  }
+  if (result.lengthSq() > 1e-12) result.normalize();
+  return vectorTuple(result);
+}
+
+function vectorTuple(vector: THREE.Vector3): [number, number, number] {
+  return [vector.x, vector.y, vector.z];
+}
+
+function attributeRevision(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined): number {
+  if (!attribute) return -1;
+  return "version" in attribute ? attribute.version : attribute.data.version;
 }
 
 function sliceInstancePositions(

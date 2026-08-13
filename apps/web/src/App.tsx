@@ -378,6 +378,12 @@ export function App() {
       }
       if (event.key === "Enter" && !isEditableTarget(event.target)) {
         const state = useEditorStore.getState();
+        if (state.seamDraft) {
+          event.preventDefault();
+          if (state.seamDraft.activeSide === "first") state.finishSeamDraftSide();
+          else state.reviewSeamDraft();
+          return;
+        }
         if (state.seamProposal) {
           event.preventDefault();
           state.confirmSeamProposal({ name: "Costura", direction: state.seamProposal.compatibility.recommendedDirection, treatment: state.seamProposal.compatibility.recommendedTreatment });

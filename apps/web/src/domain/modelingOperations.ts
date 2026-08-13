@@ -12,6 +12,7 @@ import {
   isInternalPath,
   makeEdgeId,
   migrateLegacyPieceToSegments,
+  seamSideRanges,
   type GarmentDraft,
   type InternalPath,
   type PatternDart,
@@ -168,7 +169,9 @@ export function joinModelingPieces(
   const joined = buildJoinedPiece(first, firstWorkspace.transform, second, secondWorkspace.transform, candidate);
   if (!joined) return failure(garment, "A união produziria um contorno degenerado ou desconectado.");
   const removedIds = new Set([first.id, second.id]);
-  const removedSeams = (garment.seams ?? []).filter((seam) => removedIds.has(seam.first.pieceId) || removedIds.has(seam.second.pieceId));
+  const removedSeams = (garment.seams ?? []).filter((seam) =>
+    [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+      .some((range) => removedIds.has(range.pieceId)));
   const nextWorkspace: PieceWorkspaceState = {
     pieceId: joined.id,
     transform: { ...firstWorkspace.transform, pieceId: joined.id },
@@ -178,7 +181,9 @@ export function joinModelingPieces(
   const next = syncWorkspace({
     ...garment,
     pieces: garment.pieces.flatMap((piece) => removedIds.has(piece.id) ? [] : [piece]).concat(joined),
-    seams: (garment.seams ?? []).filter((seam) => !removedIds.has(seam.first.pieceId) && !removedIds.has(seam.second.pieceId)),
+    seams: (garment.seams ?? []).filter((seam) =>
+      [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+        .every((range) => !removedIds.has(range.pieceId))),
     workspaceStates: [...(garment.workspaceStates ?? []).filter((state) => !removedIds.has(state.pieceId)), nextWorkspace],
     assemblyPlacements: (garment.assemblyPlacements ?? []).filter((placement) => !removedIds.has(placement.pieceId)),
   });

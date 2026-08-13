@@ -1,0 +1,41 @@
+{
+  "heading": "Moldeon",
+  "selectedThumbnailCount": 2,
+  "selectedPressed": "true",
+  "frontReferencePieceId": "panel-a",
+  "panelInstances": [
+    {
+      "id": "panel-a:panel:1",
+      "sourcePatternId": "panel-a",
+      "mirrored": false,
+      "surface": "front",
+      "bodySide": "left"
+    },
+    {
+      "id": "panel-a:panel:2",
+      "sourcePatternId": "panel-a",
+      "mirrored": true,
+      "surface": "front",
+      "bodySide": "right"
+    },
+    {
+      "id": "panel-b:panel:1",
+      "sourcePatternId": "panel-b",
+      "mirrored": false,
+      "surface": "back",
+      "bodySide": "left"
+    },
+    {
+      "id": "panel-b:panel:2",
+      "sourcePatternId": "panel-b",
+      "mirrored": true,
+      "surface": "back",
+      "bodySide": "right"
+    }
+  ],
+  "seamGroupIds": [
+    "seam-side-a",
+    "seam-side-b"
+  ],
+  "consoleErrors": []
+}

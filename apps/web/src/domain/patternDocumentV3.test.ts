@@ -11,7 +11,6 @@ import {
   type PatternInternalLine,
 } from "./pattern";
 import {
-  PatternDocumentCompatibilityError,
   garmentDraftToPatternDocumentV3,
   migratePatternProject,
   parsePatternDocumentV3,
@@ -263,7 +262,7 @@ describe("PatternDocumentV3", () => {
     expect(() => parsePatternDocumentV3(self)).toThrow("mesmos intervalos");
   });
 
-  it("refuses lossy projection of advanced SeamGroup data", () => {
+  it("projects advanced SeamGroup data without losing unequal side counts", () => {
     const document = garmentDraftToPatternDocumentV3(
       createBaselineFixture("equal-length-seam"),
     );
@@ -273,12 +272,14 @@ describe("PatternDocumentV3", () => {
       endT: 0.25,
     });
 
-    expect(() => patternDocumentV3ToGarmentDraft(document)).toThrow(
-      PatternDocumentCompatibilityError,
-    );
-    expect(() => patternDocumentV3ToGarmentDraft(document)).toThrow(
-      "múltiplos intervalos",
-    );
+    const restored = patternDocumentV3ToGarmentDraft(document);
+    expect(restored.seams).toHaveLength(1);
+    expect(restored.seams?.[0].firstRanges).toEqual(document.seamGroups[0].first);
+    expect(restored.seams?.[0].secondRanges).toBeUndefined();
+    expect(garmentDraftToPatternDocumentV3(restored).seamGroups[0]).toMatchObject({
+      first: document.seamGroups[0].first,
+      second: document.seamGroups[0].second,
+    });
   });
 
   it("round trips inactive seams without discarding their state", () => {

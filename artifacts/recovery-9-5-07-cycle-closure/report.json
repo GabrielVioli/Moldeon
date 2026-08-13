@@ -1,0 +1,1912 @@
+{
+  "before": {
+    "seamGroups": [
+      "tube-right",
+      "tube-left",
+      "attach-a",
+      "attach-b"
+    ],
+    "mappings": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "intrinsic": {
+      "maxRelativeDistortion": 0.00003423431247807224,
+      "maxAbsoluteDistortionM": 1.711715623903612e-7,
+      "evaluatedConstraintCount": 2512,
+      "byInstance": {
+        "cycle-tube-front:panel:1": {
+          "maxRelativeDistortion": 0.000022888183594423073,
+          "maxAbsoluteDistortionM": 1.1444091797211536e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-tube-back:panel:1": {
+          "maxRelativeDistortion": 0.000022888183603270162,
+          "maxAbsoluteDistortionM": 1.1444091801635081e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-upper-a:panel:1": {
+          "maxRelativeDistortion": 0.000034057118884593673,
+          "maxAbsoluteDistortionM": 1.7028559442296837e-7,
+          "evaluatedConstraintCount": 368
+        },
+        "cycle-upper-b:panel:1": {
+          "maxRelativeDistortion": 0.00003423431247807224,
+          "maxAbsoluteDistortionM": 1.711715623903612e-7,
+          "evaluatedConstraintCount": 368
+        }
+      }
+    },
+    "bridgeMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "252dd86f-c2ca-46f4-8ef8-dd17b55ed4c0:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "eac1d852-bda1-43d2-a297-0788b910a6d4:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "7b7ca0e1-8a39-4019-b98d-b0fd88c08907:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "f45b29f0-d493-489c-8cc1-6ea79d3949e0:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "viewportMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "3b7a90ae-8b71-45a6-b52e-841578904ab6:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "dc7f71d8-11bb-4b05-adec-549477fb82f5:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "fca236ef-1fba-4488-9cc2-e409c682a351:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "fb6a11fb-4bc3-4a67-8981-06eb3aa1d0ad:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "cycleResidual": {
+      "count": 0,
+      "averageM": 0,
+      "maxM": 0
+    }
+  },
+  "closed": {
+    "seamGroups": [
+      "tube-right",
+      "tube-left",
+      "attach-a",
+      "attach-b",
+      "upper-cycle"
+    ],
+    "mappings": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "intrinsic": {
+      "maxRelativeDistortion": 0.00003423431247807224,
+      "maxAbsoluteDistortionM": 1.711715623903612e-7,
+      "evaluatedConstraintCount": 2512,
+      "byInstance": {
+        "cycle-tube-front:panel:1": {
+          "maxRelativeDistortion": 0.000022888183594423073,
+          "maxAbsoluteDistortionM": 1.1444091797211536e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-tube-back:panel:1": {
+          "maxRelativeDistortion": 0.000022888183603270162,
+          "maxAbsoluteDistortionM": 1.1444091801635081e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-upper-a:panel:1": {
+          "maxRelativeDistortion": 0.000034057118884593673,
+          "maxAbsoluteDistortionM": 1.7028559442296837e-7,
+          "evaluatedConstraintCount": 368
+        },
+        "cycle-upper-b:panel:1": {
+          "maxRelativeDistortion": 0.00003423431247807224,
+          "maxAbsoluteDistortionM": 1.711715623903612e-7,
+          "evaluatedConstraintCount": 368
+        }
+      }
+    },
+    "bridgeMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "4ad5cbc2-d7d2-4130-aae0-f32aacecc284:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "ab50c40c-882c-4b08-a5fe-5cd5b53c1201:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "db345d04-17a6-4985-95fd-9e0eff5d955d:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "e19434a1-53b8-4005-ab46-9ff3b9173aee:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "viewportMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "3b7a90ae-8b71-45a6-b52e-841578904ab6:1:1",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "dc7f71d8-11bb-4b05-adec-549477fb82f5:1:1",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "fca236ef-1fba-4488-9cc2-e409c682a351:1:2",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "fb6a11fb-4bc3-4a67-8981-06eb3aa1d0ad:1:2",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "cycleResidual": {
+      "count": 12,
+      "averageM": 0.13278792534703424,
+      "maxM": 0.13953395611411687
+    }
+  },
+  "removed": {
+    "seamGroups": [
+      "tube-right",
+      "tube-left",
+      "attach-a",
+      "attach-b"
+    ],
+    "mappings": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "intrinsic": {
+      "maxRelativeDistortion": 0.00003423431247807224,
+      "maxAbsoluteDistortionM": 1.711715623903612e-7,
+      "evaluatedConstraintCount": 2512,
+      "byInstance": {
+        "cycle-tube-front:panel:1": {
+          "maxRelativeDistortion": 0.000022888183594423073,
+          "maxAbsoluteDistortionM": 1.1444091797211536e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-tube-back:panel:1": {
+          "maxRelativeDistortion": 0.000022888183603270162,
+          "maxAbsoluteDistortionM": 1.1444091801635081e-7,
+          "evaluatedConstraintCount": 888
+        },
+        "cycle-upper-a:panel:1": {
+          "maxRelativeDistortion": 0.000034057118884593673,
+          "maxAbsoluteDistortionM": 1.7028559442296837e-7,
+          "evaluatedConstraintCount": 368
+        },
+        "cycle-upper-b:panel:1": {
+          "maxRelativeDistortion": 0.00003423431247807224,
+          "maxAbsoluteDistortionM": 1.711715623903612e-7,
+          "evaluatedConstraintCount": 368
+        }
+      }
+    },
+    "bridgeMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "9846a99d-0fc1-4aa2-8d83-bfd0417f03d6:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "96861b5f-036e-4337-a57d-721daec983e7:0:0",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "0e5f732d-4384-40b6-93bb-fd51a98f71bd:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "2df9d470-1dd3-4abd-87ed-dcb1db3b0961:0:1",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "viewportMeshes": [
+      {
+        "id": "cycle-tube-front:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            0.02500000037252903
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.056830987334251404
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.282776805974435,
+          0.03821725808623908
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "a1c6c613",
+        "geometryRevision": "3b7a90ae-8b71-45a6-b52e-841578904ab6:2:2",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420766628533,
+          8.590183445500267e-18,
+          0.8919701942299382
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.172769596526081e-18,
+          1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-tube-back:panel:1",
+        "vertexCount": 345,
+        "triangleCount": 544,
+        "boundingBox": {
+          "min": [
+            -0.03183098882436752,
+            1.146399974822998,
+            -0.006830988451838493
+          ],
+          "max": [
+            0.03183098882436752,
+            1.4063999652862549,
+            0.02500000037252903
+          ]
+        },
+        "centroid": [
+          0.006699153994196567,
+          1.2700231811274654,
+          0.011782741953578332
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "9a3e0b2b",
+        "geometryRevision": "dc7f71d8-11bb-4b05-adec-549477fb82f5:2:2",
+        "meshCount": 1,
+        "meanNormal": [
+          0.45209420671554584,
+          8.590183234990968e-18,
+          -0.8919701947118197
+        ],
+        "meanTriangleNormal": [
+          0,
+          3.3774644092051828e-18,
+          -1
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-a:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            0.056830987334251404
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            0.07110069692134857
+          ]
+        },
+        "centroid": [
+          0.008275861723412728,
+          1.4368789459096973,
+          0.06429388415196846
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "6fb9a27f",
+        "geometryRevision": "fca236ef-1fba-4488-9cc2-e409c682a351:2:3",
+        "meshCount": 1,
+        "meanNormal": [
+          -2.6038371814923077e-8,
+          0.23782864706213022,
+          -0.9713071268330096
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.23782844862093167,
+          -0.9713071754221528
+        ],
+        "materialSide": 2
+      },
+      {
+        "id": "cycle-upper-b:panel:1",
+        "vertexCount": 145,
+        "triangleCount": 224,
+        "boundingBox": {
+          "min": [
+            -0.05000000074505806,
+            1.4063999652862549,
+            -0.02110069990158081
+          ],
+          "max": [
+            0.05000000074505806,
+            1.464678406715393,
+            -0.006830988451838493
+          ]
+        },
+        "centroid": [
+          -0.008275861723412728,
+          1.4368789459096973,
+          -0.014293885282401381
+        ],
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "matrixWorld": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "geometrySignature": "4f5f99cb",
+        "geometryRevision": "fb6a11fb-4bc3-4a67-8981-06eb3aa1d0ad:2:3",
+        "meshCount": 1,
+        "meanNormal": [
+          2.6158142353713465e-8,
+          0.2378287771354988,
+          0.9713070949839874
+        ],
+        "meanTriangleNormal": [
+          0,
+          0.2378284779090846,
+          0.971307168250831
+        ],
+        "materialSide": 2
+      }
+    ],
+    "cycleResidual": {
+      "count": 0,
+      "averageM": 0,
+      "maxM": 0
+    }
+  },
+  "deltaBeforeClosed": {
+    "cycle-tube-front:panel:1": 0,
+    "cycle-tube-back:panel:1": 0,
+    "cycle-upper-a:panel:1": 0,
+    "cycle-upper-b:panel:1": 0
+  },
+  "deltaBeforeRemoved": {
+    "cycle-tube-front:panel:1": 0,
+    "cycle-tube-back:panel:1": 0,
+    "cycle-upper-a:panel:1": 0,
+    "cycle-upper-b:panel:1": 0
+  },
+  "upperComparison": {
+    "centroidDistance": 0.0803118736783663,
+    "meanNormalDot": -0.886875007402838,
+    "exactBoundingBoxOverlap": false,
+    "exactPositionOverlap": false
+  },
+  "consoleErrors": []
+}

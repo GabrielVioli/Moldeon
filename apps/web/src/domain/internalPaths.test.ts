@@ -277,7 +277,10 @@ describe("InternalPath e operações geométricas", () => {
     expect(group?.first.length).toBe(parts.length);
     expect(group?.second.length).toBe(parts.length);
     const restored = patternDocumentV3ToGarmentDraft(document);
-    expect(restored.seams?.filter((seam) => seam.groupId === result.createdSeamGroupId)).toHaveLength(parts.length);
+    const restoredGroup = restored.seams?.find((seam) => seam.groupId === result.createdSeamGroupId);
+    expect(restoredGroup).toBeDefined();
+    expect(restoredGroup?.firstRanges).toEqual(group?.first);
+    expect(restoredGroup?.secondRanges).toEqual(group?.second);
   });
 
   it.each([

@@ -12,6 +12,7 @@ import {
   migrateLegacyPieceToSegments,
   parseGarmentDraft,
   parsePatternPiece,
+  seamSideRanges,
   type AssemblyPlacement,
   type GarmentDraft,
   type PatternPiece,
@@ -940,23 +941,24 @@ function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGro
       ...base,
       id: groupId,
       name: first.name ?? groupId,
-      first: parts.map((part) => structuredClone(part.first)),
-      second: parts.map((part) => structuredClone(part.second)),
+      first: parts.flatMap((part) => seamSideRanges(part, "first").map((range) => structuredClone(range))),
+      second: parts.flatMap((part) => seamSideRanges(part, "second").map((range) => structuredClone(range))),
       active: parts.every((part) => part.active !== false),
     };
   });
 }
 
 function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams"]> {
-  if (group.first.length !== group.second.length) {
-    throw new PatternDocumentCompatibilityError("A costura " + group.id + " possui múltiplos intervalos com quantidades diferentes entre os lados.", group.id);
-  }
-  return group.first.map((first, index) => ({
-    id: group.first.length === 1 ? group.id : group.id + ":part:" + (index + 1),
+  const first = structuredClone(group.first[0]);
+  const second = structuredClone(group.second[0]);
+  return [{
+    id: group.id,
     groupId: group.id,
     name: group.name,
-    first: structuredClone(first),
-    second: structuredClone(group.second[index]),
+    first,
+    second,
+    ...(group.first.length > 1 ? { firstRanges: structuredClone(group.first) } : {}),
+    ...(group.second.length > 1 ? { secondRanges: structuredClone(group.second) } : {}),
     direction: group.direction,
     easeRatio: group.compatibility?.legacyEaseRatio ?? Math.abs(group.targetRatio - 1),
     type: group.compatibility?.legacyType ?? group.treatment,
@@ -966,7 +968,7 @@ function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams
     targetRatio: group.targetRatio,
     slackMm: group.slackMm,
     active: group.active,
-  }));
+  }];
 }
 
 function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): SeamGroupV3 {
@@ -976,8 +978,8 @@ function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): Se
   return {
     id: seam.id,
     name: seam.name ?? seam.id,
-    first: [structuredClone(seam.first)],
-    second: [structuredClone(seam.second)],
+    first: seamSideRanges(seam, "first").map((range) => structuredClone(range)),
+    second: seamSideRanges(seam, "second").map((range) => structuredClone(range)),
     direction: seam.direction,
     treatment,
     distribution: seam.distribution ?? (treatment === "ease" || treatment === "gather" ? "proportional" : "uniform"),
@@ -1151,14 +1153,9 @@ function assemblyRoleFromRegion(
 }
 
 function ensureLegacyRuntimeCompatibility(document: PatternDocumentV3): void {
-  for (const group of document.seamGroups) {
-    if (group.first.length !== group.second.length) {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} possui múltiplos intervalos com quantidades diferentes entre os lados.`,
-        group.id,
-      );
-    }
-  }
+  // A projeção runtime preserva sequências compostas em firstRanges e
+  // secondRanges; quantidades diferentes entre os lados não são mais lossy.
+  void document;
 }
 
 function parseMetadata(value: unknown): PatternDocumentV3["metadata"] {
@@ -1739,8 +1736,8 @@ function issue(
 }
 
 function seamGroupSignature(group: SeamGroupV3): string {
-  const first = group.first.map(rangeSignature).sort().join("|");
-  const second = group.second.map(rangeSignature).sort().join("|");
+  const first = group.first.map(rangeSignature).join("|");
+  const second = group.second.map(rangeSignature).join("|");
   return [first, second].sort().join("<=>");
 }
 
@@ -1753,8 +1750,8 @@ function rangesListsEqual(
   second: SeamGroupV3["second"],
 ): boolean {
   if (first.length !== second.length) return false;
-  const firstSignatures = first.map(rangeSignature).sort();
-  const secondSignatures = second.map(rangeSignature).sort();
+  const firstSignatures = first.map(rangeSignature);
+  const secondSignatures = second.map(rangeSignature);
   return firstSignatures.every((signature, index) => signature === secondSignatures[index]);
 }
 

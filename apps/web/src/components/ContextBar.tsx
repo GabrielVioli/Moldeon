@@ -24,6 +24,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const garment = useEditorStore((state) => state.garment);
   const seam = useEditorStore((state) => state.seamProposal);
   const seamIssues = useEditorStore((state) => state.seamIssues);
+  const seamDraft = useEditorStore((state) => state.seamDraft);
   const seamFirstEdge = useEditorStore((state) => state.seamFirstEdge);
   const nearbySeam = useEditorStore((state) => state.nearbySeamSuggestion);
   const selectedDartId = useEditorStore((state) => state.selectedDartId);
@@ -32,6 +33,8 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
   const selected = useEditorStore((state) => state.selectedPieceIds);
   const confirmSeam = useEditorStore((state) => state.confirmSeamProposal);
   const proposeSeam = useEditorStore((state) => state.proposeSeam);
+  const finishSeamDraftSide = useEditorStore((state) => state.finishSeamDraftSide);
+  const reviewSeamDraft = useEditorStore((state) => state.reviewSeamDraft);
   const updateDart = useEditorStore((state) => state.updateDart);
   const removeDart = useEditorStore((state) => state.removeDart);
   const invertDart = useEditorStore((state) => state.invertDart);
@@ -77,13 +80,14 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     : undefined;
   const effectiveCutAnalysis = multiCutAnalysis ?? pathAnalysis;
   const cutTargetCount = multiCutAnalysis?.targetPieceIds.length ?? 0;
-  const hasContext = Boolean(seam || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0));
+  const hasContext = Boolean(seam || seamDraft || seamFirstEdge || nearbySeam || seamIssues.length > 0 || draftPath || selectedPath || measure || selectedDart || selectedSegment || (tool === "select" && selected.length > 0));
   const showModelingControls = tool === "select"
     && !draftPath
     && !selectedPath
     && !selectedDart
     && !selectedSegment
     && !seam
+    && !seamDraft
     && !seamFirstEdge
     && !measure;
   const [dismissed, setDismissed] = useState(false);
@@ -95,6 +99,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
     const pathState = useInternalPathEditorStore.getState();
     closingRef.current = Boolean(
       editor.seamProposal
+      || editor.seamDraft
       || editor.seamFirstEdge
       || editor.nearbySeamSuggestion
       || editor.measureDraft
@@ -116,7 +121,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       return;
     }
     setDismissed(false);
-  }, [tool, selected, selectedPathId, selectedDartId, selectedEdgeId, seam, seamFirstEdge, nearbySeam, measure, pathAnalysis]);
+  }, [tool, selected, selectedPathId, selectedDartId, selectedEdgeId, seam, seamDraft, seamFirstEdge, nearbySeam, measure, pathAnalysis]);
 
   useEffect(() => {
     if (!hasContext || dismissed) return;
@@ -143,7 +148,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
       window.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("pointerdown", handlePointerDown, true);
     };
-  }, [closePanel, dismissed, draftPath, hasContext, seam, seamFirstEdge, tool]);
+  }, [closePanel, dismissed, draftPath, hasContext, seam, seamDraft, seamFirstEdge, tool]);
 
   const confirmCurrentSeam = () => {
     if (!seam) return;
@@ -155,7 +160,7 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
 
   if (!hasContext) {
     const hint = tool === "seam"
-      ? "Clique na primeira borda e depois na segunda."
+      ? "Clique nas bordas do lado A da costura."
       : tool === "cut"
         ? selected.length > 1
           ? "Clique e arraste uma linha atravessando as peças selecionadas. O Moldeon calcula as interseções ao soltar; Escape cancela."
@@ -174,12 +179,25 @@ export function ContextBar({ tool, onDone }: { tool: EditorTool; onDone(): void 
         <span><strong>Bordas próximas</strong> · deseja costurá-las?</span>
         <button className="primary-button" onClick={() => proposeSeam(nearbySeam.first, nearbySeam.second)}>Costurar</button>
       </> : null}
-      {seamFirstEdge && !seam ? <span><strong>Primeira borda escolhida.</strong> Agora escolha a borda correspondente.</span> : null}
+      {seamDraft && !seam ? <>
+        <span>
+          <strong>{seamDraft.activeSide === "first" ? "Lado A" : "Lado B"}</strong>
+          {" · "}{seamDraft[seamDraft.activeSide].length} borda(s) selecionada(s) em ordem.
+          {seamDraft.activeSide === "first"
+            ? " Selecione todas as bordas deste lado."
+            : " Selecione todas as bordas correspondentes."}
+        </span>
+        {seamDraft.activeSide === "first" ? (
+          <button className="primary-button" type="button" disabled={seamDraft.first.length === 0} onClick={finishSeamDraftSide}>Concluir lado A</button>
+        ) : (
+          <button className="primary-button" type="button" disabled={seamDraft.second.length === 0} onClick={reviewSeamDraft}>Revisar costura</button>
+        )}
+      </> : null}
       {seamIssues.length > 0 ? <span className="context-error" role="alert"><strong>Não foi possível concluir:</strong> {seamIssues.map((issue) => issue.message).join(" ")}</span> : null}
       {seam ? <>
         <span><strong>Revisar costura</strong> · {(seam.compatibility.firstLengthMm / 10).toFixed(1)} cm × {(seam.compatibility.secondLengthMm / 10).toFixed(1)} cm · diferença {seam.compatibility.differenceMm.toFixed(1)} mm{seam.compatibility.compatible ? "" : " (confirme apenas se for intencional)"}</span>
-        <button onClick={() => proposeSeam(seam.second, seam.first)}>Inverter lado</button>
-        <button className="primary-button" onClick={confirmCurrentSeam}>Confirmar costura</button>
+        <button type="button" onClick={() => proposeSeam(seam.secondRanges ?? [seam.second], seam.firstRanges ?? [seam.first])}>Inverter lado</button>
+        <button type="button" className="primary-button" onClick={confirmCurrentSeam}>Confirmar costura</button>
       </> : null}
 
       {draftPath ? <>

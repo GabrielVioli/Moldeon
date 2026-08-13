@@ -192,4 +192,44 @@ describe("ResolvedAssemblyInput canonical contract", () => {
       && constraint.restDistance > 0.0015,
     )).toBe(true);
   });
+
+  it.each(["same", "opposite"] as const)("generates ConstraintPoints over a composed side in %s direction", (direction) => {
+    const first = square("long-edge", placement("torso", "front", "center", "torso-front"));
+    const second: PatternPiece = {
+      ...square("split-edge", placement("torso", "back", "center", "torso-back")),
+      points: [
+        { id: "split-edge:a", xMm: 0, yMm: 0 },
+        { id: "split-edge:mid", xMm: 40, yMm: 0 },
+        { id: "split-edge:b", xMm: 100, yMm: 0 },
+        { id: "split-edge:c", xMm: 100, yMm: 160 },
+        { id: "split-edge:d", xMm: 0, yMm: 160 },
+      ],
+    };
+    const firstEdge = getPatternEdges(first)[0];
+    const secondEdges = getPatternEdges(second);
+    const firstRange = { pieceId: first.id, edgeId: firstEdge.id, startT: 0, endT: 1 };
+    const secondRanges = [0, 1].map((index) => ({ pieceId: second.id, edgeId: secondEdges[index].id, startT: 0, endT: 1 }));
+    const garment = draft([first, second]);
+    garment.seams = [{
+      id: "one-to-two",
+      name: "Uma para duas",
+      first: firstRange,
+      second: secondRanges[0],
+      secondRanges,
+      direction,
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    }];
+
+    const state = buildResolvedGarmentAssembly(buildResolvedAssemblyInput(garment));
+    const constraints = state.stitchConstraints.filter((constraint) => constraint.seamGroupId === "one-to-two");
+    expect(constraints.length).toBeGreaterThan(2);
+    expect(new Set(constraints.map((constraint) => constraint.rangeB?.edgeId))).toEqual(
+      new Set(secondRanges.map((range) => range.edgeId)),
+    );
+    expect(constraints[0].rangeB?.edgeId).toBe(direction === "same" ? secondRanges[0].edgeId : secondRanges[1].edgeId);
+    expect(constraints.at(-1)?.rangeB?.edgeId).toBe(direction === "same" ? secondRanges[1].edgeId : secondRanges[0].edgeId);
+  });
 });

@@ -11,6 +11,9 @@ import type { BodyType } from "../domain/pattern";
 import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
 import {
   buildGarmentAssemblyMeshes,
+  canReuseGarmentAssemblyMesh,
+  captureGarmentMeshDiagnostics,
+  copyGarmentAssemblyGeometry,
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
@@ -121,6 +124,11 @@ export class ThreeViewport {
     this.host.dataset.garmentGeometrySignatures = this.garmentMeshes
       .map((item) => `${item.key}:${item.geometrySignature}`)
       .join(",");
+    if (import.meta.env.DEV) {
+      this.host.dataset.garmentMeshDiagnostics = JSON.stringify(
+        captureGarmentMeshDiagnostics(this.garmentMeshes),
+      );
+    }
     this.host.dataset.coveredAvatarPartCount = String(arrangement.coveredAvatarPartNames.size);
     this.host.dataset.arrangementDiagnosticCount = String(arrangement.diagnostics.length);
     this.host.dataset.arrangementErrorCount = String(arrangement.diagnostics.filter((item) => item.severity === "error").length);
@@ -174,6 +182,7 @@ export class ThreeViewport {
     delete this.host.dataset.avatarAssetId;
     delete this.host.dataset.avatarInspection;
     delete this.host.dataset.garmentInstanceCount;
+    delete this.host.dataset.garmentMeshDiagnostics;
   }
 
   private frameDressedScene(): void {
@@ -215,14 +224,9 @@ export class ThreeViewport {
     for (const next of nextMeshes) {
       const previous = previousByKey.get(next.key);
       previousByKey.delete(next.key);
-      const previousPositions = previous?.mesh.geometry.getAttribute("position");
-      const nextPositions = next.mesh.geometry.getAttribute("position");
-      const canReuse = previous !== undefined
-        && previousPositions !== undefined
-        && previous.geometrySignature === next.geometrySignature
-        && previousPositions.count === nextPositions.count;
+      const canReuse = previous !== undefined && canReuseGarmentAssemblyMesh(previous, next);
 
-      if (!canReuse || !previous || !previousPositions) {
+      if (!canReuse || !previous) {
         if (previous) {
           this.garmentGroup.remove(previous.mesh);
           disposeMesh(previous.mesh);
@@ -232,12 +236,7 @@ export class ThreeViewport {
         continue;
       }
 
-      const target = previousPositions.array as Float32Array;
-      target.set(nextPositions.array as ArrayLike<number>);
-      previousPositions.needsUpdate = true;
-      previous.mesh.geometry.computeVertexNormals();
-      previous.mesh.geometry.computeBoundingBox();
-      previous.mesh.geometry.computeBoundingSphere();
+      copyGarmentAssemblyGeometry(previous.mesh.geometry, next.mesh.geometry);
       disposeMaterial(previous.mesh.material);
       previous.mesh.material = next.mesh.material;
       next.mesh.geometry.dispose();

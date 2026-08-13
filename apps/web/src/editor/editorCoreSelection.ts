@@ -42,6 +42,7 @@ export function hasEditorSelection(): boolean {
       || editor.pieceSelectionActive
       || editor.selectedPieceIds.length > 0
       || editor.seamFirstEdge
+      || editor.seamDraft
       || editor.seamProposal
       || editor.nearbySeamSuggestion
       || internal.selectedPathId

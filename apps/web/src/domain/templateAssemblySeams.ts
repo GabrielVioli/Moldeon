@@ -1,6 +1,7 @@
 import {
   edgeRangeLength,
   getPatternEdges,
+  seamSideRanges,
   type GarmentDraft,
   type PatternEdge,
   type PatternPiece,
@@ -40,18 +41,17 @@ export function resolveTemplateAssemblyGarment(
   }
 
   const reservedEdges = new Set(
-    canonical.flatMap((seam) => [
-      edgeReferenceKey(seam.first.pieceId, seam.first.edgeId),
-      edgeReferenceKey(seam.second.pieceId, seam.second.edgeId),
-    ]),
+    canonical.flatMap((seam) =>
+      [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+        .map((range) => edgeReferenceKey(range.pieceId, range.edgeId))),
   );
   const existingByPair = new Map(
     (garment.seams ?? []).map((seam) => [seamPairKey(seam), seam]),
   );
   const preservedCustom = (garment.seams ?? []).filter((seam) =>
     !isGenericSeamName(seam.name) &&
-    !reservedEdges.has(edgeReferenceKey(seam.first.pieceId, seam.first.edgeId)) &&
-    !reservedEdges.has(edgeReferenceKey(seam.second.pieceId, seam.second.edgeId)),
+    [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+      .every((range) => !reservedEdges.has(edgeReferenceKey(range.pieceId, range.edgeId))),
   );
   const resolvedCanonical = canonical.map((seam) => {
     const existing = existingByPair.get(seamPairKey(seam));
@@ -264,8 +264,8 @@ function edgeReferenceKey(pieceId: string, edgeId: string): string {
 }
 
 function seamPairKey(seam: Seam): string {
-  const first = edgeReferenceKey(seam.first.pieceId, seam.first.edgeId);
-  const second = edgeReferenceKey(seam.second.pieceId, seam.second.edgeId);
+  const first = seamSideRanges(seam, "first").map((range) => edgeReferenceKey(range.pieceId, range.edgeId)).join(">");
+  const second = seamSideRanges(seam, "second").map((range) => edgeReferenceKey(range.pieceId, range.edgeId)).join(">");
   return first < second ? `${first}|${second}` : `${second}|${first}`;
 }
 

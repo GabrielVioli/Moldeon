@@ -1,13 +1,16 @@
-import type {
-  AssemblyPlacement,
-  EdgeRange,
-  GarmentDraft,
-  PatternPiece,
-  PatternPreviewPlacement,
-  PatternSnapshot,
-  Seam,
-  SeamDistribution,
-  SeamTreatment,
+import {
+  edgeRangeSequenceLength,
+  resolveEdgeRangeSequenceProgress,
+  seamSideRanges,
+  type EdgeRange,
+  type GarmentDraft,
+  type PatternPiece,
+  type PatternPreviewPlacement,
+  type PatternSnapshot,
+  type Seam,
+  type SeamDistribution,
+  type SeamTreatment,
+  type AssemblyPlacement,
 } from "../domain/pattern";
 import {
   buildPanelTopology,
@@ -45,6 +48,12 @@ export interface AssemblyStitchConstraint {
   stiffness: number;
   instanceA?: string;
   instanceB?: string;
+  /** Correspondência canônica preservada para placement e futuro XPBD. */
+  rangeA?: EdgeRange;
+  rangeB?: EdgeRange;
+  rangeLengthAMm?: number;
+  rangeLengthBMm?: number;
+  progress?: number;
 }
 
 export interface AssemblyAnchorConstraint {
@@ -61,9 +70,10 @@ export interface AssemblyInstanceArrangement {
   axis: [number, number, number];
   /** Centro geométrico usado por mapeamentos tubulares analíticos. */
   tubeCenter?: [number, number, number];
+  tubeRadiusM?: number;
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
-  mapping: "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube";
+  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube";
   flipWinding: boolean;
 }
 
@@ -93,10 +103,120 @@ export interface GarmentAssemblyState {
   invalid: boolean;
 }
 
+export interface IntrinsicDistortionMetric {
+  maxRelativeDistortion: number;
+  maxAbsoluteDistortionM: number;
+  evaluatedConstraintCount: number;
+  byInstance: Record<string, {
+    maxRelativeDistortion: number;
+    maxAbsoluteDistortionM: number;
+    evaluatedConstraintCount: number;
+  }>;
+}
+
 const METERS_PER_MM = 0.001;
 const SEAM_SAMPLE_SPACING_MM = 14;
 const MAX_SEAM_SAMPLES = 220;
 const DISTANCE_EPSILON = 1e-8;
+
+/**
+ * Mede somente comprimentos estruturais internos, nunca distâncias de costura.
+ * Assim a métrica continua válida mesmo quando o initial assembly aceita gaps.
+ */
+export function measureIntrinsicDistortion(
+  state: Pick<GarmentAssemblyState, "positions" | "structuralConstraints" | "instances">,
+): IntrinsicDistortionMetric {
+  let maxRelativeDistortion = 0;
+  let maxAbsoluteDistortionM = 0;
+  let evaluatedConstraintCount = 0;
+  const byInstance: IntrinsicDistortionMetric["byInstance"] = Object.fromEntries(
+    state.instances.map((instance) => [instance.id, {
+      maxRelativeDistortion: 0,
+      maxAbsoluteDistortionM: 0,
+      evaluatedConstraintCount: 0,
+    }]),
+  );
+  const instanceByParticle = new Map<number, AssemblyPanelInstance>();
+  for (const instance of state.instances) {
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      instanceByParticle.set(instance.particleStart + local, instance);
+    }
+  }
+
+  for (const constraint of state.structuralConstraints) {
+    if (constraint.restLength <= DISTANCE_EPSILON) continue;
+    const offsetA = constraint.a * 3;
+    const offsetB = constraint.b * 3;
+    const instance = instanceByParticle.get(constraint.a);
+    const currentLength = intrinsicConstraintLength(state.positions, offsetA, offsetB, instance);
+    const absolute = Math.abs(currentLength - constraint.restLength);
+    maxAbsoluteDistortionM = Math.max(maxAbsoluteDistortionM, absolute);
+    maxRelativeDistortion = Math.max(
+      maxRelativeDistortion,
+      absolute / constraint.restLength,
+    );
+    evaluatedConstraintCount += 1;
+    const instanceId = instance?.id;
+    const perInstance = instanceId ? byInstance[instanceId] : undefined;
+    if (perInstance) {
+      perInstance.maxAbsoluteDistortionM = Math.max(perInstance.maxAbsoluteDistortionM, absolute);
+      perInstance.maxRelativeDistortion = Math.max(
+        perInstance.maxRelativeDistortion,
+        absolute / constraint.restLength,
+      );
+      perInstance.evaluatedConstraintCount += 1;
+    }
+  }
+
+  return {
+    maxRelativeDistortion,
+    maxAbsoluteDistortionM,
+    evaluatedConstraintCount,
+    byInstance,
+  };
+}
+
+function intrinsicConstraintLength(
+  positions: Float32Array,
+  offsetA: number,
+  offsetB: number,
+  instance: AssemblyPanelInstance | undefined,
+): number {
+  const arrangement = instance?.arrangement;
+  const center = arrangement?.tubeCenter;
+  const radius = arrangement?.tubeRadiusM;
+  if (arrangement?.mapping !== "seam-derived-tube" || !center || !radius || radius <= DISTANCE_EPSILON) {
+    return Math.hypot(
+      positions[offsetB] - positions[offsetA],
+      positions[offsetB + 1] - positions[offsetA + 1],
+      positions[offsetB + 2] - positions[offsetA + 2],
+    );
+  }
+
+  const axisLength = Math.hypot(...arrangement.axis);
+  const axis = arrangement.axis.map((value) => value / Math.max(axisLength, DISTANCE_EPSILON));
+  const first = [
+    positions[offsetA] - center[0],
+    positions[offsetA + 1] - center[1],
+    positions[offsetA + 2] - center[2],
+  ];
+  const second = [
+    positions[offsetB] - center[0],
+    positions[offsetB + 1] - center[1],
+    positions[offsetB + 2] - center[2],
+  ];
+  const axialFirst = first[0] * axis[0] + first[1] * axis[1] + first[2] * axis[2];
+  const axialSecond = second[0] * axis[0] + second[1] * axis[1] + second[2] * axis[2];
+  const radialFirst = first.map((value, index) => value - axis[index] * axialFirst);
+  const radialSecond = second.map((value, index) => value - axis[index] * axialSecond);
+  const cosine = (
+    radialFirst[0] * radialSecond[0]
+    + radialFirst[1] * radialSecond[1]
+    + radialFirst[2] * radialSecond[2]
+  ) / Math.max(DISTANCE_EPSILON, Math.hypot(...radialFirst) * Math.hypot(...radialSecond));
+  const angle = Math.acos(Math.min(1, Math.max(-1, cosine)));
+  return Math.hypot(axialSecond - axialFirst, angle * radius);
+}
 
 export function buildGarmentAssembly(
   snapshots: readonly PatternSnapshot[],
@@ -276,57 +396,45 @@ function buildGlobalStitchConstraints(
 
   for (const seam of seams) {
     if (seam.active === false) continue;
-    if (rangesAreIdentical(seam.first, seam.second)) {
+    const firstRanges = seamSideRanges(seam, "first");
+    const secondRanges = seamSideRanges(seam, "second");
+    if (rangeSequencesAreIdentical(firstRanges, secondRanges)) {
       warnings.push(`${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`);
       continue;
     }
-
-    const firstInstances = byPiece.get(seam.first.pieceId) ?? [];
-    const secondInstances = byPiece.get(seam.second.pieceId) ?? [];
-
-    if (firstInstances.length === 0 || secondInstances.length === 0) {
+    const pieces = [...new Map(instances.map((instance) => [instance.pieceId, instance.topology.sourcePiece])).values()];
+    const firstLength = edgeRangeSequenceLength(pieces, firstRanges);
+    const secondLength = edgeRangeSequenceLength(pieces, secondRanges);
+    if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
+    if ([...firstRanges, ...secondRanges].some((range) => (byPiece.get(range.pieceId) ?? []).length === 0)) {
       warnings.push(`${seam.name ?? seam.id}: uma das peças da costura não está no preview 3D.`);
       continue;
     }
-
-    const pairs = seam.first.pieceId === seam.second.pieceId
-      ? firstInstances.map((instance) => [instance, instance] as const)
-      : pairInstances(firstInstances, secondInstances);
-
-    for (const [firstInstance, secondInstance] of pairs) {
-      const firstPath = firstInstance.topology.edges.get(seam.first.edgeId);
-      const secondPath = secondInstance.topology.edges.get(seam.second.edgeId);
-
-      if (!firstPath || !secondPath) {
-        warnings.push(`${seam.name ?? seam.id}: uma borda da costura não existe na topologia.`);
-        continue;
-      }
-
-      const firstLength = edgeRangeLength(firstPath, seam.first);
-      const secondLength = edgeRangeLength(secondPath, seam.second);
-      if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
-
-      const sampleCount = Math.min(
-        MAX_SEAM_SAMPLES,
-        Math.max(
-          2,
-          Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1,
-        ),
-      );
-      const stiffness = seamStiffness(seam.treatment);
-      const targetRatio = Number.isFinite(seam.targetRatio) && (seam.targetRatio ?? 0) > 0
-        ? seam.targetRatio!
-        : Math.max(0.000001, 1 + seam.easeRatio);
-      const slackMm = Number.isFinite(seam.slackMm) && (seam.slackMm ?? 0) >= 0
-        ? seam.slackMm!
-        : 0;
-      const distribution = seam.distribution ?? "uniform";
-      const mismatchMm = Math.abs(firstLength - secondLength * targetRatio);
-      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-        const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
-        const firstT = interpolateRange(seam.first, progress);
-        const secondProgress = seam.direction === "opposite" ? 1 - progress : progress;
-        const secondT = interpolateRange(seam.second, secondProgress);
+    const sampleCount = Math.min(MAX_SEAM_SAMPLES, Math.max(2,
+      Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1));
+    const stiffness = seamStiffness(seam.treatment);
+    const targetRatio = Number.isFinite(seam.targetRatio) && (seam.targetRatio ?? 0) > 0
+      ? seam.targetRatio! : Math.max(0.000001, 1 + seam.easeRatio);
+    const slackMm = Number.isFinite(seam.slackMm) && (seam.slackMm ?? 0) >= 0 ? seam.slackMm! : 0;
+    const distribution = seam.distribution ?? "uniform";
+    const mismatchMm = Math.abs(firstLength - secondLength * targetRatio);
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
+      const firstPoint = resolveEdgeRangeSequenceProgress(pieces, firstRanges, progress);
+      const secondProgress = seam.direction === "opposite" ? 1 - progress : progress;
+      const secondPoint = resolveEdgeRangeSequenceProgress(pieces, secondRanges, secondProgress);
+      if (!firstPoint || !secondPoint) continue;
+      const firstInstances = byPiece.get(firstPoint.range.pieceId) ?? [];
+      const secondInstances = byPiece.get(secondPoint.range.pieceId) ?? [];
+      const pairs = firstPoint.range.pieceId === secondPoint.range.pieceId
+        ? firstInstances.map((instance) => [instance, instance] as const)
+        : pairInstances(firstInstances, secondInstances);
+      for (const [firstInstance, secondInstance] of pairs) {
+        const firstPath = firstInstance.topology.edges.get(firstPoint.range.edgeId);
+        const secondPath = secondInstance.topology.edges.get(secondPoint.range.edgeId);
+        if (!firstPath || !secondPath) continue;
+        const firstT = firstPoint.t;
+        const secondT = secondPoint.t;
         const a = pointReference(firstInstance, firstPath, firstT);
         const b = pointReference(secondInstance, secondPath, secondT);
 
@@ -346,6 +454,11 @@ function buildGlobalStitchConstraints(
           stiffness,
           instanceA: firstInstance.id,
           instanceB: secondInstance.id,
+          rangeA: { ...firstPoint.range },
+          rangeB: { ...secondPoint.range },
+          rangeLengthAMm: firstPoint.rangeLengthMm,
+          rangeLengthBMm: secondPoint.rangeLengthMm,
+          progress,
         });
       }
     }
@@ -753,6 +866,11 @@ function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
     Math.abs(first.startT - second.startT) <= 1e-7 &&
     Math.abs(first.endT - second.endT) <= 1e-7
   );
+}
+
+function rangeSequencesAreIdentical(first: readonly EdgeRange[], second: readonly EdgeRange[]): boolean {
+  return first.length === second.length
+    && first.every((range, index) => rangesAreIdentical(range, second[index]));
 }
 
 function pairKey(first: string, second: string): string {

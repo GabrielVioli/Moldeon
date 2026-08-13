@@ -1,7 +1,10 @@
-import type {
-  EdgeRange,
-  GarmentDraft,
-  SeamTreatment,
+import {
+  edgeRangeSequenceLength,
+  resolveEdgeRangeSequenceProgress,
+  seamSideRanges,
+  type EdgeRange,
+  type GarmentDraft,
+  type SeamTreatment,
 } from "../domain/pattern";
 import {
   buildPanelTopology,
@@ -94,14 +97,14 @@ export function buildSelfSeamConstraints(
 
   for (const seam of garment.seams ?? []) {
     if (seam.active === false) continue;
-    if (
-      seam.first.pieceId !==
-      seam.second.pieceId
-    ) {
+    const firstRanges = seamSideRanges(seam, "first");
+    const secondRanges = seamSideRanges(seam, "second");
+    const involvedPieceIds = new Set([...firstRanges, ...secondRanges].map((range) => range.pieceId));
+    if (involvedPieceIds.size !== 1) {
       continue;
     }
 
-    const pieceId = seam.first.pieceId;
+    const pieceId = [...involvedPieceIds][0];
 
     if (
       options.pieceId !== undefined &&
@@ -114,7 +117,7 @@ export function buildSelfSeamConstraints(
      * Não faz sentido costurar exatamente o mesmo intervalo
      * da mesma borda sobre ele mesmo.
      */
-    if (rangesAreIdentical(seam.first, seam.second)) {
+    if (rangeSequencesAreIdentical(firstRanges, secondRanges)) {
       continue;
     }
 
@@ -134,25 +137,8 @@ export function buildSelfSeamConstraints(
         topologyCache,
       );
 
-    const firstPath = topology.edges.get(
-      seam.first.edgeId,
-    );
-    const secondPath = topology.edges.get(
-      seam.second.edgeId,
-    );
-
-    if (!firstPath || !secondPath) {
-      continue;
-    }
-
-    const firstLengthMm = edgeRangeLengthMm(
-      firstPath,
-      seam.first,
-    );
-    const secondLengthMm = edgeRangeLengthMm(
-      secondPath,
-      seam.second,
-    );
+    const firstLengthMm = edgeRangeSequenceLength([piece], firstRanges);
+    const secondLengthMm = edgeRangeSequenceLength([piece], secondRanges);
 
     if (
       firstLengthMm <= LENGTH_EPSILON_MM ||
@@ -181,29 +167,25 @@ export function buildSelfSeamConstraints(
           ? 0
           : sampleIndex / (sampleCount - 1);
 
-      const firstT = interpolateRangeParameter(
-        seam.first,
-        progress,
-      );
-
       const secondProgress =
         seam.direction === "opposite"
           ? 1 - progress
           : progress;
-
-      const secondT = interpolateRangeParameter(
-        seam.second,
-        secondProgress,
-      );
+      const firstPoint = resolveEdgeRangeSequenceProgress([piece], firstRanges, progress);
+      const secondPoint = resolveEdgeRangeSequenceProgress([piece], secondRanges, secondProgress);
+      if (!firstPoint || !secondPoint) continue;
+      const firstPath = topology.edges.get(firstPoint.range.edgeId);
+      const secondPath = topology.edges.get(secondPoint.range.edgeId);
+      if (!firstPath || !secondPath) continue;
 
       const pointA = createConstraintPoint(
         firstPath,
-        firstT,
+        firstPoint.t,
       );
 
       const pointB = createConstraintPoint(
         secondPath,
-        secondT,
+        secondPoint.t,
       );
 
       /*
@@ -551,6 +533,14 @@ function rangesAreIdentical(
     Math.abs(first.endT - second.endT) <=
       PARAMETER_EPSILON
   );
+}
+
+function rangeSequencesAreIdentical(
+  first: readonly EdgeRange[],
+  second: readonly EdgeRange[],
+): boolean {
+  return first.length === second.length
+    && first.every((range, index) => rangesAreIdentical(range, second[index]));
 }
 
 function treatmentStiffness(
