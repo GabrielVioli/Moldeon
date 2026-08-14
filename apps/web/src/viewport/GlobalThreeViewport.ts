@@ -17,7 +17,7 @@ import {
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
-import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
+import { measureIntrinsicDistortion, type GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
 import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
 import { XpbdWorkerClient } from "../physics/XpbdWorkerClient";
@@ -193,6 +193,21 @@ export class ThreeViewport {
       },
     );
     this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
+    this.host.dataset.spatialAssemblyDiagnostics = JSON.stringify({
+      revision: input.signature,
+      intrinsicDistortion: measureIntrinsicDistortion(arrangement.state),
+      initialPositionSignature: positionSignature(arrangement.state.positions),
+      instances: arrangement.state.instances.map((instance) => ({
+        id: instance.id,
+        pieceId: instance.pieceId,
+        mapping: instance.arrangement?.mapping ?? null,
+        tubeCenter: instance.arrangement?.tubeCenter ?? null,
+        tubeRadiusM: instance.arrangement?.tubeRadiusM ?? null,
+        axis: instance.arrangement?.axis ?? null,
+        vertexCount: instance.vertexCount,
+      })),
+      seamPlacementDiagnostics: arrangement.seamPlacementDiagnostics,
+    });
     const identity = this.simulation.updateGeometry(initialization);
     this.assemblyGeneration = identity.generation;
     this.simulationEpoch = identity.epoch;
@@ -470,6 +485,14 @@ export class ThreeViewport {
         this.writeFrameCounters();
         this.writeSimulationDiagnostics(frame.diagnostics);
         this.host.dataset.simulationPositionSignature = positionSignature(frame.positions);
+        // Um frame aceito prova que o Worker concluiu a inicialização dessa
+        // identidade. Regrava o marcador porque uma renderização React muito
+        // rápida pode reconciliar o host depois do callback onReady.
+        this.host.dataset.simulationWorkerReady = JSON.stringify({
+          revision: frame.revision,
+          generation: frame.generation,
+          epoch: frame.epoch,
+        });
         this.host.dataset.simulationAppliedFrame = JSON.stringify({
           revision: frame.revision,
           generation: frame.generation,

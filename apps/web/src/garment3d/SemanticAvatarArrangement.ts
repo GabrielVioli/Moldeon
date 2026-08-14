@@ -95,6 +95,8 @@ interface PatternFrame2D {
 interface SeamDerivedTubeFrame extends PatternFrame2D {
   worldAxis: AvatarVector3;
   worldAcross: AvatarVector3;
+  /** Normal radial no centro angular deste painel. */
+  worldNormal?: AvatarVector3;
   center: AvatarVector3;
   radiusM: number;
   angularSpanRad: number;
@@ -105,6 +107,15 @@ interface SeamDerivedTubeCandidate {
   componentKey: string;
   scoreMm2: number;
   frames: Array<readonly [string, SeamDerivedTubeFrame]>;
+}
+
+interface TubeCycleConnection {
+  key: string;
+  direction: Seam["direction"];
+  firstInstanceId: string;
+  secondInstanceId: string;
+  firstRange: EdgeRange;
+  secondRange: EdgeRange;
 }
 
 export function buildSemanticAvatarArrangement(
@@ -355,7 +366,7 @@ function arrangeInstance(
 
   instance.arrangement = {
     anchorId: anchor.id,
-    outwardNormal: [...anchor.outwardNormal],
+    outwardNormal: [...(tubeFrame?.worldNormal ?? anchor.outwardNormal)],
     axis: [...(tubeFrame?.worldAxis ?? anchor.axis)],
     ...(tubeFrame ? { tubeCenter: [...tubeFrame.center] as AvatarVector3 } : {}),
     ...(tubeFrame ? { tubeRadiusM: tubeFrame.radiusM } : {}),
@@ -553,6 +564,8 @@ function buildSeamDerivedTubeFrames(
     });
   }
 
+  candidates.push(...buildMultipanelTubeCandidates(state, garment, avatar, componentByPieceId));
+
   /*
    * Um segundo par tubular dentro do mesmo connected component normalmente
    * aparece quando uma SeamGroup nova fecha um ciclo entre painéis já presos.
@@ -574,6 +587,280 @@ function buildSeamDerivedTubeFrames(
     }
   }
   return result;
+}
+
+/**
+ * Reconhece ciclos simples no multigrafo de costuras entre PanelInstances.
+ * Cada painel do ciclo precisa oferecer duas bordas longitudinais em lados
+ * opostos. A largura material acumulada define a circunferência; nenhuma
+ * coordenada 2D é escalada para fechar o ciclo.
+ */
+function buildMultipanelTubeCandidates(
+  state: GarmentAssemblyState,
+  garment: GarmentDraft,
+  avatar: AvatarParametricModel,
+  componentByPieceId: ReadonlyMap<string, string>,
+): SeamDerivedTubeCandidate[] {
+  const seamById = new Map((garment.seams ?? []).map((seam) => [seam.id, seam]));
+  const instanceById = new Map(state.instances.map((instance) => [instance.id, instance]));
+  const pieceById = new Map(garment.pieces.map((piece) => [piece.id, piece]));
+  const connectionByKey = new Map<string, TubeCycleConnection>();
+
+  for (const constraint of state.stitchConstraints) {
+    if (!constraint.instanceA || !constraint.instanceB || constraint.instanceA === constraint.instanceB) continue;
+    const seam = seamById.get(constraint.seamId);
+    const instanceA = instanceById.get(constraint.instanceA);
+    const instanceB = instanceById.get(constraint.instanceB);
+    if (!instanceA || !instanceB) continue;
+
+    let firstInstanceId: string;
+    let secondInstanceId: string;
+    let firstRange: EdgeRange;
+    let secondRange: EdgeRange;
+    let direction: Seam["direction"];
+    if (seam && seam.active !== false) {
+      const firstRanges = seamSideRanges(seam, "first");
+      const secondRanges = seamSideRanges(seam, "second");
+      if (firstRanges.length !== 1 || secondRanges.length !== 1) continue;
+      const firstIsA = instanceA.pieceId === firstRanges[0].pieceId
+        && instanceB.pieceId === secondRanges[0].pieceId;
+      const firstIsB = instanceB.pieceId === firstRanges[0].pieceId
+        && instanceA.pieceId === secondRanges[0].pieceId;
+      if (!firstIsA && !firstIsB) continue;
+      firstInstanceId = firstIsA ? instanceA.id : instanceB.id;
+      secondInstanceId = firstIsA ? instanceB.id : instanceA.id;
+      firstRange = { ...firstRanges[0] };
+      secondRange = { ...secondRanges[0] };
+      direction = seam.direction;
+    } else if (constraint.seamId.startsWith("fold:")) {
+      const firstFold = getPatternEdges(instanceA.topology.sourcePiece).find((edge) => edge.role === "fold");
+      const secondFold = getPatternEdges(instanceB.topology.sourcePiece).find((edge) => edge.role === "fold");
+      if (!firstFold || !secondFold) continue;
+      firstInstanceId = instanceA.id;
+      secondInstanceId = instanceB.id;
+      firstRange = { pieceId: instanceA.pieceId, edgeId: firstFold.id, startT: 0, endT: 1 };
+      secondRange = { pieceId: instanceB.pieceId, edgeId: secondFold.id, startT: 0, endT: 1 };
+      direction = "same";
+    } else continue;
+    const pair = instancePairKey(firstInstanceId, secondInstanceId);
+    const key = `${constraint.seamId}\u0000${pair}`;
+    if (!connectionByKey.has(key)) {
+      connectionByKey.set(key, {
+        key,
+        direction,
+        firstInstanceId,
+        secondInstanceId,
+        firstRange,
+        secondRange,
+      });
+    }
+  }
+
+  const adjacency = new Map<string, TubeCycleConnection[]>();
+  for (const connection of connectionByKey.values()) {
+    const first = adjacency.get(connection.firstInstanceId) ?? [];
+    first.push(connection);
+    adjacency.set(connection.firstInstanceId, first);
+    const second = adjacency.get(connection.secondInstanceId) ?? [];
+    second.push(connection);
+    adjacency.set(connection.secondInstanceId, second);
+  }
+  for (const connections of adjacency.values()) connections.sort((left, right) => left.key.localeCompare(right.key));
+
+  const candidates: SeamDerivedTubeCandidate[] = [];
+  const visited = new Set<string>();
+  for (const start of [...adjacency.keys()].sort()) {
+    if (visited.has(start)) continue;
+    const component: string[] = [];
+    const queue = [start];
+    visited.add(start);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      component.push(current);
+      for (const connection of adjacency.get(current) ?? []) {
+        const neighbor = otherCycleInstance(connection, current);
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    component.sort();
+    if (component.length < 3 || component.some((id) => (adjacency.get(id)?.length ?? 0) !== 2)) continue;
+    const edgeCount = new Set(component.flatMap((id) => (adjacency.get(id) ?? []).map((edge) => edge.key))).size;
+    if (edgeCount !== component.length) continue;
+    const cycle = traceTubeCycle(component[0], adjacency);
+    if (!cycle || cycle.nodes.length !== component.length) continue;
+
+    const baseAxisById = new Map<string, readonly [number, number]>();
+    let valid = true;
+    for (let index = 0; index < cycle.nodes.length; index += 1) {
+      const instanceId = cycle.nodes[index];
+      const instance = instanceById.get(instanceId);
+      const piece = instance ? pieceById.get(instance.pieceId) : undefined;
+      if (!instance || !piece) { valid = false; break; }
+      const ranges = [
+        cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId),
+        cycleRangeFor(cycle.edges[index], instanceId),
+      ];
+      const axis = dominantRangeAxis(piece, ranges);
+      if (!axis) { valid = false; break; }
+      baseAxisById.set(instanceId, axis);
+    }
+    if (!valid) continue;
+
+    const axialSignById = new Map<string, 1 | -1>([[cycle.nodes[0], 1]]);
+    for (let index = 0; index < cycle.nodes.length; index += 1) {
+      const currentId = cycle.nodes[index];
+      const nextId = cycle.nodes[(index + 1) % cycle.nodes.length];
+      const connection = cycle.edges[index];
+      const currentInstance = instanceById.get(currentId)!;
+      const nextInstance = instanceById.get(nextId)!;
+      const currentPiece = pieceById.get(currentInstance.pieceId)!;
+      const nextPiece = pieceById.get(nextInstance.pieceId)!;
+      const currentVector = edgeRangeVector(currentPiece, cycleRangeFor(connection, currentId));
+      const nextVector = edgeRangeVector(nextPiece, cycleRangeFor(connection, nextId));
+      const currentSign = axialSignById.get(currentId);
+      const currentAxis = baseAxisById.get(currentId)!;
+      const nextAxis = baseAxisById.get(nextId)!;
+      if (!currentVector || !nextVector || !currentSign) { valid = false; break; }
+      const currentAlong = dot2(currentVector, currentAxis) * currentSign;
+      const nextAlong = dot2(nextVector, nextAxis) * (connection.direction === "opposite" ? -1 : 1);
+      if (Math.abs(currentAlong) <= 1e-6 || Math.abs(nextAlong) <= 1e-6) { valid = false; break; }
+      const propagated: 1 | -1 = currentAlong * nextAlong >= 0 ? 1 : -1;
+      const existing = axialSignById.get(nextId);
+      if (existing && existing !== propagated) { valid = false; break; }
+      axialSignById.set(nextId, propagated);
+    }
+    if (!valid) continue;
+
+    const patternFrames = new Map<string, PatternFrame2D>();
+    let circumferenceMm = 0;
+    let axialSpanMm = 0;
+    for (let index = 0; index < cycle.nodes.length; index += 1) {
+      const instanceId = cycle.nodes[index];
+      const instance = instanceById.get(instanceId)!;
+      const piece = pieceById.get(instance.pieceId)!;
+      const incoming = cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId);
+      const outgoing = cycleRangeFor(cycle.edges[index], instanceId);
+      const provisional = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, 1);
+      const incomingSide = seamRangeSide(piece, incoming, provisional);
+      const outgoingSide = seamRangeSide(piece, outgoing, provisional);
+      if (incomingSide === 0 || outgoingSide === 0 || incomingSide === outgoingSide) { valid = false; break; }
+      const acrossSign: 1 | -1 = incomingSide < outgoingSide ? 1 : -1;
+      const frame = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, acrossSign);
+      patternFrames.set(instanceId, frame);
+      circumferenceMm += frame.acrossMaxMm - frame.acrossMinMm;
+      axialSpanMm = Math.max(axialSpanMm, frame.axialMaxMm - frame.axialMinMm);
+    }
+    if (!valid || circumferenceMm <= 1e-6) continue;
+
+    const radiusM = circumferenceMm * METERS_PER_MM / (Math.PI * 2);
+    const rootFrame = patternFrames.get(cycle.nodes[0])!;
+    const worldAxis = normalize3([rootFrame.axis[0], -rootFrame.axis[1], 0]);
+    const baseNormal: AvatarVector3 = [0, 0, 1];
+    const baseAcross = normalize3(cross3(baseNormal, worldAxis));
+    const instances = cycle.nodes.map((id) => instanceById.get(id)!);
+    const center = resolveTubeCenter(instances, avatar, worldAxis, axialSpanMm * METERS_PER_MM);
+    const frames: Array<readonly [string, SeamDerivedTubeFrame]> = [];
+    let angularCursor = -Math.PI;
+    for (const instanceId of cycle.nodes) {
+      const frame = patternFrames.get(instanceId)!;
+      const angularSpanRad = (frame.acrossMaxMm - frame.acrossMinMm) * METERS_PER_MM / radiusM;
+      const centerAngle = angularCursor + angularSpanRad * 0.5;
+      const worldNormal = addScaled3(baseNormal, baseAcross, Math.cos(centerAngle), Math.sin(centerAngle));
+      const worldAcross = addScaled3(baseNormal, baseAcross, -Math.sin(centerAngle), Math.cos(centerAngle));
+      frames.push([instanceId, {
+        ...frame,
+        worldAxis,
+        worldAcross,
+        worldNormal,
+        center,
+        radiusM,
+        angularSpanRad,
+      }]);
+      angularCursor += angularSpanRad;
+    }
+    candidates.push({
+      pairKey: `cycle:${cycle.edges.map((edge) => edge.key).sort().join("|")}`,
+      componentKey: componentByPieceId.get(instances[0].pieceId) ?? instances[0].pieceId,
+      scoreMm2: axialSpanMm * circumferenceMm * 2,
+      frames,
+    });
+  }
+  return candidates;
+}
+
+function traceTubeCycle(
+  root: string,
+  adjacency: ReadonlyMap<string, readonly TubeCycleConnection[]>,
+): { nodes: string[]; edges: TubeCycleConnection[] } | undefined {
+  const firstEdge = adjacency.get(root)?.[0];
+  if (!firstEdge) return undefined;
+  const nodes = [root];
+  const edges: TubeCycleConnection[] = [];
+  let current = root;
+  let edge = firstEdge;
+  while (edges.length <= adjacency.size) {
+    edges.push(edge);
+    const next = otherCycleInstance(edge, current);
+    if (next === root) return edges.length === nodes.length ? { nodes, edges } : undefined;
+    if (nodes.includes(next)) return undefined;
+    nodes.push(next);
+    const nextEdges = adjacency.get(next) ?? [];
+    const following = nextEdges.find((candidate) => candidate.key !== edge.key);
+    if (!following) return undefined;
+    current = next;
+    edge = following;
+  }
+  return undefined;
+}
+
+function otherCycleInstance(connection: TubeCycleConnection, instanceId: string): string {
+  return connection.firstInstanceId === instanceId ? connection.secondInstanceId : connection.firstInstanceId;
+}
+
+function cycleRangeFor(connection: TubeCycleConnection, instanceId: string): EdgeRange {
+  return connection.firstInstanceId === instanceId ? connection.firstRange : connection.secondRange;
+}
+
+function dominantRangeAxis(piece: PatternPiece, ranges: readonly EdgeRange[]): readonly [number, number] | undefined {
+  let xx = 0;
+  let xy = 0;
+  let yy = 0;
+  for (const range of ranges) {
+    const vector = edgeRangeVector(piece, range);
+    const length = edgeRangeLength(piece, range);
+    if (!vector || length <= 1e-6) continue;
+    const magnitude = Math.hypot(vector[0], vector[1]);
+    if (magnitude <= 1e-6) continue;
+    const x = vector[0] / magnitude;
+    const y = vector[1] / magnitude;
+    xx += length * x * x;
+    xy += length * x * y;
+    yy += length * y * y;
+  }
+  const total = xx + yy;
+  if (total <= 1e-6) return undefined;
+  const discriminant = Math.hypot(xx - yy, 2 * xy);
+  const dominant = (total + discriminant) * 0.5;
+  if (dominant / total < 0.82) return undefined;
+  const angle = 0.5 * Math.atan2(2 * xy, xx - yy);
+  let axis: [number, number] = [Math.cos(angle), Math.sin(angle)];
+  if ((Math.abs(axis[0]) >= Math.abs(axis[1]) ? axis[0] : axis[1]) < 0) axis = [-axis[0], -axis[1]];
+  return axis;
+}
+
+function addScaled3(
+  first: AvatarVector3,
+  second: AvatarVector3,
+  firstScale: number,
+  secondScale: number,
+): AvatarVector3 {
+  return [
+    first[0] * firstScale + second[0] * secondScale,
+    first[1] * firstScale + second[1] * secondScale,
+    first[2] * firstScale + second[2] * secondScale,
+  ];
 }
 
 function connectedComponentKeys(
@@ -790,7 +1077,8 @@ function mapSeamDerivedTube(
 ): void {
   const axialCenter = (frame.axialMinMm + frame.axialMaxMm) * 0.5;
   const acrossSpan = Math.max(1e-6, frame.acrossMaxMm - frame.acrossMinMm);
-  const surfaceNormal: AvatarVector3 = instance.placement.surface === "back" ? [0, 0, -1] : [0, 0, 1];
+  const surfaceNormal: AvatarVector3 = frame.worldNormal
+    ?? (instance.placement.surface === "back" ? [0, 0, -1] : [0, 0, 1]);
   for (let local = 0; local < instance.vertexCount; local += 1) {
     const point: readonly [number, number] = [
       instance.topology.positions2DMm[local * 2],
@@ -902,7 +1190,7 @@ function placeConnectedPanelsRigidly(
   }
 
   const componentVisited = new Set<string>();
-  for (const firstInstance of instanceById.values()) {
+  for (const firstInstance of [...instanceById.values()].sort((left, right) => left.id.localeCompare(right.id))) {
     if (componentVisited.has(firstInstance.id)) continue;
     const component: string[] = [];
     const discoveryQueue = [firstInstance.id];
@@ -910,22 +1198,23 @@ function placeConnectedPanelsRigidly(
     while (discoveryQueue.length > 0) {
       const current = discoveryQueue.shift()!;
       component.push(current);
-      for (const neighbor of adjacency.get(current) ?? []) {
+      for (const neighbor of [...(adjacency.get(current) ?? [])].sort()) {
         if (componentVisited.has(neighbor)) continue;
         componentVisited.add(neighbor);
         discoveryQueue.push(neighbor);
       }
     }
 
+    component.sort();
     const tubeRoots = component.filter(
       (id) => instanceById.get(id)?.arrangement?.mapping === "seam-derived-tube",
-    );
+    ).sort();
     const roots = tubeRoots.length > 0 ? tubeRoots : component.slice(0, 1);
     const placed = new Set(roots);
     const queue = [...roots];
     while (queue.length > 0) {
       const fixedId = queue.shift()!;
-      for (const movingId of adjacency.get(fixedId) ?? []) {
+      for (const movingId of [...(adjacency.get(fixedId) ?? [])].sort()) {
         if (placed.has(movingId)) continue;
         const fixed = instanceById.get(fixedId);
         const moving = instanceById.get(movingId);
@@ -1001,33 +1290,29 @@ function alignRigidPanelToSeam(
     developDirection = targetDirection;
   }
 
-  if (
-    fixedInstance.arrangement?.mapping === "rigid-panel"
-    && movingInstance.arrangement?.mapping === "rigid-panel"
-    && fixedPoints.length > 1
-  ) {
-    const fixedInterior = perpendicularToAxis(
+  if (fixedInstance.arrangement?.mapping === "rigid-panel"
+    && movingInstance.arrangement?.mapping === "rigid-panel") {
+    const fixedInterior = normalize3(perpendicularToAxis(
       subtract3(panelCenter(positions, fixedInstance), fixedMidpoint),
       seamDirection,
-    );
-    const movingInterior = perpendicularToAxis(
+    ));
+    const movingInterior = normalize3(perpendicularToAxis(
       subtract3(panelCenter(positions, movingInstance), fixedMidpoint),
       seamDirection,
-    );
-    if (dot3(fixedInterior, movingInterior) > 0) {
+    ));
+    const targetDirection = fixedInterior.map((value) => -value) as AvatarVector3;
+    const unfoldAngle = signedAngleAroundAxis(movingInterior, targetDirection, seamDirection);
+    if (Math.abs(unfoldAngle) > 1e-8) {
       rotateRigidPanelAroundLine(
         positions,
         movingInstance,
         fixedMidpoint,
         seamDirection,
-        Math.PI,
+        unfoldAngle,
       );
-      developAngleRad = Math.PI;
-      developDirection = normalize3(perpendicularToAxis(
-        subtract3(panelCenter(positions, movingInstance), fixedMidpoint),
-        seamDirection,
-      ));
     }
+    developAngleRad = unfoldAngle;
+    developDirection = targetDirection;
   }
 
   const representative = constraints.find((constraint) => constraint.rangeA && constraint.rangeB);

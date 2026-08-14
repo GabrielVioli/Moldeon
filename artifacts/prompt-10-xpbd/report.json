@@ -2,67 +2,67 @@
   "workerAsset": "http://127.0.0.1:5188/src/workers/simulation.worker.ts?worker_file&type=module",
   "lifecycle": {
     "running": {
-      "stepCount": 18,
+      "stepCount": 31,
       "substeps": 2,
-      "particleCount": 605,
-      "triangleCount": 960,
-      "stretchConstraintCount": 1564,
-      "shearConstraintCount": 960,
-      "bendConstraintCount": 1316,
+      "particleCount": 266,
+      "triangleCount": 468,
+      "stretchConstraintCount": 733,
+      "shearConstraintCount": 468,
+      "bendConstraintCount": 671,
       "seamConstraintCount": 20,
-      "seamErrorAverage": 1.9410731730915677e-9,
-      "seamErrorMaximum": 7.450580596923828e-9,
-      "maximumPositionMagnitude": 1.310391663528205,
-      "maximumVelocityMagnitude": 1.4168106329973302,
-      "maximumCorrectionApplied": 5.28220584982511e-8,
+      "seamErrorAverage": 2.0500152338688712e-8,
+      "seamErrorMaximum": 1.140912375632509e-7,
+      "maximumPositionMagnitude": 1.1029463144186653,
+      "maximumVelocityMagnitude": 2.378344058998189,
+      "maximumCorrectionApplied": 1.8874690326136597e-7,
       "invalid": false,
-      "droppedTimeSeconds": 0.06638500000070781
+      "droppedTimeSeconds": 0
     },
     "paused": {
-      "stepCount": 46,
-      "substeps": 2,
-      "particleCount": 605,
-      "triangleCount": 960,
-      "stretchConstraintCount": 1564,
-      "shearConstraintCount": 960,
-      "bendConstraintCount": 1316,
+      "stepCount": 70,
+      "substeps": 0,
+      "particleCount": 266,
+      "triangleCount": 468,
+      "stretchConstraintCount": 733,
+      "shearConstraintCount": 468,
+      "bendConstraintCount": 671,
       "seamConstraintCount": 20,
-      "seamErrorAverage": 1.4610419660640346e-8,
-      "seamErrorMaximum": 5.960464477539063e-8,
-      "maximumPositionMagnitude": 0.7442425291480445,
-      "maximumVelocityMagnitude": 3.427323818228899,
-      "maximumCorrectionApplied": 1.8653788638017942e-7,
+      "seamErrorAverage": 1.0877394386765211e-8,
+      "seamErrorMaximum": 2.8421665417071632e-8,
+      "maximumPositionMagnitude": 0.45517416973800995,
+      "maximumVelocityMagnitude": 4.979795932818268,
+      "maximumCorrectionApplied": 9.768631858901329e-8,
       "invalid": false,
       "droppedTimeSeconds": 0
     },
     "stepped": {
-      "stepCount": 47,
+      "stepCount": 71,
       "substeps": 1,
-      "particleCount": 605,
-      "triangleCount": 960,
-      "stretchConstraintCount": 1564,
-      "shearConstraintCount": 960,
-      "bendConstraintCount": 1316,
+      "particleCount": 266,
+      "triangleCount": 468,
+      "stretchConstraintCount": 733,
+      "shearConstraintCount": 468,
+      "bendConstraintCount": 671,
       "seamConstraintCount": 20,
-      "seamErrorAverage": 1.015525517355376e-8,
-      "seamErrorMaximum": 3.4527998339574313e-8,
-      "maximumPositionMagnitude": 0.7163063654423931,
-      "maximumVelocityMagnitude": 3.4950404167912668,
-      "maximumCorrectionApplied": 2.0007138244217222e-7,
+      "seamErrorAverage": 1.4845828215742739e-8,
+      "seamErrorMaximum": 2.383192081142394e-8,
+      "maximumPositionMagnitude": 0.49271966859730554,
+      "maximumVelocityMagnitude": 5.0412969590027945,
+      "maximumCorrectionApplied": 7.681950521116351e-8,
       "invalid": false,
       "droppedTimeSeconds": 0
     },
     "reset": {
       "stepCount": 0,
       "substeps": 0,
-      "particleCount": 605,
-      "triangleCount": 960,
-      "stretchConstraintCount": 1564,
-      "shearConstraintCount": 960,
-      "bendConstraintCount": 1316,
+      "particleCount": 266,
+      "triangleCount": 468,
+      "stretchConstraintCount": 733,
+      "shearConstraintCount": 468,
+      "bendConstraintCount": 671,
       "seamConstraintCount": 20,
-      "seamErrorAverage": 1.403341881221949e-17,
-      "seamErrorMaximum": 1.403341934139473e-17,
+      "seamErrorAverage": 1.4033418731236063e-17,
+      "seamErrorMaximum": 1.403341936316264e-17,
       "maximumPositionMagnitude": 1.4228544727923027,
       "maximumVelocityMagnitude": 0,
       "maximumCorrectionApplied": 0,
@@ -70,19 +70,19 @@
       "droppedTimeSeconds": 0
     },
     "resumed": {
-      "stepCount": 15,
+      "stepCount": 37,
       "substeps": 2,
-      "particleCount": 605,
-      "triangleCount": 960,
-      "stretchConstraintCount": 1564,
-      "shearConstraintCount": 960,
-      "bendConstraintCount": 1316,
+      "particleCount": 266,
+      "triangleCount": 468,
+      "stretchConstraintCount": 733,
+      "shearConstraintCount": 468,
+      "bendConstraintCount": 671,
       "seamConstraintCount": 20,
-      "seamErrorAverage": 1.3528690203252585e-9,
-      "seamErrorMaximum": 4.313491563960628e-9,
-      "maximumPositionMagnitude": 1.3435946650049129,
-      "maximumVelocityMagnitude": 1.1877187501032183,
-      "maximumCorrectionApplied": 5.198138213096882e-8,
+      "seamErrorAverage": 2.3122719240067224e-8,
+      "seamErrorMaximum": 5.646297148231552e-8,
+      "maximumPositionMagnitude": 0.9738930327775762,
+      "maximumVelocityMagnitude": 2.805502891544501,
+      "maximumCorrectionApplied": 7.947391304255142e-8,
       "invalid": false,
       "droppedTimeSeconds": 0
     }
@@ -98,76 +98,78 @@
             "panelInstanceId": "tube-piece:panel:1",
             "geometrySignature": "7db71efb",
             "particleStart": 0,
-            "particleCount": 605,
-            "particleEndExclusive": 605,
-            "triangleCount": 960,
-            "maximumLocalTriangleIndex": 604
+            "particleCount": 266,
+            "particleEndExclusive": 266,
+            "triangleCount": 468,
+            "maximumLocalTriangleIndex": 265
           }
         ],
-        "particleCount": 605,
-        "positionsLength": 1815,
-        "triangleCount": 960,
-        "maximumTriangleIndex": 604,
-        "stretchConstraintCount": 1564,
-        "shearConstraintCount": 960,
-        "bendConstraintCount": 1316,
+        "particleCount": 266,
+        "positionsLength": 798,
+        "triangleCount": 468,
+        "maximumTriangleIndex": 265,
+        "stretchConstraintCount": 733,
+        "shearConstraintCount": 468,
+        "bendConstraintCount": 671,
         "seamConstraintCount": 20,
         "seamConstraintsByGroup": {
           "tube-piece:self-seam": 20
         },
-        "finitePositionCount": 1815,
+        "finitePositionCount": 798,
         "valid": true
       },
       "diagnostics": {
-        "stepCount": 49,
+        "stepCount": 91,
         "substeps": 2,
-        "particleCount": 605,
-        "triangleCount": 960,
-        "stretchConstraintCount": 1564,
-        "shearConstraintCount": 960,
-        "bendConstraintCount": 1316,
+        "particleCount": 266,
+        "triangleCount": 468,
+        "stretchConstraintCount": 733,
+        "shearConstraintCount": 468,
+        "bendConstraintCount": 671,
         "seamConstraintCount": 20,
-        "seamErrorAverage": 1.0919714718422182e-8,
-        "seamErrorMaximum": 3.451686499846192e-8,
-        "maximumPositionMagnitude": 0.6591755032889676,
-        "maximumVelocityMagnitude": 3.6296689511503355,
-        "maximumCorrectionApplied": 1.8043915215221152e-7,
+        "seamErrorAverage": 6.503909117734698e-8,
+        "seamErrorMaximum": 1.2056010457457175e-7,
+        "maximumPositionMagnitude": 1.4081353371275225,
+        "maximumVelocityMagnitude": 6.220958233069329,
+        "maximumCorrectionApplied": 2.023868873846928e-7,
         "invalid": false,
         "droppedTimeSeconds": 0
       },
       "ready": {
         "revision": "53b89d37",
-        "generation": 1
+        "generation": 1,
+        "epoch": 6
       },
       "applied": {
         "revision": "53b89d37",
         "generation": 1,
-        "sequence": 47,
-        "positionsLength": 1815
+        "epoch": 6,
+        "sequence": 40,
+        "positionsLength": 798
       },
       "rejected": null,
-      "workerState": "running:1",
+      "workerState": "running:1:6",
       "meshes": [
         {
           "id": "tube-piece:panel:1",
-          "vertexCount": 605,
-          "triangleCount": 960,
+          "vertexCount": 266,
+          "triangleCount": 468,
           "boundingBox": {
             "min": [
-              -0.0572957806289196,
+              -0.05642532929778099,
               1.146399974822998,
               0.10117217153310776
             ],
             "max": [
-              0.0572957806289196,
+              0.05642532929778099,
               1.4063999652862549,
               0.21576373279094696
             ]
           },
           "centroid": [
-            0.007117790364744988,
-            1.2918545360407554,
-            0.14519376159945796
+            4.2092405032742688e-19,
+            1.2763999955994743,
+            0.15545238476050527
           ],
           "transform": {
             "position": [
@@ -205,17 +207,17 @@
             ]
           },
           "geometrySignature": "7db71efb",
-          "geometryRevision": "296bc836-4001-4379-96bd-5a9763e0c1bb:0:0",
+          "geometryRevision": "6e2c315d-6c94-4cac-b1f8-cb67aa436155:0:0",
           "meshCount": 1,
           "meanNormal": [
-            0.47256274061144016,
-            -1.8743743859884378e-18,
-            -0.8812970306235036
+            1.6175105010112455e-16,
+            6.162975541625081e-33,
+            -1
           ],
           "meanTriangleNormal": [
             0,
-            -1.1159659080075407e-19,
-            -3.577867169202165e-18
+            2.5784889631710947e-21,
+            -7.37257477290143e-18
           ],
           "materialSide": 2
         }
@@ -230,86 +232,88 @@
             "panelInstanceId": "tube-piece:panel:1",
             "geometrySignature": "7db71efb",
             "particleStart": 0,
-            "particleCount": 605,
-            "particleEndExclusive": 605,
-            "triangleCount": 960,
-            "maximumLocalTriangleIndex": 604
+            "particleCount": 266,
+            "particleEndExclusive": 266,
+            "triangleCount": 468,
+            "maximumLocalTriangleIndex": 265
           },
           {
             "panelInstanceId": "xpbd-flap-piece:panel:1",
             "geometrySignature": "0247e2ce",
-            "particleStart": 605,
+            "particleStart": 266,
             "particleCount": 245,
-            "particleEndExclusive": 850,
+            "particleEndExclusive": 511,
             "triangleCount": 384,
             "maximumLocalTriangleIndex": 244
           }
         ],
-        "particleCount": 850,
-        "positionsLength": 2550,
-        "triangleCount": 1344,
-        "maximumTriangleIndex": 849,
-        "stretchConstraintCount": 2192,
-        "shearConstraintCount": 1344,
-        "bendConstraintCount": 1840,
+        "particleCount": 511,
+        "positionsLength": 1533,
+        "triangleCount": 852,
+        "maximumTriangleIndex": 510,
+        "stretchConstraintCount": 1361,
+        "shearConstraintCount": 852,
+        "bendConstraintCount": 1195,
         "seamConstraintCount": 31,
         "seamConstraintsByGroup": {
           "tube-piece:self-seam": 20,
           "xpbd-tube-with-flap:flap-seam": 11
         },
-        "finitePositionCount": 2550,
+        "finitePositionCount": 1533,
         "valid": true
       },
       "diagnostics": {
         "stepCount": 191,
         "substeps": 2,
-        "particleCount": 850,
-        "triangleCount": 1344,
-        "stretchConstraintCount": 2192,
-        "shearConstraintCount": 1344,
-        "bendConstraintCount": 1840,
+        "particleCount": 511,
+        "triangleCount": 852,
+        "stretchConstraintCount": 1361,
+        "shearConstraintCount": 852,
+        "bendConstraintCount": 1195,
         "seamConstraintCount": 31,
-        "seamErrorAverage": 0.00004737460582063996,
-        "seamErrorMaximum": 0.0014601817204028282,
-        "maximumPositionMagnitude": 8.696608300805684,
-        "maximumVelocityMagnitude": 10.92228390560721,
-        "maximumCorrectionApplied": 0.0004999999073334038,
+        "seamErrorAverage": 0.000020793264893396205,
+        "seamErrorMaximum": 0.00015050545949150924,
+        "maximumPositionMagnitude": 8.69710965199299,
+        "maximumVelocityMagnitude": 10.971879692812454,
+        "maximumCorrectionApplied": 0.0005000002565793693,
         "invalid": false,
         "droppedTimeSeconds": 0
       },
       "ready": {
         "revision": "12dc0d60",
-        "generation": 2
+        "generation": 2,
+        "epoch": 8
       },
       "applied": {
         "revision": "12dc0d60",
         "generation": 2,
-        "sequence": 93,
-        "positionsLength": 2550
+        "epoch": 8,
+        "sequence": 88,
+        "positionsLength": 1533
       },
       "rejected": null,
-      "workerState": "running:2",
+      "workerState": "running:2:8",
       "meshes": [
         {
           "id": "tube-piece:panel:1",
-          "vertexCount": 605,
-          "triangleCount": 960,
+          "vertexCount": 266,
+          "triangleCount": 468,
           "boundingBox": {
             "min": [
-              -0.0572957806289196,
+              -0.05642532929778099,
               1.146399974822998,
               0.10117217153310776
             ],
             "max": [
-              0.0572957806289196,
+              0.05642532929778099,
               1.4063999652862549,
               0.21576373279094696
             ]
           },
           "centroid": [
-            0.007117790364744988,
-            1.2918545360407554,
-            0.14519376159945796
+            4.2092405032742688e-19,
+            1.2763999955994743,
+            0.15545238476050527
           ],
           "transform": {
             "position": [
@@ -347,17 +351,17 @@
             ]
           },
           "geometrySignature": "7db71efb",
-          "geometryRevision": "296bc836-4001-4379-96bd-5a9763e0c1bb:41:1",
+          "geometryRevision": "6e2c315d-6c94-4cac-b1f8-cb67aa436155:48:1",
           "meshCount": 1,
           "meanNormal": [
-            0.47256274061144016,
-            -1.8743743859884378e-18,
-            -0.8812970306235036
+            1.6175105010112455e-16,
+            6.162975541625081e-33,
+            -1
           ],
           "meanTriangleNormal": [
             0,
-            -1.1159659080075407e-19,
-            -3.577867169202165e-18
+            2.5784889631710947e-21,
+            -7.37257477290143e-18
           ],
           "materialSide": 2
         },
@@ -418,7 +422,7 @@
             ]
           },
           "geometrySignature": "0247e2ce",
-          "geometryRevision": "0ec76edc-0f0d-45a9-8327-025683c32714:0:1",
+          "geometryRevision": "865511b3-a83d-4fdc-88a0-065ee6466b64:0:1",
           "meshCount": 1,
           "meanNormal": [
             -4.7988745645424946e-8,
@@ -443,76 +447,78 @@
             "panelInstanceId": "tube-piece:panel:1",
             "geometrySignature": "7db71efb",
             "particleStart": 0,
-            "particleCount": 605,
-            "particleEndExclusive": 605,
-            "triangleCount": 960,
-            "maximumLocalTriangleIndex": 604
+            "particleCount": 266,
+            "particleEndExclusive": 266,
+            "triangleCount": 468,
+            "maximumLocalTriangleIndex": 265
           }
         ],
-        "particleCount": 605,
-        "positionsLength": 1815,
-        "triangleCount": 960,
-        "maximumTriangleIndex": 604,
-        "stretchConstraintCount": 1564,
-        "shearConstraintCount": 960,
-        "bendConstraintCount": 1316,
+        "particleCount": 266,
+        "positionsLength": 798,
+        "triangleCount": 468,
+        "maximumTriangleIndex": 265,
+        "stretchConstraintCount": 733,
+        "shearConstraintCount": 468,
+        "bendConstraintCount": 671,
         "seamConstraintCount": 20,
         "seamConstraintsByGroup": {
           "tube-piece:self-seam": 20
         },
-        "finitePositionCount": 1815,
+        "finitePositionCount": 798,
         "valid": true
       },
       "diagnostics": {
-        "stepCount": 27,
+        "stepCount": 38,
         "substeps": 2,
-        "particleCount": 605,
-        "triangleCount": 960,
-        "stretchConstraintCount": 1564,
-        "shearConstraintCount": 960,
-        "bendConstraintCount": 1316,
+        "particleCount": 266,
+        "triangleCount": 468,
+        "stretchConstraintCount": 733,
+        "shearConstraintCount": 468,
+        "bendConstraintCount": 671,
         "seamConstraintCount": 20,
-        "seamErrorAverage": 7.156943925210263e-9,
-        "seamErrorMaximum": 6.274173358633582e-8,
-        "maximumPositionMagnitude": 1.1775345937923307,
-        "maximumVelocityMagnitude": 2.087808132211891,
-        "maximumCorrectionApplied": 1.622329007424226e-7,
+        "seamErrorAverage": 3.018158320315151e-8,
+        "seamErrorMaximum": 5.465012816743526e-8,
+        "maximumPositionMagnitude": 0.9504456359393483,
+        "maximumVelocityMagnitude": 2.8756952286243993,
+        "maximumCorrectionApplied": 8.352331891716562e-8,
         "invalid": false,
         "droppedTimeSeconds": 0
       },
       "ready": {
         "revision": "53b89d37",
-        "generation": 3
+        "generation": 3,
+        "epoch": 10
       },
       "applied": {
         "revision": "53b89d37",
         "generation": 3,
-        "sequence": 8,
-        "positionsLength": 1815
+        "epoch": 10,
+        "sequence": 12,
+        "positionsLength": 798
       },
       "rejected": null,
-      "workerState": "running:3",
+      "workerState": "running:3:10",
       "meshes": [
         {
           "id": "tube-piece:panel:1",
-          "vertexCount": 605,
-          "triangleCount": 960,
+          "vertexCount": 266,
+          "triangleCount": 468,
           "boundingBox": {
             "min": [
-              -0.0572957806289196,
+              -0.05642532929778099,
               1.146399974822998,
               0.10117217153310776
             ],
             "max": [
-              0.0572957806289196,
+              0.05642532929778099,
               1.4063999652862549,
               0.21576373279094696
             ]
           },
           "centroid": [
-            0.007117790364744988,
-            1.2918545360407554,
-            0.14519376159945796
+            4.2092405032742688e-19,
+            1.2763999955994743,
+            0.15545238476050527
           ],
           "transform": {
             "position": [
@@ -550,17 +556,17 @@
             ]
           },
           "geometrySignature": "7db71efb",
-          "geometryRevision": "296bc836-4001-4379-96bd-5a9763e0c1bb:144:1",
+          "geometryRevision": "6e2c315d-6c94-4cac-b1f8-cb67aa436155:135:1",
           "meshCount": 1,
           "meanNormal": [
-            0.47256274061144016,
-            -1.8743743859884378e-18,
-            -0.8812970306235036
+            1.6175105010112455e-16,
+            6.162975541625081e-33,
+            -1
           ],
           "meanTriangleNormal": [
             0,
-            -1.1159659080075407e-19,
-            -3.577867169202165e-18
+            2.5784889631710947e-21,
+            -7.37257477290143e-18
           ],
           "materialSide": 2
         }
@@ -624,7 +630,7 @@
         "valid": true
       },
       "diagnostics": {
-        "stepCount": 12,
+        "stepCount": 13,
         "substeps": 2,
         "particleCount": 1460,
         "triangleCount": 2304,
@@ -632,26 +638,28 @@
         "shearConstraintCount": 2304,
         "bendConstraintCount": 3152,
         "seamConstraintCount": 41,
-        "seamErrorAverage": 3.545734604151365e-8,
-        "seamErrorMaximum": 1.1926748300777466e-7,
-        "maximumPositionMagnitude": 1.3873687860281219,
-        "maximumVelocityMagnitude": 0.9558770062198408,
-        "maximumCorrectionApplied": 1.788141493460119e-7,
+        "seamErrorAverage": 3.272403048969751e-8,
+        "seamErrorMaximum": 1.1920928955078125e-7,
+        "maximumPositionMagnitude": 1.3788108157876267,
+        "maximumVelocityMagnitude": 1.0334781408448048,
+        "maximumCorrectionApplied": 1.9670096765906056e-7,
         "invalid": false,
-        "droppedTimeSeconds": 0.047125
+        "droppedTimeSeconds": 0.04610499999858439
       },
       "ready": {
         "revision": "3e2d9298",
-        "generation": 4
+        "generation": 4,
+        "epoch": 12
       },
       "applied": {
         "revision": "3e2d9298",
         "generation": 4,
+        "epoch": 12,
         "sequence": 4,
         "positionsLength": 4380
       },
       "rejected": null,
-      "workerState": "running:4",
+      "workerState": "running:4:12",
       "meshes": [
         {
           "id": "xpbd-panel-1:panel:1",
@@ -710,7 +718,7 @@
             ]
           },
           "geometrySignature": "ac47f17d",
-          "geometryRevision": "54f6e61e-6f62-4b5e-989c-59d8ce671052:0:1",
+          "geometryRevision": "8870ba22-49c0-43d1-b41c-6cf646dcea49:0:1",
           "meshCount": 1,
           "meanNormal": [
             0,
@@ -781,7 +789,7 @@
             ]
           },
           "geometrySignature": "700168bb",
-          "geometryRevision": "44062c51-a726-4e9a-9c66-91e33fe2351d:0:1",
+          "geometryRevision": "76052421-7d9d-43d8-9a48-b70b263db776:0:1",
           "meshCount": 1,
           "meanNormal": [
             0,
@@ -852,7 +860,7 @@
             ]
           },
           "geometrySignature": "71fab9b5",
-          "geometryRevision": "9746e7a5-ee4a-4784-9aa7-7d2a203c410e:0:1",
+          "geometryRevision": "4dd67e78-260f-4a1a-8573-8dea1206e5eb:0:1",
           "meshCount": 1,
           "meanNormal": [
             0,
@@ -923,7 +931,7 @@
             ]
           },
           "geometrySignature": "d18cb2af",
-          "geometryRevision": "d400ed1b-69b4-4415-9699-4f83045f8828:0:1",
+          "geometryRevision": "d9ce53eb-9d7a-4435-a590-d5f90f0e157a:0:1",
           "meshCount": 1,
           "meanNormal": [
             0,

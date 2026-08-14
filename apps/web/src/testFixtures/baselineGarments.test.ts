@@ -24,12 +24,15 @@ describe("baseline garment fixtures", () => {
       "self-seam-tube",
       "xpbd-tube-with-flap",
       "xpbd-four-panel-composite",
+      "spatial-two-panel-tube",
+      "spatial-four-panel-tube",
+      "spatial-open-chain",
       "sleeve-with-body",
       "multiple-fabrics",
       "legacy-valid",
       "intentionally-invalid",
     ]);
-    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(18);
+    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(21);
   });
 
   it.each(BASELINE_FIXTURE_IDS)("creates %s deterministically", (id) => {

@@ -19,6 +19,7 @@ import {
 } from "./PanelTopology";
 import {
   recommendedPanelRefinement,
+  remeshStructuredQuadrilateral,
   refinePanelTopology,
 } from "./PanelRefinement";
 import type { PanelEdgePath, PanelVertexSourceMapping } from "./types";
@@ -227,15 +228,21 @@ export function buildGarmentAssembly(
   const warnings: string[] = [];
   const instances: AssemblyPanelInstance[] = [];
   const positionValues: number[] = [];
+  const structuredSelfSeamPieces = findStructuredSelfSeamPieces(snapshots, garment);
   for (const snapshot of snapshots) {
     let topology: PanelTopology;
 
     try {
       const baseTopology = buildPanelTopology(snapshot.piece, METERS_PER_MM, geometrySignatures.get(snapshot.piece.id));
-      topology = refinePanelTopology(
-        baseTopology,
-        recommendedPanelRefinement(baseTopology),
-      );
+      topology = structuredSelfSeamPieces.has(snapshot.piece.id)
+        ? remeshStructuredQuadrilateral(baseTopology) ?? refinePanelTopology(
+            baseTopology,
+            recommendedPanelRefinement(baseTopology),
+          )
+        : refinePanelTopology(
+            baseTopology,
+            recommendedPanelRefinement(baseTopology),
+          );
     } catch (error) {
       warnings.push(
         `${snapshot.piece.name}: ${
@@ -317,6 +324,30 @@ export function buildGarmentAssembly(
     warnings,
     invalid: false,
   };
+}
+
+function findStructuredSelfSeamPieces(
+  snapshots: readonly PatternSnapshot[],
+  garment: GarmentDraft,
+): Set<string> {
+  const availablePieces = new Set(
+    snapshots
+      .filter((snapshot) => resolvePiecePlacements(snapshot.piece, garment).length === 1)
+      .map((snapshot) => snapshot.piece.id),
+  );
+  const result = new Set<string>();
+  for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
+    const first = seamSideRanges(seam, "first");
+    const second = seamSideRanges(seam, "second");
+    if (first.length !== 1
+      || second.length !== 1
+      || first[0].pieceId !== second[0].pieceId
+      || !availablePieces.has(first[0].pieceId)
+      || seamSidesMateriallyOverlap(first, second)) continue;
+    result.add(first[0].pieceId);
+  }
+  return result;
 }
 
 function appendInitialPositions(

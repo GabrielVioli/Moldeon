@@ -90,6 +90,38 @@ function genericComponent(panelCount: 2 | 4, withSeams: boolean): GarmentDraft {
   return { ...blank, pieces, seams };
 }
 
+function genericTubeCycle(panelCount: 2 | 4): GarmentDraft {
+  const garment = genericComponent(panelCount, true);
+  const first = garment.pieces[0];
+  const last = garment.pieces[garment.pieces.length - 1];
+  return {
+    ...garment,
+    seams: [
+      ...(garment.seams ?? []),
+      {
+        id: "generic-cycle-close",
+        groupId: "generic-cycle-close",
+        first: {
+          pieceId: last.id,
+          edgeId: getPatternEdges(last)[1].id,
+          startT: 0,
+          endT: 1,
+        },
+        second: {
+          pieceId: first.id,
+          edgeId: getPatternEdges(first)[3].id,
+          startT: 0,
+          endT: 1,
+        },
+        direction: "opposite",
+        easeRatio: 0,
+        type: "standard",
+        active: true,
+      },
+    ],
+  };
+}
+
 function arrangedDraft(garment: GarmentDraft) {
   return buildSemanticAvatarArrangement(
     buildResolvedAssemblyInput(garment),
@@ -295,7 +327,115 @@ function instancePositions(
   ));
 }
 
+function referencePosition(
+  positions: Float32Array,
+  reference: { particleIndices: number[]; weights: number[] },
+): [number, number, number] {
+  const result: [number, number, number] = [0, 0, 0];
+  reference.particleIndices.forEach((particleIndex, index) => {
+    result[0] += positions[particleIndex * 3] * reference.weights[index];
+    result[1] += positions[particleIndex * 3 + 1] * reference.weights[index];
+    result[2] += positions[particleIndex * 3 + 2] * reference.weights[index];
+  });
+  return result;
+}
+
+function instanceCentroid(result: ReturnType<typeof arrangedDraft>, instanceId: string): [number, number, number] {
+  const values = instancePositions(result, instanceId);
+  const center: [number, number, number] = [0, 0, 0];
+  for (let offset = 0; offset < values.length; offset += 3) {
+    center[0] += values[offset];
+    center[1] += values[offset + 1];
+    center[2] += values[offset + 2];
+  }
+  const count = values.length / 3;
+  return center.map((value) => value / count) as [number, number, number];
+}
+
 describe("SemanticAvatarArrangement", () => {
+  it.each([2, 4] as const)(
+    "maps a closed cycle of %i panels to a clean seam-derived shell",
+    (panelCount) => {
+      const result = arrangedDraft(genericTubeCycle(panelCount));
+
+      expect(result.state.instances).toHaveLength(panelCount);
+      expect(result.state.instances.every(
+        (instance) => instance.arrangement?.mapping === "seam-derived-tube",
+      )).toBe(true);
+      expect(measureIntrinsicDistortion(result.state).maxRelativeDistortion).toBeLessThan(0.015);
+
+      const seamGaps = result.state.stitchConstraints.map((constraint) => {
+        const first = referencePosition(result.state.positions, constraint.a);
+        const second = referencePosition(result.state.positions, constraint.b);
+        return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+      });
+      expect(Math.max(...seamGaps)).toBeLessThan(2e-5);
+
+      const radialErrors: number[] = [];
+      for (const instance of result.state.instances) {
+        const arrangement = instance.arrangement!;
+        const center = arrangement.tubeCenter!;
+        const axis = arrangement.axis;
+        const radius = arrangement.tubeRadiusM!;
+        for (let local = 0; local < instance.vertexCount; local += 1) {
+          const offset = (instance.particleStart + local) * 3;
+          const relative = [
+            result.state.positions[offset] - center[0],
+            result.state.positions[offset + 1] - center[1],
+            result.state.positions[offset + 2] - center[2],
+          ];
+          const along = relative[0] * axis[0] + relative[1] * axis[1] + relative[2] * axis[2];
+          const radial = Math.hypot(
+            relative[0] - axis[0] * along,
+            relative[1] - axis[1] * along,
+            relative[2] - axis[2] * along,
+          );
+          radialErrors.push(Math.abs(radial - radius));
+        }
+      }
+      expect(Math.max(...radialErrors)).toBeLessThan(2e-6);
+      const z = result.state.instances.map((instance) => instancePositions(result, instance.id))
+        .flatMap((positions) => positions.filter((_value, index) => index % 3 === 2));
+      expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(0.04);
+    },
+  );
+
+  it("is independent from piece names and seam creation order", () => {
+    const canonical = genericTubeCycle(4);
+    const renamedAndReordered: GarmentDraft = {
+      ...canonical,
+      pieces: canonical.pieces.map((piece, index) => ({ ...piece, name: `aleatório-${9 - index}` })).reverse(),
+      seams: [...(canonical.seams ?? [])].reverse(),
+    };
+    const first = arrangedDraft(canonical);
+    const second = arrangedDraft(renamedAndReordered);
+    for (const instance of first.state.instances) {
+      const expected = instancePositions(first, instance.id);
+      const actual = instancePositions(second, instance.id);
+      expect(actual).toHaveLength(expected.length);
+      actual.forEach((value, index) => expect(Math.abs(value - expected[index])).toBeLessThan(1e-7));
+    }
+  });
+
+  it("stops treating a four-panel component as closed when the closing seam is removed", () => {
+    const closedGarment = genericTubeCycle(4);
+    const openedGarment = {
+      ...closedGarment,
+      seams: closedGarment.seams?.filter((seam) => seam.id !== "generic-cycle-close"),
+    };
+    const closed = arrangedDraft(closedGarment);
+    const opened = arrangedDraft(openedGarment);
+
+    expect(closed.state.instances.every((instance) => instance.arrangement?.mapping === "seam-derived-tube")).toBe(true);
+    expect(opened.state.instances.every((instance) => instance.arrangement?.mapping === "rigid-panel")).toBe(true);
+    expect(measureIntrinsicDistortion(opened.state).maxRelativeDistortion).toBeLessThan(5e-5);
+    expect(opened.state.positions.every(Number.isFinite)).toBe(true);
+    const centers = opened.state.instances.map((instance) => instanceCentroid(opened, instance.id));
+    const pairDistances = centers.flatMap((center, index) => centers.slice(index + 1).map((other) =>
+      Math.hypot(center[0] - other[0], center[1] - other[1], center[2] - other[2])));
+    expect(Math.min(...pairDistances)).toBeGreaterThan(0.05);
+  });
+
   it.each([2, 4] as const)(
     "keeps each of %i generic panels stable while preserving SeamGroups for future physics",
     (panelCount) => {

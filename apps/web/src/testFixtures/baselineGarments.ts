@@ -36,6 +36,9 @@ export const BASELINE_FIXTURE_IDS = [
   "self-seam-tube",
   "xpbd-tube-with-flap",
   "xpbd-four-panel-composite",
+  "spatial-two-panel-tube",
+  "spatial-four-panel-tube",
+  "spatial-open-chain",
   "sleeve-with-body",
   "multiple-fabrics",
   "legacy-valid",
@@ -78,6 +81,12 @@ export function createBaselineFixture(id: BaselineFixtureId): GarmentDraft {
       return tubeWithFlapFixture(id);
     case "xpbd-four-panel-composite":
       return fourPanelCompositeFixture(id);
+    case "spatial-two-panel-tube":
+      return spatialPanelFixture(id, 2, true);
+    case "spatial-four-panel-tube":
+      return spatialPanelFixture(id, 4, true);
+    case "spatial-open-chain":
+      return spatialPanelFixture(id, 3, false);
     case "sleeve-with-body":
       return templateFixture("tshirt", id);
     case "multiple-fabrics":
@@ -405,6 +414,37 @@ function fourPanelCompositeFixture(fixtureId: string): GarmentDraft {
   };
   return {
     ...garmentFixture(fixtureId, pieces, [composite, simple]),
+    dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
+  };
+}
+
+function spatialPanelFixture(
+  fixtureId: string,
+  panelCount: 2 | 3 | 4,
+  closed: boolean,
+): GarmentDraft {
+  const pieces = Array.from({ length: panelCount }, (_, index) =>
+    rectanglePiece(`spatial-panel-${index + 1}`, 120, 240));
+  const connectionCount = closed ? panelCount : panelCount - 1;
+  const seams: Seam[] = Array.from({ length: connectionCount }, (_, index) => {
+    const first = pieces[index];
+    const second = pieces[(index + 1) % panelCount];
+    return {
+      id: `${fixtureId}:join-${index + 1}`,
+      groupId: `${fixtureId}:join-${index + 1}`,
+      name: `União espacial ${index + 1}`,
+      first: { pieceId: first.id, edgeId: getPatternEdges(first)[1].id, startT: 0, endT: 1 },
+      second: { pieceId: second.id, edgeId: getPatternEdges(second)[3].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    };
+  });
+  const garment = garmentFixture(fixtureId, pieces, seams);
+  return {
+    ...garment,
     dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
   };
 }

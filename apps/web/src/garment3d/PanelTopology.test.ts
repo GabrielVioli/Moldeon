@@ -5,6 +5,7 @@ import { initializePanelSimulation, simulatePanel } from "./PanelSimulation";
 import { getPatternEdges, type PatternPoint, type GarmentDraft, type PatternPiece } from "../domain/pattern";
 import { createPatternSnapshot } from "../core/fallbackPatternEngine";
 import { buildGarmentAssembly } from "./GarmentAssembly";
+import { createBaselineFixture } from "../testFixtures/baselineGarments";
 
 const rectanglePoints: PatternPoint[] = [
   { id: "a", xMm: 0, yMm: 0 },
@@ -113,6 +114,33 @@ describe("PanelTopology and self seam simulation", () => {
       source.panelInstanceId === placement.id
       && source.meshVertexIndex === index
       && source.sourcePatternId === piece.id,
+    )).toBe(true);
+  });
+
+  it("uses a structured material mesh for a quadrilateral self-seam tube", () => {
+    const garment = createBaselineFixture("self-seam-tube");
+    const state = buildGarmentAssembly(
+      garment.pieces.map((piece) => createPatternSnapshot(piece)),
+      garment,
+    );
+    const topology = state.instances[0].topology;
+    let maximumTriangleSpanMm = 0;
+    for (let offset = 0; offset < topology.triangles.length; offset += 3) {
+      const xCoordinates = [0, 1, 2].map(
+        (index) => topology.positions2DMm[topology.triangles[offset + index] * 2],
+      );
+      maximumTriangleSpanMm = Math.max(
+        maximumTriangleSpanMm,
+        Math.max(...xCoordinates) - Math.min(...xCoordinates),
+      );
+    }
+
+    expect(state.instances[0].vertexCount).toBe(266);
+    expect(maximumTriangleSpanMm).toBeLessThanOrEqual(20.001);
+    expect(topology.edges.size).toBe(4);
+    expect(topology.vertexSources).toHaveLength(state.instances[0].vertexCount);
+    expect(topology.vertexSources.every((source, index) =>
+      source.vertexIndex === index && source.sourcePatternId === garment.pieces[0].id,
     )).toBe(true);
   });
 
