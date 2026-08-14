@@ -1,0 +1,49 @@
+name: Deploy Test 10.1 Preview
+
+on:
+  push:
+    branches:
+      - "deploy/test-10-1-95a35d9"
+    paths:
+      - ".github/workflows/deploy-test-10-1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERCEL_ORG_ID: team_xWSg3ampf9wcc02kJfuBZdRb
+      VERCEL_PROJECT_ID: prj_j0RHUyo4JJnFfSfYLQBmv2tXte5b
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Verify Vercel credentials
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN is not configured for this repository." >&2
+            exit 2
+          fi
+      - name: Deploy exact build to Vercel preview
+        id: deploy
+        shell: bash
+        run: |
+          URL=$(npx --yes vercel@latest deploy apps/web/dist --yes --token="$VERCEL_TOKEN" --scope=gabrielviolis-projects)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "$URL"
+      - name: Record preview URL
+        run: echo "Preview ${{ steps.deploy.outputs.url }}"
