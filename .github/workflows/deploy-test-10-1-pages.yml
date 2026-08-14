@@ -1,0 +1,49 @@
+name: Deploy Test 10.1 Pages
+
+on:
+  push:
+    branches:
+      - "deploy/test-10-1-95a35d9"
+    paths:
+      - ".github/workflows/deploy-test-10-1-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-test-10-1-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Pages preview
+        run: npm run build --workspace @moldeon/web -- --base=/Moldeon/
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
