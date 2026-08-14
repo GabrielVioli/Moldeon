@@ -17,6 +17,10 @@ import {
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
+import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
+import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
+import { XpbdWorkerClient } from "../physics/XpbdWorkerClient";
 
 export type RenderBackend = "webgpu" | "webgl2";
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
@@ -37,12 +41,18 @@ export class ThreeViewport {
   private readonly profile: PerformanceProfile;
   private readonly renderer: ViewportRenderer;
   private garmentMeshes: GarmentAssemblyMeshData[] = [];
+  private readonly simulation: XpbdWorkerClient;
+  private assemblyState: GarmentAssemblyState | null = null;
+  private assemblyRevision: string | null = null;
+  private assemblyGeneration = 0;
   private avatarSignature: string | null = null;
   private avatarLoadController: AbortController | null = null;
   private hasFramedScene = false;
   private frameId: number | null = null;
   private lastFrameAt = 0;
   private disposed = false;
+  private simulationRunning = false;
+  private resumeAfterVisibility = false;
 
   private constructor(
     private readonly host: HTMLElement,
@@ -52,6 +62,36 @@ export class ThreeViewport {
   ) {
     this.renderer = renderer;
     this.profile = profile;
+    this.host.dataset.simulationWorker = "created";
+    this.simulation = new XpbdWorkerClient({
+      onFrame: (frame) => {
+        this.host.dataset.simulationWorkerFrame = JSON.stringify({
+          revision: frame.revision,
+          generation: frame.generation,
+          sequence: frame.sequence,
+          positionsLength: frame.positions.length,
+          stepCount: frame.diagnostics.stepCount,
+        });
+        this.requestRender();
+      },
+      onReady: (revision, generation, diagnostics) => {
+        this.host.dataset.simulationWorkerReady = JSON.stringify({ revision, generation });
+        if (revision !== this.assemblyRevision || generation !== this.assemblyGeneration) return;
+        this.writeSimulationDiagnostics(diagnostics);
+      },
+      onState: (generation, running, disposed) => {
+        this.host.dataset.simulationWorkerState = disposed
+          ? "disposed"
+          : `${running ? "running" : "paused"}:${generation}`;
+      },
+      onDiscardedFrame: (revision, generation, reason) => {
+        this.host.dataset.simulationDiscardedFrame = JSON.stringify({ revision, generation, reason });
+      },
+      onError: (message, recoverable) => {
+        console.error("Worker XPBD:", message);
+        this.host.dataset.simulationStatus = recoverable ? "recoverable-error" : "error";
+      },
+    });
     this.scene.background = new THREE.Color(0xe9e6df);
     this.camera.position.set(2.1, 1.25, 3.2);
 
@@ -79,6 +119,7 @@ export class ThreeViewport {
       this.refresh();
     });
     this.resizeObserver.observe(this.host);
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
   }
 
   static async create(host: HTMLElement, signal?: AbortSignal): Promise<ThreeViewport> {
@@ -112,6 +153,28 @@ export class ThreeViewport {
       visibleInstanceIds: arrangement.visibleInstanceIds,
     });
     this.reconcileGarmentMeshes(nextMeshes);
+    this.assemblyState = arrangement.state;
+    this.assemblyRevision = input.signature;
+    this.host.dataset.simulationGeometryRevision = input.signature;
+    const settings = input.document.simulationSettings;
+    const resumeAfterRebuild = this.simulationRunning;
+    const initialization = buildXpbdInitialization(
+      arrangement.state,
+      arrangement.garment,
+      input.signature,
+      {
+        config: {
+          gravity: settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number],
+          maximumSubsteps: settings.substeps,
+          iterations: settings.iterations,
+        },
+      },
+    );
+    this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
+    this.assemblyGeneration = this.simulation.updateGeometry(initialization);
+    this.host.dataset.simulationGeneration = String(this.assemblyGeneration);
+    if (resumeAfterRebuild) this.simulation.resume();
+    this.host.dataset.simulationStatus = resumeAfterRebuild ? "running" : "ready";
 
     if (!this.hasFramedScene || avatarConfiguration.changed) {
       this.frameDressedScene();
@@ -143,7 +206,35 @@ export class ThreeViewport {
   }
 
   dress(): void {
-    this.refresh();
+    this.resumeSimulation();
+  }
+
+  pauseSimulation(): void {
+    this.simulation.pause();
+    this.simulationRunning = false;
+    this.host.dataset.simulationStatus = "paused";
+  }
+
+  resumeSimulation(): void {
+    this.host.dataset.simulationResumeRequested = this.assemblyRevision ?? "without-geometry";
+    this.simulation.resume();
+    this.simulationRunning = true;
+    this.host.dataset.simulationStatus = "running";
+    this.requestRender();
+  }
+
+  stepSimulation(): void {
+    this.simulation.step();
+    this.simulationRunning = false;
+    this.host.dataset.simulationStatus = "paused";
+    this.requestRender();
+  }
+
+  resetSimulation(): void {
+    this.simulation.reset();
+    this.simulationRunning = false;
+    this.host.dataset.simulationStatus = "ready";
+    this.requestRender();
   }
 
   refresh(): void {
@@ -159,6 +250,7 @@ export class ThreeViewport {
     if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver.disconnect();
+    document.removeEventListener("visibilitychange", this.handleVisibilityChange);
     if (this.frameId !== null) {
       window.cancelAnimationFrame(this.frameId);
       this.frameId = null;
@@ -167,6 +259,10 @@ export class ThreeViewport {
     this.controls.dispose();
     this.avatarLoadController?.abort();
     this.avatarLoadController = null;
+    this.simulation.dispose();
+    this.assemblyState = null;
+    this.assemblyRevision = null;
+    this.assemblyGeneration = 0;
     this.clearGarment();
     this.clearAvatar();
     disposeObject(this.scene);
@@ -183,6 +279,8 @@ export class ThreeViewport {
     delete this.host.dataset.avatarInspection;
     delete this.host.dataset.garmentInstanceCount;
     delete this.host.dataset.garmentMeshDiagnostics;
+    delete this.host.dataset.simulationStatus;
+    delete this.host.dataset.simulationDiagnostics;
   }
 
   private frameDressedScene(): void {
@@ -329,9 +427,76 @@ export class ThreeViewport {
     if (this.disposed) return;
     const deltaSeconds = this.lastFrameAt === 0 ? 1 / 60 : Math.min((time - this.lastFrameAt) / 1000, 0.05);
     this.lastFrameAt = time;
+    const frame = this.simulation.consumeLatestFrame();
+    if (frame) {
+      if (frame.revision === this.assemblyRevision
+        && frame.generation === this.assemblyGeneration
+        && this.assemblyState
+        && frame.positions.length === this.assemblyState.positions.length
+        && frameCanUpdateMeshes(frame.positions, this.assemblyState, this.garmentMeshes)) {
+        this.assemblyState.positions.set(frame.positions);
+        for (const mesh of this.garmentMeshes) refreshMeshFromAssembly(mesh, this.assemblyState);
+        this.writeSimulationDiagnostics(frame.diagnostics);
+        this.host.dataset.simulationAppliedFrame = JSON.stringify({
+          revision: frame.revision,
+          generation: frame.generation,
+          sequence: frame.sequence,
+          positionsLength: frame.positions.length,
+        });
+      } else {
+        this.host.dataset.simulationRejectedFrame = JSON.stringify({
+          revision: frame.revision,
+          generation: frame.generation,
+          expectedRevision: this.assemblyRevision,
+          expectedGeneration: this.assemblyGeneration,
+          positionsLength: frame.positions.length,
+          expectedPositionsLength: this.assemblyState?.positions.length ?? 0,
+        });
+      }
+      this.simulation.recycleFrame(frame);
+    }
     this.controls.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
+    if (this.simulationRunning) this.requestRender();
   };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.resumeAfterVisibility = this.simulationRunning;
+      if (this.simulationRunning) this.pauseSimulation();
+      return;
+    }
+    if (this.resumeAfterVisibility) this.resumeSimulation();
+    this.resumeAfterVisibility = false;
+  };
+
+  private writeSimulationDiagnostics(diagnostics: object): void {
+    this.host.dataset.simulationDiagnostics = JSON.stringify(diagnostics);
+  }
+}
+
+function frameCanUpdateMeshes(
+  positions: Float32Array,
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+): boolean {
+  for (const value of positions) if (!Number.isFinite(value)) return false;
+  const instanceById = new Map(state.instances.map((instance) => [instance.id, instance]));
+  for (const mesh of meshes) {
+    const instance = instanceById.get(mesh.key);
+    const positionAttribute = mesh.mesh.geometry.getAttribute("position");
+    if (!instance
+      || instance.particleStart < 0
+      || instance.particleStart + instance.vertexCount > positions.length / 3
+      || positionAttribute.count !== instance.vertexCount) return false;
+    const index = mesh.mesh.geometry.index;
+    if (index) {
+      for (let offset = 0; offset < index.count; offset += 1) {
+        if (index.getX(offset) >= instance.vertexCount) return false;
+      }
+    }
+  }
+  return true;
 }
 
 async function createRenderer(

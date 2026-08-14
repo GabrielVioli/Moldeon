@@ -29,6 +29,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [simulationState, setSimulationState] = useState<"ready" | "running" | "paused">("ready");
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
 
   latestInputRef.current = assemblyInput;
@@ -56,6 +57,7 @@ export const GarmentViewport = memo(function GarmentViewport({
         }
         if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
+          setSimulationState("running");
           lastDressedVersionRef.current = latestSimulateVersionRef.current;
         } else if (latestActiveRef.current) {
           viewport.refresh();
@@ -103,6 +105,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   useEffect(() => {
     if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
     viewportRef.current.dress();
+    setSimulationState("running");
     lastDressedVersionRef.current = simulateVersion;
   }, [simulateVersion]);
 
@@ -118,6 +121,27 @@ export const GarmentViewport = memo(function GarmentViewport({
         {approvedAvatar
           ? `Manequim aprovado · ${approvedAvatar.assetId}`
           : AVATAR_NOT_CONFIGURED_MESSAGE}
+      </div>
+      <div className="viewport-simulation-controls" aria-label="Controles da simula\u00e7\u00e3o">
+        {simulationState === "running" ? (
+          <button type="button" onClick={() => {
+            viewportRef.current?.pauseSimulation();
+            setSimulationState("paused");
+          }}>Pausar</button>
+        ) : (
+          <button type="button" onClick={() => {
+            viewportRef.current?.resumeSimulation();
+            setSimulationState("running");
+          }}>Continuar</button>
+        )}
+        <button type="button" onClick={() => {
+          viewportRef.current?.stepSimulation();
+          setSimulationState("paused");
+        }}>Passo</button>
+        <button type="button" onClick={() => {
+          viewportRef.current?.resetSimulation();
+          setSimulationState("ready");
+        }}>Reiniciar</button>
       </div>
     </div>
   );

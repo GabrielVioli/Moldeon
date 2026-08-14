@@ -74,6 +74,8 @@ export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssem
       anchor: instance.arrangementAnchor,
     })),
     seams: seamGroups,
+    fabrics: document.fabrics.map((fabric) => ({ id: fabric.id, physics: fabric.physics })),
+    simulationSettings: document.simulationSettings,
     body: document.body,
     measurements: document.measurements.values,
   }));

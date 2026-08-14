@@ -22,12 +22,14 @@ describe("baseline garment fixtures", () => {
       "equal-length-seam",
       "length-mismatch-seam",
       "self-seam-tube",
+      "xpbd-tube-with-flap",
+      "xpbd-four-panel-composite",
       "sleeve-with-body",
       "multiple-fabrics",
       "legacy-valid",
       "intentionally-invalid",
     ]);
-    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(16);
+    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(18);
   });
 
   it.each(BASELINE_FIXTURE_IDS)("creates %s deterministically", (id) => {

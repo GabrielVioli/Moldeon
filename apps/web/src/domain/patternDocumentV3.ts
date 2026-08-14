@@ -12,6 +12,7 @@ import {
   migrateLegacyPieceToSegments,
   parseGarmentDraft,
   parsePatternPiece,
+  seamSidesMateriallyOverlap,
   seamSideRanges,
   type AssemblyPlacement,
   type GarmentDraft,
@@ -589,7 +590,7 @@ export function validatePatternDocumentV3(
     if (group.first.length === 0 || group.second.length === 0) {
       issues.push(issue("empty-range", "error", `O grupo ${group.id} precisa ter intervalos nos dois lados.`, group.id));
     }
-    if (rangesListsEqual(group.first, group.second)) {
+    if (seamSidesMateriallyOverlap(group.first, group.second)) {
       issues.push(issue("degenerate-self-seam", "error", `O grupo ${group.id} costura exatamente os mesmos intervalos.`, group.id));
     }
     const signature = seamGroupSignature(group);
@@ -1743,16 +1744,6 @@ function seamGroupSignature(group: SeamGroupV3): string {
 
 function rangeSignature(range: SeamGroupV3["first"][number]): string {
   return `${range.pieceId}:${range.edgeId}:${range.startT}:${range.endT}`;
-}
-
-function rangesListsEqual(
-  first: SeamGroupV3["first"],
-  second: SeamGroupV3["second"],
-): boolean {
-  if (first.length !== second.length) return false;
-  const firstSignatures = first.map(rangeSignature);
-  const secondSignatures = second.map(rangeSignature);
-  return firstSignatures.every((signature, index) => signature === secondSignatures[index]);
 }
 
 function parseOptionalTuple(

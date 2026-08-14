@@ -1,31 +1,34 @@
 # Plano de física XPBD
 
-## Dados mínimos
+## Estado atual — Prompt 10
+
+A referência física CPU está integrada ao produto real e roda em Web Worker. A descrição detalhada está em [XPBD_IMPLEMENTATION.md](XPBD_IMPLEMENTATION.md).
 
 ```text
-positions          Float32Array, xyz
-previousPositions  Float32Array, xyz
-velocities         Float32Array, xyz
-inverseMasses      Float32Array
-triangles          Uint32Array
-stretchConstraints pares de vértices + comprimento inicial
-bendConstraints    arestas compartilhadas + compliance
-seamConstraints    pares de pontos de bordas distintas
+Documento V3 → assembly inicial → adapter SI/SoA → Worker XPBD
+→ frame revisionado → ponte Three.js → positions/normais da mesh existente
 ```
 
-## Passo de simulação
+Implementado:
 
-1. Aplicar forças.
-2. Prever posições.
-3. Resolver alongamento.
-4. Resolver cisalhamento.
-5. Resolver flexão.
-6. Resolver costuras.
-7. Resolver colisão com avatar.
-8. Resolver autocolisão.
-9. Atualizar velocidades.
-10. Recalcular normais.
+- timestep fixo com accumulator, substeps, iterations e delta clamp;
+- gravidade, massa por área e damping;
+- stretch anisotrópico warp/weft, shear independente e bend discreto;
+- SeamGroups interpoladas e compostas `N↔M`;
+- residual inicial progressivo e transmissão de força;
+- lifecycle completo e rebuild limpo por revision/generation;
+- transferables, double buffering, reciclagem e backpressure;
+- proteção contra topologia incompatível, NaN, Infinity e correções explosivas;
+- atualização da `BufferGeometry` sem passar partículas por React.
 
-## Estratégia
+## Ordem das próximas etapas físicas
 
-A CPU deve ser a referência de correção. Só depois de testes determinísticos, os gargalos serão movidos para WebGPU compute.
+1. proxies de colisão do avatar aprovados, sem alterar o solver estrutural;
+2. contato tecido-corpo e atrito;
+3. colisão com chão como opção de diagnóstico;
+4. self-collision e multicamadas;
+5. anchors/notches e distribuição piecewise de ease/gather;
+6. validação e profiling em dispositivos reais;
+7. somente depois, avaliar GPU/WebGPU mantendo a CPU como referência.
+
+O initial assembly permanece geométrico. Não deve voltar a fechar costuras por deformação estática nem absorver responsabilidades físicas.

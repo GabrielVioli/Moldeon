@@ -1547,7 +1547,7 @@ export function validateSeam(
     resolved.set(range, piece);
   }
 
-  if (rangeListsEqualInOrder(firstRanges, secondRanges)) {
+  if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
     issues.push(issue("invalid-self-seam", seam.id, "Uma borda não pode ser costurada nela mesma."));
   }
 
@@ -1595,6 +1595,33 @@ function rangesEqual(left: EdgeRange, right: EdgeRange): boolean {
     left.edgeId === right.edgeId &&
     left.startT === right.startT &&
     left.endT === right.endT
+  );
+}
+
+/**
+ * Compara identidade material, não apenas ownership. Duas faixas só entram
+ * em conflito quando usam a mesma borda canônica e compartilham um intervalo
+ * de comprimento positivo. Um endpoint comum não é sobreposição material.
+ */
+export function edgeRangesMateriallyOverlap(
+  left: EdgeRange,
+  right: EdgeRange,
+  epsilon = 1e-7,
+): boolean {
+  if (left.pieceId !== right.pieceId || left.edgeId !== right.edgeId) return false;
+  const leftStart = Math.min(left.startT, left.endT);
+  const leftEnd = Math.max(left.startT, left.endT);
+  const rightStart = Math.min(right.startT, right.endT);
+  const rightEnd = Math.max(right.startT, right.endT);
+  return Math.min(leftEnd, rightEnd) - Math.max(leftStart, rightStart) > epsilon;
+}
+
+export function seamSidesMateriallyOverlap(
+  first: readonly EdgeRange[],
+  second: readonly EdgeRange[],
+): boolean {
+  return first.some((left) =>
+    second.some((right) => edgeRangesMateriallyOverlap(left, right)),
   );
 }
 

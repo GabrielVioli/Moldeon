@@ -1,6 +1,7 @@
 import {
   edgeRangeSequenceLength,
   resolveEdgeRangeSequenceProgress,
+  seamSidesMateriallyOverlap,
   seamSideRanges,
   type EdgeRange,
   type GarmentDraft,
@@ -398,7 +399,7 @@ function buildGlobalStitchConstraints(
     if (seam.active === false) continue;
     const firstRanges = seamSideRanges(seam, "first");
     const secondRanges = seamSideRanges(seam, "second");
-    if (rangeSequencesAreIdentical(firstRanges, secondRanges)) {
+    if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
       warnings.push(`${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`);
       continue;
     }
@@ -857,20 +858,6 @@ function pointReferenceKey(reference: GlobalPointReference): string {
         `${particleIndex}:${reference.weights[index].toFixed(7)}`,
     )
     .join("|");
-}
-
-function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
-  return (
-    first.pieceId === second.pieceId &&
-    first.edgeId === second.edgeId &&
-    Math.abs(first.startT - second.startT) <= 1e-7 &&
-    Math.abs(first.endT - second.endT) <= 1e-7
-  );
-}
-
-function rangeSequencesAreIdentical(first: readonly EdgeRange[], second: readonly EdgeRange[]): boolean {
-  return first.length === second.length
-    && first.every((range, index) => rangesAreIdentical(range, second[index]));
 }
 
 function pairKey(first: string, second: string): string {

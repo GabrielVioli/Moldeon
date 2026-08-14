@@ -111,7 +111,7 @@ export function refreshMeshFromAssembly(
   const target = attribute.array as Float32Array;
   target.set(dressed);
   attribute.needsUpdate = true;
-  applyInstanceNormals(meshData.mesh.geometry, instance, dressed);
+  applyInstanceNormals(meshData.mesh.geometry, instance, dressed, meshData.flat);
   meshData.mesh.geometry.computeBoundingBox();
   meshData.mesh.geometry.computeBoundingSphere();
 }
@@ -226,6 +226,7 @@ function applyInstanceNormals(
   geometry: THREE.BufferGeometry,
   instance: AssemblyPanelInstance,
   positions: Float32Array,
+  basePositions?: Float32Array,
 ): void {
   const arrangement = instance.arrangement;
   const center = arrangement?.tubeCenter;
@@ -235,12 +236,18 @@ function applyInstanceNormals(
   }
 
   const [axisX, axisY, axisZ] = normalizeVector(arrangement.axis);
+  const translation = averagePositionDelta(positions, basePositions);
+  const movedCenter: [number, number, number] = [
+    center[0] + translation[0],
+    center[1] + translation[1],
+    center[2] + translation[2],
+  ];
   const normals = new Float32Array(positions.length);
 
   for (let offset = 0; offset < positions.length; offset += 3) {
-    const fromCenterX = positions[offset] - center[0];
-    const fromCenterY = positions[offset + 1] - center[1];
-    const fromCenterZ = positions[offset + 2] - center[2];
+    const fromCenterX = positions[offset] - movedCenter[0];
+    const fromCenterY = positions[offset + 1] - movedCenter[1];
+    const fromCenterZ = positions[offset + 2] - movedCenter[2];
     const alongAxis =
       fromCenterX * axisX
       + fromCenterY * axisY
@@ -268,6 +275,23 @@ function normalizeVector(
   const length = Math.hypot(vector[0], vector[1], vector[2]);
   if (length <= 1e-9) return [0, 0, 1];
   return [vector[0] / length, vector[1] / length, vector[2] / length];
+}
+
+function averagePositionDelta(
+  positions: Float32Array,
+  basePositions: Float32Array | undefined,
+): [number, number, number] {
+  if (!basePositions || basePositions.length !== positions.length || positions.length === 0) return [0, 0, 0];
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  const count = positions.length / 3;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    x += positions[offset] - basePositions[offset];
+    y += positions[offset + 1] - basePositions[offset + 1];
+    z += positions[offset + 2] - basePositions[offset + 2];
+  }
+  return [x / count, y / count, z / count];
 }
 
 function copyFloatAttribute(

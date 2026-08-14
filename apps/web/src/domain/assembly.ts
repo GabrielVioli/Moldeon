@@ -1,6 +1,7 @@
 import {
   edgeRangeSequenceLength,
   getPatternEdges,
+  seamSidesMateriallyOverlap,
   seamSideRanges,
   validateSeam,
   type AssemblyPlacement,
@@ -122,7 +123,7 @@ export function analyzeSeamCompatibility(
   const differenceMm = Math.abs(firstLengthMm - secondLengthMm);
   const referenceLength = Math.max(firstLengthMm, secondLengthMm, 1);
   const differencePercent = (differenceMm / referenceLength) * 100;
-  const identicalRange = rangeSequencesAreIdentical(firstRanges, secondRanges);
+  const overlappingMaterial = seamSidesMateriallyOverlap(firstRanges, secondRanges);
 
   let recommendedTreatment: SeamTreatment = "standard";
   if (differenceMm > 5 && differencePercent > 2) {
@@ -139,7 +140,7 @@ export function analyzeSeamCompatibility(
   const compatible =
     firstLengthMm > 0 &&
     secondLengthMm > 0 &&
-    !identicalRange;
+    !overlappingMaterial;
 
   const treatmentLabel: Record<SeamTreatment, string> = {
     standard: "costura padrão",
@@ -159,8 +160,8 @@ export function analyzeSeamCompatibility(
     recommendedDirection: "opposite",
     message: compatible
       ? `Diferença de ${differenceMm.toFixed(1)} mm (${differencePercent.toFixed(1)}%): ${treatmentLabel[recommendedTreatment]}.`
-      : identicalRange
-        ? "Escolha duas faixas diferentes para criar a costura."
+      : overlappingMaterial
+        ? "Escolha faixas sem sobreposição material para criar a costura."
         : "Escolha duas bordas válidas.",
   };
 }
@@ -181,7 +182,7 @@ export function buildAssemblyGraph(
     if (seam.active === false) continue;
     const firstRanges = seamSideRanges(seam, "first");
     const secondRanges = seamSideRanges(seam, "second");
-    if (rangeSequencesAreIdentical(firstRanges, secondRanges)) {
+    if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
       issues.push(
         `${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`,
       );
@@ -680,20 +681,6 @@ function anchorFor(
   if (region === "neck") return "neck";
   if (region === "hip") return surface === "back" ? "hip-back" : "hip-front";
   return surface === "back" ? "torso-back" : "torso-front";
-}
-
-function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
-  return (
-    first.pieceId === second.pieceId &&
-    first.edgeId === second.edgeId &&
-    Math.abs(first.startT - second.startT) <= 1e-7 &&
-    Math.abs(first.endT - second.endT) <= 1e-7
-  );
-}
-
-function rangeSequencesAreIdentical(first: readonly EdgeRange[], second: readonly EdgeRange[]): boolean {
-  return first.length === second.length
-    && first.every((range, index) => rangesAreIdentical(range, second[index]));
 }
 
 function unique(values: string[]): string[] {

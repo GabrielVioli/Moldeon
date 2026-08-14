@@ -124,7 +124,7 @@ export function App() {
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
     if (isCompactWorkspace) setMobileView("preview");
-    if (mode === "assembly") simulate();
+    simulate();
   }, [isCompactWorkspace, simulate]);
   const handleSimulate = useCallback(() => {
     if (!dressingPreflight.canDress) {

@@ -580,6 +580,31 @@ button {
   font-weight: 700;
 }
 
+.viewport-simulation-controls {
+  position: absolute;
+  z-index: 6;
+  top: 52px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: rgba(245, 243, 238, 0.88);
+  border: 1px solid rgba(40, 41, 43, 0.14);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.viewport-simulation-controls button {
+  min-height: 30px;
+  padding: 0 9px;
+  color: #33352f;
+  background: #fff;
+  border: 1px solid #c9c5bc;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .body-position-section {
   padding: 12px 0;
   border-top: 1px solid #d5d1c9;
@@ -1756,6 +1781,12 @@ button {
 
   .template-card {
     min-height: 168px;
+  }
+
+  .viewport-simulation-controls {
+    top: auto;
+    right: 10px;
+    bottom: 10px;
   }
 
   .template-contract {

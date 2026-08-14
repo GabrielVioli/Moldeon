@@ -389,6 +389,7 @@ function buildSeamDerivedTubeFrames(
   }
 
   const seamsByPair = new Map<string, Seam[]>();
+  const selfTubeSeams: Seam[] = [];
   const pieceAdjacency = new Map<string, Set<string>>(
     garment.pieces.map((piece) => [piece.id, new Set<string>()]),
   );
@@ -405,7 +406,11 @@ function buildSeamDerivedTubeFrames(
     }
     // A detecção analítica de tubo é deliberadamente restrita a
     // costuras simples; sequências compostas seguem pelo placement rígido.
-    if (firstRanges.length !== 1 || secondRanges.length !== 1 || seam.first.pieceId === seam.second.pieceId) continue;
+    if (firstRanges.length !== 1 || secondRanges.length !== 1) continue;
+    if (firstRanges[0].pieceId === secondRanges[0].pieceId) {
+      selfTubeSeams.push(seam);
+      continue;
+    }
     const ids = [seam.first.pieceId, seam.second.pieceId].sort();
     const key = `${ids[0]}\u0000${ids[1]}`;
     const current = seamsByPair.get(key) ?? [];
@@ -413,6 +418,51 @@ function buildSeamDerivedTubeFrames(
     seamsByPair.set(key, current);
   }
   const componentByPieceId = connectedComponentKeys(pieceAdjacency);
+
+  for (const seam of selfTubeSeams) {
+    const firstRange = seamSideRanges(seam, "first")[0];
+    const secondRange = seamSideRanges(seam, "second")[0];
+    if (!firstRange || !secondRange || firstRange.pieceId !== secondRange.pieceId) continue;
+    const piece = pieceById.get(firstRange.pieceId);
+    const instances = instanceByPieceId.get(firstRange.pieceId) ?? [];
+    if (!piece || instances.length === 0) continue;
+    const baseAxis = dominantSeamAxis(piece, [seam]);
+    if (!baseAxis) continue;
+
+    for (const instance of instances) {
+      const frame = projectedPatternFrame(instance, baseAxis, 1, 1);
+      const firstSide = seamRangeSide(piece, firstRange, frame);
+      const secondSide = seamRangeSide(piece, secondRange, frame);
+      const firstVector = edgeRangeVector(piece, firstRange);
+      const rawSecondVector = edgeRangeVector(piece, secondRange);
+      if (!firstVector || !rawSecondVector || firstSide === 0 || secondSide === 0 || firstSide === secondSide) continue;
+      const secondVector = seam.direction === "opposite"
+        ? [-rawSecondVector[0], -rawSecondVector[1]] as const
+        : rawSecondVector;
+      if (dot2(firstVector, frame.axis) * dot2(secondVector, frame.axis) <= 0) continue;
+
+      const circumferenceM = (frame.acrossMaxMm - frame.acrossMinMm) * METERS_PER_MM;
+      const radiusM = circumferenceM / (Math.PI * 2);
+      if (!Number.isFinite(radiusM) || radiusM <= 1e-6) continue;
+      const axialSpanMm = frame.axialMaxMm - frame.axialMinMm;
+      const worldAxis = normalize3([frame.axis[0], -frame.axis[1], 0]);
+      const worldAcross = cross3([0, 0, 1], worldAxis);
+      const center = resolveTubeCenter([instance], avatar, worldAxis, axialSpanMm * METERS_PER_MM);
+      candidates.push({
+        pairKey: `self:${piece.id}:${seam.id}:${instance.id}`,
+        componentKey: componentByPieceId.get(piece.id) ?? piece.id,
+        scoreMm2: axialSpanMm * (frame.acrossMaxMm - frame.acrossMinMm),
+        frames: [[instance.id, {
+          ...frame,
+          worldAxis,
+          worldAcross,
+          center,
+          radiusM,
+          angularSpanRad: Math.PI * 2,
+        }]],
+      });
+    }
+  }
 
   for (const [key, seams] of [...seamsByPair].sort(([left], [right]) => left.localeCompare(right))) {
     if (seams.length < 2) continue;

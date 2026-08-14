@@ -66,6 +66,27 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.seams?.[0]).toMatchObject({ name: "Lateral", direction: "opposite", treatment: "standard" });
   });
 
+  it("creates a tube seam from distinct lateral edges of the same panel", () => {
+    const edges = getPatternEdges(useEditorStore.getState().garment.pieces[0]);
+    useEditorStore.getState().proposeSeam(
+      { pieceId: "a", edgeId: edges[1].id, startT: 0, endT: 1 },
+      { pieceId: "a", edgeId: edges[3].id, startT: 0, endT: 1 },
+    );
+    expect(useEditorStore.getState().seamProposal?.compatibility.compatible).toBe(true);
+    useEditorStore.getState().confirmSeamProposal({
+      name: "Fechamento tubular",
+      direction: "opposite",
+      treatment: "standard",
+    });
+
+    expect(useEditorStore.getState().seamIssues).toEqual([]);
+    expect(useEditorStore.getState().garment.seams).toHaveLength(1);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams).toBeUndefined();
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.seams?.[0].name).toBe("Fechamento tubular");
+  });
+
   it("preserves ordered composite sides through selection, undo and redo", () => {
     const state = useEditorStore.getState();
     const firstEdges = getPatternEdges(state.garment.pieces[0]);

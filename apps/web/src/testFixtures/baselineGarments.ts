@@ -34,6 +34,8 @@ export const BASELINE_FIXTURE_IDS = [
   "equal-length-seam",
   "length-mismatch-seam",
   "self-seam-tube",
+  "xpbd-tube-with-flap",
+  "xpbd-four-panel-composite",
   "sleeve-with-body",
   "multiple-fabrics",
   "legacy-valid",
@@ -72,6 +74,10 @@ export function createBaselineFixture(id: BaselineFixtureId): GarmentDraft {
       return pairedSeamFixture(id, 240, 310);
     case "self-seam-tube":
       return selfSeamFixture(id);
+    case "xpbd-tube-with-flap":
+      return tubeWithFlapFixture(id);
+    case "xpbd-four-panel-composite":
+      return fourPanelCompositeFixture(id);
     case "sleeve-with-body":
       return templateFixture("tshirt", id);
     case "multiple-fabrics":
@@ -312,7 +318,95 @@ function selfSeamFixture(fixtureId: string): GarmentDraft {
     type: "standard",
     treatment: "standard",
   };
-  return garmentFixture(fixtureId, [piece], [seam]);
+  return {
+    ...garmentFixture(fixtureId, [piece], [seam]),
+    dressing: { region: "upper", frontReferencePieceId: piece.id },
+  };
+}
+
+function tubeWithFlapFixture(fixtureId: string): GarmentDraft {
+  const tube = selfSeamFixture(fixtureId);
+  const flap = {
+    ...rectanglePiece("xpbd-flap-piece", 140, 120),
+    fabricId: tube.fabrics[0].id,
+  };
+  const tubeTop = getPatternEdges(tube.pieces[0]).find((edge) => edge.role === "waist")!;
+  const flapTop = getPatternEdges(flap).find((edge) => edge.role === "waist")!;
+  const parentSpan = 140 / 360;
+  const parentStart = (1 - parentSpan) / 2;
+  const flapSeam: Seam = {
+    id: `${fixtureId}:flap-seam`,
+    name: "Retalho costurado ao tubo",
+    first: { pieceId: tube.pieces[0].id, edgeId: tubeTop.id, startT: parentStart, endT: 1 - parentStart },
+    second: { pieceId: flap.id, edgeId: flapTop.id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  return {
+    ...tube,
+    dressing: { region: "upper", frontReferencePieceId: tube.pieces[0].id },
+    pieces: [...tube.pieces, flap],
+    seams: [...(tube.seams ?? []), flapSeam],
+    assemblyPlacements: [
+      ...(tube.assemblyPlacements ?? []),
+      {
+        pieceId: flap.id,
+        role: "front",
+        outwardSide: "front",
+        positionMm: [250, 0, 0],
+        rotationDeg: [0, 0, 0],
+        flipped: false,
+        source: "manual",
+      },
+    ],
+  };
+}
+
+function fourPanelCompositeFixture(fixtureId: string): GarmentDraft {
+  const pieces = Array.from({ length: 4 }, (_, index) =>
+    rectanglePiece(`xpbd-panel-${index + 1}`, 160, 220));
+  const topEdges = pieces.map((piece) => getPatternEdges(piece).find((edge) => edge.role === "waist")!);
+  const firstRanges = [
+    { pieceId: pieces[0].id, edgeId: topEdges[0].id, startT: 0, endT: 1 },
+    { pieceId: pieces[1].id, edgeId: topEdges[1].id, startT: 0, endT: 1 },
+  ];
+  const secondRanges = [
+    { pieceId: pieces[2].id, edgeId: topEdges[2].id, startT: 0, endT: 0.5 },
+    { pieceId: pieces[2].id, edgeId: topEdges[2].id, startT: 0.5, endT: 1 },
+    { pieceId: pieces[3].id, edgeId: topEdges[3].id, startT: 0, endT: 1 },
+  ];
+  const composite: Seam = {
+    id: `${fixtureId}:composite-2-to-3`,
+    groupId: `${fixtureId}:composite-2-to-3`,
+    name: "Costura composta 2 para 3",
+    first: firstRanges[0],
+    second: secondRanges[0],
+    firstRanges,
+    secondRanges,
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  const firstSide = getPatternEdges(pieces[0]).find((edge) => edge.role === "sideSeam")!;
+  const thirdSide = getPatternEdges(pieces[2]).find((edge) => edge.role === "sideSeam")!;
+  const simple: Seam = {
+    id: `${fixtureId}:secondary-side-seam`,
+    groupId: `${fixtureId}:secondary-side-seam`,
+    name: "Costura lateral secundária",
+    first: { pieceId: pieces[0].id, edgeId: firstSide.id, startT: 0, endT: 1 },
+    second: { pieceId: pieces[2].id, edgeId: thirdSide.id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  return {
+    ...garmentFixture(fixtureId, pieces, [composite, simple]),
+    dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
+  };
 }
 
 function multipleFabricsFixture(fixtureId: string): GarmentDraft {

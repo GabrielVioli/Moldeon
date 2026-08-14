@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeSeamCompatibility, validateSeamForAssembly } from "./assembly";
 import {
   edgeRangeSequenceLength,
+  edgeRangesMateriallyOverlap,
   getPatternEdges,
   resolveEdgeRangeSequenceProgress,
   seamSideRanges,
@@ -64,6 +65,49 @@ function seam(firstRanges: EdgeRange[], secondRanges: EdgeRange[], direction: Se
 }
 
 describe("composite SeamGroup sides", () => {
+  it("allows distinct left and right edges of the same physical panel", () => {
+    const draft = garment([100]);
+    const edges = getPatternEdges(draft.pieces[0]);
+    const right = { pieceId: draft.pieces[0].id, edgeId: edges[1].id, startT: 0, endT: 1 };
+    const left = { pieceId: draft.pieces[0].id, edgeId: edges[3].id, startT: 0, endT: 1 };
+
+    expect(edgeRangesMateriallyOverlap(left, right)).toBe(false);
+    expect(analyzeSeamCompatibility(draft, left, right).compatible).toBe(true);
+    expect(validateSeamForAssembly(seam([left], [right]), draft)).toEqual([]);
+  });
+
+  it("rejects only positive material overlap on the same edge", () => {
+    const draft = garment([100]);
+    const edge = getPatternEdges(draft.pieces[0])[0];
+    const material = (startT: number, endT: number): EdgeRange => ({
+      pieceId: draft.pieces[0].id,
+      edgeId: edge.id,
+      startT,
+      endT,
+    });
+
+    expect(validateSeamForAssembly(seam([material(0, 1)], [material(0, 1)]), draft))
+      .toContainEqual(expect.objectContaining({ code: "invalid-self-seam" }));
+    expect(validateSeamForAssembly(seam([material(0, 0.65)], [material(0.4, 1)]), draft))
+      .toContainEqual(expect.objectContaining({ code: "invalid-self-seam" }));
+    expect(edgeRangesMateriallyOverlap(material(0, 0.4), material(0.6, 1))).toBe(false);
+    expect(analyzeSeamCompatibility(draft, material(0, 0.4), material(0.6, 1)).compatible).toBe(true);
+    expect(edgeRangesMateriallyOverlap(material(0, 0.5), material(0.5, 1))).toBe(false);
+    expect(analyzeSeamCompatibility(draft, material(0, 0.5), material(0.5, 1)).compatible).toBe(true);
+  });
+
+  it("allows a composite self-panel seam when every material range is disjoint", () => {
+    const draft = garment([100]);
+    const edges = getPatternEdges(draft.pieces[0]);
+    const top = (startT: number, endT: number): EdgeRange => ({ pieceId: "p0", edgeId: edges[0].id, startT, endT });
+    const side = (edgeIndex: number): EdgeRange => ({ pieceId: "p0", edgeId: edges[edgeIndex].id, startT: 0, endT: 1 });
+    const first = [side(1), top(0, 0.25)];
+    const second = [side(3), top(0.5, 0.75)];
+
+    expect(analyzeSeamCompatibility(draft, first, second).compatible).toBe(true);
+    expect(validateSeamForAssembly(seam(first, second), draft)).toEqual([]);
+  });
+
   it.each([
     { label: "uma para uma", lengths: [100, 100], a: [0], b: [1] },
     { label: "uma para duas", lengths: [300, 120, 180], a: [0], b: [1, 2] },
