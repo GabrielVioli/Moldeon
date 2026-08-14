@@ -5,20 +5,22 @@ import {
   type XpbdWorkerResponse,
 } from "./xpbdProtocol";
 import type { XpbdStepDiagnostics } from "./xpbd";
+import type { XpbdWorkerLifecycleSnapshot } from "./xpbdProtocol";
 
 export interface XpbdFrame {
   revision: string;
   generation: number;
+  epoch: number;
   sequence: number;
   positions: Float32Array;
   diagnostics: XpbdStepDiagnostics;
 }
 
 export interface XpbdWorkerClientCallbacks {
-  onReady?(revision: string, generation: number, diagnostics: XpbdStepDiagnostics): void;
+  onReady?(revision: string, generation: number, epoch: number, diagnostics: XpbdStepDiagnostics): void;
   onFrame?(frame: XpbdFrame): void;
-  onState?(generation: number, running: boolean, disposed: boolean): void;
-  onDiscardedFrame?(revision: string, generation: number, reason: string): void;
+  onState?(generation: number, running: boolean, disposed: boolean, snapshot: XpbdWorkerLifecycleSnapshot): void;
+  onDiscardedFrame?(revision: string, generation: number, epoch: number, reason: string): void;
   onError?(message: string, recoverable: boolean): void;
 }
 
@@ -27,6 +29,8 @@ export class XpbdWorkerClient {
   private disposed = false;
   private latestFrame: XpbdFrame | null = null;
   private generation = 0;
+  private epoch = 0;
+  private commandId = 0;
   private expectedRevision: string | null = null;
 
   constructor(private readonly callbacks: XpbdWorkerClientCallbacks = {}) {
@@ -38,27 +42,33 @@ export class XpbdWorkerClient {
     this.worker.addEventListener("error", this.handleWorkerError);
   }
 
-  initialize(payload: XpbdInitializationData): number {
+  initialize(payload: XpbdInitializationData): { generation: number; epoch: number } {
     this.recycleLatestFrame();
     this.generation += 1;
+    this.epoch += 1;
+    this.commandId += 1;
     this.expectedRevision = payload.revision;
-    this.post({ type: "initialize", generation: this.generation, payload }, initializationTransferables(payload));
-    return this.generation;
+    this.post({ type: "initialize", generation: this.generation, epoch: this.epoch, commandId: this.commandId, payload }, initializationTransferables(payload));
+    return { generation: this.generation, epoch: this.epoch };
   }
 
-  updateGeometry(payload: XpbdInitializationData): number {
+  updateGeometry(payload: XpbdInitializationData): { generation: number; epoch: number } {
     this.recycleLatestFrame();
     this.generation += 1;
+    this.epoch += 1;
+    this.commandId += 1;
     this.expectedRevision = payload.revision;
-    this.post({ type: "updateGeometry", generation: this.generation, payload }, initializationTransferables(payload));
-    return this.generation;
+    this.post({ type: "updateGeometry", generation: this.generation, epoch: this.epoch, commandId: this.commandId, payload }, initializationTransferables(payload));
+    return { generation: this.generation, epoch: this.epoch };
   }
 
-  start(): void { this.post({ type: "start" }); }
-  pause(): void { this.post({ type: "pause" }); }
-  resume(): void { this.post({ type: "resume" }); }
-  step(deltaSeconds?: number): void { this.post({ type: "step", ...(deltaSeconds === undefined ? {} : { deltaSeconds }) }); }
-  reset(): void { this.post({ type: "reset" }); }
+  start(): number { return this.sendLifecycle("start"); }
+  pause(): number { return this.sendLifecycle("pause"); }
+  resume(): number { return this.sendLifecycle("resume"); }
+  step(deltaSeconds?: number): number {
+    return this.sendLifecycle("step", deltaSeconds === undefined ? {} : { deltaSeconds });
+  }
+  reset(): number { return this.sendLifecycle("reset"); }
 
   consumeLatestFrame(): XpbdFrame | null {
     const frame = this.latestFrame;
@@ -74,7 +84,9 @@ export class XpbdWorkerClient {
   dispose(): void {
     if (this.disposed) return;
     this.recycleLatestFrame();
-    this.post({ type: "dispose" });
+    this.epoch += 1;
+    this.commandId += 1;
+    this.post({ type: "dispose", generation: this.generation, epoch: this.epoch, commandId: this.commandId });
     this.disposed = true;
     this.worker.removeEventListener("message", this.handleMessage);
     this.worker.removeEventListener("error", this.handleWorkerError);
@@ -84,11 +96,12 @@ export class XpbdWorkerClient {
   private readonly handleMessage = (event: MessageEvent<XpbdWorkerResponse>): void => {
     const message = event.data;
     if (message.type === "positions") {
-      if (message.generation !== this.generation || message.revision !== this.expectedRevision) {
+      if (message.generation !== this.generation || message.revision !== this.expectedRevision || message.epoch !== this.epoch) {
         this.callbacks.onDiscardedFrame?.(
           message.revision,
           message.generation,
-          message.generation !== this.generation ? "generation" : "revision",
+          message.epoch,
+          message.generation !== this.generation ? "generation" : message.revision !== this.expectedRevision ? "revision" : "epoch",
         );
         if (message.positions.byteLength > 0) {
           this.post({ type: "recyclePositions", buffer: message.positions.buffer as ArrayBuffer }, [message.positions.buffer as ArrayBuffer]);
@@ -101,16 +114,19 @@ export class XpbdWorkerClient {
       return;
     }
     if (message.type === "ready") {
-      if (message.generation !== this.generation || message.revision !== this.expectedRevision) return;
-      this.callbacks.onReady?.(message.revision, message.generation, message.diagnostics);
+      if (message.generation !== this.generation || message.revision !== this.expectedRevision || message.epoch !== this.epoch) return;
+      this.callbacks.onReady?.(message.revision, message.generation, message.epoch, message.diagnostics);
       return;
     }
     if (message.type === "state") {
-      if (message.generation !== this.generation && !message.disposed) return;
-      this.callbacks.onState?.(message.generation, message.running, message.disposed);
+      if ((message.generation !== this.generation || message.epoch !== this.epoch) && !message.disposed) return;
+      this.callbacks.onState?.(message.generation, message.running, message.disposed, message.snapshot);
       return;
     }
-    if (message.type === "error") this.callbacks.onError?.(message.message, message.recoverable);
+    if (message.type === "error") {
+      if (message.generation !== this.generation || message.epoch !== this.epoch) return;
+      this.callbacks.onError?.(message.message, message.recoverable);
+    }
   };
 
   private readonly handleWorkerError = (event: ErrorEvent): void => {
@@ -121,6 +137,17 @@ export class XpbdWorkerClient {
     if (!this.latestFrame) return;
     this.recycleFrame(this.latestFrame);
     this.latestFrame = null;
+  }
+
+  private sendLifecycle<T extends "start" | "pause" | "resume" | "step" | "reset">(
+    type: T,
+    extra: T extends "step" ? { deltaSeconds?: number } : Record<string, never> = {} as never,
+  ): number {
+    this.recycleLatestFrame();
+    this.epoch += 1;
+    this.commandId += 1;
+    this.post({ type, generation: this.generation, epoch: this.epoch, commandId: this.commandId, ...extra } as XpbdWorkerRequest);
+    return this.epoch;
   }
 
   private post(message: XpbdWorkerRequest, transfer: Transferable[] = []): void {

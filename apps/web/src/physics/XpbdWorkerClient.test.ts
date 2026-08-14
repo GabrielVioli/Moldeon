@@ -7,9 +7,7 @@ class FakeWorker {
   readonly requests: unknown[] = [];
   private readonly listeners = new Map<string, Set<(event: MessageEvent) => void>>();
 
-  constructor() {
-    FakeWorker.current = this;
-  }
+  constructor() { FakeWorker.current = this; }
 
   addEventListener(type: string, listener: (event: MessageEvent) => void): void {
     const current = this.listeners.get(type) ?? new Set();
@@ -21,20 +19,16 @@ class FakeWorker {
     this.listeners.get(type)?.delete(listener);
   }
 
-  postMessage(message: unknown): void {
-    this.requests.push(message);
-  }
+  postMessage(message: unknown): void { this.requests.push(message); }
 
   emit(message: unknown): void {
-    for (const listener of this.listeners.get("message") ?? []) {
-      listener({ data: message } as MessageEvent);
-    }
+    for (const listener of this.listeners.get("message") ?? []) listener({ data: message } as MessageEvent);
   }
 
   terminate(): void { /* lifecycle observado pelas mensagens. */ }
 }
 
-describe("XpbdWorkerClient revision generations", () => {
+describe("XpbdWorkerClient revision and lifecycle epochs", () => {
   beforeEach(() => {
     FakeWorker.current = null;
     vi.stubGlobal("Worker", FakeWorker);
@@ -42,28 +36,119 @@ describe("XpbdWorkerClient revision generations", () => {
 
   it("rejects a late A frame after A → B → A rebuilds", () => {
     const accepted: XpbdFrame[] = [];
-    const discarded: Array<{ revision: string; generation: number; reason: string }> = [];
+    const discarded: Array<{ revision: string; generation: number; epoch: number; reason: string }> = [];
     const client = new XpbdWorkerClient({
-      onFrame: (frame) => accepted.push(frame),
-      onDiscardedFrame: (revision, generation, reason) => discarded.push({ revision, generation, reason }),
+      onFrame: (value) => accepted.push(value),
+      onDiscardedFrame: (revision, generation, epoch, reason) => discarded.push({ revision, generation, epoch, reason }),
     });
     const worker = FakeWorker.current!;
-    const firstGeneration = client.updateGeometry(initialization("revision-a", 4));
+    const first = client.updateGeometry(initialization("revision-a", 4));
     client.updateGeometry(initialization("revision-b", 7));
-    const restoredGeneration = client.updateGeometry(initialization("revision-a", 4));
+    const restored = client.updateGeometry(initialization("revision-a", 4));
 
-    worker.emit(frame("revision-a", firstGeneration, 4));
-    worker.emit(frame("revision-a", restoredGeneration, 4));
+    worker.emit(frame("revision-a", first.generation, first.epoch, 4));
+    worker.emit(frame("revision-a", restored.generation, restored.epoch, 4));
 
-    expect(firstGeneration).toBe(1);
-    expect(restoredGeneration).toBe(3);
-    expect(discarded).toEqual([{ revision: "revision-a", generation: 1, reason: "generation" }]);
+    expect(first.generation).toBe(1);
+    expect(restored.generation).toBe(3);
+    expect(discarded).toEqual([{ revision: "revision-a", generation: 1, epoch: 1, reason: "generation" }]);
     expect(accepted).toHaveLength(1);
     expect(accepted[0].generation).toBe(3);
     expect(worker.requests).toContainEqual(expect.objectContaining({ type: "recyclePositions" }));
     client.dispose();
   });
+
+  it("rejects a pre-reset frame from the same revision and generation", () => {
+    const accepted: XpbdFrame[] = [];
+    const discarded: Array<{ epoch: number; reason: string }> = [];
+    const client = new XpbdWorkerClient({
+      onFrame: (value) => accepted.push(value),
+      onDiscardedFrame: (_revision, _generation, epoch, reason) => discarded.push({ epoch, reason }),
+    });
+    const worker = FakeWorker.current!;
+    const initialized = client.updateGeometry(initialization("revision-a", 4));
+    const resetEpoch = client.reset();
+
+    worker.emit(frame("revision-a", initialized.generation, initialized.epoch, 4));
+    worker.emit(frame("revision-a", initialized.generation, resetEpoch, 4));
+
+    expect(discarded).toEqual([{ epoch: initialized.epoch, reason: "epoch" }]);
+    expect(accepted).toHaveLength(1);
+    expect(accepted[0].epoch).toBe(resetEpoch);
+    client.dispose();
+  });
+
+  it("assigns a monotonic epoch to rapid lifecycle commands", () => {
+    const client = new XpbdWorkerClient();
+    const worker = FakeWorker.current!;
+    const initialized = client.updateGeometry(initialization("revision-a", 4));
+    const firstResume = client.resume();
+    const secondResume = client.resume();
+    const reset = client.reset();
+    const commands = worker.requests.filter((request): request is Record<string, unknown> =>
+      typeof request === "object" && request !== null && "type" in request && request.type !== "recyclePositions");
+
+    expect([initialized.epoch, firstResume, secondResume, reset]).toEqual([1, 2, 3, 4]);
+    expect(commands.map((request) => request.type)).toEqual(["updateGeometry", "resume", "resume", "reset"]);
+    expect(commands.map((request) => request.epoch)).toEqual([1, 2, 3, 4]);
+    expect(commands.map((request) => request.commandId)).toEqual([1, 2, 3, 4]);
+    client.dispose();
+  });
+
+  it("ignores stale state acknowledgements and stale errors after reset", () => {
+    const states: Array<{ running: boolean; epoch: number }> = [];
+    const errors: string[] = [];
+    const client = new XpbdWorkerClient({
+      onState: (_generation, running, _disposed, snapshot) => states.push({ running, epoch: snapshot.epoch }),
+      onError: (message) => errors.push(message),
+    });
+    const worker = FakeWorker.current!;
+    const initialized = client.updateGeometry(initialization("revision-a", 4));
+    const runningEpoch = client.resume();
+    const resetEpoch = client.reset();
+
+    worker.emit(lifecycleState(initialized.generation, runningEpoch, true, "resume"));
+    worker.emit({
+      type: "error",
+      revision: "revision-a",
+      generation: initialized.generation,
+      epoch: runningEpoch,
+      message: "erro antigo",
+      recoverable: true,
+    });
+    worker.emit(lifecycleState(initialized.generation, resetEpoch, false, "reset"));
+
+    expect(states).toEqual([{ running: false, epoch: resetEpoch }]);
+    expect(errors).toEqual([]);
+    client.dispose();
+  });
 });
+
+function lifecycleState(generation: number, epoch: number, running: boolean, lastCommand: "resume" | "reset") {
+  return {
+    type: "state" as const,
+    generation,
+    epoch,
+    running,
+    disposed: false,
+    snapshot: {
+      timestampMs: 1,
+      lifecycle: running ? "running" as const : "paused" as const,
+      generation,
+      epoch,
+      commandId: epoch,
+      stepCount: running ? 1 : 0,
+      accumulator: 0,
+      timerActive: running,
+      timersStarted: running ? 1 : 0,
+      timersCanceled: running ? 0 : 1,
+      framesProduced: 0,
+      framesSent: 0,
+      commandsProcessed: epoch,
+      lastCommand,
+    },
+  };
+}
 
 function initialization(revision: string, particleCount: number): XpbdInitializationData {
   const positions = new Float32Array(particleCount * 3);
@@ -121,11 +206,12 @@ function initialization(revision: string, particleCount: number): XpbdInitializa
   };
 }
 
-function frame(revision: string, generation: number, particleCount: number): XpbdFrame & { type: "positions" } {
+function frame(revision: string, generation: number, epoch: number, particleCount: number): XpbdFrame & { type: "positions" } {
   return {
     type: "positions",
     revision,
     generation,
+    epoch,
     sequence: 1,
     positions: new Float32Array(particleCount * 3),
     diagnostics: {

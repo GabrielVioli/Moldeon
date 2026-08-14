@@ -7,11 +7,19 @@ import type { XpbdWorkerRequest, XpbdWorkerResponse } from "../physics/xpbdProto
 let state: XpbdState | null = null;
 let revision = "";
 let generation = 0;
+let epoch = 0;
+let commandId = 0;
 let running = false;
 let disposed = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastTick = 0;
 let sequence = 0;
+let timersStarted = 0;
+let timersCanceled = 0;
+let framesProduced = 0;
+let framesSent = 0;
+let commandsProcessed = 0;
+let lastCommand: XpbdWorkerRequest["type"] = "initialize";
 const outputBuffers: ArrayBuffer[] = [];
 
 self.onmessage = (event: MessageEvent<XpbdWorkerRequest>) => {
@@ -23,6 +31,7 @@ self.onmessage = (event: MessageEvent<XpbdWorkerRequest>) => {
       type: "error",
       revision: revision || undefined,
       generation,
+      epoch,
       message: error instanceof Error ? error.message : "Falha desconhecida no Worker XPBD.",
       recoverable: state !== null,
     });
@@ -30,10 +39,12 @@ self.onmessage = (event: MessageEvent<XpbdWorkerRequest>) => {
 };
 
 function handleRequest(request: XpbdWorkerRequest): void {
+  commandsProcessed += 1;
+  lastCommand = request.type;
   switch (request.type) {
     case "initialize":
     case "updateGeometry":
-      initialize(request.payload, request.generation);
+      initialize(request.payload, request.generation, request.epoch, request.commandId);
       return;
     case "updateSeams":
       if (!state || request.revision !== revision) return;
@@ -59,24 +70,39 @@ function handleRequest(request: XpbdWorkerRequest): void {
       return;
     case "start":
     case "resume":
+      if (!state || !acceptLifecycleCommand(request)) return;
+      cancelTimer();
       running = true;
       lastTick = performance.now();
-      schedule();
-      post({ type: "state", generation, running, disposed: false });
+      schedule(epoch);
+      postState();
       return;
     case "pause":
+      if (!state || !acceptLifecycleCommand(request)) return;
       running = false;
       cancelTimer();
-      post({ type: "state", generation, running, disposed: false });
+      ensureOutputBuffer();
+      emitFrame(measureXpbdDiagnostics(state));
+      postState();
       return;
     case "step":
-      if (!state) return;
+      if (!state || !acceptLifecycleCommand(request)) return;
+      running = false;
+      cancelTimer();
+      ensureOutputBuffer();
       emitFrame(advanceXpbd(state, request.deltaSeconds ?? state.config.fixedTimeStep));
+      postState();
       return;
     case "reset":
-      if (!state) return;
+      if (!state || !acceptLifecycleCommand(request)) return;
+      running = false;
+      cancelTimer();
       resetXpbdState(state);
+      sequence = 0;
+      outputBuffers.length = 0;
+      allocateOutputBuffers();
       emitFrame(measureXpbdDiagnostics(state));
+      postState();
       return;
     case "recyclePositions":
       if (state && request.buffer.byteLength === state.positions.byteLength && outputBuffers.length < 3) {
@@ -84,21 +110,25 @@ function handleRequest(request: XpbdWorkerRequest): void {
       }
       return;
     case "dispose":
+      if (!acceptLifecycleCommand(request)) return;
       running = false;
       disposed = true;
       cancelTimer();
       state = null;
       outputBuffers.length = 0;
-      post({ type: "state", generation, running: false, disposed: true });
+      postState();
   }
 }
 
-function initialize(payload: XpbdInitializationData, nextGeneration: number): void {
+function initialize(payload: XpbdInitializationData, nextGeneration: number, nextEpoch: number, nextCommandId: number): void {
+  if (nextGeneration < generation || (nextGeneration === generation && nextEpoch <= epoch)) return;
   running = false;
   cancelTimer();
   outputBuffers.length = 0;
   revision = payload.revision;
   generation = nextGeneration;
+  epoch = nextEpoch;
+  commandId = nextCommandId;
   sequence = 0;
   state = createXpbdState({
     positions: payload.positions,
@@ -134,40 +164,91 @@ function initialize(payload: XpbdInitializationData, nextGeneration: number): vo
     pins: { indices: payload.pinIndices, targets: payload.pinTargets },
     config: payload.config,
   });
-  outputBuffers.push(new ArrayBuffer(state.positions.byteLength), new ArrayBuffer(state.positions.byteLength));
-  post({ type: "ready", revision, generation, diagnostics: measureXpbdDiagnostics(state) });
+  allocateOutputBuffers();
+  post({ type: "ready", revision, generation, epoch, diagnostics: measureXpbdDiagnostics(state) });
+  postState();
 }
 
-function schedule(): void {
+function schedule(scheduledEpoch: number): void {
   if (!running || disposed || timer !== null) return;
-  timer = setTimeout(tick, 8);
+  timer = setTimeout(() => tick(scheduledEpoch), 8);
+  timersStarted += 1;
 }
 
-function tick(): void {
+function tick(scheduledEpoch: number): void {
   timer = null;
-  if (!running || !state || disposed) return;
+  if (!running || !state || disposed || scheduledEpoch !== epoch) return;
   const now = performance.now();
   const delta = lastTick > 0 ? (now - lastTick) / 1000 : state.config.fixedTimeStep;
   lastTick = now;
   const diagnostics = advanceXpbd(state, delta);
   emitFrame(diagnostics);
-  schedule();
+  schedule(scheduledEpoch);
 }
 
 function emitFrame(diagnostics: ReturnType<typeof measureXpbdDiagnostics>): void {
+  framesProduced += 1;
   if (!state || outputBuffers.length === 0) return;
   const buffer = outputBuffers.pop()!;
   if (buffer.byteLength !== state.positions.byteLength) return;
   const positions = new Float32Array(buffer);
   positions.set(state.positions);
   sequence += 1;
-  post({ type: "positions", revision, generation, sequence, positions, diagnostics }, [buffer]);
+  framesSent += 1;
+  post({ type: "positions", revision, generation, epoch, sequence, positions, diagnostics }, [buffer]);
 }
 
 function cancelTimer(): void {
-  if (timer !== null) clearTimeout(timer);
+  if (timer !== null) {
+    clearTimeout(timer);
+    timersCanceled += 1;
+  }
   timer = null;
 }
+
+function postState(): void {
+  post({
+    type: "state",
+    generation,
+    epoch,
+    running,
+    disposed,
+    snapshot: {
+      timestampMs: performance.now(),
+      lifecycle: disposed ? "disposed" : running ? "running" : "paused",
+      generation,
+      epoch,
+      commandId,
+      stepCount: state?.stepCount ?? 0,
+      accumulator: state?.accumulator ?? 0,
+      timerActive: timer !== null,
+      timersStarted,
+      timersCanceled,
+      framesProduced,
+      framesSent,
+      commandsProcessed,
+      lastCommand,
+    },
+  });
+}
+
+function acceptLifecycleCommand(request: XpbdCommandRequest): boolean {
+  if (request.generation !== generation || request.epoch <= epoch || request.commandId <= commandId) return false;
+  epoch = request.epoch;
+  commandId = request.commandId;
+  return true;
+}
+
+function allocateOutputBuffers(): void {
+  if (!state) return;
+  outputBuffers.push(new ArrayBuffer(state.positions.byteLength), new ArrayBuffer(state.positions.byteLength));
+}
+
+function ensureOutputBuffer(): void {
+  if (state && outputBuffers.length === 0) outputBuffers.push(new ArrayBuffer(state.positions.byteLength));
+}
+
+type XpbdCommandRequest = Extract<XpbdWorkerRequest, { generation: number; epoch: number; commandId: number }>;
 
 function post(message: XpbdWorkerResponse, transfer: Transferable[] = []): void {
   self.postMessage(message, transfer);

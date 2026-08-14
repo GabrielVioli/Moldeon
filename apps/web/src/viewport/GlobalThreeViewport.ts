@@ -23,6 +23,7 @@ import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
 import { XpbdWorkerClient } from "../physics/XpbdWorkerClient";
 
 export type RenderBackend = "webgpu" | "webgl2";
+export type SimulationLifecycleState = "paused" | "running";
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
 interface PerformanceProfile {
@@ -45,6 +46,7 @@ export class ThreeViewport {
   private assemblyState: GarmentAssemblyState | null = null;
   private assemblyRevision: string | null = null;
   private assemblyGeneration = 0;
+  private simulationEpoch = 0;
   private avatarSignature: string | null = null;
   private avatarLoadController: AbortController | null = null;
   private hasFramedScene = false;
@@ -53,39 +55,55 @@ export class ThreeViewport {
   private disposed = false;
   private simulationRunning = false;
   private resumeAfterVisibility = false;
+  private framesReceived = 0;
+  private framesApplied = 0;
+  private framesDiscarded = 0;
 
   private constructor(
     private readonly host: HTMLElement,
     renderer: ViewportRenderer,
     readonly backend: RenderBackend,
     profile: PerformanceProfile,
+    private readonly onSimulationStateChange?: (state: SimulationLifecycleState) => void,
   ) {
     this.renderer = renderer;
     this.profile = profile;
     this.host.dataset.simulationWorker = "created";
     this.simulation = new XpbdWorkerClient({
       onFrame: (frame) => {
+        this.framesReceived += 1;
+        this.writeFrameCounters();
         this.host.dataset.simulationWorkerFrame = JSON.stringify({
           revision: frame.revision,
           generation: frame.generation,
+          epoch: frame.epoch,
           sequence: frame.sequence,
           positionsLength: frame.positions.length,
           stepCount: frame.diagnostics.stepCount,
         });
         this.requestRender();
       },
-      onReady: (revision, generation, diagnostics) => {
-        this.host.dataset.simulationWorkerReady = JSON.stringify({ revision, generation });
-        if (revision !== this.assemblyRevision || generation !== this.assemblyGeneration) return;
+      onReady: (revision, generation, epoch, diagnostics) => {
+        this.host.dataset.simulationWorkerReady = JSON.stringify({ revision, generation, epoch });
+        if (revision !== this.assemblyRevision || generation !== this.assemblyGeneration || epoch !== this.simulationEpoch) return;
         this.writeSimulationDiagnostics(diagnostics);
       },
-      onState: (generation, running, disposed) => {
+      onState: (generation, running, disposed, snapshot) => {
+        this.simulationRunning = running && !disposed;
+        this.simulationEpoch = snapshot.epoch;
         this.host.dataset.simulationWorkerState = disposed
           ? "disposed"
-          : `${running ? "running" : "paused"}:${generation}`;
+          : `${running ? "running" : "paused"}:${generation}:${snapshot.epoch}`;
+        this.host.dataset.simulationStatus = disposed ? "disposed" : running ? "running" : "paused";
+        if (!disposed) this.onSimulationStateChange?.(running ? "running" : "paused");
+        this.traceLifecycle("worker-state", snapshot);
+        if (running) this.requestRender();
       },
-      onDiscardedFrame: (revision, generation, reason) => {
-        this.host.dataset.simulationDiscardedFrame = JSON.stringify({ revision, generation, reason });
+      onDiscardedFrame: (revision, generation, epoch, reason) => {
+        this.framesDiscarded += 1;
+        this.writeFrameCounters();
+        this.host.dataset.simulationDiscardedFrame = JSON.stringify({ revision, generation, epoch, reason });
+        this.traceLifecycle("frame-discarded", { revision, generation, epoch, reason });
       },
       onError: (message, recoverable) => {
         console.error("Worker XPBD:", message);
@@ -122,11 +140,15 @@ export class ThreeViewport {
     document.addEventListener("visibilitychange", this.handleVisibilityChange);
   }
 
-  static async create(host: HTMLElement, signal?: AbortSignal): Promise<ThreeViewport> {
+  static async create(
+    host: HTMLElement,
+    signal?: AbortSignal,
+    onSimulationStateChange?: (state: SimulationLifecycleState) => void,
+  ): Promise<ThreeViewport> {
     if (signal?.aborted) throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
     const profile = getPerformanceProfile();
     const rendererResult = await createRenderer(profile, signal);
-    const viewport = new ThreeViewport(host, rendererResult.renderer, rendererResult.backend, profile);
+    const viewport = new ThreeViewport(host, rendererResult.renderer, rendererResult.backend, profile, onSimulationStateChange);
     const abort = () => viewport.dispose();
     signal?.addEventListener("abort", abort, { once: true });
     try {
@@ -171,9 +193,15 @@ export class ThreeViewport {
       },
     );
     this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
-    this.assemblyGeneration = this.simulation.updateGeometry(initialization);
+    const identity = this.simulation.updateGeometry(initialization);
+    this.assemblyGeneration = identity.generation;
+    this.simulationEpoch = identity.epoch;
     this.host.dataset.simulationGeneration = String(this.assemblyGeneration);
-    if (resumeAfterRebuild) this.simulation.resume();
+    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
+    if (resumeAfterRebuild) {
+      this.simulationEpoch = this.simulation.resume();
+      this.host.dataset.simulationEpoch = String(this.simulationEpoch);
+    }
     this.host.dataset.simulationStatus = resumeAfterRebuild ? "running" : "ready";
 
     if (!this.hasFramedScene || avatarConfiguration.changed) {
@@ -210,30 +238,30 @@ export class ThreeViewport {
   }
 
   pauseSimulation(): void {
-    this.simulation.pause();
-    this.simulationRunning = false;
-    this.host.dataset.simulationStatus = "paused";
+    this.traceLifecycle("ui-command", { command: "pause", uiState: this.host.dataset.simulationUiState ?? "unknown" });
+    this.simulationEpoch = this.simulation.pause();
+    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
   }
 
   resumeSimulation(): void {
+    this.traceLifecycle("ui-command", { command: "resume", uiState: this.host.dataset.simulationUiState ?? "unknown" });
     this.host.dataset.simulationResumeRequested = this.assemblyRevision ?? "without-geometry";
-    this.simulation.resume();
-    this.simulationRunning = true;
-    this.host.dataset.simulationStatus = "running";
+    this.simulationEpoch = this.simulation.resume();
+    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
     this.requestRender();
   }
 
   stepSimulation(): void {
-    this.simulation.step();
-    this.simulationRunning = false;
-    this.host.dataset.simulationStatus = "paused";
+    this.traceLifecycle("ui-command", { command: "step", uiState: this.host.dataset.simulationUiState ?? "unknown" });
+    this.simulationEpoch = this.simulation.step();
+    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
     this.requestRender();
   }
 
   resetSimulation(): void {
-    this.simulation.reset();
-    this.simulationRunning = false;
-    this.host.dataset.simulationStatus = "ready";
+    this.traceLifecycle("ui-command", { command: "reset", uiState: this.host.dataset.simulationUiState ?? "unknown" });
+    this.simulationEpoch = this.simulation.reset();
+    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
     this.requestRender();
   }
 
@@ -263,6 +291,7 @@ export class ThreeViewport {
     this.assemblyState = null;
     this.assemblyRevision = null;
     this.assemblyGeneration = 0;
+    this.simulationEpoch = 0;
     this.clearGarment();
     this.clearAvatar();
     disposeObject(this.scene);
@@ -431,15 +460,20 @@ export class ThreeViewport {
     if (frame) {
       if (frame.revision === this.assemblyRevision
         && frame.generation === this.assemblyGeneration
+        && frame.epoch === this.simulationEpoch
         && this.assemblyState
         && frame.positions.length === this.assemblyState.positions.length
         && frameCanUpdateMeshes(frame.positions, this.assemblyState, this.garmentMeshes)) {
         this.assemblyState.positions.set(frame.positions);
         for (const mesh of this.garmentMeshes) refreshMeshFromAssembly(mesh, this.assemblyState);
+        this.framesApplied += 1;
+        this.writeFrameCounters();
         this.writeSimulationDiagnostics(frame.diagnostics);
+        this.host.dataset.simulationPositionSignature = positionSignature(frame.positions);
         this.host.dataset.simulationAppliedFrame = JSON.stringify({
           revision: frame.revision,
           generation: frame.generation,
+          epoch: frame.epoch,
           sequence: frame.sequence,
           positionsLength: frame.positions.length,
         });
@@ -449,6 +483,8 @@ export class ThreeViewport {
           generation: frame.generation,
           expectedRevision: this.assemblyRevision,
           expectedGeneration: this.assemblyGeneration,
+          epoch: frame.epoch,
+          expectedEpoch: this.simulationEpoch,
           positionsLength: frame.positions.length,
           expectedPositionsLength: this.assemblyState?.positions.length ?? 0,
         });
@@ -473,6 +509,42 @@ export class ThreeViewport {
   private writeSimulationDiagnostics(diagnostics: object): void {
     this.host.dataset.simulationDiagnostics = JSON.stringify(diagnostics);
   }
+
+  private writeFrameCounters(): void {
+    this.host.dataset.simulationFrameCounters = JSON.stringify({
+      received: this.framesReceived,
+      applied: this.framesApplied,
+      discarded: this.framesDiscarded,
+    });
+  }
+
+  private traceLifecycle(event: string, detail: object): void {
+    if (!import.meta.env.DEV) return;
+    const trace = JSON.parse(this.host.dataset.simulationLifecycleTrace ?? "[]") as object[];
+    trace.push({
+      timestampMs: performance.now(),
+      event,
+      revision: this.assemblyRevision,
+      generation: this.assemblyGeneration,
+      simulationRunning: this.simulationRunning,
+      framesReceived: this.framesReceived,
+      framesApplied: this.framesApplied,
+      framesDiscarded: this.framesDiscarded,
+      ...detail,
+    });
+    if (trace.length > 200) trace.splice(0, trace.length - 200);
+    this.host.dataset.simulationLifecycleTrace = JSON.stringify(trace);
+  }
+}
+
+function positionSignature(positions: Float32Array): string {
+  const bytes = new Uint8Array(positions.buffer, positions.byteOffset, positions.byteLength);
+  let hash = 0x811c9dc5;
+  for (const value of bytes) {
+    hash ^= value;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${positions.length}:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function frameCanUpdateMeshes(

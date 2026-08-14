@@ -4,7 +4,7 @@ import {
   approvedAvatarForBody,
   AVATAR_NOT_CONFIGURED_MESSAGE,
 } from "../avatar/ApprovedAvatarAsset";
-import { ThreeViewport } from "./GlobalThreeViewport";
+import { ThreeViewport, type SimulationLifecycleState } from "./GlobalThreeViewport";
 
 interface GarmentViewportProps {
   assemblyInput: ResolvedAssemblyInput;
@@ -29,7 +29,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const updateFrameRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [simulationState, setSimulationState] = useState<"ready" | "running" | "paused">("ready");
+  const [simulationState, setSimulationState] = useState<"ready" | SimulationLifecycleState>("ready");
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
 
   latestInputRef.current = assemblyInput;
@@ -43,7 +43,9 @@ export const GarmentViewport = memo(function GarmentViewport({
     const abortController = new AbortController();
     setError(null);
 
-    void ThreeViewport.create(host, abortController.signal)
+    void ThreeViewport.create(host, abortController.signal, (nextState) => {
+      if (mounted) setSimulationState(nextState);
+    })
       .then((viewport) => {
         if (!mounted) {
           viewport.dispose();
@@ -57,7 +59,6 @@ export const GarmentViewport = memo(function GarmentViewport({
         }
         if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
-          setSimulationState("running");
           lastDressedVersionRef.current = latestSimulateVersionRef.current;
         } else if (latestActiveRef.current) {
           viewport.refresh();
@@ -105,12 +106,11 @@ export const GarmentViewport = memo(function GarmentViewport({
   useEffect(() => {
     if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
     viewportRef.current.dress();
-    setSimulationState("running");
     lastDressedVersionRef.current = simulateVersion;
   }, [simulateVersion]);
 
   return (
-    <div className="viewport-host" ref={hostRef} data-testid="dressed-avatar-viewport">
+    <div className="viewport-host" ref={hostRef} data-testid="dressed-avatar-viewport" data-simulation-ui-state={simulationState}>
       {error ? <div className="viewport-error">{error}</div> : null}
       {warnings.length > 0 ? (
         <div className="viewport-warnings" role="alert">
@@ -126,21 +126,17 @@ export const GarmentViewport = memo(function GarmentViewport({
         {simulationState === "running" ? (
           <button type="button" onClick={() => {
             viewportRef.current?.pauseSimulation();
-            setSimulationState("paused");
           }}>Pausar</button>
         ) : (
           <button type="button" onClick={() => {
             viewportRef.current?.resumeSimulation();
-            setSimulationState("running");
           }}>Continuar</button>
         )}
         <button type="button" onClick={() => {
           viewportRef.current?.stepSimulation();
-          setSimulationState("paused");
         }}>Passo</button>
         <button type="button" onClick={() => {
           viewportRef.current?.resetSimulation();
-          setSimulationState("ready");
         }}>Reiniciar</button>
       </div>
     </div>

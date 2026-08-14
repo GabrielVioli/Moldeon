@@ -24,6 +24,14 @@ Agora o limite atua sobre o deslocamento real, relativo à menor aresta local; r
 
 Havia dois fatores: `Provar` só chamava a ação física quando o modo anterior já era assembly, e uma explosão física podia saturar Worker/renderização antes de aparecer progresso útil. `Provar` agora sempre solicita a simulação. O smoke confirmou Worker criado, ready, running, steps, frames aceitos, mesh atualizada e lifecycle completo.
 
+### Reset que continuava simulando
+
+A primeira transição incorreta foi registrada antes da correção: `reset` restaurava os arrays do solver, mas mantinha `running=true` e o `setTimeout` recursivo ativo. A UI mudava localmente para `Continuar`, enquanto o Worker continuava produzindo steps. Na reprodução, `stepCount` foi de 4 para 310 em 5,2 segundos e a assinatura das posições mudou.
+
+O lifecycle agora é comandado por `generation + epoch + commandId` monotônicos. Cada comando aceito invalida frames e acknowledgements anteriores. `pause`, `step` e `reset` cancelam o único timer ativo; `resume` cancela qualquer timer remanescente antes de iniciar exatamente um novo loop. `reset` recria pose, buffers temporários, velocidades, accumulator e lambdas, publica a pose resetada e termina em `paused`. O estado React só muda depois do acknowledgement efetivo do Worker.
+
+`pause` também publica um snapshot sem avançar a física. Isso sincroniza o `stepCount` mostrado/renderizado com o estado interno antes de `Passo`; um clique passa a corresponder exatamente a um physics step e termina novamente pausado.
+
 ## Regressão da autocostura
 
 A validação passou a comparar identidade material canônica (`piece + edge + intervalo`) em vez de bloquear pelo `PanelInstance` ou peça. Bordas esquerda/direita da mesma instância são válidas; o mesmo range e sobreposição positiva são inválidos; ranges disjuntos ou apenas adjacentes são válidos. A regra vale para todos os pares entre lados compostos e preserva `1↔1`, `1↔N`, `N↔1` e `N↔M`.
@@ -61,8 +69,9 @@ Compliances do algodão padrão: stretch warp/weft `3,8e-7/5,6e-7`, shear `2,875
 - cenas canônicas A–Q: painel livre, pendurado, tubo, tesselações diferentes, transmissão de força, `1↔2`, `2↔1`, `2↔3`, residual, ciclo, ramificação, determinismo, delta grande, lifecycle, rebuild 2D e 4+ painéis;
 - integração real: tubo, painel desconectado, retalho costurado, A→B→A e quatro `PanelInstances`;
 - domínio: autocostura material, ranges compostos, ordem, same/opposite, undo/redo;
-- Worker client: descarte de frame A antigo após A→B→A;
-- suíte completa: 67 arquivos / 447 testes;
+- Worker client: descarte de frame A antigo após A→B→A, descarte por epoch após reset, epochs monotônicos e rejeição de state/error antigos;
+- lifecycle público: reset imóvel por 5,2 s, 10 ciclos consecutivos, sequências rápidas e smoke mobile;
+- suíte completa: 67 arquivos / 450 testes;
 - typecheck: aprovado;
 - build fallback de produção: aprovado;
 - `git diff --check`: aprovado;
@@ -76,6 +85,10 @@ Evidências locais:
 - `desktop-tube-with-flap.png`;
 - `desktop-four-panel-composite.png`;
 - `mobile-paused.png`.
+- `artifacts/prompt-10-lifecycle/pre-fix-report.json` e `pre-fix.png`;
+- `artifacts/prompt-10-lifecycle/validation-report.json` e `validation.png`.
+
+Na validação final de lifecycle, os 10 resets terminaram com `stepCount = 0`, timer inativo e assinatura `1815:e9a20cbe` imutável durante 5,1 segundos. Cada `Passo` avançou exatamente uma unidade. Passaram também `reset→reset`, `reset→resume`, `pause→reset`, `resume→reset`, `pause→resume→pause`, dois passos seguidos e seis cliques rápidos em `Continuar`. Desktop e mobile encerraram sem erro de console.
 
 No caso C, quatro meshes permaneceram presentes, `maxTriangleIndex = 1459 < particleCount = 1460`, a costura composta gerou 24 constraints e a segunda SeamGroup gerou 17. No rebuild B→A, a topologia voltou exatamente a 605 partículas e 960 triângulos, sem mesh fantasma.
 
