@@ -100,6 +100,8 @@ interface SeamDerivedTubeFrame extends PatternFrame2D {
   center: AvatarVector3;
   radiusM: number;
   angularSpanRad: number;
+  tubeGroupId?: string;
+  tubeScoreMm2?: number;
 }
 
 interface SeamDerivedTubeCandidate {
@@ -116,6 +118,11 @@ interface TubeCycleConnection {
   secondInstanceId: string;
   firstRange: EdgeRange;
   secondRange: EdgeRange;
+}
+
+interface TubeCycle {
+  nodes: string[];
+  edges: TubeCycleConnection[];
 }
 
 export function buildSemanticAvatarArrangement(
@@ -370,6 +377,8 @@ function arrangeInstance(
     axis: [...(tubeFrame?.worldAxis ?? anchor.axis)],
     ...(tubeFrame ? { tubeCenter: [...tubeFrame.center] as AvatarVector3 } : {}),
     ...(tubeFrame ? { tubeRadiusM: tubeFrame.radiusM } : {}),
+    ...(tubeFrame?.tubeGroupId ? { tubeGroupId: tubeFrame.tubeGroupId } : {}),
+    ...(tubeFrame?.tubeScoreMm2 !== undefined ? { tubeScoreMm2: tubeFrame.tubeScoreMm2 } : {}),
     bodySide: instance.placement.bodySide,
     marginM: anchor.initialMarginM,
     mapping: tubeFrame
@@ -380,9 +389,9 @@ function arrangeInstance(
 }
 
 /**
- * Detecta a subestrutura tubular primária de cada connected component.
- * Painéis anexados não invalidam o tubo já resolvido, mas um ciclo secundário
- * também não pode promovê-los a outro tubo e substituir suas poses rígidas.
+ * Detecta cascas tubulares materialmente disjuntas. Candidatos que disputam as
+ * mesmas PanelInstances continuam exclusivos; loops auxiliares disjuntos são
+ * preservados e depois alinhados rigidamente à casca global do componente.
  */
 function buildSeamDerivedTubeFrames(
   state: GarmentAssemblyState,
@@ -567,22 +576,23 @@ function buildSeamDerivedTubeFrames(
   candidates.push(...buildMultipanelTubeCandidates(state, garment, avatar, componentByPieceId));
 
   /*
-   * Um segundo par tubular dentro do mesmo connected component normalmente
-   * aparece quando uma SeamGroup nova fecha um ciclo entre painéis já presos.
-   * Remapeá-lo como outro cilindro destruiria a pose estável anterior. Mantemos
-   * somente a maior subestrutura tubular como raiz analítica e deixamos as
-   * demais costuras como constraints com residual para o futuro XPBD.
+   * Candidatos que disputam as mesmas PanelInstances continuam mutuamente
+   * exclusivos: vence a maior casca coerente. Subestruturas fechadas e
+   * materialmente disjuntas, como corpo + faixa superior, podem coexistir no
+   * mesmo connected component. A SeamGroup entre elas preserva o residual para
+   * o XPBD sem obrigar uma delas a virar uma faixa plana ou abas radiais.
    */
-  const acceptedComponents = new Set<string>();
   const assignedInstances = new Set<string>();
   for (const candidate of [...candidates].sort(
     (left, right) => right.scoreMm2 - left.scoreMm2 || left.pairKey.localeCompare(right.pairKey),
   )) {
-    if (acceptedComponents.has(candidate.componentKey)) continue;
     if (candidate.frames.some(([instanceId]) => assignedInstances.has(instanceId))) continue;
-    acceptedComponents.add(candidate.componentKey);
     for (const [instanceId, frame] of candidate.frames) {
-      result.set(instanceId, frame);
+      result.set(instanceId, {
+        ...frame,
+        tubeGroupId: candidate.pairKey,
+        tubeScoreMm2: candidate.scoreMm2,
+      });
       assignedInstances.add(instanceId);
     }
   }
@@ -685,115 +695,207 @@ function buildMultipanelTubeCandidates(
       }
     }
     component.sort();
-    if (component.length < 3 || component.some((id) => (adjacency.get(id)?.length ?? 0) !== 2)) continue;
-    const edgeCount = new Set(component.flatMap((id) => (adjacency.get(id) ?? []).map((edge) => edge.key))).size;
-    if (edgeCount !== component.length) continue;
-    const cycle = traceTubeCycle(component[0], adjacency);
-    if (!cycle || cycle.nodes.length !== component.length) continue;
-
-    const baseAxisById = new Map<string, readonly [number, number]>();
-    let valid = true;
-    for (let index = 0; index < cycle.nodes.length; index += 1) {
-      const instanceId = cycle.nodes[index];
-      const instance = instanceById.get(instanceId);
-      const piece = instance ? pieceById.get(instance.pieceId) : undefined;
-      if (!instance || !piece) { valid = false; break; }
-      const ranges = [
-        cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId),
-        cycleRangeFor(cycle.edges[index], instanceId),
-      ];
-      const axis = dominantRangeAxis(piece, ranges);
-      if (!axis) { valid = false; break; }
-      baseAxisById.set(instanceId, axis);
+    for (const cycle of selectShellCycles(component, adjacency, instanceById, pieceById)) {
+      const candidate = buildMultipanelTubeCandidate(
+        cycle,
+        instanceById,
+        pieceById,
+        avatar,
+        componentByPieceId,
+      );
+      if (candidate) candidates.push(candidate);
     }
-    if (!valid) continue;
-
-    const axialSignById = new Map<string, 1 | -1>([[cycle.nodes[0], 1]]);
-    for (let index = 0; index < cycle.nodes.length; index += 1) {
-      const currentId = cycle.nodes[index];
-      const nextId = cycle.nodes[(index + 1) % cycle.nodes.length];
-      const connection = cycle.edges[index];
-      const currentInstance = instanceById.get(currentId)!;
-      const nextInstance = instanceById.get(nextId)!;
-      const currentPiece = pieceById.get(currentInstance.pieceId)!;
-      const nextPiece = pieceById.get(nextInstance.pieceId)!;
-      const currentVector = edgeRangeVector(currentPiece, cycleRangeFor(connection, currentId));
-      const nextVector = edgeRangeVector(nextPiece, cycleRangeFor(connection, nextId));
-      const currentSign = axialSignById.get(currentId);
-      const currentAxis = baseAxisById.get(currentId)!;
-      const nextAxis = baseAxisById.get(nextId)!;
-      if (!currentVector || !nextVector || !currentSign) { valid = false; break; }
-      const currentAlong = dot2(currentVector, currentAxis) * currentSign;
-      const nextAlong = dot2(nextVector, nextAxis) * (connection.direction === "opposite" ? -1 : 1);
-      if (Math.abs(currentAlong) <= 1e-6 || Math.abs(nextAlong) <= 1e-6) { valid = false; break; }
-      const propagated: 1 | -1 = currentAlong * nextAlong >= 0 ? 1 : -1;
-      const existing = axialSignById.get(nextId);
-      if (existing && existing !== propagated) { valid = false; break; }
-      axialSignById.set(nextId, propagated);
-    }
-    if (!valid) continue;
-
-    const patternFrames = new Map<string, PatternFrame2D>();
-    let circumferenceMm = 0;
-    let axialSpanMm = 0;
-    for (let index = 0; index < cycle.nodes.length; index += 1) {
-      const instanceId = cycle.nodes[index];
-      const instance = instanceById.get(instanceId)!;
-      const piece = pieceById.get(instance.pieceId)!;
-      const incoming = cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId);
-      const outgoing = cycleRangeFor(cycle.edges[index], instanceId);
-      const provisional = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, 1);
-      const incomingSide = seamRangeSide(piece, incoming, provisional);
-      const outgoingSide = seamRangeSide(piece, outgoing, provisional);
-      if (incomingSide === 0 || outgoingSide === 0 || incomingSide === outgoingSide) { valid = false; break; }
-      const acrossSign: 1 | -1 = incomingSide < outgoingSide ? 1 : -1;
-      const frame = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, acrossSign);
-      patternFrames.set(instanceId, frame);
-      circumferenceMm += frame.acrossMaxMm - frame.acrossMinMm;
-      axialSpanMm = Math.max(axialSpanMm, frame.axialMaxMm - frame.axialMinMm);
-    }
-    if (!valid || circumferenceMm <= 1e-6) continue;
-
-    const radiusM = circumferenceMm * METERS_PER_MM / (Math.PI * 2);
-    const rootFrame = patternFrames.get(cycle.nodes[0])!;
-    const worldAxis = normalize3([rootFrame.axis[0], -rootFrame.axis[1], 0]);
-    const baseNormal: AvatarVector3 = [0, 0, 1];
-    const baseAcross = normalize3(cross3(baseNormal, worldAxis));
-    const instances = cycle.nodes.map((id) => instanceById.get(id)!);
-    const center = resolveTubeCenter(instances, avatar, worldAxis, axialSpanMm * METERS_PER_MM);
-    const frames: Array<readonly [string, SeamDerivedTubeFrame]> = [];
-    let angularCursor = -Math.PI;
-    for (const instanceId of cycle.nodes) {
-      const frame = patternFrames.get(instanceId)!;
-      const angularSpanRad = (frame.acrossMaxMm - frame.acrossMinMm) * METERS_PER_MM / radiusM;
-      const centerAngle = angularCursor + angularSpanRad * 0.5;
-      const worldNormal = addScaled3(baseNormal, baseAcross, Math.cos(centerAngle), Math.sin(centerAngle));
-      const worldAcross = addScaled3(baseNormal, baseAcross, -Math.sin(centerAngle), Math.cos(centerAngle));
-      frames.push([instanceId, {
-        ...frame,
-        worldAxis,
-        worldAcross,
-        worldNormal,
-        center,
-        radiusM,
-        angularSpanRad,
-      }]);
-      angularCursor += angularSpanRad;
-    }
-    candidates.push({
-      pairKey: `cycle:${cycle.edges.map((edge) => edge.key).sort().join("|")}`,
-      componentKey: componentByPieceId.get(instances[0].pieceId) ?? instances[0].pieceId,
-      scoreMm2: axialSpanMm * circumferenceMm * 2,
-      frames,
-    });
   }
   return candidates;
+}
+
+function selectShellCycles(
+  component: readonly string[],
+  adjacency: ReadonlyMap<string, readonly TubeCycleConnection[]>,
+  instanceById: ReadonlyMap<string, AssemblyPanelInstance>,
+  pieceById: ReadonlyMap<string, PatternPiece>,
+): TubeCycle[] {
+  const selectedByInstance = new Map<string, ReadonlySet<string>>();
+  for (const instanceId of component) {
+    const instance = instanceById.get(instanceId);
+    const piece = instance ? pieceById.get(instance.pieceId) : undefined;
+    const connections = adjacency.get(instanceId) ?? [];
+    if (!instance || !piece || connections.length < 2) continue;
+    let best: { keys: ReadonlySet<string>; score: number; tie: string } | undefined;
+    for (let firstIndex = 0; firstIndex < connections.length - 1; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < connections.length; secondIndex += 1) {
+        const first = connections[firstIndex];
+        const second = connections[secondIndex];
+        const firstRange = cycleRangeFor(first, instanceId);
+        const secondRange = cycleRangeFor(second, instanceId);
+        const axis = dominantRangeAxis(piece, [firstRange, secondRange]);
+        if (!axis) continue;
+        const frame = projectedPatternFrame(instance, axis, 1, 1);
+        const firstSide = seamRangeSide(piece, firstRange, frame);
+        const secondSide = seamRangeSide(piece, secondRange, frame);
+        if (firstSide === 0 || secondSide === 0 || firstSide === secondSide) continue;
+        const firstLength = edgeRangeLength(piece, firstRange);
+        const secondLength = edgeRangeLength(piece, secondRange);
+        const score = firstLength + secondLength + Math.min(firstLength, secondLength);
+        const tie = [first.key, second.key].sort().join("|");
+        if (!best || score > best.score + 1e-6 || (Math.abs(score - best.score) <= 1e-6 && tie < best.tie)) {
+          best = { keys: new Set([first.key, second.key]), score, tie };
+        }
+      }
+    }
+    if (best) selectedByInstance.set(instanceId, best.keys);
+  }
+
+  const shellAdjacency = new Map<string, TubeCycleConnection[]>();
+  const seenConnections = new Set<string>();
+  for (const instanceId of component) {
+    for (const connection of adjacency.get(instanceId) ?? []) {
+      if (seenConnections.has(connection.key)) continue;
+      seenConnections.add(connection.key);
+      if (!selectedByInstance.get(connection.firstInstanceId)?.has(connection.key)
+        || !selectedByInstance.get(connection.secondInstanceId)?.has(connection.key)) continue;
+      const first = shellAdjacency.get(connection.firstInstanceId) ?? [];
+      first.push(connection);
+      shellAdjacency.set(connection.firstInstanceId, first);
+      const second = shellAdjacency.get(connection.secondInstanceId) ?? [];
+      second.push(connection);
+      shellAdjacency.set(connection.secondInstanceId, second);
+    }
+  }
+  for (const connections of shellAdjacency.values()) connections.sort((left, right) => left.key.localeCompare(right.key));
+
+  const cycles: TubeCycle[] = [];
+  const visited = new Set<string>();
+  for (const start of [...shellAdjacency.keys()].sort()) {
+    if (visited.has(start)) continue;
+    const nodes: string[] = [];
+    const queue = [start];
+    visited.add(start);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      nodes.push(current);
+      for (const connection of shellAdjacency.get(current) ?? []) {
+        const neighbor = otherCycleInstance(connection, current);
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    nodes.sort();
+    if (nodes.length < 3 || nodes.some((id) => (shellAdjacency.get(id)?.length ?? 0) !== 2)) continue;
+    const edgeCount = new Set(nodes.flatMap((id) => (shellAdjacency.get(id) ?? []).map((edge) => edge.key))).size;
+    if (edgeCount !== nodes.length) continue;
+    const cycle = traceTubeCycle(nodes[0], shellAdjacency);
+    if (cycle?.nodes.length === nodes.length) cycles.push(cycle);
+  }
+  return cycles;
+}
+
+function buildMultipanelTubeCandidate(
+  cycle: TubeCycle,
+  instanceById: ReadonlyMap<string, AssemblyPanelInstance>,
+  pieceById: ReadonlyMap<string, PatternPiece>,
+  avatar: AvatarParametricModel,
+  componentByPieceId: ReadonlyMap<string, string>,
+): SeamDerivedTubeCandidate | undefined {
+  const baseAxisById = new Map<string, readonly [number, number]>();
+  for (let index = 0; index < cycle.nodes.length; index += 1) {
+    const instanceId = cycle.nodes[index];
+    const instance = instanceById.get(instanceId);
+    const piece = instance ? pieceById.get(instance.pieceId) : undefined;
+    if (!instance || !piece) return undefined;
+    const ranges = [
+      cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId),
+      cycleRangeFor(cycle.edges[index], instanceId),
+    ];
+    const axis = dominantRangeAxis(piece, ranges);
+    if (!axis) return undefined;
+    baseAxisById.set(instanceId, axis);
+  }
+
+  const axialSignById = new Map<string, 1 | -1>([[cycle.nodes[0], 1]]);
+  for (let index = 0; index < cycle.nodes.length; index += 1) {
+    const currentId = cycle.nodes[index];
+    const nextId = cycle.nodes[(index + 1) % cycle.nodes.length];
+    const connection = cycle.edges[index];
+    const currentInstance = instanceById.get(currentId)!;
+    const nextInstance = instanceById.get(nextId)!;
+    const currentPiece = pieceById.get(currentInstance.pieceId)!;
+    const nextPiece = pieceById.get(nextInstance.pieceId)!;
+    const currentVector = edgeRangeVector(currentPiece, cycleRangeFor(connection, currentId));
+    const nextVector = edgeRangeVector(nextPiece, cycleRangeFor(connection, nextId));
+    const currentSign = axialSignById.get(currentId);
+    const currentAxis = baseAxisById.get(currentId)!;
+    const nextAxis = baseAxisById.get(nextId)!;
+    if (!currentVector || !nextVector || !currentSign) return undefined;
+    const currentAlong = dot2(currentVector, currentAxis) * currentSign;
+    const nextAlong = dot2(nextVector, nextAxis) * (connection.direction === "opposite" ? -1 : 1);
+    if (Math.abs(currentAlong) <= 1e-6 || Math.abs(nextAlong) <= 1e-6) return undefined;
+    const propagated: 1 | -1 = currentAlong * nextAlong >= 0 ? 1 : -1;
+    const existing = axialSignById.get(nextId);
+    if (existing && existing !== propagated) return undefined;
+    axialSignById.set(nextId, propagated);
+  }
+
+  const patternFrames = new Map<string, PatternFrame2D>();
+  let circumferenceMm = 0;
+  let axialSpanMm = 0;
+  for (let index = 0; index < cycle.nodes.length; index += 1) {
+    const instanceId = cycle.nodes[index];
+    const instance = instanceById.get(instanceId)!;
+    const piece = pieceById.get(instance.pieceId)!;
+    const incoming = cycleRangeFor(cycle.edges[(index - 1 + cycle.edges.length) % cycle.edges.length], instanceId);
+    const outgoing = cycleRangeFor(cycle.edges[index], instanceId);
+    const provisional = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, 1);
+    const incomingSide = seamRangeSide(piece, incoming, provisional);
+    const outgoingSide = seamRangeSide(piece, outgoing, provisional);
+    if (incomingSide === 0 || outgoingSide === 0 || incomingSide === outgoingSide) return undefined;
+    const acrossSign: 1 | -1 = incomingSide < outgoingSide ? 1 : -1;
+    const frame = projectedPatternFrame(instance, baseAxisById.get(instanceId)!, axialSignById.get(instanceId)!, acrossSign);
+    patternFrames.set(instanceId, frame);
+    circumferenceMm += frame.acrossMaxMm - frame.acrossMinMm;
+    axialSpanMm = Math.max(axialSpanMm, frame.axialMaxMm - frame.axialMinMm);
+  }
+  if (circumferenceMm <= 1e-6) return undefined;
+
+  const radiusM = circumferenceMm * METERS_PER_MM / (Math.PI * 2);
+  const rootFrame = patternFrames.get(cycle.nodes[0])!;
+  const worldAxis = normalize3([rootFrame.axis[0], -rootFrame.axis[1], 0]);
+  const baseNormal: AvatarVector3 = [0, 0, 1];
+  const baseAcross = normalize3(cross3(baseNormal, worldAxis));
+  const instances = cycle.nodes.map((id) => instanceById.get(id)!);
+  const center = resolveTubeCenter(instances, avatar, worldAxis, axialSpanMm * METERS_PER_MM);
+  const frames: Array<readonly [string, SeamDerivedTubeFrame]> = [];
+  let angularCursor = -Math.PI;
+  for (const instanceId of cycle.nodes) {
+    const frame = patternFrames.get(instanceId)!;
+    const angularSpanRad = (frame.acrossMaxMm - frame.acrossMinMm) * METERS_PER_MM / radiusM;
+    const centerAngle = angularCursor + angularSpanRad * 0.5;
+    const worldNormal = addScaled3(baseNormal, baseAcross, Math.cos(centerAngle), Math.sin(centerAngle));
+    const worldAcross = addScaled3(baseNormal, baseAcross, -Math.sin(centerAngle), Math.cos(centerAngle));
+    frames.push([instanceId, {
+      ...frame,
+      worldAxis,
+      worldAcross,
+      worldNormal,
+      center,
+      radiusM,
+      angularSpanRad,
+    }]);
+    angularCursor += angularSpanRad;
+  }
+  return {
+    pairKey: `cycle:${cycle.edges.map((edge) => edge.key).sort().join("|")}`,
+    componentKey: componentByPieceId.get(instances[0].pieceId) ?? instances[0].pieceId,
+    scoreMm2: axialSpanMm * circumferenceMm * 2,
+    frames,
+  };
 }
 
 function traceTubeCycle(
   root: string,
   adjacency: ReadonlyMap<string, readonly TubeCycleConnection[]>,
-): { nodes: string[]; edges: TubeCycleConnection[] } | undefined {
+): TubeCycle | undefined {
   const firstEdge = adjacency.get(root)?.[0];
   if (!firstEdge) return undefined;
   const nodes = [root];
@@ -1206,10 +1308,22 @@ function placeConnectedPanelsRigidly(
     }
 
     component.sort();
-    const tubeRoots = component.filter(
-      (id) => instanceById.get(id)?.arrangement?.mapping === "seam-derived-tube",
-    ).sort();
-    const roots = tubeRoots.length > 0 ? tubeRoots : component.slice(0, 1);
+    const tubeGroups = new Map<string, string[]>();
+    for (const id of component) {
+      const arrangement = instanceById.get(id)?.arrangement;
+      if (arrangement?.mapping !== "seam-derived-tube") continue;
+      const groupId = arrangement.tubeGroupId ?? `tube:${id}`;
+      const group = tubeGroups.get(groupId) ?? [];
+      group.push(id);
+      tubeGroups.set(groupId, group);
+    }
+    for (const group of tubeGroups.values()) group.sort();
+    const primaryTubeGroup = [...tubeGroups.entries()].sort((left, right) => {
+      const leftScore = instanceById.get(left[1][0])?.arrangement?.tubeScoreMm2 ?? 0;
+      const rightScore = instanceById.get(right[1][0])?.arrangement?.tubeScoreMm2 ?? 0;
+      return rightScore - leftScore || left[0].localeCompare(right[0]);
+    })[0];
+    const roots = primaryTubeGroup?.[1] ?? component.slice(0, 1);
     const placed = new Set(roots);
     const queue = [...roots];
     while (queue.length > 0) {
@@ -1219,6 +1333,28 @@ function placeConnectedPanelsRigidly(
         const fixed = instanceById.get(fixedId);
         const moving = instanceById.get(movingId);
         if (!fixed || !moving) continue;
+        const movingTubeGroupId = moving.arrangement?.mapping === "seam-derived-tube"
+          ? moving.arrangement.tubeGroupId ?? `tube:${moving.id}`
+          : undefined;
+        const movingTubeGroup = movingTubeGroupId ? tubeGroups.get(movingTubeGroupId) : undefined;
+        if (movingTubeGroup && movingTubeGroup.some((id) => !placed.has(id))) {
+          const translation = averageTubeGroupTranslation(
+            state.positions,
+            state.stitchConstraints,
+            placed,
+            new Set(movingTubeGroup),
+          );
+          for (const memberId of movingTubeGroup) {
+            const member = instanceById.get(memberId);
+            if (!member) continue;
+            translateRigidPanel(state.positions, member, translation);
+            const center = member.arrangement?.tubeCenter;
+            if (center) member.arrangement!.tubeCenter = add3(center, translation);
+            placed.add(memberId);
+            queue.push(memberId);
+          }
+          continue;
+        }
         const constraints = constraintsByPair.get(instancePairKey(fixedId, movingId)) ?? [];
         const diagnostic = alignRigidPanelToSeam(
           state.positions,
@@ -1235,6 +1371,32 @@ function placeConnectedPanelsRigidly(
     }
   }
   return diagnostics;
+}
+
+function averageTubeGroupTranslation(
+  positions: Float32Array,
+  constraints: GarmentAssemblyState["stitchConstraints"],
+  fixedIds: ReadonlySet<string>,
+  movingIds: ReadonlySet<string>,
+): AvatarVector3 {
+  const translation: AvatarVector3 = [0, 0, 0];
+  let count = 0;
+  for (const constraint of constraints) {
+    if (!constraint.instanceA || !constraint.instanceB) continue;
+    const firstIsFixed = fixedIds.has(constraint.instanceA) && movingIds.has(constraint.instanceB);
+    const secondIsFixed = fixedIds.has(constraint.instanceB) && movingIds.has(constraint.instanceA);
+    if (!firstIsFixed && !secondIsFixed) continue;
+    const first = evaluateReference(positions, constraint.a);
+    const second = evaluateReference(positions, constraint.b);
+    const delta = firstIsFixed ? subtract3(first, second) : subtract3(second, first);
+    translation[0] += delta[0];
+    translation[1] += delta[1];
+    translation[2] += delta[2];
+    count += 1;
+  }
+  return count === 0
+    ? [0, 0, 0]
+    : translation.map((value) => value / count) as AvatarVector3;
 }
 
 function alignRigidPanelToSeam(
@@ -1483,6 +1645,10 @@ function signedAngleAroundAxis(
 
 function subtract3(first: AvatarVector3, second: AvatarVector3): AvatarVector3 {
   return [first[0] - second[0], first[1] - second[1], first[2] - second[2]];
+}
+
+function add3(first: AvatarVector3, second: AvatarVector3): AvatarVector3 {
+  return [first[0] + second[0], first[1] + second[1], first[2] + second[2]];
 }
 
 function dot3(first: AvatarVector3, second: AvatarVector3): number {

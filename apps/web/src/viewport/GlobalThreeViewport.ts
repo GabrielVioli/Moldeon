@@ -206,6 +206,7 @@ export class ThreeViewport {
         axis: instance.arrangement?.axis ?? null,
         vertexCount: instance.vertexCount,
       })),
+      seamGraph: summarizeAssemblySeamGraph(arrangement.state),
       seamPlacementDiagnostics: arrangement.seamPlacementDiagnostics,
     });
     const identity = this.simulation.updateGeometry(initialization);
@@ -558,6 +559,43 @@ export class ThreeViewport {
     if (trace.length > 200) trace.splice(0, trace.length - 200);
     this.host.dataset.simulationLifecycleTrace = JSON.stringify(trace);
   }
+}
+
+function summarizeAssemblySeamGraph(state: GarmentAssemblyState): {
+  nodes: string[];
+  edges: Array<{
+    seamGroupId: string;
+    firstInstanceId: string;
+    secondInstanceId: string;
+    sampleCount: number;
+  }>;
+} {
+  const byKey = new Map<string, {
+    seamGroupId: string;
+    firstInstanceId: string;
+    secondInstanceId: string;
+    sampleCount: number;
+  }>();
+  for (const constraint of state.stitchConstraints) {
+    if (!constraint.instanceA || !constraint.instanceB) continue;
+    const instances = [constraint.instanceA, constraint.instanceB].sort();
+    const key = `${constraint.seamGroupId}\u0000${instances[0]}\u0000${instances[1]}`;
+    const current = byKey.get(key);
+    if (current) current.sampleCount += 1;
+    else byKey.set(key, {
+      seamGroupId: constraint.seamGroupId,
+      firstInstanceId: instances[0],
+      secondInstanceId: instances[1],
+      sampleCount: 1,
+    });
+  }
+  return {
+    nodes: state.instances.map((instance) => instance.id).sort(),
+    edges: [...byKey.values()].sort((left, right) =>
+      left.seamGroupId.localeCompare(right.seamGroupId)
+      || left.firstInstanceId.localeCompare(right.firstInstanceId)
+      || left.secondInstanceId.localeCompare(right.secondInstanceId)),
+  };
 }
 
 function positionSignature(positions: Float32Array): string {

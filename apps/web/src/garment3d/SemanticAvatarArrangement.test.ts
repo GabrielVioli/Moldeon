@@ -16,6 +16,7 @@ import {
   copyGarmentAssemblyGeometry,
 } from "./GarmentThreeBridge";
 import { measureIntrinsicDistortion } from "./GarmentAssembly";
+import { createBaselineFixture } from "../testFixtures/baselineGarments";
 
 function arrange(templateId: PatternTemplateId) {
   const garment = createGarmentFromTemplate(templateId, DEFAULT_BODY_MEASUREMENTS, "feminine");
@@ -120,6 +121,52 @@ function genericTubeCycle(panelCount: 2 | 4): GarmentDraft {
       },
     ],
   };
+}
+
+function notchedTubeCycle(includeLocalClosure: boolean): GarmentDraft {
+  const garment = genericComponent(4, false);
+  const pieces = garment.pieces.map((piece, index) => ({
+    ...piece,
+    id: `notched-${index}`,
+    name: `Recorte ${index + 1}`,
+    points: [
+      { id: `notched-${index}:a`, xMm: 0, yMm: 35 },
+      { id: `notched-${index}:b`, xMm: 40, yMm: 0 },
+      { id: `notched-${index}:c`, xMm: 80, yMm: 0 },
+      { id: `notched-${index}:d`, xMm: 120, yMm: 35 },
+      { id: `notched-${index}:e`, xMm: 120, yMm: 240 },
+      { id: `notched-${index}:f`, xMm: 0, yMm: 240 },
+    ],
+    bodyPlacement: piece.bodyPlacement
+      ? { ...piece.bodyPlacement, offsetXMm: (index - 1.5) * 135 }
+      : undefined,
+  }));
+  const seams = pieces.map((piece, index) => {
+    const next = pieces[(index + 1) % pieces.length];
+    return {
+      id: `notched-side-${index}`,
+      groupId: `notched-side-${index}`,
+      first: { pieceId: piece.id, edgeId: getPatternEdges(piece)[3].id, startT: 0, endT: 1 },
+      second: { pieceId: next.id, edgeId: getPatternEdges(next)[5].id, startT: 0, endT: 1 },
+      direction: "opposite" as const,
+      easeRatio: 0,
+      type: "standard" as const,
+      active: true,
+    };
+  });
+  if (includeLocalClosure) {
+    seams.push({
+      id: "notched-local-closure",
+      groupId: "notched-local-closure",
+      first: { pieceId: pieces[0].id, edgeId: getPatternEdges(pieces[0])[2].id, startT: 0, endT: 1 },
+      second: { pieceId: pieces[1].id, edgeId: getPatternEdges(pieces[1])[0].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      active: true,
+    });
+  }
+  return { ...garment, pieces, seams };
 }
 
 function arrangedDraft(garment: GarmentDraft) {
@@ -434,6 +481,87 @@ describe("SemanticAvatarArrangement", () => {
     const pairDistances = centers.flatMap((center, index) => centers.slice(index + 1).map((other) =>
       Math.hypot(center[0] - other[0], center[1] - other[1], center[2] - other[2])));
     expect(Math.min(...pairDistances)).toBeGreaterThan(0.05);
+  });
+
+  it("preserves the primary tubular cycle when a diagonal local closure is added", () => {
+    const withoutLocalClosure = arrangedDraft(notchedTubeCycle(false));
+    const withLocalClosure = arrangedDraft(notchedTubeCycle(true));
+    const ids = withoutLocalClosure.state.instances.map((instance) => instance.id).sort();
+
+    expect(ids).toHaveLength(4);
+    expect(withLocalClosure.state.instances.map((instance) => instance.id).sort()).toEqual(ids);
+    expect(withLocalClosure.state.instances.every(
+      (instance) => instance.arrangement?.mapping === "seam-derived-tube",
+    )).toBe(true);
+    expect(new Set(withoutLocalClosure.state.stitchConstraints.map((constraint) => constraint.seamGroupId)).size).toBe(4);
+    expect(new Set(withLocalClosure.state.stitchConstraints.map((constraint) => constraint.seamGroupId))).toEqual(
+      new Set([...withoutLocalClosure.state.stitchConstraints.map((constraint) => constraint.seamGroupId), "notched-local-closure"]),
+    );
+    for (const id of ids) {
+      expect(instancePositions(withLocalClosure, id)).toEqual(instancePositions(withoutLocalClosure, id));
+    }
+    expect(measureIntrinsicDistortion(withLocalClosure.state).maxRelativeDistortion).toBeLessThan(0.015);
+
+    const beforeMeshes = buildGarmentAssemblyMeshes(withoutLocalClosure.state, withoutLocalClosure.garment, {
+      castShadow: false,
+      receiveShadow: false,
+      visibleInstanceIds: withoutLocalClosure.visibleInstanceIds,
+    });
+    const afterMeshes = buildGarmentAssemblyMeshes(withLocalClosure.state, withLocalClosure.garment, {
+      castShadow: false,
+      receiveShadow: false,
+      visibleInstanceIds: withLocalClosure.visibleInstanceIds,
+    });
+    expect(afterMeshes).toHaveLength(4);
+    const beforeDiagnostics = new Map(captureGarmentMeshDiagnostics(beforeMeshes).map((item) => [item.id, item]));
+    for (const diagnostic of captureGarmentMeshDiagnostics(afterMeshes)) {
+      const before = beforeDiagnostics.get(diagnostic.id)!;
+      expect(diagnostic).toMatchObject({
+        id: before.id,
+        vertexCount: before.vertexCount,
+        triangleCount: before.triangleCount,
+        boundingBox: before.boundingBox,
+        centroid: before.centroid,
+        transform: before.transform,
+        geometrySignature: before.geometrySignature,
+        meshCount: 1,
+        meanNormal: before.meanNormal,
+        meanTriangleNormal: before.meanTriangleNormal,
+        materialSide: before.materialSide,
+      });
+    }
+  });
+
+  it("keeps the global body shell dominant over a closed upper band and composite top seam", () => {
+    const bodyOnly = arrangedDraft(createBaselineFixture("spatial-notched-tube"));
+    const withUpperBand = arrangedDraft(createBaselineFixture("spatial-notched-tube-waistband"));
+    const bodyIds = bodyOnly.state.instances.map((instance) => instance.id).sort();
+    const upperBand = withUpperBand.state.instances.find((instance) => instance.pieceId === "spatial-upper-band");
+
+    expect(bodyIds).toHaveLength(4);
+    expect(withUpperBand.state.instances).toHaveLength(5);
+    expect(upperBand?.arrangement?.mapping).toBe("seam-derived-tube");
+    const bodyCenter = withUpperBand.state.instances.find((instance) => instance.id === bodyIds[0])!
+      .arrangement!.tubeCenter!;
+    expect(Math.abs(upperBand!.arrangement!.tubeCenter![0] - bodyCenter[0])).toBeLessThan(0.005);
+    expect(Math.abs(upperBand!.arrangement!.tubeCenter![2] - bodyCenter[2])).toBeLessThan(0.005);
+    for (const id of bodyIds) {
+      expect(withUpperBand.state.instances.find((instance) => instance.id === id)?.arrangement?.mapping)
+        .toBe("seam-derived-tube");
+      expect(instancePositions(withUpperBand, id)).toEqual(instancePositions(bodyOnly, id));
+    }
+    const seamGroups = new Set(withUpperBand.state.stitchConstraints.map((constraint) => constraint.seamGroupId));
+    expect(seamGroups.has("spatial-notched-tube-waistband:local-closure")).toBe(true);
+    expect(seamGroups.has("spatial-notched-tube-waistband:upper-band-loop")).toBe(true);
+    expect(seamGroups.has("spatial-notched-tube-waistband:composite-top")).toBe(true);
+    expect(measureIntrinsicDistortion(withUpperBand.state).maxRelativeDistortion).toBeLessThan(0.015);
+    const meshes = buildGarmentAssemblyMeshes(withUpperBand.state, withUpperBand.garment, {
+      castShadow: false,
+      receiveShadow: false,
+      visibleInstanceIds: withUpperBand.visibleInstanceIds,
+    });
+    expect(meshes).toHaveLength(5);
+    expect(new Set(meshes.map((mesh) => mesh.key))).toEqual(new Set([...bodyIds, upperBand!.id]));
   });
 
   it.each([2, 4] as const)(

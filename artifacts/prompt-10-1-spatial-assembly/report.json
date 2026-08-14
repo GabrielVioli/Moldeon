@@ -65,6 +65,19 @@
               "vertexCount": 266
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -125,7 +138,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "be4e5a7d-c93a-4e61-b133-7d476d165052:0:0",
+            "geometryRevision": "d852a8dd-d89c-4e0f-87ea-a1a5345b220a:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -203,6 +216,19 @@
               "vertexCount": 266
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -263,7 +289,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "be4e5a7d-c93a-4e61-b133-7d476d165052:0:0",
+            "geometryRevision": "d852a8dd-d89c-4e0f-87ea-a1a5345b220a:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -341,6 +367,19 @@
               "vertexCount": 266
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -401,7 +440,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "be4e5a7d-c93a-4e61-b133-7d476d165052:0:0",
+            "geometryRevision": "d852a8dd-d89c-4e0f-87ea-a1a5345b220a:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -504,6 +543,26 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -564,7 +623,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "d1797bf5-1e1c-4e43-a1e7-9feb4a12b998:0:0",
+            "geometryRevision": "62426976-b3fa-4d0b-ab4d-a7678cafb896:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.45490103453138486,
@@ -635,7 +694,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "15e97852-a043-4452-9f40-2f1b77871795:0:0",
+            "geometryRevision": "a8d16ed5-75d1-44d9-9782-3a802e7cbeeb:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.4549010429452732,
@@ -735,6 +794,26 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -795,7 +874,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "d1797bf5-1e1c-4e43-a1e7-9feb4a12b998:0:0",
+            "geometryRevision": "62426976-b3fa-4d0b-ab4d-a7678cafb896:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.45490103453138486,
@@ -866,7 +945,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "15e97852-a043-4452-9f40-2f1b77871795:0:0",
+            "geometryRevision": "a8d16ed5-75d1-44d9-9782-3a802e7cbeeb:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.4549010429452732,
@@ -966,6 +1045,26 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-two-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -1026,7 +1125,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "d1797bf5-1e1c-4e43-a1e7-9feb4a12b998:0:0",
+            "geometryRevision": "62426976-b3fa-4d0b-ab4d-a7678cafb896:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.45490103453138486,
@@ -1097,7 +1196,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "15e97852-a043-4452-9f40-2f1b77871795:0:0",
+            "geometryRevision": "a8d16ed5-75d1-44d9-9782-3a802e7cbeeb:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.4549010429452732,
@@ -1244,6 +1343,40 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1",
+              "spatial-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-3",
+                "firstInstanceId": "spatial-panel-3:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-4",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -1304,7 +1437,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "3c24c288-26bb-4f76-a780-a10c70929809:0:0",
+            "geometryRevision": "76329b73-722a-4359-9107-b058072ec575:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.58053798964903,
@@ -1375,7 +1508,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "56a2d4ef-1ac2-44da-ab3a-2f0e0ed96f52:0:0",
+            "geometryRevision": "aef9d66a-8769-41cb-a06f-6334d8dc982c:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.814233160118494,
@@ -1446,7 +1579,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "a3519ac6-126b-40a6-9804-5cd90b2eb17e:0:0",
+            "geometryRevision": "c887b416-7da8-4158-8632-8b6eaf6ad656:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.5805379845999891,
@@ -1517,7 +1650,7 @@
               ]
             },
             "geometrySignature": "aebfb2eb",
-            "geometryRevision": "4ef32c2f-dbea-4e6e-89e2-42e75a88de0a:0:0",
+            "geometryRevision": "5da3b1a6-a389-45aa-9b19-6d34c2f244b8:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.8142331615270417,
@@ -1661,6 +1794,40 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1",
+              "spatial-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-3",
+                "firstInstanceId": "spatial-panel-3:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-4",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -1721,7 +1888,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "3c24c288-26bb-4f76-a780-a10c70929809:0:0",
+            "geometryRevision": "76329b73-722a-4359-9107-b058072ec575:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.58053798964903,
@@ -1792,7 +1959,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "56a2d4ef-1ac2-44da-ab3a-2f0e0ed96f52:0:0",
+            "geometryRevision": "aef9d66a-8769-41cb-a06f-6334d8dc982c:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.814233160118494,
@@ -1863,7 +2030,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "a3519ac6-126b-40a6-9804-5cd90b2eb17e:0:0",
+            "geometryRevision": "c887b416-7da8-4158-8632-8b6eaf6ad656:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.5805379845999891,
@@ -1934,7 +2101,7 @@
               ]
             },
             "geometrySignature": "aebfb2eb",
-            "geometryRevision": "4ef32c2f-dbea-4e6e-89e2-42e75a88de0a:0:0",
+            "geometryRevision": "5da3b1a6-a389-45aa-9b19-6d34c2f244b8:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.8142331615270417,
@@ -2078,6 +2245,40 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1",
+              "spatial-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-3",
+                "firstInstanceId": "spatial-panel-3:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-four-panel-tube:join-4",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-4:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": []
         },
         "meshes": [
@@ -2138,7 +2339,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "3c24c288-26bb-4f76-a780-a10c70929809:0:0",
+            "geometryRevision": "76329b73-722a-4359-9107-b058072ec575:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.58053798964903,
@@ -2209,7 +2410,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "56a2d4ef-1ac2-44da-ab3a-2f0e0ed96f52:0:0",
+            "geometryRevision": "aef9d66a-8769-41cb-a06f-6334d8dc982c:0:0",
             "meshCount": 1,
             "meanNormal": [
               -0.814233160118494,
@@ -2280,7 +2481,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "a3519ac6-126b-40a6-9804-5cd90b2eb17e:0:0",
+            "geometryRevision": "c887b416-7da8-4158-8632-8b6eaf6ad656:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.5805379845999891,
@@ -2351,7 +2552,7 @@
               ]
             },
             "geometrySignature": "aebfb2eb",
-            "geometryRevision": "4ef32c2f-dbea-4e6e-89e2-42e75a88de0a:0:0",
+            "geometryRevision": "5da3b1a6-a389-45aa-9b19-6d34c2f244b8:0:0",
             "meshCount": 1,
             "meanNormal": [
               0.8142331615270417,
@@ -2464,6 +2665,27 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-open-chain:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-open-chain:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "spatial-open-chain:join-1",
@@ -2681,7 +2903,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "c3486ddd-5c14-4418-babe-66e90471661f:0:1",
+            "geometryRevision": "4367ed72-1b6c-4dd3-8188-ed42d16b55dd:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -2752,7 +2974,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "fcba0158-8881-4dde-8366-76042bc5cc4a:0:1",
+            "geometryRevision": "f5bd33db-3bcc-4355-bb76-307f3a668807:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -2823,7 +3045,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "855d9201-b2a3-4f38-b807-3d0558f932ea:0:1",
+            "geometryRevision": "a80a6a0c-2113-468f-8313-50c78de30449:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -2933,6 +3155,27 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-open-chain:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-open-chain:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "spatial-open-chain:join-1",
@@ -3150,7 +3393,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "c3486ddd-5c14-4418-babe-66e90471661f:0:1",
+            "geometryRevision": "4367ed72-1b6c-4dd3-8188-ed42d16b55dd:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3221,7 +3464,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "fcba0158-8881-4dde-8366-76042bc5cc4a:0:1",
+            "geometryRevision": "f5bd33db-3bcc-4355-bb76-307f3a668807:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3292,7 +3535,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "855d9201-b2a3-4f38-b807-3d0558f932ea:0:1",
+            "geometryRevision": "a80a6a0c-2113-468f-8313-50c78de30449:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3402,6 +3645,27 @@
               "vertexCount": 345
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-panel-1:panel:1",
+              "spatial-panel-2:panel:1",
+              "spatial-panel-3:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-open-chain:join-1",
+                "firstInstanceId": "spatial-panel-1:panel:1",
+                "secondInstanceId": "spatial-panel-2:panel:1",
+                "sampleCount": 19
+              },
+              {
+                "seamGroupId": "spatial-open-chain:join-2",
+                "firstInstanceId": "spatial-panel-2:panel:1",
+                "secondInstanceId": "spatial-panel-3:panel:1",
+                "sampleCount": 19
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "spatial-open-chain:join-1",
@@ -3619,7 +3883,7 @@
               ]
             },
             "geometrySignature": "018f44cf",
-            "geometryRevision": "c3486ddd-5c14-4418-babe-66e90471661f:0:1",
+            "geometryRevision": "4367ed72-1b6c-4dd3-8188-ed42d16b55dd:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3690,7 +3954,7 @@
               ]
             },
             "geometrySignature": "98b4d59b",
-            "geometryRevision": "fcba0158-8881-4dde-8366-76042bc5cc4a:0:1",
+            "geometryRevision": "f5bd33db-3bcc-4355-bb76-307f3a668807:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3761,7 +4025,7 @@
               ]
             },
             "geometrySignature": "1659191f",
-            "geometryRevision": "855d9201-b2a3-4f38-b807-3d0558f932ea:0:1",
+            "geometryRevision": "a80a6a0c-2113-468f-8313-50c78de30449:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -3772,6 +4036,3108 @@
               0,
               0,
               1
+            ],
+            "materialSide": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "spatial-notched-tube",
+      "reset": {
+        "uiState": "paused",
+        "workerState": "paused:1:3",
+        "positionSignature": "4140:d14a71b6",
+        "appliedFrame": {
+          "revision": "3612f79c",
+          "generation": 1,
+          "epoch": 3,
+          "sequence": 1,
+          "positionsLength": 4140
+        },
+        "diagnostics": {
+          "stepCount": 0,
+          "substeps": 0,
+          "particleCount": 1380,
+          "triangleCount": 2176,
+          "stretchConstraintCount": 3552,
+          "shearConstraintCount": 2176,
+          "bendConstraintCount": 2976,
+          "seamConstraintCount": 64,
+          "seamErrorAverage": 3.3407883171687324e-17,
+          "seamErrorMaximum": 1.3877788221404763e-16,
+          "maximumPositionMagnitude": 1.409868765667017,
+          "maximumVelocityMagnitude": 0,
+          "maximumCorrectionApplied": 0,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "3612f79c",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3552,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              }
+            }
+          },
+          "initialPositionSignature": "4140:d14a71b6",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "e3b95f2f-8e7f-47a4-9bad-9742388d8855:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "a7b649dd-db09-446d-8419-08d4f938e370:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "d299362f-1370-46ad-a1f1-7f77e26539d0:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "d2dd81fe-bf02-4717-81e0-e5fcf72ec885:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          }
+        ]
+      },
+      "afterSteps": {
+        "uiState": "paused",
+        "workerState": "paused:1:9",
+        "positionSignature": "4140:4506f93d",
+        "appliedFrame": {
+          "revision": "3612f79c",
+          "generation": 1,
+          "epoch": 9,
+          "sequence": 7,
+          "positionsLength": 4140
+        },
+        "diagnostics": {
+          "stepCount": 6,
+          "substeps": 1,
+          "particleCount": 1380,
+          "triangleCount": 2176,
+          "stretchConstraintCount": 3552,
+          "shearConstraintCount": 2176,
+          "bendConstraintCount": 2976,
+          "seamConstraintCount": 64,
+          "seamErrorAverage": 9.840537035630138e-10,
+          "seamErrorMaximum": 6.48695033076874e-9,
+          "maximumPositionMagnitude": 1.3956927897914402,
+          "maximumVelocityMagnitude": 0.483673274682853,
+          "maximumCorrectionApplied": 4.56452659462349e-8,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "3612f79c",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3552,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              }
+            }
+          },
+          "initialPositionSignature": "4140:d14a71b6",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "e3b95f2f-8e7f-47a4-9bad-9742388d8855:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "a7b649dd-db09-446d-8419-08d4f938e370:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "d299362f-1370-46ad-a1f1-7f77e26539d0:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "d2dd81fe-bf02-4717-81e0-e5fcf72ec885:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          }
+        ]
+      },
+      "restored": {
+        "uiState": "paused",
+        "workerState": "paused:1:10",
+        "positionSignature": "4140:d14a71b6",
+        "appliedFrame": {
+          "revision": "3612f79c",
+          "generation": 1,
+          "epoch": 10,
+          "sequence": 1,
+          "positionsLength": 4140
+        },
+        "diagnostics": {
+          "stepCount": 0,
+          "substeps": 0,
+          "particleCount": 1380,
+          "triangleCount": 2176,
+          "stretchConstraintCount": 3552,
+          "shearConstraintCount": 2176,
+          "bendConstraintCount": 2976,
+          "seamConstraintCount": 64,
+          "seamErrorAverage": 3.3407883171687324e-17,
+          "seamErrorMaximum": 1.3877788221404763e-16,
+          "maximumPositionMagnitude": 1.409868765667017,
+          "maximumVelocityMagnitude": 0,
+          "maximumCorrectionApplied": 0,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "3612f79c",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3552,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              }
+            }
+          },
+          "initialPositionSignature": "4140:d14a71b6",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "e3b95f2f-8e7f-47a4-9bad-9742388d8855:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "a7b649dd-db09-446d-8419-08d4f938e370:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "d299362f-1370-46ad-a1f1-7f77e26539d0:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "d2dd81fe-bf02-4717-81e0-e5fcf72ec885:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "spatial-notched-tube-waistband",
+      "reset": {
+        "uiState": "paused",
+        "workerState": "paused:1:3",
+        "positionSignature": "4419:fceb8298",
+        "appliedFrame": {
+          "revision": "55caab56",
+          "generation": 1,
+          "epoch": 3,
+          "sequence": 1,
+          "positionsLength": 4419
+        },
+        "diagnostics": {
+          "stepCount": 0,
+          "substeps": 0,
+          "particleCount": 1473,
+          "triangleCount": 2296,
+          "stretchConstraintCount": 3764,
+          "shearConstraintCount": 2296,
+          "bendConstraintCount": 3124,
+          "seamConstraintCount": 116,
+          "seamErrorAverage": 0.06451975556819944,
+          "seamErrorMaximum": 0.17482940877103453,
+          "maximumPositionMagnitude": 1.4326749746986118,
+          "maximumVelocityMagnitude": 0,
+          "maximumCorrectionApplied": 0,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "55caab56",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3764,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-upper-band:panel:1": {
+                "maxRelativeDistortion": 0.000004359654017952304,
+                "maxAbsoluteDistortionM": 7.629394531416533e-8,
+                "evaluatedConstraintCount": 212
+              }
+            }
+          },
+          "initialPositionSignature": "4419:fceb8298",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-upper-band:panel:1",
+              "pieceId": "spatial-upper-band",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                -1.0210513272731698e-9,
+                1.4106166104035833,
+                0.021057373800162843
+              ],
+              "tubeRadiusM": 0.09313839747463439,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 93
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1",
+              "spatial-upper-band:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 10
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-4:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:local-closure",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 5
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:upper-band-loop",
+                "firstInstanceId": "spatial-upper-band:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 4
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "37bf865e-c67f-44ab-b44d-a0c9b1a21742:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "40d27090-ed88-4c8b-8f0d-4b1bb122a517:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "bf4f6eaf-0620-4e8a-8186-d8bab67d3f23:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "7724a9b0-f77e-45d8-8a12-54dcdb3bed8f:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-upper-band:panel:1",
+            "vertexCount": 93,
+            "triangleCount": 120,
+            "boundingBox": {
+              "min": [
+                -0.09262817353010178,
+                1.3931165933609009,
+                -0.07208102196455002
+              ],
+              "max": [
+                0.09262817353010178,
+                1.4281165599822998,
+                0.11419577151536942
+              ]
+            },
+            "centroid": [
+              5.621271799293207e-10,
+              1.4106165965398154,
+              0.024061842461026484
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "c4c81519",
+            "geometryRevision": "b3fa52e6-e02c-4ffc-a313-32b49d55e12e:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              1.99365143542257e-7,
+              -1.431048809477178e-25,
+              0.9999999999999801
+            ],
+            "meanTriangleNormal": [
+              0,
+              0,
+              2.168404344971009e-19
+            ],
+            "materialSide": 2
+          }
+        ]
+      },
+      "afterSteps": {
+        "uiState": "paused",
+        "workerState": "paused:1:9",
+        "positionSignature": "4419:6e5f2796",
+        "appliedFrame": {
+          "revision": "55caab56",
+          "generation": 1,
+          "epoch": 9,
+          "sequence": 7,
+          "positionsLength": 4419
+        },
+        "diagnostics": {
+          "stepCount": 6,
+          "substeps": 1,
+          "particleCount": 1473,
+          "triangleCount": 2296,
+          "stretchConstraintCount": 3764,
+          "shearConstraintCount": 2296,
+          "bendConstraintCount": 3124,
+          "seamConstraintCount": 116,
+          "seamErrorAverage": 0.05007499255187567,
+          "seamErrorMaximum": 0.15061687117515102,
+          "maximumPositionMagnitude": 1.416111491833848,
+          "maximumVelocityMagnitude": 0.9892025523870045,
+          "maximumCorrectionApplied": 0.001750004244968295,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "55caab56",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3764,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-upper-band:panel:1": {
+                "maxRelativeDistortion": 0.000004359654017952304,
+                "maxAbsoluteDistortionM": 7.629394531416533e-8,
+                "evaluatedConstraintCount": 212
+              }
+            }
+          },
+          "initialPositionSignature": "4419:fceb8298",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-upper-band:panel:1",
+              "pieceId": "spatial-upper-band",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                -1.0210513272731698e-9,
+                1.4106166104035833,
+                0.021057373800162843
+              ],
+              "tubeRadiusM": 0.09313839747463439,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 93
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1",
+              "spatial-upper-band:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 10
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-4:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:local-closure",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 5
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:upper-band-loop",
+                "firstInstanceId": "spatial-upper-band:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 4
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "37bf865e-c67f-44ab-b44d-a0c9b1a21742:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "40d27090-ed88-4c8b-8f0d-4b1bb122a517:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "bf4f6eaf-0620-4e8a-8186-d8bab67d3f23:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "7724a9b0-f77e-45d8-8a12-54dcdb3bed8f:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-upper-band:panel:1",
+            "vertexCount": 93,
+            "triangleCount": 120,
+            "boundingBox": {
+              "min": [
+                -0.09262817353010178,
+                1.3931165933609009,
+                -0.07208102196455002
+              ],
+              "max": [
+                0.09262817353010178,
+                1.4281165599822998,
+                0.11419577151536942
+              ]
+            },
+            "centroid": [
+              5.621271799293207e-10,
+              1.4106165965398154,
+              0.024061842461026484
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "c4c81519",
+            "geometryRevision": "b3fa52e6-e02c-4ffc-a313-32b49d55e12e:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              1.99365143542257e-7,
+              -1.431048809477178e-25,
+              0.9999999999999801
+            ],
+            "meanTriangleNormal": [
+              0,
+              0,
+              2.168404344971009e-19
+            ],
+            "materialSide": 2
+          }
+        ]
+      },
+      "restored": {
+        "uiState": "paused",
+        "workerState": "paused:1:10",
+        "positionSignature": "4419:fceb8298",
+        "appliedFrame": {
+          "revision": "55caab56",
+          "generation": 1,
+          "epoch": 10,
+          "sequence": 1,
+          "positionsLength": 4419
+        },
+        "diagnostics": {
+          "stepCount": 0,
+          "substeps": 0,
+          "particleCount": 1473,
+          "triangleCount": 2296,
+          "stretchConstraintCount": 3764,
+          "shearConstraintCount": 2296,
+          "bendConstraintCount": 3124,
+          "seamConstraintCount": 116,
+          "seamErrorAverage": 0.06451975556819944,
+          "seamErrorMaximum": 0.17482940877103453,
+          "maximumPositionMagnitude": 1.4326749746986118,
+          "maximumVelocityMagnitude": 0,
+          "maximumCorrectionApplied": 0,
+          "invalid": false,
+          "droppedTimeSeconds": 0
+        },
+        "spatial": {
+          "revision": "55caab56",
+          "intrinsicDistortion": {
+            "maxRelativeDistortion": 0.0000188315899998567,
+            "maxAbsoluteDistortionM": 1.151668502230585e-7,
+            "evaluatedConstraintCount": 3764,
+            "byInstance": {
+              "spatial-notch-1:panel:1": {
+                "maxRelativeDistortion": 0.0000188315899998567,
+                "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-2:panel:1": {
+                "maxRelativeDistortion": 0.000018831589939911388,
+                "maxAbsoluteDistortionM": 1.151668502230585e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-3:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-notch-4:panel:1": {
+                "maxRelativeDistortion": 0.000018831589999670535,
+                "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+                "evaluatedConstraintCount": 888
+              },
+              "spatial-upper-band:panel:1": {
+                "maxRelativeDistortion": 0.000004359654017952304,
+                "maxAbsoluteDistortionM": 7.629394531416533e-8,
+                "evaluatedConstraintCount": 212
+              }
+            }
+          },
+          "initialPositionSignature": "4419:fceb8298",
+          "instances": [
+            {
+              "id": "spatial-notch-1:panel:1",
+              "pieceId": "spatial-notch-1",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-2:panel:1",
+              "pieceId": "spatial-notch-2",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-3:panel:1",
+              "pieceId": "spatial-notch-3",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-notch-4:panel:1",
+              "pieceId": "spatial-notch-4",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                0,
+                1.2864,
+                0.025
+              ],
+              "tubeRadiusM": 0.07639437268410978,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 345
+            },
+            {
+              "id": "spatial-upper-band:panel:1",
+              "pieceId": "spatial-upper-band",
+              "mapping": "seam-derived-tube",
+              "tubeCenter": [
+                -1.0210513272731698e-9,
+                1.4106166104035833,
+                0.021057373800162843
+              ],
+              "tubeRadiusM": 0.09313839747463439,
+              "axis": [
+                6.123233995736766e-17,
+                -1,
+                0
+              ],
+              "vertexCount": 93
+            }
+          ],
+          "seamGraph": {
+            "nodes": [
+              "spatial-notch-1:panel:1",
+              "spatial-notch-2:panel:1",
+              "spatial-notch-3:panel:1",
+              "spatial-notch-4:panel:1",
+              "spatial-upper-band:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 10
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:composite-top",
+                "firstInstanceId": "spatial-notch-4:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 11
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:local-closure",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 5
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-1",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-2:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-2",
+                "firstInstanceId": "spatial-notch-2:panel:1",
+                "secondInstanceId": "spatial-notch-3:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-3",
+                "firstInstanceId": "spatial-notch-3:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:side-4",
+                "firstInstanceId": "spatial-notch-1:panel:1",
+                "secondInstanceId": "spatial-notch-4:panel:1",
+                "sampleCount": 16
+              },
+              {
+                "seamGroupId": "spatial-notched-tube-waistband:upper-band-loop",
+                "firstInstanceId": "spatial-upper-band:panel:1",
+                "secondInstanceId": "spatial-upper-band:panel:1",
+                "sampleCount": 4
+              }
+            ]
+          },
+          "seamPlacementDiagnostics": []
+        },
+        "meshes": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              -0.037769280106801056,
+              1.2844533557477205,
+              -0.02813284249716452
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "0d25c697",
+            "geometryRevision": "37bf865e-c67f-44ab-b44d-a0c9b1a21742:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.5793803841488692,
+              -1.6641291915045417e-17,
+              -0.8150572804800341
+            ],
+            "meanTriangleNormal": [
+              0.7071067881527956,
+              0.00004887691458392028,
+              0.7071067725310546
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -0.07639437168836594,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                -2.0816681711721685e-17,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              -0.05313284240959995,
+              1.2844533557477205,
+              0.06276928027686865
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "96169377",
+            "geometryRevision": "40d27090-ed88-4c8b-8f0d-4b1bb122a517:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              -0.8150572785570589,
+              -2.1510267836389985e-17,
+              0.5793803868540606
+            ],
+            "meanTriangleNormal": [
+              0.7071067723393551,
+              0.00004887493058429022,
+              -0.7071067883446321
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                -2.7755575615628914e-17,
+                1.1663999557495117,
+                0.02500000037252903
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.10139437019824982
+              ]
+            },
+            "centroid": [
+              0.037769280106801056,
+              1.2844533557477205,
+              0.07813284289145815
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "4cbc2f3f",
+            "geometryRevision": "bf4f6eaf-0620-4e8a-8186-d8bab67d3f23:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.5793803801688959,
+              1.6641292149198368e-17,
+              0.8150572833091829
+            ],
+            "meanTriangleNormal": [
+              0.7071067722708856,
+              -0.00004887407405645812,
+              0.7071067884131608
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "vertexCount": 345,
+            "triangleCount": 544,
+            "boundingBox": {
+              "min": [
+                7.632783294297951e-17,
+                1.1663999557495117,
+                -0.051394373178482056
+              ],
+              "max": [
+                0.07639437168836594,
+                1.4063999652862549,
+                0.02500000037252903
+              ]
+            },
+            "centroid": [
+              0.05313284240959995,
+              1.2844533557477205,
+              -0.012769280190991265
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "e611079f",
+            "geometryRevision": "7724a9b0-f77e-45d8-8a12-54dcdb3bed8f:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              0.8150572797526145,
+              2.1510267851544524e-17,
+              -0.5793803851721839
+            ],
+            "meanTriangleNormal": [
+              0.7071067882760234,
+              -0.000048878388410300615,
+              -0.707106772407725
+            ],
+            "materialSide": 2
+          },
+          {
+            "id": "spatial-upper-band:panel:1",
+            "vertexCount": 93,
+            "triangleCount": 120,
+            "boundingBox": {
+              "min": [
+                -0.09262817353010178,
+                1.3931165933609009,
+                -0.07208102196455002
+              ],
+              "max": [
+                0.09262817353010178,
+                1.4281165599822998,
+                0.11419577151536942
+              ]
+            },
+            "centroid": [
+              5.621271799293207e-10,
+              1.4106165965398154,
+              0.024061842461026484
+            ],
+            "transform": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "matrixWorld": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "geometrySignature": "c4c81519",
+            "geometryRevision": "b3fa52e6-e02c-4ffc-a313-32b49d55e12e:0:0",
+            "meshCount": 1,
+            "meanNormal": [
+              1.99365143542257e-7,
+              -1.431048809477178e-25,
+              0.9999999999999801
+            ],
+            "meanTriangleNormal": [
+              0,
+              0,
+              2.168404344971009e-19
             ],
             "materialSide": 2
           }
@@ -3860,6 +7226,26 @@
               "vertexCount": 245
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1",
+              "xpbd-flap-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              },
+              {
+                "seamGroupId": "xpbd-tube-with-flap:flap-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "xpbd-flap-piece:panel:1",
+                "sampleCount": 11
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-tube-with-flap:flap-seam",
@@ -3999,7 +7385,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "cc4785cd-6668-4b23-bfd1-b62fa4243758:0:0",
+            "geometryRevision": "e1e61625-c06e-40d9-a8fd-312505a01b2d:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -4070,7 +7456,7 @@
               ]
             },
             "geometrySignature": "0247e2ce",
-            "geometryRevision": "401b34f6-c47f-4ae3-9f87-4a0e80ed4a05:0:1",
+            "geometryRevision": "bb3fb45c-b686-44e4-9735-9069478545e9:0:1",
             "meshCount": 1,
             "meanNormal": [
               -4.7988745645424946e-8,
@@ -4166,6 +7552,26 @@
               "vertexCount": 245
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1",
+              "xpbd-flap-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              },
+              {
+                "seamGroupId": "xpbd-tube-with-flap:flap-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "xpbd-flap-piece:panel:1",
+                "sampleCount": 11
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-tube-with-flap:flap-seam",
@@ -4305,7 +7711,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "cc4785cd-6668-4b23-bfd1-b62fa4243758:0:0",
+            "geometryRevision": "e1e61625-c06e-40d9-a8fd-312505a01b2d:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -4376,7 +7782,7 @@
               ]
             },
             "geometrySignature": "0247e2ce",
-            "geometryRevision": "401b34f6-c47f-4ae3-9f87-4a0e80ed4a05:0:1",
+            "geometryRevision": "bb3fb45c-b686-44e4-9735-9069478545e9:0:1",
             "meshCount": 1,
             "meanNormal": [
               -4.7988745645424946e-8,
@@ -4472,6 +7878,26 @@
               "vertexCount": 245
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "tube-piece:panel:1",
+              "xpbd-flap-piece:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "tube-piece:self-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "tube-piece:panel:1",
+                "sampleCount": 20
+              },
+              {
+                "seamGroupId": "xpbd-tube-with-flap:flap-seam",
+                "firstInstanceId": "tube-piece:panel:1",
+                "secondInstanceId": "xpbd-flap-piece:panel:1",
+                "sampleCount": 11
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-tube-with-flap:flap-seam",
@@ -4611,7 +8037,7 @@
               ]
             },
             "geometrySignature": "7db71efb",
-            "geometryRevision": "cc4785cd-6668-4b23-bfd1-b62fa4243758:0:0",
+            "geometryRevision": "e1e61625-c06e-40d9-a8fd-312505a01b2d:0:0",
             "meshCount": 1,
             "meanNormal": [
               1.6175105010112455e-16,
@@ -4682,7 +8108,7 @@
               ]
             },
             "geometrySignature": "0247e2ce",
-            "geometryRevision": "401b34f6-c47f-4ae3-9f87-4a0e80ed4a05:0:1",
+            "geometryRevision": "bb3fb45c-b686-44e4-9735-9069478545e9:0:1",
             "meshCount": 1,
             "meanNormal": [
               -4.7988745645424946e-8,
@@ -4813,6 +8239,34 @@
               "vertexCount": 365
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "xpbd-panel-1:panel:1",
+              "xpbd-panel-2:panel:1",
+              "xpbd-panel-3:panel:1",
+              "xpbd-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-4:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-2:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 17
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
@@ -5108,7 +8562,7 @@
               ]
             },
             "geometrySignature": "ac47f17d",
-            "geometryRevision": "165bf522-fb2b-4ef0-b507-3de2832523f0:0:1",
+            "geometryRevision": "3b80485c-aea1-4ec9-bdbb-99d25a3c22d1:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5179,7 +8633,7 @@
               ]
             },
             "geometrySignature": "700168bb",
-            "geometryRevision": "1f7c33c0-0039-48ff-89cf-5130413455af:0:1",
+            "geometryRevision": "fda62447-7c92-41a7-a0d2-ece1e0254ef7:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5250,7 +8704,7 @@
               ]
             },
             "geometrySignature": "71fab9b5",
-            "geometryRevision": "60767f07-242c-479f-b148-0be72235feda:0:1",
+            "geometryRevision": "f5b05182-b202-4568-8403-3c6930343362:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5321,7 +8775,7 @@
               ]
             },
             "geometrySignature": "d18cb2af",
-            "geometryRevision": "f6e0a3de-de93-4cb3-9716-bf4e6726068b:0:1",
+            "geometryRevision": "b8c1c9e3-72ec-49f9-9260-69e6fee4a2c6:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5449,6 +8903,34 @@
               "vertexCount": 365
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "xpbd-panel-1:panel:1",
+              "xpbd-panel-2:panel:1",
+              "xpbd-panel-3:panel:1",
+              "xpbd-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-4:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-2:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 17
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
@@ -5744,7 +9226,7 @@
               ]
             },
             "geometrySignature": "ac47f17d",
-            "geometryRevision": "165bf522-fb2b-4ef0-b507-3de2832523f0:0:1",
+            "geometryRevision": "3b80485c-aea1-4ec9-bdbb-99d25a3c22d1:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5815,7 +9297,7 @@
               ]
             },
             "geometrySignature": "700168bb",
-            "geometryRevision": "1f7c33c0-0039-48ff-89cf-5130413455af:0:1",
+            "geometryRevision": "fda62447-7c92-41a7-a0d2-ece1e0254ef7:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5886,7 +9368,7 @@
               ]
             },
             "geometrySignature": "71fab9b5",
-            "geometryRevision": "60767f07-242c-479f-b148-0be72235feda:0:1",
+            "geometryRevision": "f5b05182-b202-4568-8403-3c6930343362:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -5957,7 +9439,7 @@
               ]
             },
             "geometrySignature": "d18cb2af",
-            "geometryRevision": "f6e0a3de-de93-4cb3-9716-bf4e6726068b:0:1",
+            "geometryRevision": "b8c1c9e3-72ec-49f9-9260-69e6fee4a2c6:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -6085,6 +9567,34 @@
               "vertexCount": 365
             }
           ],
+          "seamGraph": {
+            "nodes": [
+              "xpbd-panel-1:panel:1",
+              "xpbd-panel-2:panel:1",
+              "xpbd-panel-3:panel:1",
+              "xpbd-panel-4:panel:1"
+            ],
+            "edges": [
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-4:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:composite-2-to-3",
+                "firstInstanceId": "xpbd-panel-2:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 12
+              },
+              {
+                "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
+                "firstInstanceId": "xpbd-panel-1:panel:1",
+                "secondInstanceId": "xpbd-panel-3:panel:1",
+                "sampleCount": 17
+              }
+            ]
+          },
           "seamPlacementDiagnostics": [
             {
               "seamGroupId": "xpbd-four-panel-composite:secondary-side-seam",
@@ -6380,7 +9890,7 @@
               ]
             },
             "geometrySignature": "ac47f17d",
-            "geometryRevision": "165bf522-fb2b-4ef0-b507-3de2832523f0:0:1",
+            "geometryRevision": "3b80485c-aea1-4ec9-bdbb-99d25a3c22d1:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -6451,7 +9961,7 @@
               ]
             },
             "geometrySignature": "700168bb",
-            "geometryRevision": "1f7c33c0-0039-48ff-89cf-5130413455af:0:1",
+            "geometryRevision": "fda62447-7c92-41a7-a0d2-ece1e0254ef7:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -6522,7 +10032,7 @@
               ]
             },
             "geometrySignature": "71fab9b5",
-            "geometryRevision": "60767f07-242c-479f-b148-0be72235feda:0:1",
+            "geometryRevision": "f5b05182-b202-4568-8403-3c6930343362:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -6593,7 +10103,7 @@
               ]
             },
             "geometrySignature": "d18cb2af",
-            "geometryRevision": "f6e0a3de-de93-4cb3-9716-bf4e6726068b:0:1",
+            "geometryRevision": "b8c1c9e3-72ec-49f9-9260-69e6fee4a2c6:0:1",
             "meshCount": 1,
             "meanNormal": [
               0,
@@ -6611,6 +10121,1373 @@
       }
     }
   ],
+  "localClosureComparison": {
+    "beforeLocalClosure": {
+      "uiState": "paused",
+      "workerState": "paused:1:3",
+      "positionSignature": "4140:d14a71b6",
+      "appliedFrame": {
+        "revision": "3612f79c",
+        "generation": 1,
+        "epoch": 3,
+        "sequence": 1,
+        "positionsLength": 4140
+      },
+      "diagnostics": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 1380,
+        "triangleCount": 2176,
+        "stretchConstraintCount": 3552,
+        "shearConstraintCount": 2176,
+        "bendConstraintCount": 2976,
+        "seamConstraintCount": 64,
+        "seamErrorAverage": 3.3407883171687324e-17,
+        "seamErrorMaximum": 1.3877788221404763e-16,
+        "maximumPositionMagnitude": 1.409868765667017,
+        "maximumVelocityMagnitude": 0,
+        "maximumCorrectionApplied": 0,
+        "invalid": false,
+        "droppedTimeSeconds": 0
+      },
+      "spatial": {
+        "revision": "3612f79c",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.0000188315899998567,
+          "maxAbsoluteDistortionM": 1.151668502230585e-7,
+          "evaluatedConstraintCount": 3552,
+          "byInstance": {
+            "spatial-notch-1:panel:1": {
+              "maxRelativeDistortion": 0.0000188315899998567,
+              "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-2:panel:1": {
+              "maxRelativeDistortion": 0.000018831589939911388,
+              "maxAbsoluteDistortionM": 1.151668502230585e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-3:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-4:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+              "evaluatedConstraintCount": 888
+            }
+          }
+        },
+        "initialPositionSignature": "4140:d14a71b6",
+        "instances": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "pieceId": "spatial-notch-1",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "pieceId": "spatial-notch-2",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "pieceId": "spatial-notch-3",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "pieceId": "spatial-notch-4",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "spatial-notch-1:panel:1",
+            "spatial-notch-2:panel:1",
+            "spatial-notch-3:panel:1",
+            "spatial-notch-4:panel:1"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "spatial-notched-tube:side-1",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-2:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-2",
+              "firstInstanceId": "spatial-notch-2:panel:1",
+              "secondInstanceId": "spatial-notch-3:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-3",
+              "firstInstanceId": "spatial-notch-3:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-4",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            }
+          ]
+        },
+        "seamPlacementDiagnostics": []
+      },
+      "meshes": [
+        {
+          "id": "spatial-notch-1:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            -0.037769280106801056,
+            1.2844533557477205,
+            -0.02813284249716452
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "0d25c697",
+          "geometryRevision": "d52b2d80-0c23-434a-b453-aacd4b844b09:0:0",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5793803841488692,
+            -1.6641291915045417e-17,
+            -0.8150572804800341
+          ],
+          "meanTriangleNormal": [
+            0.7071067881527956,
+            0.00004887691458392028,
+            0.7071067725310546
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-2:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              -2.0816681711721685e-17,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            -0.05313284240959995,
+            1.2844533557477205,
+            0.06276928027686865
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "96169377",
+          "geometryRevision": "c1d9f05b-0ae7-4a00-8f78-69c1fd60d537:0:0",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.8150572785570589,
+            -2.1510267836389985e-17,
+            0.5793803868540606
+          ],
+          "meanTriangleNormal": [
+            0.7071067723393551,
+            0.00004887493058429022,
+            -0.7071067883446321
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-3:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -2.7755575615628914e-17,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            0.037769280106801056,
+            1.2844533557477205,
+            0.07813284289145815
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "4cbc2f3f",
+          "geometryRevision": "27cee6a9-1f35-4836-ba6d-cfe8161a2542:0:0",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5793803801688959,
+            1.6641292149198368e-17,
+            0.8150572833091829
+          ],
+          "meanTriangleNormal": [
+            0.7071067722708856,
+            -0.00004887407405645812,
+            0.7071067884131608
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-4:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              7.632783294297951e-17,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            0.05313284240959995,
+            1.2844533557477205,
+            -0.012769280190991265
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "e611079f",
+          "geometryRevision": "da3d028f-9818-4919-8957-0f66dad28810:0:0",
+          "meshCount": 1,
+          "meanNormal": [
+            0.8150572797526145,
+            2.1510267851544524e-17,
+            -0.5793803851721839
+          ],
+          "meanTriangleNormal": [
+            0.7071067882760234,
+            -0.000048878388410300615,
+            -0.707106772407725
+          ],
+          "materialSide": 2
+        }
+      ]
+    },
+    "afterLocalClosure": {
+      "uiState": "paused",
+      "workerState": "paused:2:5",
+      "positionSignature": "4140:d14a71b6",
+      "appliedFrame": {
+        "revision": "4a78d302",
+        "generation": 2,
+        "epoch": 5,
+        "sequence": 1,
+        "positionsLength": 4140
+      },
+      "diagnostics": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 1380,
+        "triangleCount": 2176,
+        "stretchConstraintCount": 3552,
+        "shearConstraintCount": 2176,
+        "bendConstraintCount": 2976,
+        "seamConstraintCount": 69,
+        "seamErrorAverage": 0.002816690874380509,
+        "seamErrorMaximum": 0.07639437448233366,
+        "maximumPositionMagnitude": 1.409868765667017,
+        "maximumVelocityMagnitude": 0,
+        "maximumCorrectionApplied": 0,
+        "invalid": false,
+        "droppedTimeSeconds": 0
+      },
+      "spatial": {
+        "revision": "4a78d302",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.0000188315899998567,
+          "maxAbsoluteDistortionM": 1.151668502230585e-7,
+          "evaluatedConstraintCount": 3552,
+          "byInstance": {
+            "spatial-notch-1:panel:1": {
+              "maxRelativeDistortion": 0.0000188315899998567,
+              "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-2:panel:1": {
+              "maxRelativeDistortion": 0.000018831589939911388,
+              "maxAbsoluteDistortionM": 1.151668502230585e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-3:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-4:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+              "evaluatedConstraintCount": 888
+            }
+          }
+        },
+        "initialPositionSignature": "4140:d14a71b6",
+        "instances": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "pieceId": "spatial-notch-1",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "pieceId": "spatial-notch-2",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "pieceId": "spatial-notch-3",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "pieceId": "spatial-notch-4",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "spatial-notch-1:panel:1",
+            "spatial-notch-2:panel:1",
+            "spatial-notch-3:panel:1",
+            "spatial-notch-4:panel:1"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "seam-7b7cd326-814f-47a3-ab07-7fe5b3b9a36f",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-2:panel:1",
+              "sampleCount": 5
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-1",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-2:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-2",
+              "firstInstanceId": "spatial-notch-2:panel:1",
+              "secondInstanceId": "spatial-notch-3:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-3",
+              "firstInstanceId": "spatial-notch-3:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-4",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            }
+          ]
+        },
+        "seamPlacementDiagnostics": []
+      },
+      "meshes": [
+        {
+          "id": "spatial-notch-1:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            -0.037769280106801056,
+            1.2844533557477205,
+            -0.02813284249716452
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "0d25c697",
+          "geometryRevision": "d52b2d80-0c23-434a-b453-aacd4b844b09:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5793803841488692,
+            -1.6641291915045417e-17,
+            -0.8150572804800341
+          ],
+          "meanTriangleNormal": [
+            0.7071067881527956,
+            0.00004887691458392028,
+            0.7071067725310546
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-2:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              -2.0816681711721685e-17,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            -0.05313284240959995,
+            1.2844533557477205,
+            0.06276928027686865
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "96169377",
+          "geometryRevision": "c1d9f05b-0ae7-4a00-8f78-69c1fd60d537:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.8150572785570589,
+            -2.1510267836389985e-17,
+            0.5793803868540606
+          ],
+          "meanTriangleNormal": [
+            0.7071067723393551,
+            0.00004887493058429022,
+            -0.7071067883446321
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-3:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -2.7755575615628914e-17,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            0.037769280106801056,
+            1.2844533557477205,
+            0.07813284289145815
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "4cbc2f3f",
+          "geometryRevision": "27cee6a9-1f35-4836-ba6d-cfe8161a2542:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5793803801688959,
+            1.6641292149198368e-17,
+            0.8150572833091829
+          ],
+          "meanTriangleNormal": [
+            0.7071067722708856,
+            -0.00004887407405645812,
+            0.7071067884131608
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-4:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              7.632783294297951e-17,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            0.05313284240959995,
+            1.2844533557477205,
+            -0.012769280190991265
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "e611079f",
+          "geometryRevision": "da3d028f-9818-4919-8957-0f66dad28810:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            0.8150572797526145,
+            2.1510267851544524e-17,
+            -0.5793803851721839
+          ],
+          "meanTriangleNormal": [
+            0.7071067882760234,
+            -0.000048878388410300615,
+            -0.707106772407725
+          ],
+          "materialSide": 2
+        }
+      ]
+    },
+    "afterLocalClosureSteps": {
+      "uiState": "paused",
+      "workerState": "paused:2:11",
+      "positionSignature": "4140:ccf48977",
+      "appliedFrame": {
+        "revision": "4a78d302",
+        "generation": 2,
+        "epoch": 11,
+        "sequence": 7,
+        "positionsLength": 4140
+      },
+      "diagnostics": {
+        "stepCount": 6,
+        "substeps": 1,
+        "particleCount": 1380,
+        "triangleCount": 2176,
+        "stretchConstraintCount": 3552,
+        "shearConstraintCount": 2176,
+        "bendConstraintCount": 2976,
+        "seamConstraintCount": 69,
+        "seamErrorAverage": 0.002146548174069695,
+        "seamErrorMaximum": 0.06230577035321441,
+        "maximumPositionMagnitude": 1.3962397671500035,
+        "maximumVelocityMagnitude": 0.581410370514474,
+        "maximumCorrectionApplied": 0.00044290450750850136,
+        "invalid": false,
+        "droppedTimeSeconds": 0
+      },
+      "spatial": {
+        "revision": "4a78d302",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.0000188315899998567,
+          "maxAbsoluteDistortionM": 1.151668502230585e-7,
+          "evaluatedConstraintCount": 3552,
+          "byInstance": {
+            "spatial-notch-1:panel:1": {
+              "maxRelativeDistortion": 0.0000188315899998567,
+              "maxAbsoluteDistortionM": 1.1500374551276504e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-2:panel:1": {
+              "maxRelativeDistortion": 0.000018831589939911388,
+              "maxAbsoluteDistortionM": 1.151668502230585e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-3:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1501112994610763e-7,
+              "evaluatedConstraintCount": 888
+            },
+            "spatial-notch-4:panel:1": {
+              "maxRelativeDistortion": 0.000018831589999670535,
+              "maxAbsoluteDistortionM": 1.1488494736783261e-7,
+              "evaluatedConstraintCount": 888
+            }
+          }
+        },
+        "initialPositionSignature": "4140:d14a71b6",
+        "instances": [
+          {
+            "id": "spatial-notch-1:panel:1",
+            "pieceId": "spatial-notch-1",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-2:panel:1",
+            "pieceId": "spatial-notch-2",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-3:panel:1",
+            "pieceId": "spatial-notch-3",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          },
+          {
+            "id": "spatial-notch-4:panel:1",
+            "pieceId": "spatial-notch-4",
+            "mapping": "seam-derived-tube",
+            "tubeCenter": [
+              0,
+              1.2864,
+              0.025
+            ],
+            "tubeRadiusM": 0.07639437268410978,
+            "axis": [
+              6.123233995736766e-17,
+              -1,
+              0
+            ],
+            "vertexCount": 345
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "spatial-notch-1:panel:1",
+            "spatial-notch-2:panel:1",
+            "spatial-notch-3:panel:1",
+            "spatial-notch-4:panel:1"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "seam-7b7cd326-814f-47a3-ab07-7fe5b3b9a36f",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-2:panel:1",
+              "sampleCount": 5
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-1",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-2:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-2",
+              "firstInstanceId": "spatial-notch-2:panel:1",
+              "secondInstanceId": "spatial-notch-3:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-3",
+              "firstInstanceId": "spatial-notch-3:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            },
+            {
+              "seamGroupId": "spatial-notched-tube:side-4",
+              "firstInstanceId": "spatial-notch-1:panel:1",
+              "secondInstanceId": "spatial-notch-4:panel:1",
+              "sampleCount": 16
+            }
+          ]
+        },
+        "seamPlacementDiagnostics": []
+      },
+      "meshes": [
+        {
+          "id": "spatial-notch-1:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            -0.037769280106801056,
+            1.2844533557477205,
+            -0.02813284249716452
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "0d25c697",
+          "geometryRevision": "d52b2d80-0c23-434a-b453-aacd4b844b09:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5793803841488692,
+            -1.6641291915045417e-17,
+            -0.8150572804800341
+          ],
+          "meanTriangleNormal": [
+            0.7071067881527956,
+            0.00004887691458392028,
+            0.7071067725310546
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-2:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -0.07639437168836594,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              -2.0816681711721685e-17,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            -0.05313284240959995,
+            1.2844533557477205,
+            0.06276928027686865
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "96169377",
+          "geometryRevision": "c1d9f05b-0ae7-4a00-8f78-69c1fd60d537:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.8150572785570589,
+            -2.1510267836389985e-17,
+            0.5793803868540606
+          ],
+          "meanTriangleNormal": [
+            0.7071067723393551,
+            0.00004887493058429022,
+            -0.7071067883446321
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-3:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              -2.7755575615628914e-17,
+              1.1663999557495117,
+              0.02500000037252903
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.10139437019824982
+            ]
+          },
+          "centroid": [
+            0.037769280106801056,
+            1.2844533557477205,
+            0.07813284289145815
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "4cbc2f3f",
+          "geometryRevision": "27cee6a9-1f35-4836-ba6d-cfe8161a2542:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5793803801688959,
+            1.6641292149198368e-17,
+            0.8150572833091829
+          ],
+          "meanTriangleNormal": [
+            0.7071067722708856,
+            -0.00004887407405645812,
+            0.7071067884131608
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-notch-4:panel:1",
+          "vertexCount": 345,
+          "triangleCount": 544,
+          "boundingBox": {
+            "min": [
+              7.632783294297951e-17,
+              1.1663999557495117,
+              -0.051394373178482056
+            ],
+            "max": [
+              0.07639437168836594,
+              1.4063999652862549,
+              0.02500000037252903
+            ]
+          },
+          "centroid": [
+            0.05313284240959995,
+            1.2844533557477205,
+            -0.012769280190991265
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "e611079f",
+          "geometryRevision": "da3d028f-9818-4919-8957-0f66dad28810:12:1",
+          "meshCount": 1,
+          "meanNormal": [
+            0.8150572797526145,
+            2.1510267851544524e-17,
+            -0.5793803851721839
+          ],
+          "meanTriangleNormal": [
+            0.7071067882760234,
+            -0.000048878388410300615,
+            -0.707106772407725
+          ],
+          "materialSide": 2
+        }
+      ]
+    }
+  },
   "mobileReset": {
     "uiState": "paused",
     "workerState": "paused:1:3",
@@ -6739,6 +11616,40 @@
           "vertexCount": 345
         }
       ],
+      "seamGraph": {
+        "nodes": [
+          "spatial-panel-1:panel:1",
+          "spatial-panel-2:panel:1",
+          "spatial-panel-3:panel:1",
+          "spatial-panel-4:panel:1"
+        ],
+        "edges": [
+          {
+            "seamGroupId": "spatial-four-panel-tube:join-1",
+            "firstInstanceId": "spatial-panel-1:panel:1",
+            "secondInstanceId": "spatial-panel-2:panel:1",
+            "sampleCount": 19
+          },
+          {
+            "seamGroupId": "spatial-four-panel-tube:join-2",
+            "firstInstanceId": "spatial-panel-2:panel:1",
+            "secondInstanceId": "spatial-panel-3:panel:1",
+            "sampleCount": 19
+          },
+          {
+            "seamGroupId": "spatial-four-panel-tube:join-3",
+            "firstInstanceId": "spatial-panel-3:panel:1",
+            "secondInstanceId": "spatial-panel-4:panel:1",
+            "sampleCount": 19
+          },
+          {
+            "seamGroupId": "spatial-four-panel-tube:join-4",
+            "firstInstanceId": "spatial-panel-1:panel:1",
+            "secondInstanceId": "spatial-panel-4:panel:1",
+            "sampleCount": 19
+          }
+        ]
+      },
       "seamPlacementDiagnostics": []
     },
     "meshes": [
@@ -6799,7 +11710,7 @@
           ]
         },
         "geometrySignature": "018f44cf",
-        "geometryRevision": "3222b508-21bb-4890-bfd5-cf8e05548d8f:0:0",
+        "geometryRevision": "4095ce4e-2fde-499b-a3db-ebeca7c6f658:0:0",
         "meshCount": 1,
         "meanNormal": [
           -0.58053798964903,
@@ -6870,7 +11781,7 @@
           ]
         },
         "geometrySignature": "98b4d59b",
-        "geometryRevision": "c7f1098a-7c3b-4b5b-87e4-c5b58be8eb8f:0:0",
+        "geometryRevision": "030421b6-bd7d-4c14-9e33-ed5cca7a9e01:0:0",
         "meshCount": 1,
         "meanNormal": [
           -0.814233160118494,
@@ -6941,7 +11852,7 @@
           ]
         },
         "geometrySignature": "1659191f",
-        "geometryRevision": "f8af2a74-88b5-493e-b6b7-ffcc0180da4b:0:0",
+        "geometryRevision": "1e6bb679-183d-4328-95cb-155f2543dbea:0:0",
         "meshCount": 1,
         "meanNormal": [
           0.5805379845999891,
@@ -7012,7 +11923,7 @@
           ]
         },
         "geometrySignature": "aebfb2eb",
-        "geometryRevision": "6a004268-78d9-446c-944b-ae5da54fb3af:0:0",
+        "geometryRevision": "968bc687-74b4-46f5-81ef-a939524ee488:0:0",
         "meshCount": 1,
         "meanNormal": [
           0.8142331615270417,

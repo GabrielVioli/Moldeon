@@ -17,6 +17,10 @@ Havia ainda duas causas secundárias:
 - instâncias espelhadas criadas por `cut-on-fold` eram ligadas por constraints físicas, mas essa aresta não participava do reconhecimento do ciclo espacial;
 - a triangulação em leque de um retângulo self-seam deixava triângulos atravessarem aproximadamente 90° do cilindro. A geometria material era válida, mas os patches largos apareciam como ondulações e mordidas permanentes na rest pose.
 
+Na validação manual posterior apareceu um terceiro caso: uma seam diagonal local adicionava uma terceira aresta aos nós do ciclo. Como o primeiro detector exigia grau exatamente dois no connected component inteiro, a seam de pence invalidava a casca principal e devolvia todos os painéis ao fallback planar.
+
+Um quarto caso combinava o corpo tubular, a seam local, uma faixa superior autocosturada e uma união superior composta. O seletor antigo aceitava somente uma subestrutura tubular por connected component. Quando a casca corporal não era reconhecida, o pequeno loop superior vencia sozinho e os painéis restantes eram desenvolvidos como abas radiais ao redor dele.
+
 ## Algoritmo adotado
 
 O assembly constrói um multigrafo por `PanelInstance`, usando SeamGroups simples e ligações materiais de dobra. A solução não consulta nomes de peças.
@@ -29,7 +33,11 @@ Um connected component só é aceito como casca tubular multipainel quando:
 - as direções das bordas têm um eixo dominante coerente;
 - `same/opposite` pode ser propagado de forma consistente ao fechar o ciclo.
 
+O ciclo de casca agora é extraído do grafo completo. Para cada `PanelInstance`, o algoritmo seleciona deterministicamente o par de ranges incidentes que ocupa lados materiais opostos e apresenta o eixo dominante mais coerente, priorizando a extensão estrutural acumulada. Ligações locais, pences e retalhos permanecem no Seam Graph, mas não aumentam artificialmente o grau da subestrutura usada para definir o volume principal.
+
 A largura material de cada painel determina seu arco e a soma define a circunferência. Os painéis são distribuídos em torno de um eixo comum sem escalar as coordenadas 2D. Diferenças de comprimento axial e costuras incompatíveis permanecem como residual para o XPBD.
+
+Subestruturas tubulares que disputam as mesmas `PanelInstances` continuam mutuamente exclusivas. Subestruturas fechadas materialmente disjuntas podem coexistir no mesmo componente: a maior casca é a raiz global e loops auxiliares são alinhados rigidamente a ela pela média das correspondências de seam entre os grupos. Isso preserva corpo e faixa superior como volumes reconhecíveis, sem transformar o corpo em flaps nem achatar o loop auxiliar.
 
 Componentes abertos usam uma árvore determinística. Cada filho é alinhado rigidamente ao range correspondente e desenvolvido para o lado oposto ao interior do pai. Nenhum fechamento inexistente é inventado e constraints adicionais não deformam painéis já posicionados.
 
@@ -65,6 +73,18 @@ Smoke espacial:
 | cadeia aberta | 3 | rigid | `2,29e-5` | exato |
 | tubo + retalho | 2 | seam-derived + rigid | `3,38e-5` | exato |
 | seam composta 2↔3 | 4 | rigid | `2,29e-5` | exato |
+| corpo recortado + faixa superior | 5 | 2 cascas seam-derived | `1,88e-5` | exato |
+
+Caso A/B adicional, usando o mesmo documento:
+
+- A: quatro arestas laterais no Seam Graph, quatro meshes tubulares;
+- B: cinco arestas após adicionar a seam diagonal, ainda quatro meshes tubulares;
+- IDs, vértices, triângulos, bounding boxes, transforms, geometry signatures, normals e `material.side` permaneceram iguais na pose resetada;
+- assinatura da pose inicial A/B: idêntica;
+- residual máximo da seam caiu de `0,07639 m` para `0,06231 m` em seis steps, sem colapsar o volume;
+- erros de console: zero.
+
+No caso com faixa superior, as quatro instâncias corporais continuaram na casca tubular principal e a faixa autocosturada permaneceu uma quinta mesh tubular auxiliar, alinhada ao topo pelo Seam Graph composto. Nenhuma instância virou flap radial, desapareceu ou voltou ao fallback planar.
 
 Evidências ficam em `artifacts/prompt-10-1-spatial-assembly/`, incluindo capturas antes da física, depois de seis steps, reset restaurado e viewport mobile. Os relatórios de regressão permanecem em `artifacts/prompt-10-xpbd/` e `artifacts/prompt-10-lifecycle/`.
 

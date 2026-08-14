@@ -73,6 +73,8 @@ export interface AssemblyInstanceArrangement {
   /** Centro geométrico usado por mapeamentos tubulares analíticos. */
   tubeCenter?: [number, number, number];
   tubeRadiusM?: number;
+  tubeGroupId?: string;
+  tubeScoreMm2?: number;
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
   mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube";

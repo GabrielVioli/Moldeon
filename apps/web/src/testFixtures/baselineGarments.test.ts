@@ -27,12 +27,14 @@ describe("baseline garment fixtures", () => {
       "spatial-two-panel-tube",
       "spatial-four-panel-tube",
       "spatial-open-chain",
+      "spatial-notched-tube",
+      "spatial-notched-tube-waistband",
       "sleeve-with-body",
       "multiple-fabrics",
       "legacy-valid",
       "intentionally-invalid",
     ]);
-    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(21);
+    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(23);
   });
 
   it.each(BASELINE_FIXTURE_IDS)("creates %s deterministically", (id) => {
