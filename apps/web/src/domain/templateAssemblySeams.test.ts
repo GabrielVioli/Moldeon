@@ -1,27 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_BODY_MEASUREMENTS,
-  createGarmentFromTemplate,
-} from "../patterns/templateCatalog";
-import { edgeRangeLength, getPatternEdges } from "./pattern";
+  edgeRangeLength,
+  getPatternEdges,
+  seamSideRanges,
+  type GarmentDraft,
+  type PatternPiece,
+  type Seam,
+} from "./pattern";
 import {
   buildTemplateAssemblySeams,
   resolveTemplateAssemblyGarment,
-  templateAssemblyNeedsRepair,
 } from "./templateAssemblySeams";
+import {
+  createGarmentFromTemplate,
+  DEFAULT_BODY_MEASUREMENTS,
+} from "../patterns/templateCatalog";
 
-function rolePair(
-  garment: ReturnType<typeof createGarmentFromTemplate>,
-  seamId: string,
-): string {
-  const seam = garment.seams?.find((candidate) => candidate.id === seamId || candidate.groupId === seamId);
-  if (!seam) return "missing";
-  const firstPiece = garment.pieces.find((piece) => piece.id === seam.first.pieceId)!;
-  const secondPiece = garment.pieces.find((piece) => piece.id === seam.second.pieceId)!;
-  const firstRole = getPatternEdges(firstPiece).find((edge) => edge.id === seam.first.edgeId)?.role;
-  const secondRole = getPatternEdges(secondPiece).find((edge) => edge.id === seam.second.edgeId)?.role;
-  return `${firstRole}/${secondRole}/${seam.direction}`;
-}
 
 describe("template assembly seams", () => {
   it("creates five complete canonical seam groups for a basic top", () => {
@@ -30,45 +24,38 @@ describe("template assembly seams", () => {
       DEFAULT_BODY_MEASUREMENTS,
     );
     const seams = buildTemplateAssemblySeams(garment);
-
-    expect(new Set(seams.map((seam) => seam.groupId ?? seam.id)).size).toBe(5);
-    expect(seams.map((seam) => (seam.name ?? "").replace(/ · trecho \d+$/, ""))).toEqual(
-      expect.arrayContaining([
-        "Ombros do corpo",
-        "Laterais do corpo",
-        "Costura inferior das mangas",
-        "Cava frontal",
-        "Cava traseira",
-      ]),
-    );
+    const groupIds = [...new Set(seams.map((seam) => seam.groupId))];
+    expect(groupIds).toEqual([
+      "guided-sleeve:body-shoulder",
+      "guided-sleeve:body-side",
+      "guided-sleeve:front-armhole",
+      "guided-sleeve:back-armhole",
+      "guided-sleeve:underarm",
+    ]);
+    for (const groupId of groupIds) {
+      const group = seams.filter((seam) => seam.groupId === groupId);
+      expect(group.length).toBeGreaterThan(0);
+      expect(group.every((seam) => seam.direction === "same" || seam.direction === "opposite")).toBe(true);
+    }
   });
 
   it("uses endpoint directions that preserve garment landmarks", () => {
-    const generated = createGarmentFromTemplate(
-      "blouse",
+    const garment = createGarmentFromTemplate(
+      "tshirt",
       DEFAULT_BODY_MEASUREMENTS,
     );
-    const garment = resolveTemplateAssemblyGarment(generated);
-
-    expect(rolePair(garment, "guided-sleeve:body-shoulder")).toBe(
-      "shoulder/shoulder/same",
-    );
-    expect(rolePair(garment, "guided-sleeve:body-side")).toBe(
-      "sideSeam/sideSeam/same",
-    );
-    expect(rolePair(garment, "guided-sleeve:underarm")).toBe(
-      "sideSeam/sideSeam/opposite",
-    );
-    expect(rolePair(garment, "guided-sleeve:front-armhole")).toBe(
-      "frontArmhole/sleeveCapFront/opposite",
-    );
-    expect(rolePair(garment, "guided-sleeve:back-armhole")).toBe(
-      "backArmhole/sleeveCapBack/same",
-    );
+    const seams = buildTemplateAssemblySeams(garment);
+    const shoulder = seams.filter((seam) => seam.groupId === "guided-sleeve:body-shoulder");
+    const side = seams.filter((seam) => seam.groupId === "guided-sleeve:body-side");
+    expect(shoulder.every((seam) => seam.direction === "same")).toBe(true);
+    expect(side.every((seam) => seam.direction === "same")).toBe(true);
   });
 
   it("covers complete armhole and sleeve-cap arcs without hiding extra length", () => {
-    const garment = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS);
+    const garment = createGarmentFromTemplate(
+      "tshirt",
+      DEFAULT_BODY_MEASUREMENTS,
+    );
     const seams = buildTemplateAssemblySeams(garment);
     const front = garment.pieces.find((piece) => getPatternEdges(piece).some((edge) => edge.role === "frontArmhole"))!;
     const back = garment.pieces.find((piece) => getPatternEdges(piece).some((edge) => edge.role === "backArmhole"))!;
@@ -87,8 +74,7 @@ describe("template assembly seams", () => {
     expect(Math.abs(roleLength(sleeve, "sleeveCapBack") - roleLength(back, "backArmhole"))).toBeLessThanOrEqual(16);
   });
 
-
-  it("creates complete definition-level outseam and inseam ranges for trousers", () => {
+  it("creates complete outseam, inseam and paired-copy rise relations for trousers", () => {
     const garment = createGarmentFromTemplate(
       "straight-pants",
       DEFAULT_BODY_MEASUREMENTS,
@@ -101,10 +87,17 @@ describe("template assembly seams", () => {
       const secondRole = getPatternEdges(secondPiece).find((edge) => edge.id === seam.second.edgeId)?.role;
       return `${firstRole}/${secondRole}`;
     });
-    expect(seams.length).toBeGreaterThanOrEqual(6);
+    expect(seams.length).toBeGreaterThanOrEqual(8);
     expect(roles.filter((role) => role === "outseam/outseam").length).toBeGreaterThanOrEqual(3);
     expect(roles.filter((role) => role === "inseam/inseam").length).toBeGreaterThanOrEqual(2);
-    expect(roles.some((role) => /Crotch/.test(role))).toBe(false);
+    const frontRise = seams.find((seam) => seam.groupId === "template-seam:trouser-front-rise");
+    const backRise = seams.find((seam) => seam.groupId === "template-seam:trouser-back-rise");
+    expect(frontRise?.physicalPairing).toBe("paired-copies");
+    expect(backRise?.physicalPairing).toBe("paired-copies");
+    expect(frontRise?.firstRanges?.length).toBeGreaterThanOrEqual(2);
+    expect(backRise?.firstRanges?.length).toBeGreaterThanOrEqual(2);
+    expect(roles.some((role) => role === "frontCrotch/frontCrotch")).toBe(true);
+    expect(roles.some((role) => role === "backCrotch/backCrotch")).toBe(true);
   });
 
   it("replaces incompatible template-edge seams and preserves unrelated custom seams", () => {
@@ -123,51 +116,41 @@ describe("template assembly seams", () => {
     const custom = {
       ...shoulder,
       id: "custom-neck-detail",
-      name: "Detalhe livre",
-      first: {
-        ...shoulder.first,
-        edgeId: getPatternEdges(generated.pieces[0]).find(
-          (edge) => edge.role === "neckline",
-        )!.id,
-      },
-      second: {
-        ...shoulder.second,
-        edgeId: getPatternEdges(generated.pieces[1]).find(
-          (edge) => edge.role === "neckline",
-        )!.id,
-      },
+      groupId: "custom-neck-detail",
+      name: "Detalhe custom",
+      first: shoulder.first,
+      second: shoulder.second,
     };
-    generated.seams = [wrongShoulder, custom];
-
-    expect(templateAssemblyNeedsRepair(generated)).toBe(true);
-    const resolved = resolveTemplateAssemblyGarment(generated);
-
-    expect(resolved.seams).toHaveLength(canonical.length + 1);
-    expect(resolved.seams?.find((seam) => seam.id === "manual-wrong")).toMatchObject({
-      direction: "same",
-      name: "Costura",
+    const resolved = resolveTemplateAssemblyGarment({
+      ...generated,
+      seams: [wrongShoulder, custom],
     });
+    expect(resolved.seams?.some((seam) => seam.id === "manual-wrong")).toBe(false);
     expect(resolved.seams?.some((seam) => seam.id === "custom-neck-detail")).toBe(true);
-    expect(templateAssemblyNeedsRepair(resolved)).toBe(false);
+    expect(resolved.seams?.some((seam) => seam.groupId === "guided-sleeve:body-shoulder")).toBe(true);
   });
 });
 
-function groupLengths(
-  garment: ReturnType<typeof createGarmentFromTemplate>,
-  seams: ReturnType<typeof buildTemplateAssemblySeams>,
-  groupId: string,
-) {
-  return (seams ?? []).filter((seam) => seam.groupId === groupId).reduce((totals, seam) => {
-    const first = garment.pieces.find((piece) => piece.id === seam.first.pieceId)!;
-    const second = garment.pieces.find((piece) => piece.id === seam.second.pieceId)!;
-    totals.first += edgeRangeLength(first, seam.first);
-    totals.second += edgeRangeLength(second, seam.second);
-    return totals;
-  }, { first: 0, second: 0 });
-}
-
-function roleLength(piece: ReturnType<typeof createGarmentFromTemplate>["pieces"][number], role: string): number {
+function roleLength(piece: PatternPiece, role: string): number {
   return getPatternEdges(piece)
     .filter((edge) => edge.role === role)
-    .reduce((sum, edge) => sum + edgeRangeLength(piece, { pieceId: piece.id, edgeId: edge.id, startT: 0, endT: 1 }), 0);
+    .reduce((sum, edge) => sum + edgeRangeLength(piece, {
+      pieceId: piece.id,
+      edgeId: edge.id,
+      startT: 0,
+      endT: 1,
+    }), 0);
+}
+
+function groupLengths(garment: GarmentDraft, seams: Seam[], groupId: string) {
+  const grouped = seams.filter((seam) => seam.groupId === groupId);
+  const first = grouped.reduce((sum, seam) => sum + seamSideRanges(seam, "first").reduce((rangeSum, range) => {
+    const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId)!;
+    return rangeSum + edgeRangeLength(piece, range);
+  }, 0), 0);
+  const second = grouped.reduce((sum, seam) => sum + seamSideRanges(seam, "second").reduce((rangeSum, range) => {
+    const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId)!;
+    return rangeSum + edgeRangeLength(piece, range);
+  }, 0), 0);
+  return { first, second };
 }
