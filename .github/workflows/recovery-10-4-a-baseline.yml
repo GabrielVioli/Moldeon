@@ -1,0 +1,25 @@
+name: Recovery 10.4-A baseline
+on:
+  push:
+    branches: [recovery/10.4-a-xpbd-hotloop-performance]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    if: contains(github.event.head_commit.message, 'ci(perf): run XPBD baseline profile')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/10.4-a-xpbd-hotloop-performance
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: python scripts/recovery-10-4-a-baseline.py
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Baseline benchmark
+        env:
+          MOLDEON_PERF_BENCH: '1'
+        run: npx vitest run apps/web/src/physics/xpbdHotloopPerformance.test.ts --reporter=verbose
