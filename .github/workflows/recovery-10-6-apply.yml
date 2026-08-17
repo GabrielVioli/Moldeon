@@ -30,7 +30,7 @@ jobs:
           python scripts/recovery-10-6-relation-frames.py
           python scripts/recovery-10-6-test-fixes.py
           python scripts/recovery-10-6-material-flat-seed.py
-          python scripts/recovery-10-6-euclidean-intrinsic.py
+          python scripts/recovery-10-6-intrinsic-mode.py
       - run: npm ci
       - run: npm run typecheck
       - name: Prompt 10.6 garment suite
