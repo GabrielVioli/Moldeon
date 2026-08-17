@@ -29,5 +29,9 @@ jobs:
           python scripts/recovery-10-6-paired-fix.py
       - run: npm ci
       - run: npm run typecheck
+      - name: Prompt 10.6 garment suite
+        env:
+          MOLDEON_10_6_REPORT: "1"
+        run: npx vitest run apps/web/src/garment3d/constraintSpatialAssembly.test.ts --reporter=verbose
       - name: Focused assembly regression
         run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts apps/web/src/physics/initialSeamResidual.test.ts apps/web/src/domain/templateAssemblySeams.test.ts apps/web/src/domain/patternDocumentV3.test.ts --reporter=verbose
