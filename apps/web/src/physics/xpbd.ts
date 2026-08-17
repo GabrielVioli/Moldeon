@@ -44,6 +44,17 @@ export interface XpbdSolverConfig {
   seamTolerance: number;
 }
 
+export interface XpbdProfileTimings {
+  integrationMs: number;
+  stretchMs: number;
+  shearMs: number;
+  bendMs: number;
+  seamMs: number;
+  velocityUpdateMs: number;
+  validationMs: number;
+  solverStepTotalMs: number;
+}
+
 export interface XpbdState {
   positions: Float32Array;
   previousPositions: Float32Array;
@@ -65,6 +76,7 @@ export interface XpbdState {
   accumulator: number;
   stepCount: number;
   invalid: boolean;
+  profile: XpbdProfileTimings;
 }
 
 export interface XpbdSeamGroupErrorDiagnostic {
@@ -91,6 +103,16 @@ export interface XpbdStepDiagnostics {
   maximumCorrectionApplied: number;
   invalid: boolean;
   droppedTimeSeconds: number;
+  integrationMs?: number;
+  stretchMs?: number;
+  shearMs?: number;
+  bendMs?: number;
+  seamMs?: number;
+  velocityUpdateMs?: number;
+  validationMs?: number;
+  solverStepTotalMs?: number;
+  iterations?: number;
+  maximumSubsteps?: number;
 }
 
 export const DEFAULT_XPBD_CONFIG: XpbdSolverConfig = {
@@ -108,7 +130,7 @@ export const DEFAULT_XPBD_CONFIG: XpbdSolverConfig = {
 const EPSILON = 1e-9;
 
 export function createXpbdState(
-  input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid">,
+  input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile">,
 ): XpbdState {
   validateStateShape(input);
   return {
@@ -123,6 +145,7 @@ export function createXpbdState(
     accumulator: 0,
     stepCount: 0,
     invalid: false,
+    profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0 },
   };
 }
 
@@ -151,36 +174,48 @@ export function advanceXpbd(state: XpbdState, frameDeltaSeconds: number): XpbdSt
 }
 
 export function stepXpbd(state: XpbdState): void {
+  const stepStarted = performance.now();
+  const profile = state.profile;
+  profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0;
   const dt = state.config.fixedTimeStep;
   if (!Number.isFinite(dt) || dt <= 0) throw new RangeError("O passo da simula\u00e7\u00e3o precisa ser positivo e finito.");
 
   state.previousPositions.set(state.positions);
   state.maximumCorrectionApplied = 0;
   resetLambdas(state);
+  let phaseStarted = performance.now();
   integrate(state, dt);
+  profile.integrationMs = performance.now() - phaseStarted;
 
   for (let iteration = 0; iteration < state.config.iterations; iteration += 1) {
-    solveDistanceSet(state, dt, 0);
-    solveShearSet(state, dt);
-    solveDistanceSet(state, dt, 1);
-    solveSeamSet(state, dt);
+    phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
+    phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
+    phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
+    phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
     enforcePins(state);
   }
 
+  phaseStarted = performance.now();
   updateVelocitiesAndPositions(state, dt);
+  profile.velocityUpdateMs = performance.now() - phaseStarted;
   state.stepCount += 1;
 
+  phaseStarted = performance.now();
   if (!positionsAreSafe(state.positions)) {
     state.positions.set(state.stablePositions);
     state.previousPositions.set(state.stablePositions);
     state.predictedPositions.set(state.stablePositions);
     state.velocities.fill(0);
     state.invalid = true;
+    profile.validationMs = performance.now() - phaseStarted;
+    profile.solverStepTotalMs = performance.now() - stepStarted;
     return;
   }
 
   state.stablePositions.set(state.positions);
   state.invalid = false;
+  profile.validationMs = performance.now() - phaseStarted;
+  profile.solverStepTotalMs = performance.now() - stepStarted;
 }
 
 export function resetXpbdState(state: XpbdState): void {
@@ -266,6 +301,16 @@ export function measureXpbdDiagnostics(
     maximumCorrectionApplied: state.maximumCorrectionApplied,
     invalid: state.invalid,
     droppedTimeSeconds,
+    integrationMs: state.profile.integrationMs,
+    stretchMs: state.profile.stretchMs,
+    shearMs: state.profile.shearMs,
+    bendMs: state.profile.bendMs,
+    seamMs: state.profile.seamMs,
+    velocityUpdateMs: state.profile.velocityUpdateMs,
+    validationMs: state.profile.validationMs,
+    solverStepTotalMs: state.profile.solverStepTotalMs,
+    iterations: state.config.iterations,
+    maximumSubsteps: state.config.maximumSubsteps,
   };
 }
 
@@ -291,167 +336,46 @@ function integrate(state: XpbdState, dt: number): void {
 }
 
 function solveDistanceSet(state: XpbdState, dt: number, kind: 0 | 1): void {
-  const set = state.distances;
-  for (let index = 0; index < set.restLengths.length; index += 1) {
-    if (set.kinds[index] !== kind) continue;
-    const a = set.indices[index * 2];
-    const b = set.indices[index * 2 + 1];
-    solvePairDistance(
-      state,
-      a,
-      b,
-      set.restLengths[index],
-      set.compliances[index],
-      set.lambdas,
-      index,
-      dt,
-    );
-  }
-}
-
-function solvePairDistance(
-  state: XpbdState,
-  a: number,
-  b: number,
-  restLength: number,
-  compliance: number,
-  lambdas: Float32Array,
-  lambdaIndex: number,
-  dt: number,
-): void {
-  const positions = state.predictedPositions;
-  const aOffset = a * 3;
-  const bOffset = b * 3;
-  const dx = positions[bOffset] - positions[aOffset];
-  const dy = positions[bOffset + 1] - positions[aOffset + 1];
-  const dz = positions[bOffset + 2] - positions[aOffset + 2];
-  const length = Math.hypot(dx, dy, dz);
-  if (length <= EPSILON) return;
-  const wA = state.inverseMasses[a];
-  const wB = state.inverseMasses[b];
-  const alpha = Math.max(0, compliance) / (dt * dt);
-  const denominator = wA + wB + alpha;
-  if (denominator <= EPSILON) return;
-  const constraint = length - restLength;
-  const rawDeltaLambda = (-constraint - alpha * lambdas[lambdaIndex]) / denominator;
-  const deltaLambda = clampMultiplierByPositionCorrection(
-    rawDeltaLambda,
-    maximumMultiplierForParticleCorrections(state, [
-      [a, 1],
-      [b, 1],
-    ]),
-  );
-  lambdas[lambdaIndex] += deltaLambda;
-  const nx = dx / length;
-  const ny = dy / length;
-  const nz = dz / length;
-  positions[aOffset] -= nx * deltaLambda * wA;
-  positions[aOffset + 1] -= ny * deltaLambda * wA;
-  positions[aOffset + 2] -= nz * deltaLambda * wA;
-  positions[bOffset] += nx * deltaLambda * wB;
-  positions[bOffset + 1] += ny * deltaLambda * wB;
-  positions[bOffset + 2] += nz * deltaLambda * wB;
-  state.maximumCorrectionApplied = Math.max(
-    state.maximumCorrectionApplied,
-    Math.abs(deltaLambda) * Math.max(wA, wB),
-  );
+  const set=state.distances,pos=state.predictedPositions,inv=state.inverseMasses,limits=state.correctionLimits,alphaScale=1/(dt*dt); let maxApplied=state.maximumCorrectionApplied;
+  for(let i=0;i<set.restLengths.length;i+=1){
+    if(set.kinds[i]!==kind)continue; const k=i*2,a=set.indices[k],b=set.indices[k+1],oa=a*3,ob=b*3;
+    const dx=pos[ob]-pos[oa],dy=pos[ob+1]-pos[oa+1],dz=pos[ob+2]-pos[oa+2],ls=dx*dx+dy*dy+dz*dz; if(ls<=EPSILON*EPSILON)continue;
+    const len=Math.sqrt(ls),wa=inv[a],wb=inv[b],c=set.compliances[i],alpha=(c>0?c:0)*alphaScale,den=wa+wb+alpha; if(den<=EPSILON)continue;
+    const raw=(-(len-set.restLengths[i])-alpha*set.lambdas[i])/den; let mm=Number.POSITIVE_INFINITY;
+    if(wa>EPSILON)mm=limits[a]/wa; if(wb>EPSILON){const q=limits[b]/wb;if(q<mm)mm=q;} if(!Number.isFinite(mm))mm=0;
+    const dl=clampMultiplierByPositionCorrection(raw,mm); set.lambdas[i]+=dl; const il=1/len,nx=dx*il,ny=dy*il,nz=dz*il,sa=dl*wa,sb=dl*wb;
+    pos[oa]-=nx*sa;pos[oa+1]-=ny*sa;pos[oa+2]-=nz*sa;pos[ob]+=nx*sb;pos[ob+1]+=ny*sb;pos[ob+2]+=nz*sb;
+    const applied=Math.abs(dl)*(wa>wb?wa:wb);if(applied>maxApplied)maxApplied=applied;
+  } state.maximumCorrectionApplied=maxApplied;
 }
 
 function solveShearSet(state: XpbdState, dt: number): void {
-  const set = state.shears;
-  const positions = state.predictedPositions;
-  for (let index = 0; index < set.restCosines.length; index += 1) {
-    const p0 = set.indices[index * 3];
-    const p1 = set.indices[index * 3 + 1];
-    const p2 = set.indices[index * 3 + 2];
-    const o0 = p0 * 3;
-    const o1 = p1 * 3;
-    const o2 = p2 * 3;
-    const e1x = positions[o1] - positions[o0];
-    const e1y = positions[o1 + 1] - positions[o0 + 1];
-    const e1z = positions[o1 + 2] - positions[o0 + 2];
-    const e2x = positions[o2] - positions[o0];
-    const e2y = positions[o2 + 1] - positions[o0 + 1];
-    const e2z = positions[o2 + 2] - positions[o0 + 2];
-    const l1 = Math.hypot(e1x, e1y, e1z);
-    const l2 = Math.hypot(e2x, e2y, e2z);
-    if (l1 <= EPSILON || l2 <= EPSILON) continue;
-    const u = [e1x / l1, e1y / l1, e1z / l1] as const;
-    const v = [e2x / l2, e2y / l2, e2z / l2] as const;
-    const cosine = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-    const g1 = [(v[0] - cosine * u[0]) / l1, (v[1] - cosine * u[1]) / l1, (v[2] - cosine * u[2]) / l1] as const;
-    const g2 = [(u[0] - cosine * v[0]) / l2, (u[1] - cosine * v[1]) / l2, (u[2] - cosine * v[2]) / l2] as const;
-    const g0 = [-(g1[0] + g2[0]), -(g1[1] + g2[1]), -(g1[2] + g2[2])] as const;
-    const w0 = state.inverseMasses[p0];
-    const w1 = state.inverseMasses[p1];
-    const w2 = state.inverseMasses[p2];
-    const alpha = Math.max(0, set.compliances[index]) / (dt * dt);
-    const denominator = w0 * lengthSquared(g0) + w1 * lengthSquared(g1) + w2 * lengthSquared(g2) + alpha;
-    if (denominator <= EPSILON) continue;
-    const rawDeltaLambda = (-(cosine - set.restCosines[index]) - alpha * set.lambdas[index]) / denominator;
-    const deltaLambda = clampMultiplierByPositionCorrection(
-      rawDeltaLambda,
-      maximumMultiplierForParticleCorrections(state, [
-        [p0, Math.sqrt(lengthSquared(g0))],
-        [p1, Math.sqrt(lengthSquared(g1))],
-        [p2, Math.sqrt(lengthSquared(g2))],
-      ]),
-    );
-    set.lambdas[index] += deltaLambda;
-    applyGradient(positions, o0, g0, deltaLambda * w0);
-    applyGradient(positions, o1, g1, deltaLambda * w1);
-    applyGradient(positions, o2, g2, deltaLambda * w2);
-    state.maximumCorrectionApplied = Math.max(
-      state.maximumCorrectionApplied,
-      Math.abs(deltaLambda) * Math.max(
-        w0 * Math.sqrt(lengthSquared(g0)),
-        w1 * Math.sqrt(lengthSquared(g1)),
-        w2 * Math.sqrt(lengthSquared(g2)),
-      ),
-    );
-  }
+ const set=state.shears,pos=state.predictedPositions,inv=state.inverseMasses,limits=state.correctionLimits,alphaScale=1/(dt*dt);let maxApplied=state.maximumCorrectionApplied;
+ for(let i=0;i<set.restCosines.length;i+=1){
+  const k=i*3,p0=set.indices[k],p1=set.indices[k+1],p2=set.indices[k+2],o0=p0*3,o1=p1*3,o2=p2*3;
+  const e1x=pos[o1]-pos[o0],e1y=pos[o1+1]-pos[o0+1],e1z=pos[o1+2]-pos[o0+2],e2x=pos[o2]-pos[o0],e2y=pos[o2+1]-pos[o0+1],e2z=pos[o2+2]-pos[o0+2];
+  const l1s=e1x*e1x+e1y*e1y+e1z*e1z,l2s=e2x*e2x+e2y*e2y+e2z*e2z;if(l1s<=EPSILON*EPSILON||l2s<=EPSILON*EPSILON)continue;
+  const l1=Math.sqrt(l1s),l2=Math.sqrt(l2s),i1=1/l1,i2=1/l2,ux=e1x*i1,uy=e1y*i1,uz=e1z*i1,vx=e2x*i2,vy=e2y*i2,vz=e2z*i2,cos=ux*vx+uy*vy+uz*vz;
+  const g1x=(vx-cos*ux)*i1,g1y=(vy-cos*uy)*i1,g1z=(vz-cos*uz)*i1,g2x=(ux-cos*vx)*i2,g2y=(uy-cos*vy)*i2,g2z=(uz-cos*vz)*i2,g0x=-(g1x+g2x),g0y=-(g1y+g2y),g0z=-(g1z+g2z);
+  const q0=g0x*g0x+g0y*g0y+g0z*g0z,q1=g1x*g1x+g1y*g1y+g1z*g1z,q2=g2x*g2x+g2y*g2y+g2z*g2z,w0=inv[p0],w1=inv[p1],w2=inv[p2],c=set.compliances[i],alpha=(c>0?c:0)*alphaScale,den=w0*q0+w1*q1+w2*q2+alpha;if(den<=EPSILON)continue;
+  const raw=(-(cos-set.restCosines[i])-alpha*set.lambdas[i])/den,m0=Math.sqrt(q0),m1=Math.sqrt(q1),m2=Math.sqrt(q2);let mm=Number.POSITIVE_INFINITY,wg=w0*m0;
+  if(wg>EPSILON)mm=limits[p0]/wg;wg=w1*m1;if(wg>EPSILON){const q=limits[p1]/wg;if(q<mm)mm=q;}wg=w2*m2;if(wg>EPSILON){const q=limits[p2]/wg;if(q<mm)mm=q;}if(!Number.isFinite(mm))mm=0;
+  const dl=clampMultiplierByPositionCorrection(raw,mm);set.lambdas[i]+=dl;const s0=dl*w0,s1=dl*w1,s2=dl*w2;
+  pos[o0]+=g0x*s0;pos[o0+1]+=g0y*s0;pos[o0+2]+=g0z*s0;pos[o1]+=g1x*s1;pos[o1+1]+=g1y*s1;pos[o1+2]+=g1z*s1;pos[o2]+=g2x*s2;pos[o2+1]+=g2y*s2;pos[o2+2]+=g2z*s2;
+  const applied=Math.abs(dl)*Math.max(w0*m0,w1*m1,w2*m2);if(applied>maxApplied)maxApplied=applied;
+ }state.maximumCorrectionApplied=maxApplied;
 }
 
 function solveSeamSet(state: XpbdState, dt: number): void {
-  const seams = state.seams;
-  const positions = state.predictedPositions;
-  for (let index = 0; index < seams.restDistances.length; index += 1) {
-    const base = index * 4;
-    const a = interpolatedPoint(positions, seams.indices, seams.weights, base);
-    const b = interpolatedPoint(positions, seams.indices, seams.weights, base + 2);
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const dz = b[2] - a[2];
-    const length = Math.hypot(dx, dy, dz);
-    if (length <= EPSILON) continue;
-    const gradientEntries = seamGradientEntries(seams, base);
-    let effectiveMass = 0;
-    for (const [particle, coefficient] of gradientEntries) {
-      effectiveMass += state.inverseMasses[particle] * coefficient * coefficient;
-    }
-    const alpha = Math.max(0, seams.compliances[index]) / (dt * dt);
-    const denominator = effectiveMass + alpha;
-    if (denominator <= EPSILON) continue;
-    const rawDeltaLambda = (-(length - seams.restDistances[index]) - alpha * seams.lambdas[index]) / denominator;
-    const deltaLambda = clampMultiplierByPositionCorrection(
-      rawDeltaLambda,
-      maximumMultiplierForParticleCorrections(
-        state,
-        gradientEntries.map(([particle, coefficient]) => [particle, Math.abs(coefficient)]),
-        seams.relaxations[index],
-      ),
-    );
-    seams.lambdas[index] += deltaLambda;
-    const normal = [dx / length, dy / length, dz / length] as const;
-    for (const [particle, coefficient] of gradientEntries) {
-      const scale = deltaLambda * coefficient * state.inverseMasses[particle];
-      const offset = particle * 3;
-      state.predictedPositions[offset] += normal[0] * scale;
-      state.predictedPositions[offset + 1] += normal[1] * scale;
-      state.predictedPositions[offset + 2] += normal[2] * scale;
-      state.maximumCorrectionApplied = Math.max(state.maximumCorrectionApplied, Math.abs(scale));
-    }
-  }
+ const seams=state.seams,pos=state.predictedPositions,inv=state.inverseMasses,limits=state.correctionLimits,alphaScale=1/(dt*dt);let maxApplied=state.maximumCorrectionApplied;
+ for(let i=0;i<seams.restDistances.length;i+=1){const b=i*4,p0=seams.indices[b],p1=seams.indices[b+1],p2=seams.indices[b+2],p3=seams.indices[b+3],w0=seams.weights[b],w1=seams.weights[b+1],w2=seams.weights[b+2],w3=seams.weights[b+3];
+  let ax=0,ay=0,az=0,bx=0,by=0,bz=0;if(p0!==XPBD_MISSING_PARTICLE){const o=p0*3;ax+=pos[o]*w0;ay+=pos[o+1]*w0;az+=pos[o+2]*w0;}if(p1!==XPBD_MISSING_PARTICLE){const o=p1*3;ax+=pos[o]*w1;ay+=pos[o+1]*w1;az+=pos[o+2]*w1;}if(p2!==XPBD_MISSING_PARTICLE){const o=p2*3;bx+=pos[o]*w2;by+=pos[o+1]*w2;bz+=pos[o+2]*w2;}if(p3!==XPBD_MISSING_PARTICLE){const o=p3*3;bx+=pos[o]*w3;by+=pos[o+1]*w3;bz+=pos[o+2]*w3;}
+  const dx=bx-ax,dy=by-ay,dz=bz-az,ls=dx*dx+dy*dy+dz*dz;if(ls<=EPSILON*EPSILON)continue;const len=Math.sqrt(ls);let c0=p0===XPBD_MISSING_PARTICLE?0:-w0,c1=p1===XPBD_MISSING_PARTICLE?0:-w1,c2=p2===XPBD_MISSING_PARTICLE?0:w2,c3=p3===XPBD_MISSING_PARTICLE?0:w3;
+  if(c1&&p1===p0){c0+=c1;c1=0;}if(c2){if(p2===p0){c0+=c2;c2=0;}else if(c1&&p2===p1){c1+=c2;c2=0;}}if(c3){if(p3===p0){c0+=c3;c3=0;}else if(c1&&p3===p1){c1+=c3;c3=0;}else if(c2&&p3===p2){c2+=c3;c3=0;}}
+  let mass=0,mm=Number.POSITIVE_INFINITY;const relax=seams.relaxations[i];const add=(p:number,c:number)=>{if(Math.abs(c)<=EPSILON)return;mass+=inv[p]*c*c;const wg=inv[p]*Math.abs(c);if(wg>EPSILON){const q=limits[p]*relax/wg;if(q<mm)mm=q;}};add(p0,c0);add(p1,c1);add(p2,c2);add(p3,c3);
+  const cp=seams.compliances[i],alpha=(cp>0?cp:0)*alphaScale,den=mass+alpha;if(den<=EPSILON)continue;const raw=(-(len-seams.restDistances[i])-alpha*seams.lambdas[i])/den;if(!Number.isFinite(mm))mm=0;const dl=clampMultiplierByPositionCorrection(raw,mm);seams.lambdas[i]+=dl;const il=1/len,nx=dx*il,ny=dy*il,nz=dz*il;
+  const apply=(p:number,c:number)=>{if(Math.abs(c)<=EPSILON)return;const sc=dl*c*inv[p],o=p*3;pos[o]+=nx*sc;pos[o+1]+=ny*sc;pos[o+2]+=nz*sc;const a=Math.abs(sc);if(a>maxApplied)maxApplied=a;};apply(p0,c0);apply(p1,c1);apply(p2,c2);apply(p3,c3);
+ }state.maximumCorrectionApplied=maxApplied;
 }
 
 function updateVelocitiesAndPositions(state: XpbdState, dt: number): void {
@@ -531,7 +455,7 @@ function interpolatedPoint(
   return result;
 }
 
-function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid">): void {
+function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile">): void {
   const particleCount = input.positions.length / 3;
   if (!Number.isInteger(particleCount)
     || input.previousPositions.length !== input.positions.length

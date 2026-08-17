@@ -6,6 +6,7 @@ export type XpbdAutoPauseSteps = 0 | 30 | 60 | 120;
 
 export interface XpbdWorkerDiagnostics extends XpbdStepDiagnostics {
   physicsStepMs?: number;
+  workerStepTotalMs?: number;
 }
 
 export interface XpbdWorkerLifecycleSnapshot {

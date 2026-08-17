@@ -28,6 +28,7 @@ let lastCommand: XpbdWorkerRequest["type"] = "initialize";
 let cadence: XpbdSimulationCadence = 1;
 let autoPauseSteps: XpbdAutoPauseSteps = 0;
 let lastPhysicsStepMs = 0;
+let lastWorkerStepTotalMs = 0;
 const outputBuffers: ArrayBuffer[] = [];
 
 self.onmessage = (event: MessageEvent<XpbdWorkerRequest>) => {
@@ -226,12 +227,13 @@ function performOneStep(): XpbdWorkerDiagnostics {
   const startedAt = performance.now();
   stepXpbd(state);
   lastPhysicsStepMs = performance.now() - startedAt;
+  lastWorkerStepTotalMs = lastPhysicsStepMs;
   return currentDiagnostics(1);
 }
 
 function currentDiagnostics(substeps = 0): XpbdWorkerDiagnostics {
   if (!state) throw new Error("SimulaÃ§Ã£o XPBD nÃ£o inicializada.");
-  return { ...measureXpbdDiagnostics(state, substeps), physicsStepMs: lastPhysicsStepMs };
+  return { ...measureXpbdDiagnostics(state, substeps), physicsStepMs: lastPhysicsStepMs, workerStepTotalMs: lastWorkerStepTotalMs };
 }
 
 function reachedAutoPause(): boolean {
