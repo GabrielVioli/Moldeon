@@ -77,7 +77,7 @@ export interface AssemblyInstanceArrangement {
   tubeScoreMm2?: number;
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
-  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube";
+  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube" | "multipanel-surface-shell";
   flipWinding: boolean;
 }
 
