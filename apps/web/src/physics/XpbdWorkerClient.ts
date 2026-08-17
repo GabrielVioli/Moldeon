@@ -1,10 +1,12 @@
 import type { XpbdInitializationData } from "./GarmentXpbdAdapter";
 import {
   initializationTransferables,
+  type XpbdAutoPauseSteps,
+  type XpbdSimulationCadence,
+  type XpbdWorkerDiagnostics,
   type XpbdWorkerRequest,
   type XpbdWorkerResponse,
 } from "./xpbdProtocol";
-import type { XpbdStepDiagnostics } from "./xpbd";
 import type { XpbdWorkerLifecycleSnapshot } from "./xpbdProtocol";
 
 export interface XpbdFrame {
@@ -13,11 +15,11 @@ export interface XpbdFrame {
   epoch: number;
   sequence: number;
   positions: Float32Array;
-  diagnostics: XpbdStepDiagnostics;
+  diagnostics: XpbdWorkerDiagnostics;
 }
 
 export interface XpbdWorkerClientCallbacks {
-  onReady?(revision: string, generation: number, epoch: number, diagnostics: XpbdStepDiagnostics): void;
+  onReady?(revision: string, generation: number, epoch: number, diagnostics: XpbdWorkerDiagnostics): void;
   onFrame?(frame: XpbdFrame): void;
   onState?(generation: number, running: boolean, disposed: boolean, snapshot: XpbdWorkerLifecycleSnapshot): void;
   onDiscardedFrame?(revision: string, generation: number, epoch: number, reason: string): void;
@@ -69,6 +71,14 @@ export class XpbdWorkerClient {
     return this.sendLifecycle("step", deltaSeconds === undefined ? {} : { deltaSeconds });
   }
   reset(): number { return this.sendLifecycle("reset"); }
+
+  configureDev(settings: {
+    gravity: [number, number, number];
+    cadence: XpbdSimulationCadence;
+    autoPauseSteps: XpbdAutoPauseSteps;
+  }): void {
+    this.post({ type: "configureDev", generation: this.generation, ...settings });
+  }
 
   consumeLatestFrame(): XpbdFrame | null {
     const frame = this.latestFrame;

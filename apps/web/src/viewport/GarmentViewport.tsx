@@ -4,7 +4,12 @@ import {
   approvedAvatarForBody,
   AVATAR_NOT_CONFIGURED_MESSAGE,
 } from "../avatar/ApprovedAvatarAsset";
-import { ThreeViewport, type SimulationLifecycleState } from "./GlobalThreeViewport";
+import {
+  ThreeViewport,
+  type SimulationDevSettings,
+  type SimulationDevTelemetry,
+  type SimulationLifecycleState,
+} from "./GlobalThreeViewport";
 
 interface GarmentViewportProps {
   assemblyInput: ResolvedAssemblyInput;
@@ -30,6 +35,15 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [simulationState, setSimulationState] = useState<"ready" | SimulationLifecycleState>("ready");
+  const [devSettings, setDevSettings] = useState<SimulationDevSettings>({
+    gravityScale: 1,
+    cadence: 1,
+    autoPauseSteps: 0,
+  });
+  const [wireframe, setWireframe] = useState(false);
+  const [telemetry, setTelemetry] = useState<SimulationDevTelemetry | null>(null);
+  const devSettingsRef = useRef(devSettings);
+  const wireframeRef = useRef(wireframe);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
 
   latestInputRef.current = assemblyInput;
@@ -43,15 +57,24 @@ export const GarmentViewport = memo(function GarmentViewport({
     const abortController = new AbortController();
     setError(null);
 
-    void ThreeViewport.create(host, abortController.signal, (nextState) => {
-      if (mounted) setSimulationState(nextState);
-    })
+    void ThreeViewport.create(
+      host,
+      abortController.signal,
+      (nextState) => {
+        if (mounted) setSimulationState(nextState);
+      },
+      (nextTelemetry) => {
+        if (mounted) setTelemetry(nextTelemetry);
+      },
+    )
       .then((viewport) => {
         if (!mounted) {
           viewport.dispose();
           return;
         }
         viewportRef.current = viewport;
+        viewport.setSimulationDevSettings(devSettingsRef.current);
+        viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
         if (latestActiveRef.current) {
           setWarnings(viewport.updateGarment(latestInputRef.current));
@@ -109,6 +132,16 @@ export const GarmentViewport = memo(function GarmentViewport({
     lastDressedVersionRef.current = simulateVersion;
   }, [simulateVersion]);
 
+  useEffect(() => {
+    devSettingsRef.current = devSettings;
+    viewportRef.current?.setSimulationDevSettings(devSettings);
+  }, [devSettings]);
+
+  useEffect(() => {
+    wireframeRef.current = wireframe;
+    viewportRef.current?.setWireframe(wireframe);
+  }, [wireframe]);
+
   return (
     <div className="viewport-host" ref={hostRef} data-testid="dressed-avatar-viewport" data-simulation-ui-state={simulationState}>
       {error ? <div className="viewport-error">{error}</div> : null}
@@ -139,6 +172,82 @@ export const GarmentViewport = memo(function GarmentViewport({
           viewportRef.current?.resetSimulation();
         }}>Reiniciar</button>
       </div>
+      {import.meta.env.DEV ? (
+        <aside className="viewport-physics-dev" aria-label="Diagnóstico físico DEV">
+          <strong>Física DEV</strong>
+          <label>
+            Gravidade
+            <select
+              value={devSettings.gravityScale}
+              onChange={(event) => setDevSettings((current) => ({
+                ...current,
+                gravityScale: Number(event.target.value) as SimulationDevSettings["gravityScale"],
+              }))}
+            >
+              <option value={0}>0%</option>
+              <option value={0.25}>25%</option>
+              <option value={1}>100%</option>
+            </select>
+          </label>
+          <label>
+            Simulação
+            <select
+              value={devSettings.cadence}
+              onChange={(event) => setDevSettings((current) => ({
+                ...current,
+                cadence: Number(event.target.value) as SimulationDevSettings["cadence"],
+              }))}
+            >
+              <option value={0.1}>0.1x</option>
+              <option value={0.25}>0.25x</option>
+              <option value={1}>1x</option>
+            </select>
+          </label>
+          <label>
+            Auto-pause
+            <select
+              value={devSettings.autoPauseSteps}
+              onChange={(event) => setDevSettings((current) => ({
+                ...current,
+                autoPauseSteps: Number(event.target.value) as SimulationDevSettings["autoPauseSteps"],
+              }))}
+            >
+              <option value={0}>desligado</option>
+              <option value={30}>30 steps</option>
+              <option value={60}>60 steps</option>
+              <option value={120}>120 steps</option>
+            </select>
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
+              checked={wireframe}
+              onChange={(event) => setWireframe(event.target.checked)}
+            />
+            Wireframe
+          </label>
+          <button type="button" onClick={() => viewportRef.current?.frameGarment()}>
+            Enquadrar roupa
+          </button>
+          <dl>
+            <dt>physicsStep</dt><dd>{telemetry?.stepCount ?? 0}</dd>
+            <dt>FPS</dt><dd>{formatMetric(telemetry?.approximateFps)}</dd>
+            <dt>physicsStepMs</dt><dd>{formatMetric(telemetry?.physicsStepMs)}</dd>
+            <dt>particles</dt><dd>{telemetry?.particleCount ?? 0}</dd>
+            <dt>triangles</dt><dd>{telemetry?.triangleCount ?? 0}</dd>
+            <dt>stretch</dt><dd>{telemetry?.stretchConstraintCount ?? 0}</dd>
+            <dt>shear</dt><dd>{telemetry?.shearConstraintCount ?? 0}</dd>
+            <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
+            <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
+            <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
+            <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
+          </dl>
+        </aside>
+      ) : null}
     </div>
   );
 });
+
+function formatMetric(value: number | undefined): string {
+  return Number.isFinite(value) ? (value ?? 0).toFixed(2) : "0.00";
+}

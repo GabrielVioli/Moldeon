@@ -1,8 +1,14 @@
 /// <reference lib="webworker" />
 
-import { advanceXpbd, createXpbdState, measureXpbdDiagnostics, resetXpbdState, type XpbdState } from "../physics/xpbd";
+import { createXpbdState, measureXpbdDiagnostics, resetXpbdState, stepXpbd, type XpbdState } from "../physics/xpbd";
 import type { XpbdInitializationData } from "../physics/GarmentXpbdAdapter";
-import type { XpbdWorkerRequest, XpbdWorkerResponse } from "../physics/xpbdProtocol";
+import type {
+  XpbdAutoPauseSteps,
+  XpbdSimulationCadence,
+  XpbdWorkerDiagnostics,
+  XpbdWorkerRequest,
+  XpbdWorkerResponse,
+} from "../physics/xpbdProtocol";
 
 let state: XpbdState | null = null;
 let revision = "";
@@ -12,7 +18,6 @@ let commandId = 0;
 let running = false;
 let disposed = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
-let lastTick = 0;
 let sequence = 0;
 let timersStarted = 0;
 let timersCanceled = 0;
@@ -20,6 +25,9 @@ let framesProduced = 0;
 let framesSent = 0;
 let commandsProcessed = 0;
 let lastCommand: XpbdWorkerRequest["type"] = "initialize";
+let cadence: XpbdSimulationCadence = 1;
+let autoPauseSteps: XpbdAutoPauseSteps = 0;
+let lastPhysicsStepMs = 0;
 const outputBuffers: ArrayBuffer[] = [];
 
 self.onmessage = (event: MessageEvent<XpbdWorkerRequest>) => {
@@ -68,12 +76,33 @@ function handleRequest(request: XpbdWorkerRequest): void {
       }
       state.config = { ...state.config, ...request.config };
       return;
+    case "configureDev":
+      if (!state || request.generation !== generation) return;
+      state.config = { ...state.config, gravity: request.gravity };
+      cadence = request.cadence;
+      autoPauseSteps = request.autoPauseSteps;
+      if (running) {
+        cancelTimer();
+        if (reachedAutoPause()) {
+          running = false;
+          ensureOutputBuffer();
+          emitFrame(currentDiagnostics());
+        } else schedule(epoch);
+      }
+      postState();
+      return;
     case "start":
     case "resume":
       if (!state || !acceptLifecycleCommand(request)) return;
       cancelTimer();
+      if (reachedAutoPause()) {
+        running = false;
+        ensureOutputBuffer();
+        emitFrame(currentDiagnostics());
+        postState();
+        return;
+      }
       running = true;
-      lastTick = performance.now();
       schedule(epoch);
       postState();
       return;
@@ -82,7 +111,7 @@ function handleRequest(request: XpbdWorkerRequest): void {
       running = false;
       cancelTimer();
       ensureOutputBuffer();
-      emitFrame(measureXpbdDiagnostics(state));
+      emitFrame(currentDiagnostics());
       postState();
       return;
     case "step":
@@ -90,7 +119,7 @@ function handleRequest(request: XpbdWorkerRequest): void {
       running = false;
       cancelTimer();
       ensureOutputBuffer();
-      emitFrame(advanceXpbd(state, request.deltaSeconds ?? state.config.fixedTimeStep));
+      emitFrame(performOneStep());
       postState();
       return;
     case "reset":
@@ -98,10 +127,11 @@ function handleRequest(request: XpbdWorkerRequest): void {
       running = false;
       cancelTimer();
       resetXpbdState(state);
+      lastPhysicsStepMs = 0;
       sequence = 0;
       outputBuffers.length = 0;
       allocateOutputBuffers();
-      emitFrame(measureXpbdDiagnostics(state));
+      emitFrame(currentDiagnostics());
       postState();
       return;
     case "recyclePositions":
@@ -165,28 +195,50 @@ function initialize(payload: XpbdInitializationData, nextGeneration: number, nex
     config: payload.config,
   });
   allocateOutputBuffers();
-  post({ type: "ready", revision, generation, epoch, diagnostics: measureXpbdDiagnostics(state) });
+  lastPhysicsStepMs = 0;
+  post({ type: "ready", revision, generation, epoch, diagnostics: currentDiagnostics() });
   postState();
 }
 
 function schedule(scheduledEpoch: number): void {
   if (!running || disposed || timer !== null) return;
-  timer = setTimeout(() => tick(scheduledEpoch), 8);
+  timer = setTimeout(() => tick(scheduledEpoch), state ? state.config.fixedTimeStep * 1000 / cadence : 8);
   timersStarted += 1;
 }
 
 function tick(scheduledEpoch: number): void {
   timer = null;
   if (!running || !state || disposed || scheduledEpoch !== epoch) return;
-  const now = performance.now();
-  const delta = lastTick > 0 ? (now - lastTick) / 1000 : state.config.fixedTimeStep;
-  lastTick = now;
-  const diagnostics = advanceXpbd(state, delta);
+  const diagnostics = performOneStep();
+  const shouldAutoPause = reachedAutoPause();
+  if (shouldAutoPause) ensureOutputBuffer();
   emitFrame(diagnostics);
+  if (shouldAutoPause) {
+    running = false;
+    postState();
+    return;
+  }
   schedule(scheduledEpoch);
 }
 
-function emitFrame(diagnostics: ReturnType<typeof measureXpbdDiagnostics>): void {
+function performOneStep(): XpbdWorkerDiagnostics {
+  if (!state) throw new Error("SimulaÃ§Ã£o XPBD nÃ£o inicializada.");
+  const startedAt = performance.now();
+  stepXpbd(state);
+  lastPhysicsStepMs = performance.now() - startedAt;
+  return currentDiagnostics(1);
+}
+
+function currentDiagnostics(substeps = 0): XpbdWorkerDiagnostics {
+  if (!state) throw new Error("SimulaÃ§Ã£o XPBD nÃ£o inicializada.");
+  return { ...measureXpbdDiagnostics(state, substeps), physicsStepMs: lastPhysicsStepMs };
+}
+
+function reachedAutoPause(): boolean {
+  return Boolean(state && autoPauseSteps > 0 && state.stepCount >= autoPauseSteps);
+}
+
+function emitFrame(diagnostics: XpbdWorkerDiagnostics): void {
   framesProduced += 1;
   if (!state || outputBuffers.length === 0) return;
   const buffer = outputBuffers.pop()!;

@@ -1,6 +1,13 @@
 import type { XpbdInitializationData } from "./GarmentXpbdAdapter";
 import type { XpbdSolverConfig, XpbdStepDiagnostics } from "./xpbd";
 
+export type XpbdSimulationCadence = 0.1 | 0.25 | 1;
+export type XpbdAutoPauseSteps = 0 | 30 | 60 | 120;
+
+export interface XpbdWorkerDiagnostics extends XpbdStepDiagnostics {
+  physicsStepMs?: number;
+}
+
 export interface XpbdWorkerLifecycleSnapshot {
   timestampMs: number;
   lifecycle: "paused" | "running" | "disposed";
@@ -29,6 +36,7 @@ export type XpbdWorkerRequest =
   | ({ type: "updateGeometry"; payload: XpbdInitializationData } & XpbdCommandIdentity)
   | { type: "updateSeams"; revision: string; seamIndices: Uint32Array; seamWeights: Float32Array; seamRestDistances: Float32Array; seamCompliances: Float32Array; seamRelaxations: Float32Array; seamGroupIds: string[] }
   | { type: "updateFabric"; revision: string; distanceCompliances: Float32Array; shearCompliances: Float32Array; config?: Partial<XpbdSolverConfig> }
+  | { type: "configureDev"; generation: number; gravity: [number, number, number]; cadence: XpbdSimulationCadence; autoPauseSteps: XpbdAutoPauseSteps }
   | ({ type: "start" } & XpbdCommandIdentity)
   | ({ type: "pause" } & XpbdCommandIdentity)
   | ({ type: "resume" } & XpbdCommandIdentity)
@@ -38,8 +46,8 @@ export type XpbdWorkerRequest =
   | ({ type: "dispose" } & XpbdCommandIdentity);
 
 export type XpbdWorkerResponse =
-  | { type: "ready"; revision: string; generation: number; epoch: number; diagnostics: XpbdStepDiagnostics }
-  | { type: "positions"; revision: string; generation: number; epoch: number; sequence: number; positions: Float32Array; diagnostics: XpbdStepDiagnostics }
+  | { type: "ready"; revision: string; generation: number; epoch: number; diagnostics: XpbdWorkerDiagnostics }
+  | { type: "positions"; revision: string; generation: number; epoch: number; sequence: number; positions: Float32Array; diagnostics: XpbdWorkerDiagnostics }
   | { type: "state"; generation: number; epoch: number; running: boolean; disposed: boolean; snapshot: XpbdWorkerLifecycleSnapshot }
   | { type: "error"; revision?: string; generation: number; epoch: number; message: string; recoverable: boolean };
 

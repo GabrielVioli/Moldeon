@@ -95,6 +95,24 @@ describe("XpbdWorkerClient revision and lifecycle epochs", () => {
     client.dispose();
   });
 
+  it("sends transient DEV settings without changing the lifecycle identity", () => {
+    const client = new XpbdWorkerClient();
+    const worker = FakeWorker.current!;
+    const initialized = client.updateGeometry(initialization("revision-a", 4));
+
+    client.configureDev({ gravity: [0, 0, 0], cadence: 0.25, autoPauseSteps: 60 });
+
+    expect(worker.requests.at(-1)).toEqual({
+      type: "configureDev",
+      generation: initialized.generation,
+      gravity: [0, 0, 0],
+      cadence: 0.25,
+      autoPauseSteps: 60,
+    });
+    expect(client.resume()).toBe(initialized.epoch + 1);
+    client.dispose();
+  });
+
   it("ignores stale state acknowledgements and stale errors after reset", () => {
     const states: Array<{ running: boolean; epoch: number }> = [];
     const errors: string[] = [];

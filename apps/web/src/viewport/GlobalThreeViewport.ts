@@ -21,9 +21,22 @@ import { measureIntrinsicDistortion, type GarmentAssemblyState } from "../garmen
 import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
 import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
 import { XpbdWorkerClient } from "../physics/XpbdWorkerClient";
+import type {
+  XpbdAutoPauseSteps,
+  XpbdSimulationCadence,
+  XpbdWorkerDiagnostics,
+} from "../physics/xpbdProtocol";
 
 export type RenderBackend = "webgpu" | "webgl2";
 export type SimulationLifecycleState = "paused" | "running";
+export interface SimulationDevSettings {
+  gravityScale: 0 | 0.25 | 1;
+  cadence: XpbdSimulationCadence;
+  autoPauseSteps: XpbdAutoPauseSteps;
+}
+export interface SimulationDevTelemetry extends XpbdWorkerDiagnostics {
+  approximateFps: number;
+}
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
 interface PerformanceProfile {
@@ -58,6 +71,11 @@ export class ThreeViewport {
   private framesReceived = 0;
   private framesApplied = 0;
   private framesDiscarded = 0;
+  private baseGravity: [number, number, number] = [0, -9.81, 0];
+  private devSettings: SimulationDevSettings = { gravityScale: 1, cadence: 1, autoPauseSteps: 0 };
+  private wireframeEnabled = false;
+  private approximateFps = 0;
+  private lastAppliedFrameAt = 0;
 
   private constructor(
     private readonly host: HTMLElement,
@@ -65,6 +83,7 @@ export class ThreeViewport {
     readonly backend: RenderBackend,
     profile: PerformanceProfile,
     private readonly onSimulationStateChange?: (state: SimulationLifecycleState) => void,
+    private readonly onSimulationDiagnosticsChange?: (diagnostics: SimulationDevTelemetry) => void,
   ) {
     this.renderer = renderer;
     this.profile = profile;
@@ -144,11 +163,19 @@ export class ThreeViewport {
     host: HTMLElement,
     signal?: AbortSignal,
     onSimulationStateChange?: (state: SimulationLifecycleState) => void,
+    onSimulationDiagnosticsChange?: (diagnostics: SimulationDevTelemetry) => void,
   ): Promise<ThreeViewport> {
     if (signal?.aborted) throw new DOMException("Inicialização do viewport cancelada.", "AbortError");
     const profile = getPerformanceProfile();
     const rendererResult = await createRenderer(profile, signal);
-    const viewport = new ThreeViewport(host, rendererResult.renderer, rendererResult.backend, profile, onSimulationStateChange);
+    const viewport = new ThreeViewport(
+      host,
+      rendererResult.renderer,
+      rendererResult.backend,
+      profile,
+      onSimulationStateChange,
+      onSimulationDiagnosticsChange,
+    );
     const abort = () => viewport.dispose();
     signal?.addEventListener("abort", abort, { once: true });
     try {
@@ -175,10 +202,12 @@ export class ThreeViewport {
       visibleInstanceIds: arrangement.visibleInstanceIds,
     });
     this.reconcileGarmentMeshes(nextMeshes);
+    this.applyWireframe();
     this.assemblyState = arrangement.state;
     this.assemblyRevision = input.signature;
     this.host.dataset.simulationGeometryRevision = input.signature;
     const settings = input.document.simulationSettings;
+    this.baseGravity = settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number];
     const resumeAfterRebuild = this.simulationRunning;
     const initialization = buildXpbdInitialization(
       arrangement.state,
@@ -186,7 +215,7 @@ export class ThreeViewport {
       input.signature,
       {
         config: {
-          gravity: settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number],
+          gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
           iterations: settings.iterations,
         },
@@ -212,6 +241,7 @@ export class ThreeViewport {
     const identity = this.simulation.updateGeometry(initialization);
     this.assemblyGeneration = identity.generation;
     this.simulationEpoch = identity.epoch;
+    this.applyWorkerDevSettings();
     this.host.dataset.simulationGeneration = String(this.assemblyGeneration);
     this.host.dataset.simulationEpoch = String(this.simulationEpoch);
     if (resumeAfterRebuild) {
@@ -276,8 +306,27 @@ export class ThreeViewport {
 
   resetSimulation(): void {
     this.traceLifecycle("ui-command", { command: "reset", uiState: this.host.dataset.simulationUiState ?? "unknown" });
+    this.approximateFps = 0;
+    this.lastAppliedFrameAt = 0;
     this.simulationEpoch = this.simulation.reset();
     this.host.dataset.simulationEpoch = String(this.simulationEpoch);
+    this.requestRender();
+  }
+
+  setSimulationDevSettings(settings: SimulationDevSettings): void {
+    this.devSettings = settings;
+    this.host.dataset.simulationDevSettings = JSON.stringify(settings);
+    this.applyWorkerDevSettings();
+  }
+
+  setWireframe(enabled: boolean): void {
+    this.wireframeEnabled = enabled;
+    this.applyWireframe();
+    this.requestRender();
+  }
+
+  frameGarment(): void {
+    this.frameDressedScene();
     this.requestRender();
   }
 
@@ -326,6 +375,7 @@ export class ThreeViewport {
     delete this.host.dataset.garmentMeshDiagnostics;
     delete this.host.dataset.simulationStatus;
     delete this.host.dataset.simulationDiagnostics;
+    delete this.host.dataset.simulationDevSettings;
   }
 
   private frameDressedScene(): void {
@@ -482,6 +532,14 @@ export class ThreeViewport {
         && frameCanUpdateMeshes(frame.positions, this.assemblyState, this.garmentMeshes)) {
         this.assemblyState.positions.set(frame.positions);
         for (const mesh of this.garmentMeshes) refreshMeshFromAssembly(mesh, this.assemblyState);
+        const appliedAt = performance.now();
+        if (this.lastAppliedFrameAt > 0) {
+          const instantaneousFps = 1000 / Math.max(1, appliedAt - this.lastAppliedFrameAt);
+          this.approximateFps = this.approximateFps === 0
+            ? instantaneousFps
+            : this.approximateFps * 0.8 + instantaneousFps * 0.2;
+        }
+        this.lastAppliedFrameAt = appliedAt;
         this.framesApplied += 1;
         this.writeFrameCounters();
         this.writeSimulationDiagnostics(frame.diagnostics);
@@ -530,8 +588,34 @@ export class ThreeViewport {
     this.resumeAfterVisibility = false;
   };
 
-  private writeSimulationDiagnostics(diagnostics: object): void {
+  private writeSimulationDiagnostics(diagnostics: XpbdWorkerDiagnostics): void {
     this.host.dataset.simulationDiagnostics = JSON.stringify(diagnostics);
+    this.onSimulationDiagnosticsChange?.({ ...diagnostics, approximateFps: this.approximateFps });
+  }
+
+  private scaledGravity(): [number, number, number] {
+    return this.baseGravity.map((value) => value * this.devSettings.gravityScale) as [number, number, number];
+  }
+
+  private applyWorkerDevSettings(): void {
+    this.simulation.configureDev({
+      gravity: this.scaledGravity(),
+      cadence: this.devSettings.cadence,
+      autoPauseSteps: this.devSettings.autoPauseSteps,
+    });
+  }
+
+  private applyWireframe(): void {
+    for (const item of this.garmentMeshes) {
+      const materials = Array.isArray(item.mesh.material) ? item.mesh.material : [item.mesh.material];
+      for (const material of materials) {
+        if ("wireframe" in material) {
+          (material as THREE.MeshStandardMaterial).wireframe = this.wireframeEnabled;
+          material.needsUpdate = true;
+        }
+      }
+    }
+    this.host.dataset.simulationWireframe = String(this.wireframeEnabled);
   }
 
   private writeFrameCounters(): void {

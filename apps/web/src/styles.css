@@ -605,6 +605,56 @@ button {
   cursor: pointer;
 }
 
+.viewport-physics-dev {
+  position: absolute;
+  z-index: 6;
+  top: 98px;
+  right: 10px;
+  width: 210px;
+  max-height: calc(100% - 110px);
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  color: #33352f;
+  background: rgba(245, 243, 238, 0.94);
+  border: 1px solid rgba(40, 41, 43, 0.2);
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.viewport-physics-dev label:not(.viewport-physics-toggle) {
+  display: grid;
+  grid-template-columns: 1fr 80px;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewport-physics-dev select,
+.viewport-physics-dev button {
+  min-height: 26px;
+  font: inherit;
+}
+
+.viewport-physics-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewport-physics-dev dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  margin: 0;
+  font-family: monospace;
+}
+
+.viewport-physics-dev dt,
+.viewport-physics-dev dd {
+  margin: 0;
+}
+
 .body-position-section {
   padding: 12px 0;
   border-top: 1px solid #d5d1c9;
