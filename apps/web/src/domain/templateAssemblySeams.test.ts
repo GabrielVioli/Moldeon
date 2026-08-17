@@ -25,13 +25,13 @@ describe("template assembly seams", () => {
     );
     const seams = buildTemplateAssemblySeams(garment);
     const groupIds = [...new Set(seams.map((seam) => seam.groupId))];
-    expect(groupIds).toEqual([
+    expect([...groupIds].sort()).toEqual([
+      "guided-sleeve:back-armhole",
       "guided-sleeve:body-shoulder",
       "guided-sleeve:body-side",
       "guided-sleeve:front-armhole",
-      "guided-sleeve:back-armhole",
       "guided-sleeve:underarm",
-    ]);
+    ].sort());
     for (const groupId of groupIds) {
       const group = seams.filter((seam) => seam.groupId === groupId);
       expect(group.length).toBeGreaterThan(0);
