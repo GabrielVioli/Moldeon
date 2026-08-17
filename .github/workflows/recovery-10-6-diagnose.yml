@@ -1,0 +1,64 @@
+name: Recovery 10.6 regression isolation
+
+on:
+  push:
+    branches:
+      - recovery/10.6-constraint-spatial-assembly
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/10.6-constraint-spatial-assembly
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Materialize Prompt 10.6
+        run: |
+          python scripts/recovery-10-6-integration.py
+          python scripts/recovery-10-6-fix1.py
+          python scripts/recovery-10-6-paired-copies.py
+          python scripts/recovery-10-6-paired-fix.py
+          python scripts/recovery-10-6-relation-frames.py
+          python scripts/recovery-10-6-test-fixes.py
+          python scripts/recovery-10-6-material-flat-seed.py
+          python scripts/recovery-10-6-intrinsic-mode.py
+          python scripts/recovery-10-6-structural-objective.py
+          python scripts/recovery-10-6-frozen-legacy-candidate.py
+          python scripts/recovery-10-6-doc-notes.py
+      - run: npm ci
+      - name: 10.5 general shell
+        continue-on-error: true
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts --reporter=verbose
+      - name: Semantic avatar arrangement
+        continue-on-error: true
+        run: npx vitest run apps/web/src/garment3d/SemanticAvatarArrangement.test.ts --reporter=verbose
+      - name: Physical and resolved assembly
+        continue-on-error: true
+        run: npx vitest run apps/web/src/garment3d/PhysicalGarmentAssembly.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedGarmentAssembly.test.ts --reporter=verbose
+      - name: Initial seam residual
+        continue-on-error: true
+        run: npx vitest run apps/web/src/physics/initialSeamResidual.test.ts --reporter=verbose
+      - name: XPBD garment integration
+        continue-on-error: true
+        run: npx vitest run apps/web/src/physics/xpbdGarmentIntegration.test.ts --reporter=verbose
+      - name: XPBD canonical scenes and worker lifecycle
+        continue-on-error: true
+        run: npx vitest run apps/web/src/physics/xpbdCanonicalScenes.test.ts apps/web/src/physics/XpbdWorkerClient.test.ts --reporter=verbose
+      - name: Template assembly seams
+        continue-on-error: true
+        run: npx vitest run apps/web/src/domain/templateAssemblySeams.test.ts --reporter=verbose
+      - name: PatternDocumentV3
+        continue-on-error: true
+        run: npx vitest run apps/web/src/domain/patternDocumentV3.test.ts --reporter=verbose
+      - name: Assembly history
+        continue-on-error: true
+        run: npx vitest run apps/web/src/state/assemblyHistory.test.ts --reporter=verbose
