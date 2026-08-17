@@ -1,0 +1,29 @@
+name: Recovery 10.6 constraint spatial assembly
+
+on:
+  push:
+    branches:
+      - recovery/10.6-constraint-spatial-assembly
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/10.6-constraint-spatial-assembly
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply Prompt 10.6 integration
+        run: python scripts/recovery-10-6-integration.py
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Focused assembly regression
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts apps/web/src/physics/initialSeamResidual.test.ts --reporter=verbose
