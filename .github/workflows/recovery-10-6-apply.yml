@@ -32,6 +32,7 @@ jobs:
           python scripts/recovery-10-6-material-flat-seed.py
           python scripts/recovery-10-6-intrinsic-mode.py
           python scripts/recovery-10-6-structural-objective.py
+          python scripts/recovery-10-6-frozen-legacy-candidate.py
       - run: npm ci
       - run: npm run typecheck
       - name: Prompt 10.6 garment suite
