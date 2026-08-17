@@ -25,6 +25,7 @@ jobs:
         run: |
           python scripts/recovery-10-5-shell-patch.py
           python scripts/recovery-10-5-tests.py
+          python scripts/recovery-10-5-fixture-cleanup.py
       - run: npm ci
       - run: npm run typecheck
       - name: Prompt 10.5 killer suite
