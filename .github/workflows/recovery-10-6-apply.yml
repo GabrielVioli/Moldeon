@@ -26,6 +26,7 @@ jobs:
           python scripts/recovery-10-6-integration.py
           python scripts/recovery-10-6-fix1.py
           python scripts/recovery-10-6-paired-copies.py
+          python scripts/recovery-10-6-paired-fix.py
       - run: npm ci
       - run: npm run typecheck
       - name: Focused assembly regression
