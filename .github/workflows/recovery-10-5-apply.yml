@@ -1,0 +1,32 @@
+name: Recovery 10.5 general garment shell
+
+on:
+  push:
+    branches:
+      - recovery/10.5-general-garment-spatial-assembly
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/10.5-general-garment-spatial-assembly
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: python scripts/recovery-10-5-shell-patch.py
+      - run: npm ci
+      - run: npm run typecheck
+      - name: General garment fixture after shell placement
+        env:
+          MOLDEON_10_5_BASELINE: "1"
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.baseline.test.ts --reporter=verbose
+      - name: Assembly regressions
+        run: npx vitest run apps/web/src/garment3d/SemanticAvatarArrangement.test.ts apps/web/src/physics/initialSeamResidual.test.ts apps/web/src/physics/xpbdGarmentIntegration.test.ts --reporter=verbose
