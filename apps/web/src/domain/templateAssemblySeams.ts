@@ -85,7 +85,10 @@ export function buildTemplateAssemblySeams(
   const trouserDefinitions = buildTrouserDefinitions(garment.pieces);
 
   if (trouserDefinitions.length > 0) {
-    return trouserDefinitions.map(createSeam);
+    return [
+      ...trouserDefinitions.map(createSeam),
+      ...buildTrouserPairedCopyClosures(garment.pieces),
+    ];
   }
 
   const skirtDefinitions = buildSkirtDefinitions(garment.pieces);
@@ -175,6 +178,49 @@ function buildTrouserDefinitions(
       treatment: "ease",
     })),
   ];
+}
+
+function buildTrouserPairedCopyClosures(
+  pieces: readonly PatternPiece[],
+): Seam[] {
+  const result: Seam[] = [];
+  const definitions: Array<{ role: "frontCrotch" | "backCrotch"; key: string; name: string }> = [
+    { role: "frontCrotch", key: "trouser-front-rise", name: "Fechamento do gancho frontal" },
+    { role: "backCrotch", key: "trouser-back-rise", name: "Fechamento do gancho traseiro" },
+  ];
+  for (const definition of definitions) {
+    const piece = pieces.find((candidate) => hasRole(candidate, definition.role));
+    if (!piece || (piece.cutQuantity ?? 1) < 2) continue;
+    const edges = edgesWithRole(piece, definition.role);
+    if (edges.length === 0) continue;
+    const ranges = edges.map((edge) => ({
+      pieceId: piece.id,
+      edgeId: edge.id,
+      startT: 0,
+      endT: 1,
+    }));
+    const first = ranges[0];
+    result.push({
+      id: `template-seam:${definition.key}`,
+      groupId: `template-seam:${definition.key}`,
+      name: definition.name,
+      first,
+      second: { ...first },
+      firstRanges: ranges.map((range) => ({ ...range })),
+      secondRanges: ranges.map((range) => ({ ...range })),
+      direction: "same",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      canonicalTreatment: "standard",
+      distribution: "uniform",
+      targetRatio: 1,
+      slackMm: 0,
+      physicalPairing: "paired-copies",
+      active: true,
+    });
+  }
+  return result;
 }
 
 function buildSkirtDefinitions(

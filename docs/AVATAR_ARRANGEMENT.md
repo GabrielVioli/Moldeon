@@ -1,5 +1,7 @@
 # Avatar humano e montagem semântica
 
+> **Nota de arquitetura (Prompt 10.6):** este documento preserva o histórico do arranjo/avatar da Fase 9.5-07. A partir do 10.6, a solução final de pose relativa entre `PanelInstanceV3` é definida por `docs/ASSEMBLY_ARCHITECTURE.md`. Anchors anatômicos e mappings descritos abaixo podem fornecer contexto/seed, mas não substituem o `GarmentSpatialConstraintGraph` nem o global rigid-pose solve.
+
 ## Estado do gate 9.5-07
 
 A montagem estática usa geometria 2D atual, classificação corporal explícita e anchors paramétricos. Não há asset GLB/glTF aprovado no repositório. Portanto o avatar visual final não está configurado e a interface informa:

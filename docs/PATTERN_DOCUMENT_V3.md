@@ -1,5 +1,7 @@
 # PatternDocumentV3
 
+> **Extensão 10.6:** `SeamGroupV3` pode declarar `physicalPairing: "paired-copies"` quando a mesma faixa material precisa unir cópias físicas distintas de uma única `PatternDefinitionV3`, como o fechamento de gancho entre metades esquerda/direita cortadas 2x. A validação exige pelo menos duas `PanelInstanceV3` da definição; isto não é uma self-seam material.
+
 ## Objetivo
 
 `PatternDocumentV3` é o formato canônico e versionado de projeto do Moldeon. Ele separa a geometria técnica editável das cópias físicas usadas em montagem e simulação, preserva projetos anteriores por migrações sequenciais e mantém milímetros como unidade autoritativa.

@@ -21,7 +21,7 @@ describe("Prompt 10.5 general garment spatial assembly", () => {
     const adapter = adapterAudit(result);
     const spatial = result.arrangement.spatialAssemblyDiagnostics[0];
     const distortion = measureIntrinsicDistortion(result.arrangement.state);
-    expect(spatial.strategy).toBe("multipanel-surface-shell");
+    expect(spatial.strategy).toBe("constraint-spatial-shell");
     expect(spatial.poseConstraintCount).toBe(6);
     expect(spatial.freeBoundaryCount).toBeGreaterThan(0);
     expect(spatial.detectedCycles).toBeGreaterThan(0);
@@ -38,7 +38,7 @@ describe("Prompt 10.5 general garment spatial assembly", () => {
 
   it("does not invent a closed shell when shoulder relations are removed", () => {
     const result = arrange(createGeneralGarmentShellFixture({ shoulders: false }));
-    expect(result.arrangement.spatialAssemblyDiagnostics.every((component) => component.strategy === "rigid-fallback")).toBe(true);
+    expect(result.arrangement.constraintSpatialAssembly.components.every((component) => component.strategy === "underconstrained-open")).toBe(true);
     expect(result.arrangement.initialSeamResidualAudit.afterTubeAlignment.invariantErrors).toEqual([]);
   });
 

@@ -12,14 +12,16 @@ describe("paired physical-copy SeamGroups", () => {
     const base = createGarmentFromTemplate("straight-pants", DEFAULT_BODY_MEASUREMENTS);
     const garment = { ...base, seams: buildTemplateAssemblySeams(base) };
     const document = garmentDraftToPatternDocumentV3(garment);
-    const paired = document.seamGroups.filter((group) => group.physicalPairing === "paired-copies");
+    const paired = document.seamGroups.filter((group) => (group.physicalBindings?.length ?? 0) > 0
+      && group.first[0]?.pieceId === group.second[0]?.pieceId);
     expect(paired.map((group) => group.id).sort()).toEqual([
       "template-seam:trouser-back-rise",
       "template-seam:trouser-front-rise",
     ]);
     expect(validatePatternDocumentV3(document).filter((issue) => issue.severity === "error")).toEqual([]);
     const projected = patternDocumentV3ToGarmentDraft(document);
-    const projectedPaired = (projected.seams ?? []).filter((seam) => seam.physicalPairing === "paired-copies");
+    const projectedPaired = (projected.seams ?? []).filter((seam) => (seam.physicalBindings?.length ?? 0) > 0
+      && seam.first.pieceId === seam.second.pieceId);
     expect(projectedPaired).toHaveLength(2);
     expect(projectedPaired.every((seam) => seam.first.pieceId === seam.second.pieceId)).toBe(true);
   });
@@ -33,6 +35,6 @@ describe("paired physical-copy SeamGroups", () => {
       ...document,
       panelInstances: document.panelInstances.filter((instance) => instance.sourcePatternId !== frontId || instance.copyIndex === 0),
     };
-    expect(validatePatternDocumentV3(invalid).some((issue) => issue.code === "invalid-panel-instance" && issue.entityId === "template-seam:trouser-front-rise")).toBe(true);
+    expect(validatePatternDocumentV3(invalid).some((issue) => issue.code === "invalid-physical-binding" && issue.entityId === "template-seam:trouser-front-rise")).toBe(true);
   });
 });

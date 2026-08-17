@@ -33,6 +33,10 @@ import {
   type TubeGroupAlignmentCorrection,
 } from "./InitialSeamResidual";
 import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
+import {
+  solveGarmentSpatialConstraints,
+  type ConstraintSpatialAssemblyResult,
+} from "./ConstraintSpatialAssembly";
 import type { ResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
 export type ArrangementDiagnosticCode =
@@ -61,6 +65,7 @@ export interface SemanticAvatarArrangementResult {
   coveredAvatarPartNames: Set<string>;
   seamPlacementDiagnostics: SeamPlacementDiagnostic[];
   spatialAssemblyDiagnostics: SpatialAssemblyComponentDiagnostic[];
+  constraintSpatialAssembly: ConstraintSpatialAssemblyResult;
   initialSeamResidualAudit: {
     beforeTubeAlignment: InitialSeamResidualAudit;
     afterTubeAlignment: InitialSeamResidualAudit;
@@ -71,7 +76,7 @@ export interface SemanticAvatarArrangementResult {
 export interface SpatialAssemblyComponentDiagnostic {
   componentId: string;
   instanceIds: string[];
-  strategy: "seam-derived-tube" | "multipanel-surface-shell" | "rigid-fallback";
+  strategy: "constraint-spatial-shell" | "seam-derived-tube" | "multipanel-surface-shell" | "rigid-fallback";
   reason: string;
   structuralSeamGroupCount: number;
   freeBoundaryCount: number;
@@ -79,6 +84,11 @@ export interface SpatialAssemblyComponentDiagnostic {
   poseConstraintCount: number;
   finalMeanResidualMm: number;
   finalMaxResidualMm: number;
+  assemblySolveMs?: number;
+  nonPlanarityRad?: number;
+  coarseOverlapScore?: number;
+  normalizedResidual?: number;
+  intrinsicDistortion?: number;
 }
 
 export interface SeamPlacementDiagnostic {
@@ -174,13 +184,9 @@ export function buildSemanticAvatarArrangement(
     if (!piece || invalidPieceIds.has(instance.pieceId)) continue;
     const anchor = resolveAvatarAnchor(avatar, instance.placement);
     if (!anchor) {
-      diagnostics.push({
-        code: "missing-anchor",
-        severity: "error",
-        pieceId: piece.id,
-        instanceId: instance.id,
-        message: `${piece.name} · ${instance.id}: nenhum anchor corporal corresponde a ${placementLabel(instance.placement)}.`,
-      });
+      // Body placement is an optional hint. A valid included panel with material
+      // seams must still enter structural assembly when it is manual/unclassified.
+      visibleInstanceIds.add(instance.id);
       continue;
     }
 
@@ -188,14 +194,19 @@ export function buildSemanticAvatarArrangement(
     visibleInstanceIds.add(instance.id);
   }
 
+  // Prompt 10.6: legacy rigid propagation and analytical tube alignment are
+  // seeds only. The final pose is reconciled globally from the full material
+  // constraint multigraph before XPBD sees the garment.
   const seamPlacementDiagnostics = placeConnectedPanelsRigidly(state, visibleInstanceIds);
   const beforeTubeAlignment = auditAssemblySeamResiduals(state, resolvedGarment);
   const tubeAlignment = alignSecondaryTubeGroups(state);
+  const constraintSpatialAssembly = solveGarmentSpatialConstraints(state, visibleInstanceIds);
   const afterTubeAlignment = auditAssemblySeamResiduals(state, resolvedGarment);
   const spatialAssemblyDiagnostics = buildSpatialAssemblyDiagnostics(
     state,
     resolvedGarment,
     afterTubeAlignment,
+    constraintSpatialAssembly,
   );
   state.initialPositions.set(state.positions);
   state.previousPositions.set(state.positions);
@@ -211,6 +222,7 @@ export function buildSemanticAvatarArrangement(
     coveredAvatarPartNames,
     seamPlacementDiagnostics,
     spatialAssemblyDiagnostics,
+    constraintSpatialAssembly,
     initialSeamResidualAudit: {
       beforeTubeAlignment,
       afterTubeAlignment,
@@ -229,13 +241,8 @@ function validateSemanticMetadata(
     const placements = explicitPlacements(piece, garment);
     const expected = piece.cutOnFold ? 1 : Math.max(1, piece.cutQuantity ?? (placements.length || 1));
     if (placements.length === 0) {
-      diagnostics.push({
-        code: "missing-anchor",
-        severity: "error",
-        pieceId: piece.id,
-        message: `${piece.name}: nenhuma instância possui anchor de arranjo explícito. A peça não será exibida solta.`,
-      });
-      invalid.add(piece.id);
+      // Unclassified/manual is a valid structural state. Arrangement metadata is
+      // optional and may be supplied later by user/avatar/semantic systems.
       continue;
     }
     if (placements.length !== expected) {
@@ -1731,6 +1738,7 @@ function buildSpatialAssemblyDiagnostics(
   state: GarmentAssemblyState,
   garment: GarmentDraft,
   residualAudit: InitialSeamResidualAudit,
+  constraintSolve: ConstraintSpatialAssemblyResult,
 ): SpatialAssemblyComponentDiagnostic[] {
   const adjacency = new Map<string, Set<string>>(
     state.instances.map((instance) => [instance.id, new Set<string>()]),
@@ -1775,16 +1783,21 @@ function buildSpatialAssemblyDiagnostics(
     });
     const instances = state.instances.filter((instance) => members.has(instance.id));
     const mappings = new Set(instances.map((instance) => instance.arrangement?.mapping));
-    const strategy: SpatialAssemblyComponentDiagnostic["strategy"] = mappings.has("seam-derived-tube")
-      ? "seam-derived-tube"
-      : mappings.has("multipanel-surface-shell")
-        ? "multipanel-surface-shell"
-        : "rigid-fallback";
-    const reason = strategy === "seam-derived-tube"
-      ? "analytical-longitudinal-cycle"
-      : strategy === "multipanel-surface-shell"
-        ? "multigraph-cycle-or-parallel-material-relations"
-        : "insufficient-surface-constraints";
+    const solverComponent = constraintSolve.components.find((candidate) => candidate.componentId === instanceIds.join("|"));
+    const strategy: SpatialAssemblyComponentDiagnostic["strategy"] = mappings.has("constraint-spatial-shell")
+      ? "constraint-spatial-shell"
+      : mappings.has("seam-derived-tube")
+        ? "seam-derived-tube"
+        : mappings.has("multipanel-surface-shell")
+          ? "multipanel-surface-shell"
+          : "rigid-fallback";
+    const reason = strategy === "constraint-spatial-shell"
+      ? solverComponent?.reason ?? "global-material-constraint-pose-optimization"
+      : strategy === "seam-derived-tube"
+        ? "analytical-longitudinal-cycle"
+        : strategy === "multipanel-surface-shell"
+          ? "multigraph-cycle-or-parallel-material-relations"
+          : "insufficient-surface-constraints";
     const groups = residualAudit.groups.filter((group) => group.instanceIds.some((id) => members.has(id)));
     const sampleWeight = groups.reduce((sum, group) => sum + group.sampleCount, 0);
     const finalMeanResidualMm = sampleWeight > 0
@@ -1805,9 +1818,14 @@ function buildSpatialAssemblyDiagnostics(
       structuralSeamGroupCount: groups.filter((group) => group.classification === "structural-alignment").length,
       freeBoundaryCount,
       detectedCycles: Math.max(0, componentRelations.length - instanceIds.length + 1),
-      poseConstraintCount: componentRelations.length,
+      poseConstraintCount: solverComponent?.constraintCount ?? componentRelations.length,
       finalMeanResidualMm,
       finalMaxResidualMm,
+      assemblySolveMs: solverComponent?.assemblySolveMs,
+      nonPlanarityRad: solverComponent?.nonPlanarityRad,
+      coarseOverlapScore: solverComponent?.coarseOverlapScore,
+      normalizedResidual: solverComponent?.normalizedResidual,
+      intrinsicDistortion: solverComponent?.intrinsicDistortion,
     });
   }
   return result;

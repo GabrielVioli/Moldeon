@@ -37,6 +37,13 @@ export interface GarmentSpatialConstraintRelation {
   treatment: string;
   targetRatio: number;
   slackMm: number;
+  direction: "same" | "opposite";
+  /** Tangentes no espaço material 2D do painel, embutidas em XY. */
+  localTangentA: Vec3;
+  localTangentB: Vec3;
+  /** Vetores laterais do contorno no espaço material, derivados das tangentes. */
+  localBoundaryOrientationA: Vec3;
+  localBoundaryOrientationB: Vec3;
 }
 
 export interface GarmentSpatialConstraintNode {
@@ -194,19 +201,35 @@ export function buildGarmentSpatialConstraintGraph(
       treatment: stitch.treatment,
       targetRatio: stitch.targetRatio,
       slackMm: stitch.slackMm,
+      direction: stitch.direction ?? "same",
+      localTangentA: [0, 0, 0],
+      localTangentB: [0, 0, 0],
+      localBoundaryOrientationA: [0, 0, 0],
+      localBoundaryOrientationB: [0, 0, 0],
     });
   }
 
   const relations = [...relationMap.values()]
-    .map((relation) => ({
-      ...relation,
-      samples: [...relation.samples].sort((left, right) => left.progress - right.progress || left.id.localeCompare(right.id)),
-      characteristicLengthM: Math.max(
-        0.001,
-        relation.characteristicLengthM,
-        sampledRelationLength(state.positions, relation),
-      ),
-    }))
+    .map((relation) => {
+      const samples = [...relation.samples].sort((left, right) => left.progress - right.progress || left.id.localeCompare(right.id));
+      const panelA = instanceById.get(relation.panelA);
+      const panelB = instanceById.get(relation.panelB);
+      const localTangentA = panelA ? localMaterialTangent(panelA, samples, "a") : [0, 0, 0] as Vec3;
+      const localTangentB = panelB ? localMaterialTangent(panelB, samples, "b") : [0, 0, 0] as Vec3;
+      return {
+        ...relation,
+        samples,
+        characteristicLengthM: Math.max(
+          0.001,
+          relation.characteristicLengthM,
+          sampledRelationLength(state.positions, relation),
+        ),
+        localTangentA,
+        localTangentB,
+        localBoundaryOrientationA: [-localTangentA[1], localTangentA[0], 0] as Vec3,
+        localBoundaryOrientationB: [-localTangentB[1], localTangentB[0], 0] as Vec3,
+      };
+    })
     .sort((left, right) => left.id.localeCompare(right.id));
   const nodes = instances.map((instance) => ({
     id: instance.id,
@@ -233,7 +256,12 @@ export function solveGarmentSpatialConstraints(
   const graph = buildGarmentSpatialConstraintGraph(state, visibleInstanceIds);
   const relationById = new Map(graph.relations.map((relation) => [relation.id, relation]));
   const instanceById = new Map(state.instances.map((instance) => [instance.id, instance]));
-  const baseStatePositions = new Float32Array(state.positions);
+  const legacyStatePositions = new Float32Array(state.positions);
+  // `initialPositions` is the material-preserving physical-panel state emitted by
+  // GarmentAssembly before semantic/tube mappings bend individual panels. It is
+  // a first-class seed so a legacy analytical embedding cannot win merely because
+  // it already curved a panel while preloading structural strain.
+  const intrinsicFlatStatePositions = new Float32Array(state.initialPositions);
   const allPoses = new Map<string, Pose>();
   for (const instance of state.instances) allPoses.set(instance.id, clonePose(IDENTITY_POSE));
   const diagnostics: ConstraintSpatialComponentDiagnostic[] = [];
@@ -252,7 +280,7 @@ export function solveGarmentSpatialConstraints(
           : "isolated" as const;
       const metrics = evaluateCandidateMetrics(
         state,
-        baseStatePositions,
+        legacyStatePositions,
         component,
         relations,
       );
@@ -266,6 +294,8 @@ export function solveGarmentSpatialConstraints(
         candidateCount: 1,
         selectedSeed: "existing-isometric-seed",
         assemblySolveMs: nowMs() - componentStartedAt,
+        beforeMeanResidualMm: metrics.meanResidualMm,
+        beforeMaxResidualMm: metrics.maxResidualMm,
         ...metrics,
         strategy,
         reason: strategy === "analytic-fast-path"
@@ -279,34 +309,111 @@ export function solveGarmentSpatialConstraints(
 
     const beforeMetrics = evaluateCandidateMetrics(
       state,
-      baseStatePositions,
+      legacyStatePositions,
       component,
       relations,
     );
-    const candidates: Array<{ name: string; positions: Float32Array }> = [
-      { name: "legacy-geometric-seed", positions: new Float32Array(baseStatePositions) },
+
+    // A graph with no cycle and no parallel independent material relation is
+    // genuinely underconstrained around at least one hinge. The previous
+    // geometric propagation already provides a deterministic rigid/open pose.
+    // Do not manufacture a dihedral angle or introduce Float32 drift merely to
+    // reduce a local seam residual when the material graph cannot disambiguate
+    // that degree of freedom.
+    if (!component.supportsSpatialShell) {
+      const frozen = evaluateFrozenCandidate(
+        state,
+        legacyStatePositions,
+        component,
+        relations,
+        "validated-existing-embedding",
+        "existing-embedding",
+      );
+      diagnostics.push({
+        componentId: component.id,
+        nodeIds: [...component.nodeIds],
+        anchorId: component.anchorId,
+        constraintCount: relations.length,
+        cycleCount: component.cycleCount,
+        freeBoundaryCount: component.freeBoundaryCount,
+        candidateCount: 1,
+        selectedSeed: frozen.name,
+        assemblySolveMs: nowMs() - componentStartedAt,
+        nonPlanarityRad: frozen.nonPlanarityRad,
+        coarseOverlapScore: frozen.coarseOverlapScore,
+        intrinsicDistortion: frozen.intrinsicDistortion,
+        normalizedResidual: frozen.normalizedResidual,
+        meanResidualMm: frozen.meanResidualMm,
+        maxResidualMm: frozen.maxResidualMm,
+        beforeMeanResidualMm: beforeMetrics.meanResidualMm,
+        beforeMaxResidualMm: beforeMetrics.maxResidualMm,
+        strategy: "underconstrained-open",
+        reason: "insufficient-independent-relations-preserve-deterministic-open-pose",
+        relationResiduals: frozen.relationResiduals,
+      });
+      continue;
+    }
+
+    const candidates: Array<{
+      name: string;
+      positions: Float32Array;
+      intrinsicMode: "existing-embedding" | "euclidean";
+      optimize: boolean;
+    }> = [
+      {
+        name: "validated-existing-embedding",
+        positions: new Float32Array(legacyStatePositions),
+        intrinsicMode: "existing-embedding",
+        optimize: false,
+      },
+      {
+        name: "legacy-geometric-seed",
+        positions: new Float32Array(legacyStatePositions),
+        intrinsicMode: "existing-embedding",
+        optimize: true,
+      },
+      {
+        name: "material-flat-seed",
+        positions: new Float32Array(intrinsicFlatStatePositions),
+        intrinsicMode: "euclidean",
+        optimize: true,
+      },
     ];
     if (component.supportsSpatialShell) {
       candidates.push({
-        name: "constraint-hinge-positive",
-        positions: buildSpreadSeed(baseStatePositions, state, component, relations, 1),
+        name: "material-flat-hinge-positive",
+        positions: buildSpreadSeed(intrinsicFlatStatePositions, state, component, relations, 1),
+        intrinsicMode: "euclidean",
+        optimize: true,
       });
       candidates.push({
-        name: "constraint-hinge-negative",
-        positions: buildSpreadSeed(baseStatePositions, state, component, relations, -1),
+        name: "material-flat-hinge-negative",
+        positions: buildSpreadSeed(intrinsicFlatStatePositions, state, component, relations, -1),
+        intrinsicMode: "euclidean",
+        optimize: true,
       });
     }
 
     let best: CandidateSolution | undefined;
     for (const candidate of candidates) {
-      const solved = optimizeCandidate(
-        state,
-        candidate.positions,
-        component,
-        relations,
-        options,
-        candidate.name,
-      );
+      const solved = candidate.optimize
+        ? optimizeCandidate(
+            state,
+            candidate.positions,
+            component,
+            relations,
+            options,
+            candidate.name,
+            candidate.intrinsicMode,
+          )
+        : evaluateFrozenCandidate(
+            state,
+            candidate.positions,
+            component,
+            relations,
+            candidate.name,
+            candidate.intrinsicMode,
+          );
       if (!best || solved.score < best.score - 1e-10 || (
         Math.abs(solved.score - best.score) <= 1e-10 && solved.name.localeCompare(best.name) < 0
       )) best = solved;
@@ -319,7 +426,13 @@ export function solveGarmentSpatialConstraints(
       const instance = instanceById.get(nodeId);
       if (!instance?.arrangement) continue;
       instance.arrangement.outwardNormal = representativeNormal(state.positions, instance);
-      instance.arrangement.mapping = "constraint-spatial-shell";
+      // The component strategy is constraint-based, but a validated analytical
+      // embedding remains an internal representation of this individual panel.
+      // Keeping it prevents the global solver from erasing geodesic/isometric
+      // metadata for self-seam tubes and bands.
+      if (instance.arrangement.mapping !== "seam-derived-tube") {
+        instance.arrangement.mapping = "constraint-spatial-shell";
+      }
     }
 
     diagnostics.push({
@@ -362,6 +475,26 @@ export function solveGarmentSpatialConstraints(
   };
 }
 
+function evaluateFrozenCandidate(
+  state: GarmentAssemblyState,
+  positions: Float32Array,
+  component: GarmentSpatialConstraintComponent,
+  relations: readonly GarmentSpatialConstraintRelation[],
+  name: string,
+  intrinsicMode: "existing-embedding" | "euclidean",
+): CandidateSolution {
+  const frozen = new Float32Array(positions);
+  const metrics = evaluateCandidateMetrics(state, frozen, component, relations, intrinsicMode);
+  const poses = new Map<string, Pose>(component.nodeIds.map((id) => [id, clonePose(IDENTITY_POSE)]));
+  return {
+    name,
+    positions: frozen,
+    poses,
+    score: objectiveScore(component, metrics),
+    ...metrics,
+  };
+}
+
 function optimizeCandidate(
   state: GarmentAssemblyState,
   candidatePositions: Float32Array,
@@ -369,6 +502,7 @@ function optimizeCandidate(
   relations: readonly GarmentSpatialConstraintRelation[],
   options: ConstraintSpatialAssemblyOptions,
   name: string,
+  intrinsicMode: "existing-embedding" | "euclidean",
 ): CandidateSolution {
   const basePositions = new Float32Array(candidatePositions);
   const poses = new Map<string, Pose>(component.nodeIds.map((id) => [id, clonePose(IDENTITY_POSE)]));
@@ -408,7 +542,7 @@ function optimizeCandidate(
 
     if (iteration % 3 === 2 || iteration === maxIterations - 1) {
       const scratch = renderComponentPoses(basePositions, state, component, poses);
-      const metrics = evaluateCandidateMetrics(state, scratch, component, relations);
+      const metrics = evaluateCandidateMetrics(state, scratch, component, relations, intrinsicMode);
       const objective = objectiveScore(component, metrics);
       if (Math.abs(previousObjective - objective) <= 2e-7) break;
       previousObjective = objective;
@@ -416,7 +550,7 @@ function optimizeCandidate(
   }
 
   const positions = renderComponentPoses(basePositions, state, component, poses);
-  const metrics = evaluateCandidateMetrics(state, positions, component, relations);
+  const metrics = evaluateCandidateMetrics(state, positions, component, relations, intrinsicMode);
   return {
     name,
     positions,
@@ -614,6 +748,7 @@ function evaluateCandidateMetrics(
   positions: Float32Array,
   component: GarmentSpatialConstraintComponent,
   relations: readonly GarmentSpatialConstraintRelation[],
+  intrinsicMode: "existing-embedding" | "euclidean" = "existing-embedding",
 ): Omit<CandidateSolution, "name" | "positions" | "poses" | "score"> {
   const relationResiduals: SpatialRelationResidualDiagnostic[] = [];
   let weightedResidualM = 0;
@@ -634,10 +769,12 @@ function evaluateCandidateMetrics(
     }
     const mean = sum / relation.samples.length;
     const normalized = mean / Math.max(0.001, relation.characteristicLengthM);
-    const w = Math.max(0.05, relation.structuralWeight);
-    weightedResidualM += mean * w;
-    weightedNormalized += normalized * w;
-    weightTotal += w;
+    const w = relation.structuralWeight;
+    if (w > 0) {
+      weightedResidualM += mean * w;
+      weightedNormalized += normalized * w;
+      weightTotal += w;
+    }
     maxResidualM = Math.max(maxResidualM, maximum);
     relationResiduals.push({
       relationId: relation.id,
@@ -648,18 +785,20 @@ function evaluateCandidateMetrics(
       normalizedMeanResidual: normalized,
     });
   }
-  const intrinsic = measureIntrinsicDistortion({
-    positions,
-    structuralConstraints: state.structuralConstraints,
-    instances: state.instances,
-  });
+  const intrinsicDistortion = intrinsicMode === "existing-embedding"
+    ? measureIntrinsicDistortion({
+        positions,
+        structuralConstraints: state.structuralConstraints,
+        instances: state.instances,
+      }).maxRelativeDistortion
+    : measurePhysicalEuclideanIntrinsicDistortion(positions, state, component);
   return {
     normalizedResidual: weightTotal > 0 ? weightedNormalized / weightTotal : 0,
     meanResidualMm: weightTotal > 0 ? weightedResidualM / weightTotal * 1000 : 0,
     maxResidualMm: maxResidualM * 1000,
     nonPlanarityRad: componentNonPlanarity(positions, state, component),
     coarseOverlapScore: componentOverlapScore(positions, state, component),
-    intrinsicDistortion: intrinsic.maxRelativeDistortion,
+    intrinsicDistortion,
     relationResiduals: relationResiduals.sort((left, right) => left.relationId.localeCompare(right.relationId)),
   };
 }
@@ -867,6 +1006,38 @@ function characteristicLengthFromStitch(stitch: AssemblyStitchConstraint): numbe
   return Math.max(stitch.rangeLengthAMm ?? 0, stitch.rangeLengthBMm ?? 0) * 0.001;
 }
 
+function localMaterialTangent(
+  instance: AssemblyPanelInstance,
+  samples: readonly SpatialConstraintSample[],
+  side: "a" | "b",
+): Vec3 {
+  if (samples.length < 2) return [0, 0, 0];
+  const first = evaluateLocalReference(instance, samples[0][side]);
+  const last = evaluateLocalReference(instance, samples[samples.length - 1][side]);
+  return normalize(subtract(last, first));
+}
+
+function evaluateLocalReference(
+  instance: AssemblyPanelInstance,
+  reference: GlobalPointReference,
+): Vec3 {
+  let result: Vec3 = [0, 0, 0];
+  let total = 0;
+  for (let index = 0; index < reference.particleIndices.length; index += 1) {
+    const globalParticle = reference.particleIndices[index];
+    const local = globalParticle - instance.particleStart;
+    if (local < 0 || local >= instance.vertexCount) continue;
+    const weight = reference.weights[index] ?? 0;
+    result = add(result, [
+      instance.topology.positions2DMm[local * 2] * 0.001 * weight,
+      -instance.topology.positions2DMm[local * 2 + 1] * 0.001 * weight,
+      0,
+    ]);
+    total += weight;
+  }
+  return total > EPS && Math.abs(total - 1) > 1e-8 ? scale(result, 1 / total) : result;
+}
+
 function sampledRelationLength(
   positions: Float32Array,
   relation: GarmentSpatialConstraintRelation,
@@ -893,6 +1064,36 @@ function panelControlPoints(
     const offset = (instance.particleStart + local) * 3;
     return [positions[offset], positions[offset + 1], positions[offset + 2]];
   });
+}
+
+function measurePhysicalEuclideanIntrinsicDistortion(
+  positions: Float32Array,
+  state: GarmentAssemblyState,
+  component: GarmentSpatialConstraintComponent,
+): number {
+  const members = new Set(component.nodeIds);
+  const instanceByParticle = new Map<number, string>();
+  for (const instance of state.instances) {
+    if (!members.has(instance.id)) continue;
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      instanceByParticle.set(instance.particleStart + local, instance.id);
+    }
+  }
+  let maximum = 0;
+  for (const constraint of state.structuralConstraints) {
+    const instanceA = instanceByParticle.get(constraint.a);
+    const instanceB = instanceByParticle.get(constraint.b);
+    if (!instanceA || instanceA !== instanceB || constraint.restLength <= EPS) continue;
+    const offsetA = constraint.a * 3;
+    const offsetB = constraint.b * 3;
+    const current = Math.hypot(
+      positions[offsetB] - positions[offsetA],
+      positions[offsetB + 1] - positions[offsetA + 1],
+      positions[offsetB + 2] - positions[offsetA + 2],
+    );
+    maximum = Math.max(maximum, Math.abs(current - constraint.restLength) / constraint.restLength);
+  }
+  return maximum;
 }
 
 function componentNonPlanarity(

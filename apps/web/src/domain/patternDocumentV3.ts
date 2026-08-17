@@ -39,6 +39,7 @@ import {
   type PatternProjectV2,
   type PatternSemanticRoleV3,
   type SeamGroupV3,
+  type SeamPhysicalBindingV3,
   type SeamTreatmentV3,
   type WorkspaceStateV3,
 } from "./patternDocumentV3.types";
@@ -177,6 +178,8 @@ export function parsePatternDocumentV3(value: unknown): PatternDocumentV3 {
     simulationSettings: parseSimulationSettings(value.simulationSettings),
   };
 
+  document.seamGroups = normalizeSeamPhysicalBindings(document.seamGroups, document.panelInstances);
+
   const errors = validatePatternDocumentV3(document).filter(
     (issue) => issue.severity === "error",
   );
@@ -281,7 +284,7 @@ export function garmentDraftToPatternDocumentV3(
     patternPieceToDefinition(piece, garment, warnings),
   );
   const panelInstances = derivePanelInstances(patternDefinitions, garment);
-  const seamGroups = legacySeamsToGroups(garment.seams ?? []);
+  const seamGroups = legacySeamsToGroups(garment.seams ?? [], panelInstances);
   const workspace = createWorkspaceState(
     garment,
     options.activePatternId,
@@ -590,8 +593,14 @@ export function validatePatternDocumentV3(
     if (group.first.length === 0 || group.second.length === 0) {
       issues.push(issue("empty-range", "error", `O grupo ${group.id} precisa ter intervalos nos dois lados.`, group.id));
     }
-    if (seamSidesMateriallyOverlap(group.first, group.second)) {
-      issues.push(issue("degenerate-self-seam", "error", `O grupo ${group.id} costura exatamente os mesmos intervalos.`, group.id));
+    validatePhysicalBindings(group, document.panelInstances, issues);
+    const physicalDistinctCopy = (group.physicalBindings ?? []).some((binding) =>
+      binding.first.some((first) => binding.second.some((second) =>
+        first.patternId === second.patternId && first.panelInstanceId !== second.panelInstanceId,
+      )),
+    );
+    if (seamSidesMateriallyOverlap(group.first, group.second) && !physicalDistinctCopy) {
+      issues.push(issue("degenerate-self-seam", "error", `O grupo ${group.id} costura exatamente os mesmos intervalos sem cópias físicas distintas.`, group.id));
     }
     const signature = seamGroupSignature(group);
     const duplicateId = seamSignatures.get(signature);
@@ -927,7 +936,10 @@ function mirrorRuleForPiece(piece: PatternPiece): PatternMirrorRuleV3 {
   return "none";
 }
 
-function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGroupV3[] {
+function legacySeamsToGroups(
+  seams: NonNullable<GarmentDraft["seams"]>,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3[] {
   const grouped = new Map<string, NonNullable<GarmentDraft["seams"]>>();
   for (const seam of seams) {
     const id = seam.groupId ?? seam.id;
@@ -938,7 +950,7 @@ function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGro
   return [...grouped.entries()].map(([groupId, parts]) => {
     const first = parts[0];
     const base = legacySeamToGroup(first);
-    return {
+    const group: SeamGroupV3 = {
       ...base,
       id: groupId,
       name: first.name ?? groupId,
@@ -946,6 +958,9 @@ function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGro
       second: parts.flatMap((part) => seamSideRanges(part, "second").map((range) => structuredClone(range))),
       active: parts.every((part) => part.active !== false),
     };
+    const explicitBindings = parts.flatMap((part) => part.physicalBindings ?? []);
+    if (explicitBindings.length > 0) group.physicalBindings = structuredClone(explicitBindings);
+    return normalizeSeamPhysicalBinding(group, panelInstances);
   });
 }
 
@@ -968,6 +983,7 @@ function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams
     distribution: group.distribution,
     targetRatio: group.targetRatio,
     slackMm: group.slackMm,
+    ...(group.physicalBindings === undefined ? {} : { physicalBindings: structuredClone(group.physicalBindings) }),
     active: group.active,
   }];
 }
@@ -986,6 +1002,8 @@ function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): Se
     distribution: seam.distribution ?? (treatment === "ease" || treatment === "gather" ? "proportional" : "uniform"),
     targetRatio: seam.targetRatio ?? Math.max(0.000001, 1 + seam.easeRatio),
     slackMm: seam.slackMm ?? 0,
+    ...(seam.physicalBindings === undefined ? {} : { physicalBindings: structuredClone(seam.physicalBindings) }),
+    ...(seam.physicalPairing === undefined ? {} : { physicalPairing: seam.physicalPairing }),
     active: seam.active !== false,
     compatibility: {
       legacyEaseRatio: seam.easeRatio,
@@ -1023,6 +1041,134 @@ function legacyTreatment(group: SeamGroupV3): "standard" | "ease" | "gather" | "
     return legacy;
   }
   return group.treatment === "elastic" ? "stretch" : group.treatment === "zipper" ? "standard" : group.treatment;
+}
+
+function normalizeSeamPhysicalBindings(
+  groups: readonly SeamGroupV3[],
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3[] {
+  return groups.map((group) => normalizeSeamPhysicalBinding(group, panelInstances));
+}
+
+function normalizeSeamPhysicalBinding(
+  group: SeamGroupV3,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3 {
+  const { physicalPairing, ...canonical } = group;
+  if ((group.physicalBindings?.length ?? 0) > 0) {
+    return { ...canonical, physicalBindings: structuredClone(group.physicalBindings) };
+  }
+  const physicalBindings = physicalPairing === "paired-copies"
+    ? buildPairedCopyBindings(group, panelInstances)
+    : inferPhysicalBindings(group, panelInstances);
+  return physicalBindings.length > 0 ? { ...canonical, physicalBindings } : canonical;
+}
+
+function inferPhysicalBindings(
+  group: Pick<SeamGroupV3, "id" | "first" | "second">,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamPhysicalBindingV3[] {
+  const firstPatternIds = uniqueSorted(group.first.map((range) => range.pieceId));
+  const secondPatternIds = uniqueSorted(group.second.map((range) => range.pieceId));
+  const allPatternIds = uniqueSorted([...firstPatternIds, ...secondPatternIds]);
+  const instancesByPattern = new Map<string, PanelInstanceV3[]>();
+  for (const patternId of allPatternIds) {
+    instancesByPattern.set(patternId, panelInstances
+      .filter((instance) => instance.sourcePatternId === patternId)
+      .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id)));
+  }
+  if (allPatternIds.some((patternId) => (instancesByPattern.get(patternId)?.length ?? 0) === 0)) return [];
+  const bindingCount = Math.max(1, ...allPatternIds.map((patternId) => instancesByPattern.get(patternId)?.length ?? 0));
+  if (allPatternIds.some((patternId) => {
+    const count = instancesByPattern.get(patternId)?.length ?? 0;
+    return count !== 1 && count !== bindingCount;
+  })) return [];
+
+  const pick = (patternId: string, index: number): PanelInstanceV3 | undefined => {
+    const list = instancesByPattern.get(patternId) ?? [];
+    return list.length === 1 ? list[0] : list.find((instance) => instance.copyIndex === index) ?? list[index];
+  };
+  return Array.from({ length: bindingCount }, (_, index) => ({
+    id: `${group.id}:physical:${index + 1}`,
+    first: firstPatternIds.map((patternId) => pick(patternId, index)!)
+      .map((instance) => ({ patternId: instance.sourcePatternId, panelInstanceId: instance.id })),
+    second: secondPatternIds.map((patternId) => pick(patternId, index)!)
+      .map((instance) => ({ patternId: instance.sourcePatternId, panelInstanceId: instance.id })),
+  }));
+}
+
+function buildPairedCopyBindings(
+  group: Pick<SeamGroupV3, "id" | "first" | "second">,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamPhysicalBindingV3[] {
+  const patternIds = uniqueSorted([...group.first, ...group.second].map((range) => range.pieceId));
+  if (patternIds.length !== 1) return [];
+  const patternId = patternIds[0];
+  const instances = panelInstances
+    .filter((instance) => instance.sourcePatternId === patternId)
+    .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
+  if (instances.length < 2) return [];
+  const result: SeamPhysicalBindingV3[] = [];
+  for (let index = 0; index + 1 < instances.length; index += 2) {
+    result.push({
+      id: `${group.id}:physical:${result.length + 1}`,
+      first: [{ patternId, panelInstanceId: instances[index].id }],
+      second: [{ patternId, panelInstanceId: instances[index + 1].id }],
+    });
+  }
+  return result;
+}
+
+function validatePhysicalBindings(
+  group: SeamGroupV3,
+  panelInstances: readonly PanelInstanceV3[],
+  issues: PatternDocumentValidationIssue[],
+): void {
+  const instanceById = new Map(panelInstances.map((instance) => [instance.id, instance]));
+  const firstPatterns = new Set(group.first.map((range) => range.pieceId));
+  const secondPatterns = new Set(group.second.map((range) => range.pieceId));
+  const bindings = group.physicalBindings ?? [];
+  const ambiguous = [...firstPatterns, ...secondPatterns].some((patternId) =>
+    panelInstances.filter((instance) => instance.sourcePatternId === patternId).length > 1,
+  );
+  if (bindings.length === 0) {
+    if (ambiguous) {
+      issues.push(issue("ambiguous-physical-binding", "error", `O grupo ${group.id} possui múltiplas cópias físicas sem binding explícito.`, group.id));
+    }
+    return;
+  }
+  const bindingIds = new Set<string>();
+  for (const binding of bindings) {
+    if (bindingIds.has(binding.id)) {
+      issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} está duplicado.`, group.id));
+    }
+    bindingIds.add(binding.id);
+    const validateSide = (
+      refs: readonly { patternId: string; panelInstanceId: string }[],
+      patterns: ReadonlySet<string>,
+      side: string,
+    ) => {
+      const covered = new Set<string>();
+      for (const ref of refs) {
+        const instance = instanceById.get(ref.panelInstanceId);
+        if (!instance || instance.sourcePatternId !== ref.patternId || !patterns.has(ref.patternId)) {
+          issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} possui referência inválida ${ref.patternId}/${ref.panelInstanceId} no ${side}.`, group.id));
+        }
+        covered.add(ref.patternId);
+      }
+      for (const patternId of patterns) {
+        if (!covered.has(patternId)) {
+          issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} não cobre ${patternId} no ${side}.`, group.id));
+        }
+      }
+    };
+    validateSide(binding.first, firstPatterns, "primeiro lado");
+    validateSide(binding.second, secondPatterns, "segundo lado");
+  }
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function createWorkspaceState(
@@ -1560,8 +1706,35 @@ function parseSeamGroups(value: unknown): SeamGroupV3[] {
       distribution: readEnum(candidate.distribution, SEAM_DISTRIBUTIONS, `A distribuição da costura ${index + 1}`),
       targetRatio: readPositiveNumber(candidate.targetRatio, `A proporção da costura ${index + 1}`),
       slackMm: readNonNegativeNumber(candidate.slackMm, `A folga da costura ${index + 1}`),
+      ...(candidate.physicalBindings === undefined ? {} : {
+        physicalBindings: parsePhysicalBindings(candidate.physicalBindings, index),
+      }),
+      ...(candidate.physicalPairing === undefined ? {} : {
+        physicalPairing: readEnum(candidate.physicalPairing, ["paired-copies"] as const, `O pareamento físico legado da costura ${index + 1}`),
+      }),
       active: readBoolean(candidate.active, `O estado da costura ${index + 1}`),
       ...(compatibility === undefined ? {} : { compatibility }),
+    };
+  });
+}
+
+function parsePhysicalBindings(value: unknown, seamIndex: number): SeamPhysicalBindingV3[] {
+  if (!Array.isArray(value)) throw new TypeError(`As vinculações físicas da costura ${seamIndex + 1} são inválidas.`);
+  return value.map((binding, bindingIndex) => {
+    if (!isRecord(binding) || !Array.isArray(binding.first) || !Array.isArray(binding.second)) {
+      throw new TypeError(`A vinculação física ${bindingIndex + 1} da costura ${seamIndex + 1} é inválida.`);
+    }
+    const parseSide = (entries: unknown[], side: string) => entries.map((entry, entryIndex) => {
+      if (!isRecord(entry)) throw new TypeError(`A referência ${entryIndex + 1} do ${side} é inválida.`);
+      return {
+        patternId: readString(entry.patternId, `O molde da referência física ${entryIndex + 1}`),
+        panelInstanceId: readString(entry.panelInstanceId, `A instância da referência física ${entryIndex + 1}`),
+      };
+    });
+    return {
+      id: readString(binding.id, `O id da vinculação física ${bindingIndex + 1}`),
+      first: parseSide(binding.first, "primeiro lado"),
+      second: parseSide(binding.second, "segundo lado"),
     };
   });
 }

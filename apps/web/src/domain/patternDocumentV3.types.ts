@@ -237,6 +237,17 @@ export interface SeamGroupCompatibilityV3 {
   legacyTreatment?: string;
 }
 
+export interface SeamPhysicalInstanceReferenceV3 {
+  patternId: string;
+  panelInstanceId: string;
+}
+
+export interface SeamPhysicalBindingV3 {
+  id: string;
+  first: SeamPhysicalInstanceReferenceV3[];
+  second: SeamPhysicalInstanceReferenceV3[];
+}
+
 export interface SeamGroupV3 {
   id: string;
   name: string;
@@ -247,6 +258,10 @@ export interface SeamGroupV3 {
   distribution: SeamDistributionV3;
   targetRatio: number;
   slackMm: number;
+  /** Physical realization only. Geometry remains owned by first/second EdgeRanges. */
+  physicalBindings?: SeamPhysicalBindingV3[];
+  /** @deprecated Accepted only for V3 migration and normalized to physicalBindings. */
+  physicalPairing?: "paired-copies";
   active: boolean;
   compatibility?: SeamGroupCompatibilityV3;
 }
@@ -343,6 +358,8 @@ export interface PatternDocumentValidationIssue {
     | "duplicate-seam-group"
     | "degenerate-self-seam"
     | "invalid-panel-instance"
+    | "invalid-physical-binding"
+    | "ambiguous-physical-binding"
     | "invalid-connector"
     | "invalid-workspace-reference";
   severity: PatternDocumentIssueSeverity;

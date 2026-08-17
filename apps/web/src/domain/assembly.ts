@@ -104,11 +104,10 @@ export function validateSeamForAssembly(
   seam: Seam,
   garment: Pick<GarmentDraft, "pieces" | "seams">,
 ) {
-  return validateSeam(seam, garment).filter(
-    (issue) =>
-      issue.code !== "length-mismatch" ||
-      (seam.treatment ?? "standard") === "standard",
-  );
+  return validateSeam(seam, garment).filter((issue) => {
+    if (issue.code === "invalid-self-seam" && seam.physicalPairing === "paired-copies") return false;
+    return issue.code !== "length-mismatch" || (seam.treatment ?? "standard") === "standard";
+  });
 }
 
 export function analyzeSeamCompatibility(
@@ -182,7 +181,7 @@ export function buildAssemblyGraph(
     if (seam.active === false) continue;
     const firstRanges = seamSideRanges(seam, "first");
     const secondRanges = seamSideRanges(seam, "second");
-    if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
+    if (seamSidesMateriallyOverlap(firstRanges, secondRanges) && seam.physicalPairing !== "paired-copies") {
       issues.push(
         `${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`,
       );

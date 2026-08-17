@@ -175,6 +175,17 @@ export type SeamTreatment = "standard" | "ease" | "gather" | "stretch" | "intent
 export type SeamDistribution = "uniform" | "proportional" | "center-biased" | "custom";
 export type CanonicalSeamTreatment = SeamTreatment | "elastic" | "zipper";
 
+export interface SeamPhysicalInstanceReference {
+  patternId: string;
+  panelInstanceId: string;
+}
+
+export interface SeamPhysicalBinding {
+  id: string;
+  first: SeamPhysicalInstanceReference[];
+  second: SeamPhysicalInstanceReference[];
+}
+
 export interface Seam {
   id: string;
   /** Identificador estável do SeamGroup V3 quando a costura usa vários intervalos. */
@@ -195,6 +206,15 @@ export interface Seam {
   distribution?: SeamDistribution;
   targetRatio?: number;
   slackMm?: number;
+  /** Exact canonical physical realization carried by the derived runtime projection. */
+  physicalBindings?: SeamPhysicalBinding[];
+  /**
+   * @deprecated Migration-only hint. PatternDocumentV3 normalizes this to physicalBindings.
+   * Costura a mesma faixa material entre cópias físicas distintas da mesma
+   * PatternDefinition. Necessário para gancho frontal/traseiro de calças e
+   * outros fechamentos de peças cortadas em pares.
+   */
+  physicalPairing?: "paired-copies";
   active?: boolean;
 }
 
@@ -826,6 +846,14 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       );
       const targetRatio = s.targetRatio === undefined ? undefined : readFiniteNumber(s.targetRatio, `A proporção da costura ${i + 1}`);
       const slackMm = s.slackMm === undefined ? undefined : readFiniteNumber(s.slackMm, `A folga da costura ${i + 1}`);
+      const physicalBindings = s.physicalBindings === undefined
+        ? undefined
+        : parseSeamPhysicalBindings(s.physicalBindings, `A vinculação física da costura ${i + 1}`);
+      const physicalPairing = s.physicalPairing === undefined ? undefined : readEnum(
+        s.physicalPairing,
+        ["paired-copies"] as const,
+        `O pareamento físico da costura ${i + 1}`,
+      );
       if (!seamIds.has(id)) {
         seams.push({
           id,
@@ -843,6 +871,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
           ...(distribution === undefined ? {} : { distribution }),
           ...(targetRatio === undefined ? {} : { targetRatio }),
           ...(slackMm === undefined ? {} : { slackMm }),
+          ...(physicalBindings === undefined ? {} : { physicalBindings }),
+          ...(physicalPairing === undefined ? {} : { physicalPairing }),
           active,
         });
         seamIds.add(id);
@@ -975,6 +1005,28 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(measurementProfile === undefined ? {} : { measurementProfile }),
     ...(parametric === undefined ? {} : { parametric }),
   };
+}
+
+function parseSeamPhysicalBindings(value: unknown, label: string): SeamPhysicalBinding[] {
+  if (!Array.isArray(value)) throw new TypeError(`${label} é inválida.`);
+  return value.map((binding, index) => {
+    if (!isRecord(binding) || !Array.isArray(binding.first) || !Array.isArray(binding.second)) {
+      throw new TypeError(`${label} ${index + 1} é inválida.`);
+    }
+    const parseSide = (entries: unknown[], sideLabel: string): SeamPhysicalInstanceReference[] =>
+      entries.map((entry, entryIndex) => {
+        if (!isRecord(entry)) throw new TypeError(`${sideLabel} ${entryIndex + 1} é inválido.`);
+        return {
+          patternId: readString(entry.patternId, `${sideLabel}: molde`),
+          panelInstanceId: readString(entry.panelInstanceId, `${sideLabel}: instância`),
+        };
+      });
+    return {
+      id: readString(binding.id ?? `binding-${index + 1}`, `${label}: id`),
+      first: parseSide(binding.first, `${label}: primeiro lado`),
+      second: parseSide(binding.second, `${label}: segundo lado`),
+    };
+  });
 }
 
 function parseVector(value: unknown, label: string): PatternVector {

@@ -1,14 +1,12 @@
 import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import {
   approvedAvatarForBody,
   AVATAR_NOT_CONFIGURED_MESSAGE,
 } from "../avatar/ApprovedAvatarAsset";
 import { loadApprovedAvatar } from "../avatar/ApprovedAvatarLoader";
 import type { BodyType } from "../domain/pattern";
-import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
 import {
   buildGarmentAssemblyMeshes,
   canReuseGarmentAssemblyMesh,
@@ -17,6 +15,8 @@ import {
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import { serializePatternDocumentV3 } from "../domain/patternDocumentV3";
+import { AssemblyWorkerClient } from "../garment3d/AssemblyWorkerClient";
 import { measureIntrinsicDistortion, type GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
 import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
@@ -56,7 +56,9 @@ export class ThreeViewport {
   private readonly renderer: ViewportRenderer;
   private garmentMeshes: GarmentAssemblyMeshData[] = [];
   private readonly simulation: XpbdWorkerClient;
+  private readonly assembly = new AssemblyWorkerClient();
   private assemblyState: GarmentAssemblyState | null = null;
+  private pendingAssemblyRevision: string | null = null;
   private assemblyRevision: string | null = null;
   private assemblyGeneration = 0;
   private simulationEpoch = 0;
@@ -192,97 +194,123 @@ export class ThreeViewport {
 
   updateGarment(input: ResolvedAssemblyInput): string[] {
     const garment = input.garmentProjection;
-    const avatar = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
-    const arrangement = buildSemanticAvatarArrangement(input, avatar);
     const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);
-
-    const nextMeshes = buildGarmentAssemblyMeshes(arrangement.state, arrangement.garment, {
-      castShadow: this.profile.shadows,
-      receiveShadow: this.profile.shadows,
-      visibleInstanceIds: arrangement.visibleInstanceIds,
-    });
-    this.reconcileGarmentMeshes(nextMeshes);
-    this.applyWireframe();
-    this.assemblyState = arrangement.state;
-    this.assemblyRevision = input.signature;
-    this.host.dataset.simulationGeometryRevision = input.signature;
     const settings = input.document.simulationSettings;
     this.baseGravity = settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number];
     const resumeAfterRebuild = this.simulationRunning;
-    const initialization = buildXpbdInitialization(
-      arrangement.state,
-      arrangement.garment,
-      input.signature,
-      {
+
+    this.pendingAssemblyRevision = input.signature;
+    this.assemblyRevision = input.signature;
+    this.assemblyState = null;
+    this.simulation.pause();
+    this.host.dataset.assemblyStatus = "solving";
+    this.host.dataset.assemblyRevision = input.signature;
+    this.host.dataset.simulationStatus = "assembling";
+
+    if (import.meta.env.DEV) {
+      this.host.dataset.currentPatternDocumentV3 = serializePatternDocumentV3(input.document);
+      this.installDevDocumentExport(input.document);
+    }
+
+    void this.assembly.solve({ document: input.document, revision: input.signature }).then((response) => {
+      if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== input.signature) return;
+      const state = response.state;
+      const visibleInstanceIds = new Set(state.instances.map((instance) => instance.id));
+      const nextMeshes = buildGarmentAssemblyMeshes(state, garment, {
+        castShadow: this.profile.shadows,
+        receiveShadow: this.profile.shadows,
+        visibleInstanceIds,
+      });
+      this.reconcileGarmentMeshes(nextMeshes);
+      this.applyWireframe();
+      this.assemblyState = state;
+      this.assemblyRevision = response.revision;
+      this.pendingAssemblyRevision = null;
+      this.host.dataset.simulationGeometryRevision = response.revision;
+      this.host.dataset.assemblyStatus = response.diagnostics.assembly.invalid ? "invalid" : "ready";
+      this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
+      this.host.dataset.assemblyWarnings = JSON.stringify(response.warnings);
+
+      const initialization = buildXpbdInitialization(state, garment, response.revision, {
         config: {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
           iterations: settings.iterations,
         },
-      },
-    );
-    this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
-    if (import.meta.env.DEV) {
-      this.host.dataset.initialSeamResidualAudit = JSON.stringify({
-        assembly: arrangement.initialSeamResidualAudit,
-        adapter: initialization.seamResidualAudit,
       });
-    }
-    this.host.dataset.spatialAssemblyDiagnostics = JSON.stringify({
-      revision: input.signature,
-      intrinsicDistortion: measureIntrinsicDistortion(arrangement.state),
-      initialPositionSignature: positionSignature(arrangement.state.positions),
-      instances: arrangement.state.instances.map((instance) => ({
-        id: instance.id,
-        pieceId: instance.pieceId,
-        mapping: instance.arrangement?.mapping ?? null,
-        tubeCenter: instance.arrangement?.tubeCenter ?? null,
-        tubeRadiusM: instance.arrangement?.tubeRadiusM ?? null,
-        axis: instance.arrangement?.axis ?? null,
-        vertexCount: instance.vertexCount,
-      })),
-      seamGraph: summarizeAssemblySeamGraph(arrangement.state),
-      seamPlacementDiagnostics: arrangement.seamPlacementDiagnostics,
-    });
-    const identity = this.simulation.updateGeometry(initialization);
-    this.assemblyGeneration = identity.generation;
-    this.simulationEpoch = identity.epoch;
-    this.applyWorkerDevSettings();
-    this.host.dataset.simulationGeneration = String(this.assemblyGeneration);
-    this.host.dataset.simulationEpoch = String(this.simulationEpoch);
-    if (resumeAfterRebuild) {
-      this.simulationEpoch = this.simulation.resume();
+      this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
+      if (import.meta.env.DEV) {
+        this.host.dataset.initialSeamResidualAudit = JSON.stringify({
+          assembly: {
+            strategy: response.diagnostics.assembly.strategy,
+            components: response.diagnostics.assembly.components,
+            metrics: response.diagnostics.assembly.metrics,
+          },
+          adapter: initialization.seamResidualAudit,
+        });
+      }
+      this.host.dataset.spatialAssemblyDiagnostics = JSON.stringify({
+        revision: response.revision,
+        strategy: response.diagnostics.assembly.strategy,
+        intrinsicDistortion: measureIntrinsicDistortion(state),
+        initialPositionSignature: positionSignature(state.positions),
+        coarseVertexCount: response.diagnostics.coarseVertexCount,
+        coarseTriangleCount: response.diagnostics.coarseTriangleCount,
+        hingeCount: response.diagnostics.hingeCount,
+        reductionRatio: response.diagnostics.reductionRatio,
+        fineBindingBuildMs: response.diagnostics.fineBindingBuildMs,
+        fineTransferMs: response.diagnostics.fineTransferMs,
+        assemblySolveMs: response.diagnostics.assembly.assemblySolveMs,
+        assemblyConfidence: response.diagnostics.assembly.components.map((component) => ({
+          componentId: component.componentId,
+          state: component.constraintState,
+          confidence: component.assemblyConfidence,
+          reason: component.ambiguityReason ?? null,
+        })),
+        instances: state.instances.map((instance) => ({
+          id: instance.id,
+          pieceId: instance.pieceId,
+          vertexCount: instance.vertexCount,
+        })),
+        seamGraph: summarizeAssemblySeamGraph(state),
+      });
+
+      const identity = this.simulation.updateGeometry(initialization);
+      this.assemblyGeneration = identity.generation;
+      this.simulationEpoch = identity.epoch;
+      this.applyWorkerDevSettings();
+      this.host.dataset.simulationGeneration = String(this.assemblyGeneration);
       this.host.dataset.simulationEpoch = String(this.simulationEpoch);
-    }
-    this.host.dataset.simulationStatus = resumeAfterRebuild ? "running" : "ready";
+      if (resumeAfterRebuild) {
+        this.simulationEpoch = this.simulation.resume();
+        this.host.dataset.simulationEpoch = String(this.simulationEpoch);
+      }
+      this.host.dataset.simulationStatus = resumeAfterRebuild ? "running" : "ready";
+      this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+      this.host.dataset.garmentInstanceIds = this.garmentMeshes.map((item) => item.key).join(",");
+      this.host.dataset.garmentGeometrySignatures = this.garmentMeshes
+        .map((item) => `${item.key}:${item.geometrySignature}`)
+        .join(",");
+      if (import.meta.env.DEV) {
+        this.host.dataset.garmentMeshDiagnostics = JSON.stringify(captureGarmentMeshDiagnostics(this.garmentMeshes));
+      }
+      this.host.dataset.frameTarget = "garment-assembly";
+      if (!this.hasFramedScene || avatarConfiguration.changed) {
+        this.frameDressedScene();
+        this.hasFramedScene = true;
+      }
+      this.requestRender();
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (this.disposed || this.pendingAssemblyRevision !== input.signature) return;
+      this.pendingAssemblyRevision = null;
+      this.host.dataset.assemblyStatus = "error";
+      this.host.dataset.simulationStatus = "assembly-error";
+      this.host.dataset.assemblyError = error instanceof Error ? error.message : String(error);
+      console.error("Assembly Worker:", error);
+    });
 
-    if (!this.hasFramedScene || avatarConfiguration.changed) {
-      this.frameDressedScene();
-      this.hasFramedScene = true;
-    }
-    this.host.dataset.avatarAnchorCount = String(avatar.anchors.length);
-    this.host.dataset.collisionProxyCount = String(arrangement.collision.proxies.length);
-    this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
-    this.host.dataset.garmentInstanceIds = this.garmentMeshes.map((item) => item.key).join(",");
-    this.host.dataset.garmentGeometrySignatures = this.garmentMeshes
-      .map((item) => `${item.key}:${item.geometrySignature}`)
-      .join(",");
-    if (import.meta.env.DEV) {
-      this.host.dataset.garmentMeshDiagnostics = JSON.stringify(
-        captureGarmentMeshDiagnostics(this.garmentMeshes),
-      );
-    }
-    this.host.dataset.coveredAvatarPartCount = String(arrangement.coveredAvatarPartNames.size);
-    this.host.dataset.arrangementDiagnosticCount = String(arrangement.diagnostics.length);
-    this.host.dataset.arrangementErrorCount = String(arrangement.diagnostics.filter((item) => item.severity === "error").length);
-    this.host.dataset.frameTarget = "avatar-and-garment";
-    this.requestRender();
-
-    return [...new Set([
-      ...arrangement.state.warnings,
-      ...arrangement.diagnostics.map((diagnostic) => diagnostic.message),
-      ...(avatarConfiguration.warning ? [avatarConfiguration.warning] : []),
-    ])];
+    return avatarConfiguration.warning ? [avatarConfiguration.warning] : [];
   }
 
   dress(): void {
@@ -358,11 +386,16 @@ export class ThreeViewport {
     this.controls.dispose();
     this.avatarLoadController?.abort();
     this.avatarLoadController = null;
+    this.assembly.dispose();
     this.simulation.dispose();
+    this.pendingAssemblyRevision = null;
     this.assemblyState = null;
     this.assemblyRevision = null;
     this.assemblyGeneration = 0;
     this.simulationEpoch = 0;
+    if (import.meta.env.DEV) {
+      delete (window as Window & { __MOLDEON_ASSEMBLY_DEV__?: unknown }).__MOLDEON_ASSEMBLY_DEV__;
+    }
     this.clearGarment();
     this.clearAvatar();
     disposeObject(this.scene);
@@ -451,6 +484,18 @@ export class ThreeViewport {
       disposeMesh(stale.mesh);
     }
     this.garmentMeshes = reconciled;
+  }
+
+  private installDevDocumentExport(document: ResolvedAssemblyInput["document"]): void {
+    if (!import.meta.env.DEV) return;
+    const target = window as Window & {
+      __MOLDEON_ASSEMBLY_DEV__?: {
+        exportCurrentV3TestFixture: () => string;
+      };
+    };
+    target.__MOLDEON_ASSEMBLY_DEV__ = {
+      exportCurrentV3TestFixture: () => serializePatternDocumentV3(document),
+    };
   }
 
   private clearAvatar(): void {

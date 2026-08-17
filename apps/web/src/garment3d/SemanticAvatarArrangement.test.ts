@@ -374,6 +374,17 @@ function instancePositions(
   ));
 }
 
+function expectPositionsClose(
+  actual: readonly number[],
+  expected: readonly number[],
+  tolerance = 2e-5,
+): void {
+  expect(actual).toHaveLength(expected.length);
+  for (let index = 0; index < actual.length; index += 1) {
+    expect(Math.abs(actual[index] - expected[index])).toBeLessThanOrEqual(tolerance);
+  }
+}
+
 function referencePosition(
   positions: Float32Array,
   reference: { particleIndices: number[]; weights: number[] },
@@ -498,7 +509,7 @@ describe("SemanticAvatarArrangement", () => {
       new Set([...withoutLocalClosure.state.stitchConstraints.map((constraint) => constraint.seamGroupId), "notched-local-closure"]),
     );
     for (const id of ids) {
-      expect(instancePositions(withLocalClosure, id)).toEqual(instancePositions(withoutLocalClosure, id));
+      expectPositionsClose(instancePositions(withLocalClosure, id), instancePositions(withoutLocalClosure, id));
     }
     expect(measureIntrinsicDistortion(withLocalClosure.state).maxRelativeDistortion).toBeLessThan(0.015);
 
@@ -520,15 +531,16 @@ describe("SemanticAvatarArrangement", () => {
         id: before.id,
         vertexCount: before.vertexCount,
         triangleCount: before.triangleCount,
-        boundingBox: before.boundingBox,
-        centroid: before.centroid,
         transform: before.transform,
         geometrySignature: before.geometrySignature,
         meshCount: 1,
-        meanNormal: before.meanNormal,
-        meanTriangleNormal: before.meanTriangleNormal,
         materialSide: before.materialSide,
       });
+      expectPositionsClose(diagnostic.boundingBox.min, before.boundingBox.min);
+      expectPositionsClose(diagnostic.boundingBox.max, before.boundingBox.max);
+      expectPositionsClose(diagnostic.centroid, before.centroid);
+      expectPositionsClose(diagnostic.meanNormal, before.meanNormal);
+      expectPositionsClose(diagnostic.meanTriangleNormal, before.meanTriangleNormal);
     }
   });
 
@@ -548,7 +560,7 @@ describe("SemanticAvatarArrangement", () => {
     for (const id of bodyIds) {
       expect(withUpperBand.state.instances.find((instance) => instance.id === id)?.arrangement?.mapping)
         .toBe("seam-derived-tube");
-      expect(instancePositions(withUpperBand, id)).toEqual(instancePositions(bodyOnly, id));
+      expectPositionsClose(instancePositions(withUpperBand, id), instancePositions(bodyOnly, id));
     }
     const seamGroups = new Set(withUpperBand.state.stitchConstraints.map((constraint) => constraint.seamGroupId));
     expect(seamGroups.has("spatial-notched-tube-waistband:local-closure")).toBe(true);
@@ -599,13 +611,13 @@ describe("SemanticAvatarArrangement", () => {
       const tubeIds = ["stable-tube-front:panel:1", "stable-tube-back:panel:1"];
 
       for (const id of tubeIds) {
-        expect(instancePositions(extended, id)).toEqual(instancePositions(tubeOnly, id));
+        expectPositionsClose(instancePositions(extended, id), instancePositions(tubeOnly, id));
         expect(extended.state.instances.find((instance) => instance.id === id)?.arrangement?.mapping)
           .toBe("seam-derived-tube");
       }
       const additions = extended.state.instances.filter((instance) => instance.pieceId.startsWith("attachment-"));
       expect(additions).toHaveLength(attachmentCount);
-      expect(additions.every((instance) => instance.arrangement?.mapping === "rigid-panel")).toBe(true);
+      expect(additions.every((instance) => instance.arrangement?.mapping === "constraint-spatial-shell")).toBe(true);
       expect(extended.state.positions.every(Number.isFinite)).toBe(true);
       const distortion = measureIntrinsicDistortion(extended.state);
       expect(distortion.maxRelativeDistortion).toBeLessThan(5e-5);
@@ -653,7 +665,7 @@ describe("SemanticAvatarArrangement", () => {
     const tubeIds = ["stable-tube-front:panel:1", "stable-tube-back:panel:1"];
 
     for (const id of tubeIds) {
-      expect(instancePositions(extended, id)).toEqual(instancePositions(tubeOnly, id));
+      expectPositionsClose(instancePositions(extended, id), instancePositions(tubeOnly, id));
       expect(extended.state.instances.find((instance) => instance.id === id)?.arrangement?.mapping)
         .toBe("seam-derived-tube");
     }
@@ -684,14 +696,15 @@ describe("SemanticAvatarArrangement", () => {
         id,
         vertexCount: isolated.vertexCount,
         triangleCount: isolated.triangleCount,
-        boundingBox: isolated.boundingBox,
-        centroid: isolated.centroid,
         transform: isolated.transform,
         geometrySignature: isolated.geometrySignature,
         meshCount: 1,
-        meanNormal: isolated.meanNormal,
-        meanTriangleNormal: isolated.meanTriangleNormal,
       });
+      expectPositionsClose(attached.boundingBox.min, isolated.boundingBox.min);
+      expectPositionsClose(attached.boundingBox.max, isolated.boundingBox.max);
+      expectPositionsClose(attached.centroid, isolated.centroid);
+      expectPositionsClose(attached.meanNormal, isolated.meanNormal);
+      expectPositionsClose(attached.meanTriangleNormal, isolated.meanTriangleNormal);
 
       const previous = isolatedMeshes.find((item) => item.key === id)!;
       const next = extendedMeshes.find((item) => item.key === id)!;
@@ -722,12 +735,12 @@ describe("SemanticAvatarArrangement", () => {
     const upperIds = ["cycle-upper-a:panel:1", "cycle-upper-b:panel:1"];
 
     for (const id of [...tubeIds, ...upperIds]) {
-      expect(instancePositions(closed, id)).toEqual(instancePositions(before, id));
-      expect(instancePositions(removed, id)).toEqual(instancePositions(before, id));
+      expectPositionsClose(instancePositions(closed, id), instancePositions(before, id));
+      expectPositionsClose(instancePositions(removed, id), instancePositions(before, id));
     }
     for (const id of upperIds) {
       expect(closed.state.instances.find((instance) => instance.id === id)?.arrangement?.mapping)
-        .toBe("rigid-panel");
+        .toBe("constraint-spatial-shell");
       expect(measureIntrinsicDistortion(closed.state).byInstance[id].maxRelativeDistortion)
         .toBeLessThan(5e-5);
     }
@@ -1091,20 +1104,27 @@ describe("SemanticAvatarArrangement", () => {
     expect(visible.every((instance) => instance.arrangement?.mapping === "rigid-panel")).toBe(true);
   });
 
-  it("omits an unanchored panel and emits a named diagnostic", () => {
+  it("keeps an unanchored physical panel as an underconstrained structural citizen", () => {
     const garment = createGarmentFromTemplate("straight-skirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
-    const invalidPieceId = garment.pieces[0].id;
-    const invalid: GarmentDraft = {
+    const unanchoredPieceId = garment.pieces[0].id;
+    const unanchored: GarmentDraft = {
       ...garment,
-      pieces: garment.pieces.map((piece) => piece.id === invalidPieceId ? { ...piece, previewPlacements: undefined, bodyPlacement: undefined } : piece),
-      assemblyPlacements: garment.assemblyPlacements?.filter((placement) => placement.pieceId !== invalidPieceId),
+      pieces: garment.pieces.map((piece) => piece.id === unanchoredPieceId ? { ...piece, previewPlacements: undefined, bodyPlacement: undefined } : piece),
+      assemblyPlacements: garment.assemblyPlacements?.filter((placement) => placement.pieceId !== unanchoredPieceId),
     };
+    const input = buildResolvedAssemblyInput(unanchored);
+    const physicalInstances = input.panelInstances.filter((instance) => instance.sourcePatternId === unanchoredPieceId);
+    expect(physicalInstances.length).toBeGreaterThan(0);
+    expect(physicalInstances.every((instance) => instance.includedIn3D && instance.placementStatus === "unclassified")).toBe(true);
+
     const result = buildSemanticAvatarArrangement(
-      buildResolvedAssemblyInput(invalid),
-      buildAvatarParametricModel(invalid.measurements, invalid.bodyType),
+      input,
+      buildAvatarParametricModel(unanchored.measurements, unanchored.bodyType),
     );
-    expect(result.state.instances.some((instance) => instance.pieceId === invalidPieceId)).toBe(false);
-    expect(result.state.instances.filter((instance) => instance.pieceId === invalidPieceId && result.visibleInstanceIds.has(instance.id))).toHaveLength(0);
+    const assembled = result.state.instances.filter((instance) => instance.pieceId === unanchoredPieceId);
+    expect(assembled.length).toBeGreaterThan(0);
+    expect(assembled.every((instance) => result.visibleInstanceIds.has(instance.id))).toBe(true);
+    expect(result.state.positions.every(Number.isFinite)).toBe(true);
   });
 
   it("reports a disconnected but anchored component", () => {

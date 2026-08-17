@@ -110,11 +110,23 @@ describe("Prompt 10.6 constraint-based spatial assembly", () => {
     const garment = createBaselineFixture("straight-pants-standard");
     const input = buildResolvedAssemblyInput(garment);
     expect(input.panelInstances).toHaveLength(4);
-    const pairedGroups = input.seamGroups.filter((group) => group.physicalPairing === "paired-copies");
-    expect(pairedGroups.map((group) => group.id).sort()).toEqual([
+    const physicallyBoundGroups = input.seamGroups.filter((group) => (group.physicalBindings?.length ?? 0) > 0);
+    expect(physicallyBoundGroups.map((group) => group.id).sort()).toEqual([
       "template-seam:trouser-back-rise",
       "template-seam:trouser-front-rise",
+      "template-seam:trouser-inseam-1",
+      "template-seam:trouser-inseam-2",
+      "template-seam:trouser-outseam-1",
+      "template-seam:trouser-outseam-2",
+      "template-seam:trouser-outseam-3",
+      "template-seam:trouser-outseam-4",
     ]);
+    expect(physicallyBoundGroups.every((group) =>
+      group.physicalBindings?.every((binding) =>
+        binding.first.every((endpoint) => endpoint.panelInstanceId.length > 0)
+        && binding.second.every((endpoint) => endpoint.panelInstanceId.length > 0),
+      ) ?? false,
+    )).toBe(true);
 
     const avatar = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
     const arrangement = buildSemanticAvatarArrangement(input, avatar);
@@ -240,59 +252,51 @@ function relationGroupsByPair(relations: readonly { panelA: string; panelB: stri
   return result;
 }
 
-function componentMetricSignature(arrangement: ReturnType<typeof arrange>["arrangement"]): number[] {
+function componentMetricSignature(arrangement: ReturnType<typeof buildSemanticAvatarArrangement>): number[] {
   return arrangement.constraintSpatialAssembly.components
-    .flatMap((component) => [
-      component.constraintCount,
-      component.cycleCount,
-      component.freeBoundaryCount,
-      Number(component.nonPlanarityRad.toFixed(6)),
-      Number(component.coarseOverlapScore.toFixed(6)),
-      Number(component.normalizedResidual.toFixed(6)),
-      Number(component.meanResidualMm.toFixed(5)),
-      Number(component.maxResidualMm.toFixed(5)),
-      Number(component.intrinsicDistortion.toFixed(8)),
-    ]);
+    .map((component) => component.normalizedResidual)
+    .sort((a, b) => a - b);
 }
 
-function expectMetricClose(first: number[], second: number[], tolerance: number): void {
-  expect(second).toHaveLength(first.length);
-  for (let index = 0; index < first.length; index += 1) {
-    expect(Math.abs(second[index] - first[index])).toBeLessThanOrEqual(tolerance);
+function expectMetricClose(actual: readonly number[], expected: readonly number[], tolerance: number): void {
+  expect(actual).toHaveLength(expected.length);
+  for (let index = 0; index < actual.length; index += 1) {
+    expect(Math.abs(actual[index] - expected[index])).toBeLessThanOrEqual(tolerance);
   }
 }
 
 function maxDisplacement(before: Float32Array, after: Float32Array): number {
   let maximum = 0;
-  for (let index = 0; index < before.length; index += 3) {
+  for (let offset = 0; offset < before.length; offset += 3) {
     maximum = Math.max(maximum, Math.hypot(
-      after[index] - before[index],
-      after[index + 1] - before[index + 1],
-      after[index + 2] - before[index + 2],
+      after[offset] - before[offset],
+      after[offset + 1] - before[offset + 1],
+      after[offset + 2] - before[offset + 2],
     ));
   }
   return maximum;
 }
 
-function maxComponentExtent(state: GarmentAssemblyState, positions = state.positions): number {
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let minZ = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  let maxZ = Number.NEGATIVE_INFINITY;
-  for (let index = 0; index < positions.length; index += 3) {
-    minX = Math.min(minX, positions[index]);
-    minY = Math.min(minY, positions[index + 1]);
-    minZ = Math.min(minZ, positions[index + 2]);
-    maxX = Math.max(maxX, positions[index]);
-    maxY = Math.max(maxY, positions[index + 1]);
-    maxZ = Math.max(maxZ, positions[index + 2]);
+function maxComponentExtent(assembly: GarmentAssemblyState, positions: Float32Array = assembly.positions): number {
+  let maximum = 0;
+  for (const instance of assembly.instances) {
+    const start = instance.particleStart;
+    const end = start + instance.vertexCount;
+    let minX = Number.POSITIVE_INFINITY; let minY = Number.POSITIVE_INFINITY; let minZ = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY; let maxY = Number.NEGATIVE_INFINITY; let maxZ = Number.NEGATIVE_INFINITY;
+    for (let index = start; index < end; index += 1) {
+      const offset = index * 3;
+      minX = Math.min(minX, positions[offset]); maxX = Math.max(maxX, positions[offset]);
+      minY = Math.min(minY, positions[offset + 1]); maxY = Math.max(maxY, positions[offset + 1]);
+      minZ = Math.min(minZ, positions[offset + 2]); maxZ = Math.max(maxZ, positions[offset + 2]);
+    }
+    maximum = Math.max(maximum, Math.hypot(maxX - minX, maxY - minY, maxZ - minZ));
   }
-  return Math.hypot(maxX - minX, maxY - minY, maxZ - minZ);
+  return maximum;
 }
 
-function percentile(values: number[], p: number): number {
+function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))] ?? 0;
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))];
 }

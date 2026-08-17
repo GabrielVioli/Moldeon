@@ -18,7 +18,7 @@ import type {
 export interface ResolvedAssemblyInput {
   /** Documento canônico completo da bancada no instante da resolução. */
   document: PatternDocumentV3;
-  /** Recorte canônico contendo somente peças confirmadas e incluídas. */
+  /** Recorte canônico contendo todas as peças físicas incluídas no 3D. */
   assemblyDocument: PatternDocumentV3;
   /** Projeção legada derivada do V3, nunca fonte autoritativa. */
   garmentProjection: GarmentDraft;
@@ -34,10 +34,28 @@ export interface ResolvedAssemblyInput {
 export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssemblyInput {
   const document = garmentDraftToPatternDocumentV3(garment);
   const resolvedInstances = deriveDressingPanelInstances(document, garment);
+  return finalizeResolvedAssemblyInput(document, resolvedInstances);
+}
+
+/**
+ * Worker/canonical path. It consumes the persisted PanelInstanceV3 identities
+ * directly rather than asking a legacy GarmentDraft projection to infer them
+ * again. This is the path used by Prompt 10.7 fixture imports and Assembly
+ * Worker solves.
+ */
+export function buildResolvedAssemblyInputFromDocument(
+  documentValue: PatternDocumentV3,
+): ResolvedAssemblyInput {
+  const document = parsePatternDocumentV3(documentValue);
+  return finalizeResolvedAssemblyInput(document, document.panelInstances);
+}
+
+function finalizeResolvedAssemblyInput(
+  document: PatternDocumentV3,
+  resolvedInstances: readonly PanelInstanceV3[],
+): ResolvedAssemblyInput {
   const includedInstances = resolvedInstances.filter((instance) =>
-    instance.includedIn3D
-    && instance.placementStatus === "confirmed"
-    && instance.arrangementAnchor !== undefined,
+    instance.includedIn3D && instance.simulationEnabled,
   );
   const includedPatternIds = new Set(includedInstances.map((instance) => instance.sourcePatternId));
   const definitions = document.patternDefinitions.filter((definition) => includedPatternIds.has(definition.id));
@@ -57,7 +75,10 @@ export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssem
       patterns: document.workspace.patterns.filter((entry) => definitionIds.has(entry.patternId)),
     },
   });
-  const garmentProjection = patternDocumentV3ToGarmentDraft(assemblyDocument);
+  const garmentProjection = projectPhysicalInstancesForAssembly(
+    patternDocumentV3ToGarmentDraft(assemblyDocument),
+    includedInstances,
+  );
   const geometrySignatures = new Map(definitions.map((definition) => [
     definition.id,
     patternDefinitionGeometrySignature(definition),
@@ -84,12 +105,47 @@ export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssem
     assemblyDocument,
     garmentProjection,
     definitions,
-    panelInstances: includedInstances,
-    seamGroups,
+    panelInstances: includedInstances.map((instance) => structuredClone(instance)),
+    seamGroups: seamGroups.map((group) => structuredClone(group)),
     geometrySignatures,
     signature,
     diagnostics: validatePatternDocumentV3(document),
     snapshots: garmentProjection.pieces.map(createPatternSnapshot),
+  };
+}
+
+function projectPhysicalInstancesForAssembly(
+  garment: GarmentDraft,
+  instances: readonly PanelInstanceV3[],
+): GarmentDraft {
+  return {
+    ...garment,
+    pieces: garment.pieces.map((piece) => {
+      const physical = instances
+        .filter((instance) => instance.sourcePatternId === piece.id)
+        .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
+      if (physical.length === 0) return piece;
+      return {
+        ...piece,
+        previewPlacements: physical.map((instance) => {
+          const anchor = instance.arrangementAnchor;
+          return {
+            id: instance.id,
+            pieceId: piece.id,
+            region: anchor?.region ?? "custom",
+            surface: anchor?.surface ?? instance.surface ?? "custom",
+            bodySide: anchor?.bodySide ?? instance.bodySide ?? "center",
+            ...(anchor?.bodyAnchorId ? { bodyAnchorId: anchor.bodyAnchorId } : {}),
+            rotationDeg: anchor?.rotationDeg ?? 0,
+            offsetXMm: anchor?.offsetXMm ?? 0,
+            offsetYMm: anchor?.offsetYMm ?? 0,
+            offsetZMm: anchor?.offsetZMm ?? 0,
+            scale: 1,
+            mirrorX: instance.mirrored,
+          };
+        }),
+      };
+    }),
   };
 }
 

@@ -44,6 +44,8 @@ export interface AssemblyStitchConstraint {
   distribution: SeamDistribution;
   targetRatio: number;
   slackMm: number;
+  /** Original material correspondence direction from the canonical SeamGroup. */
+  direction?: "same" | "opposite";
   a: GlobalPointReference;
   b: GlobalPointReference;
   restDistance: number;
@@ -77,7 +79,7 @@ export interface AssemblyInstanceArrangement {
   tubeScoreMm2?: number;
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
-  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube" | "multipanel-surface-shell";
+  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube" | "multipanel-surface-shell" | "constraint-spatial-shell";
   flipWinding: boolean;
 }
 
@@ -432,8 +434,13 @@ function buildGlobalStitchConstraints(
     if (seam.active === false) continue;
     const firstRanges = seamSideRanges(seam, "first");
     const secondRanges = seamSideRanges(seam, "second");
-    if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
-      warnings.push(`${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`);
+    const hasDistinctPhysicalCopyBinding = (seam.physicalBindings ?? []).some((binding) =>
+      binding.first.some((first) => binding.second.some((second) =>
+        first.patternId === second.patternId && first.panelInstanceId !== second.panelInstanceId,
+      )),
+    );
+    if (seamSidesMateriallyOverlap(firstRanges, secondRanges) && !hasDistinctPhysicalCopyBinding) {
+      warnings.push(`${seam.name ?? seam.id}: a mesma faixa material exige cópias físicas distintas explícitas.`);
       continue;
     }
     const pieces = [...new Map(instances.map((instance) => [instance.pieceId, instance.topology.sourcePiece])).values()];
@@ -460,9 +467,14 @@ function buildGlobalStitchConstraints(
       if (!firstPoint || !secondPoint) continue;
       const firstInstances = byPiece.get(firstPoint.range.pieceId) ?? [];
       const secondInstances = byPiece.get(secondPoint.range.pieceId) ?? [];
-      const pairs = firstPoint.range.pieceId === secondPoint.range.pieceId
-        ? firstInstances.map((instance) => [instance, instance] as const)
-        : pairInstances(firstInstances, secondInstances);
+      const pairs = resolvePhysicalSeamPairs(
+        seam,
+        firstPoint.range.pieceId,
+        secondPoint.range.pieceId,
+        firstInstances,
+        secondInstances,
+        instances,
+      );
       for (const [firstInstance, secondInstance] of pairs) {
         const firstPath = firstInstance.topology.edges.get(firstPoint.range.edgeId);
         const secondPath = secondInstance.topology.edges.get(secondPoint.range.edgeId);
@@ -482,6 +494,7 @@ function buildGlobalStitchConstraints(
           distribution,
           targetRatio,
           slackMm,
+          direction: seam.direction,
           a,
           b,
           restDistance: 0.0015 + (mismatchMm + slackMm) * METERS_PER_MM / sampleCount,
@@ -777,6 +790,47 @@ function evaluateReference(
 
 function directPoint(particleIndex: number): GlobalPointReference {
   return { particleIndices: [particleIndex], weights: [1] };
+}
+
+function pairDistinctPhysicalCopies(
+  instances: readonly AssemblyPanelInstance[],
+): Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> {
+  const ordered = [...instances].sort((left, right) => {
+    const leftSide = left.placement.bodySide === "left" ? 0 : left.placement.bodySide === "right" ? 1 : 2;
+    const rightSide = right.placement.bodySide === "left" ? 0 : right.placement.bodySide === "right" ? 1 : 2;
+    return leftSide - rightSide || left.id.localeCompare(right.id);
+  });
+  const result: Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> = [];
+  for (let index = 0; index + 1 < ordered.length; index += 2) {
+    result.push([ordered[index], ordered[index + 1]] as const);
+  }
+  return result;
+}
+
+function resolvePhysicalSeamPairs(
+  seam: Seam,
+  firstPatternId: string,
+  secondPatternId: string,
+  first: readonly AssemblyPanelInstance[],
+  second: readonly AssemblyPanelInstance[],
+  allInstances: readonly AssemblyPanelInstance[],
+): Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> {
+  const byId = new Map(allInstances.map((instance) => [instance.id, instance]));
+  if ((seam.physicalBindings?.length ?? 0) > 0) {
+    const result: Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> = [];
+    for (const binding of seam.physicalBindings ?? []) {
+      const firstRef = binding.first.find((ref) => ref.patternId === firstPatternId);
+      const secondRef = binding.second.find((ref) => ref.patternId === secondPatternId);
+      if (!firstRef || !secondRef) continue;
+      const firstInstance = byId.get(firstRef.panelInstanceId);
+      const secondInstance = byId.get(secondRef.panelInstanceId);
+      if (firstInstance && secondInstance) result.push([firstInstance, secondInstance] as const);
+    }
+    return result;
+  }
+  // Strict legacy fallback only for an already-unambiguous physical relation.
+  if (first.length === 1 && second.length === 1) return [[first[0], second[0]] as const];
+  return [];
 }
 
 function pairInstances(

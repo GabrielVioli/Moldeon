@@ -185,7 +185,13 @@ describe("recovery 9.5-05 modeling transactions", () => {
     const cutPieceIds = useEditorStore.getState().garment.pieces.map((candidate) => candidate.id);
     expect(cutPieceIds).toHaveLength(2);
     expect(useEditorStore.getState().garment.pieces.every((candidate) => candidate.bodyPlacement?.status === "unclassified")).toBe(true);
-    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).panelInstances).toEqual([]);
+    const resolvedAfterCut = buildResolvedAssemblyInput(useEditorStore.getState().garment);
+    expect(resolvedAfterCut.panelInstances).toHaveLength(2);
+    expect(new Set(resolvedAfterCut.panelInstances.map((instance) => instance.sourcePatternId)))
+      .toEqual(new Set(cutPieceIds));
+    expect(resolvedAfterCut.panelInstances.every(
+      (instance) => instance.includedIn3D && instance.placementStatus === "unclassified",
+    )).toBe(true);
 
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().garment.pieces).toHaveLength(1);
