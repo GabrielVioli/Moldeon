@@ -27,6 +27,7 @@ jobs:
           python scripts/recovery-10-6-fix1.py
           python scripts/recovery-10-6-paired-copies.py
           python scripts/recovery-10-6-paired-fix.py
+          python scripts/recovery-10-6-relation-frames.py
       - run: npm ci
       - run: npm run typecheck
       - name: Prompt 10.6 garment suite
