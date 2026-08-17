@@ -21,12 +21,15 @@ jobs:
         with:
           node-version: 22.12.0
           cache: npm
-      - run: python scripts/recovery-10-5-shell-patch.py
+      - name: Apply general shell and killer tests
+        run: |
+          python scripts/recovery-10-5-shell-patch.py
+          python scripts/recovery-10-5-tests.py
       - run: npm ci
       - run: npm run typecheck
-      - name: General garment fixture after shell placement
+      - name: Prompt 10.5 killer suite
         env:
-          MOLDEON_10_5_BASELINE: "1"
+          MOLDEON_10_5_REPORT: "1"
         run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.baseline.test.ts --reporter=verbose
       - name: Assembly regressions
         run: npx vitest run apps/web/src/garment3d/SemanticAvatarArrangement.test.ts apps/web/src/physics/initialSeamResidual.test.ts apps/web/src/physics/xpbdGarmentIntegration.test.ts --reporter=verbose
