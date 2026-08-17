@@ -242,6 +242,20 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
             <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
           </dl>
+          {telemetry ? (
+            <details className="viewport-physics-seam-groups">
+              <summary>SeamGroups por residual</summary>
+              {[...Object.entries(telemetry.seamErrorsByGroup)]
+                .sort((left, right) => right[1].maxError - left[1].maxError)
+                .slice(0, 8)
+                .map(([groupId, group]) => (
+                  <div key={groupId}>
+                    <code>{groupId}</code>
+                    <span> mean {formatMetric(group.meanError * 1000)} mm · max {formatMetric(group.maxError * 1000)} mm</span>
+                  </div>
+                ))}
+            </details>
+          ) : null}
         </aside>
       ) : null}
     </div>

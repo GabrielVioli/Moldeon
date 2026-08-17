@@ -222,6 +222,12 @@ export class ThreeViewport {
       },
     );
     this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
+    if (import.meta.env.DEV) {
+      this.host.dataset.initialSeamResidualAudit = JSON.stringify({
+        assembly: arrangement.initialSeamResidualAudit,
+        adapter: initialization.seamResidualAudit,
+      });
+    }
     this.host.dataset.spatialAssemblyDiagnostics = JSON.stringify({
       revision: input.signature,
       intrinsicDistortion: measureIntrinsicDistortion(arrangement.state),
@@ -376,6 +382,7 @@ export class ThreeViewport {
     delete this.host.dataset.simulationStatus;
     delete this.host.dataset.simulationDiagnostics;
     delete this.host.dataset.simulationDevSettings;
+    delete this.host.dataset.initialSeamResidualAudit;
   }
 
   private frameDressedScene(): void {

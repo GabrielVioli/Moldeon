@@ -26,6 +26,12 @@ import type {
   GarmentAssemblyState,
   GlobalPointReference,
 } from "./GarmentAssembly";
+import {
+  alignSecondaryTubeGroups,
+  auditAssemblySeamResiduals,
+  type InitialSeamResidualAudit,
+  type TubeGroupAlignmentCorrection,
+} from "./InitialSeamResidual";
 import { buildPhysicalGarmentAssembly } from "./PhysicalGarmentAssembly";
 import type { ResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 
@@ -54,6 +60,11 @@ export interface SemanticAvatarArrangementResult {
   visibleInstanceIds: Set<string>;
   coveredAvatarPartNames: Set<string>;
   seamPlacementDiagnostics: SeamPlacementDiagnostic[];
+  initialSeamResidualAudit: {
+    beforeTubeAlignment: InitialSeamResidualAudit;
+    afterTubeAlignment: InitialSeamResidualAudit;
+    tubeGroupCorrections: TubeGroupAlignmentCorrection[];
+  };
 }
 
 export interface SeamPlacementDiagnostic {
@@ -164,6 +175,9 @@ export function buildSemanticAvatarArrangement(
   }
 
   const seamPlacementDiagnostics = placeConnectedPanelsRigidly(state, visibleInstanceIds);
+  const beforeTubeAlignment = auditAssemblySeamResiduals(state, resolvedGarment);
+  const tubeAlignment = alignSecondaryTubeGroups(state);
+  const afterTubeAlignment = auditAssemblySeamResiduals(state, resolvedGarment);
   state.initialPositions.set(state.positions);
   state.previousPositions.set(state.positions);
   const coveredAvatarPartNames = resolveCoveredAvatarParts(state, visibleInstanceIds, avatar);
@@ -177,6 +191,11 @@ export function buildSemanticAvatarArrangement(
     visibleInstanceIds,
     coveredAvatarPartNames,
     seamPlacementDiagnostics,
+    initialSeamResidualAudit: {
+      beforeTubeAlignment,
+      afterTubeAlignment,
+      tubeGroupCorrections: tubeAlignment.corrections,
+    },
   };
 }
 

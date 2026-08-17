@@ -6,6 +6,11 @@ import type {
   GlobalPointReference,
 } from "../garment3d/GarmentAssembly";
 import {
+  assertSeamReferenceInvariants,
+  auditAdapterSeamResiduals,
+  type AdapterSeamResidualAudit,
+} from "../garment3d/InitialSeamResidual";
+import {
   DEFAULT_XPBD_CONFIG,
   XPBD_MISSING_PARTICLE,
   type XpbdSolverConfig,
@@ -14,6 +19,7 @@ import {
 export interface XpbdInitializationData {
   revision: string;
   topologyDiagnostics: XpbdTopologyDiagnostics;
+  seamResidualAudit: AdapterSeamResidualAudit;
   positions: Float32Array;
   previousPositions: Float32Array;
   predictedPositions: Float32Array;
@@ -227,9 +233,28 @@ export function buildXpbdInitialization(
   if (!topologyDiagnostics.valid) {
     throw new RangeError(`Topologia XPBD inválida na revisão ${revision}.`);
   }
+  if (import.meta.env.DEV) assertSeamReferenceInvariants(state);
+  const seamIndicesArray = Uint32Array.from(seamIndices);
+  const seamWeightsArray = Float32Array.from(seamWeights);
+  const seamRestDistancesArray = Float32Array.from(seamRestDistances);
+  const seamResidualAudit = auditAdapterSeamResiduals(
+    state,
+    garment,
+    positions,
+    seamIndicesArray,
+    seamWeightsArray,
+    seamRestDistancesArray,
+    seamGroupIds,
+  );
+  if (import.meta.env.DEV && seamResidualAudit.invariantErrors.length > 0) {
+    throw new RangeError(
+      `Seam mapping inválido na revisão ${revision}: ${seamResidualAudit.invariantErrors.join(" | ")}`,
+    );
+  }
   return {
     revision,
     topologyDiagnostics,
+    seamResidualAudit,
     positions,
     previousPositions: new Float32Array(positions),
     predictedPositions: new Float32Array(positions),
@@ -245,9 +270,9 @@ export function buildXpbdInitialization(
     shearIndices: Uint32Array.from(shearIndices),
     shearRestCosines: Float32Array.from(shearRestCosines),
     shearCompliances: Float32Array.from(shearCompliances),
-    seamIndices: Uint32Array.from(seamIndices),
-    seamWeights: Float32Array.from(seamWeights),
-    seamRestDistances: Float32Array.from(seamRestDistances),
+    seamIndices: seamIndicesArray,
+    seamWeights: seamWeightsArray,
+    seamRestDistances: seamRestDistancesArray,
     seamCompliances: Float32Array.from(seamCompliances),
     seamRelaxations: Float32Array.from(seamRelaxations),
     seamGroupIds,

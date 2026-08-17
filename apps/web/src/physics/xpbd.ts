@@ -67,6 +67,13 @@ export interface XpbdState {
   invalid: boolean;
 }
 
+export interface XpbdSeamGroupErrorDiagnostic {
+  constraintCount: number;
+  meanError: number;
+  maxError: number;
+  worstConstraintIndex: number;
+}
+
 export interface XpbdStepDiagnostics {
   stepCount: number;
   substeps: number;
@@ -78,6 +85,7 @@ export interface XpbdStepDiagnostics {
   seamConstraintCount: number;
   seamErrorAverage: number;
   seamErrorMaximum: number;
+  seamErrorsByGroup: Record<string, XpbdSeamGroupErrorDiagnostic>;
   maximumPositionMagnitude: number;
   maximumVelocityMagnitude: number;
   maximumCorrectionApplied: number;
@@ -199,12 +207,30 @@ export function measureXpbdDiagnostics(
 ): XpbdStepDiagnostics {
   let seamErrorSum = 0;
   let seamErrorMaximum = 0;
+  const seamErrorsByGroup: Record<string, XpbdSeamGroupErrorDiagnostic> = {};
   const seamCount = state.seams.restDistances.length;
   for (let index = 0; index < seamCount; index += 1) {
     const distance = seamDistance(state.positions, state.seams, index);
     const error = Math.abs(distance - state.seams.restDistances[index]);
     seamErrorSum += error;
     seamErrorMaximum = Math.max(seamErrorMaximum, error);
+    const groupId = state.seams.seamGroupIds[index] ?? `ungrouped:${index}`;
+    const group = seamErrorsByGroup[groupId] ?? {
+      constraintCount: 0,
+      meanError: 0,
+      maxError: 0,
+      worstConstraintIndex: index,
+    };
+    group.constraintCount += 1;
+    group.meanError += error;
+    if (error > group.maxError) {
+      group.maxError = error;
+      group.worstConstraintIndex = index;
+    }
+    seamErrorsByGroup[groupId] = group;
+  }
+  for (const group of Object.values(seamErrorsByGroup)) {
+    group.meanError /= Math.max(1, group.constraintCount);
   }
   let bendConstraintCount = 0;
   for (const kind of state.distances.kinds) if (kind === 1) bendConstraintCount += 1;
@@ -234,6 +260,7 @@ export function measureXpbdDiagnostics(
     seamConstraintCount: seamCount,
     seamErrorAverage: seamCount > 0 ? seamErrorSum / seamCount : 0,
     seamErrorMaximum,
+    seamErrorsByGroup,
     maximumPositionMagnitude,
     maximumVelocityMagnitude,
     maximumCorrectionApplied: state.maximumCorrectionApplied,
