@@ -25,7 +25,8 @@ jobs:
         run: |
           python scripts/recovery-10-6-integration.py
           python scripts/recovery-10-6-fix1.py
+          python scripts/recovery-10-6-paired-copies.py
       - run: npm ci
       - run: npm run typecheck
       - name: Focused assembly regression
-        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts apps/web/src/physics/initialSeamResidual.test.ts --reporter=verbose
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts apps/web/src/physics/initialSeamResidual.test.ts apps/web/src/domain/templateAssemblySeams.test.ts apps/web/src/domain/patternDocumentV3.test.ts --reporter=verbose
