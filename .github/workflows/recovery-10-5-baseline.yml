@@ -1,0 +1,29 @@
+name: Recovery 10.5 baseline
+
+on:
+  push:
+    branches:
+      - recovery/10.5-general-garment-spatial-assembly
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/10.5-general-garment-spatial-assembly
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Prompt 10.5 baseline fixture
+        env:
+          MOLDEON_10_5_BASELINE: "1"
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.baseline.test.ts --reporter=verbose
