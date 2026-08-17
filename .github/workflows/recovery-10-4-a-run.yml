@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   finalize:
-    if: contains(github.event.head_commit.message, 'ci(perf): finalize XPBD 10.4-A')
+    if: "contains(github.event.head_commit.message, 'ci(perf): finalize XPBD 10.4-A')"
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
