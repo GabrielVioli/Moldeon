@@ -1,0 +1,159 @@
+name: Recovery 10.6 finalizer v2
+
+on:
+  push:
+    branches:
+      - recovery/10.6-constraint-spatial-assembly
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: recovery/10.6-constraint-spatial-assembly
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Materialize Prompt 10.6 architecture
+        run: |
+          python scripts/recovery-10-6-integration.py
+          python scripts/recovery-10-6-fix1.py
+          python scripts/recovery-10-6-paired-copies.py
+          python scripts/recovery-10-6-paired-fix.py
+          python scripts/recovery-10-6-relation-frames.py
+          python scripts/recovery-10-6-test-fixes.py
+          python scripts/recovery-10-6-material-flat-seed.py
+          python scripts/recovery-10-6-intrinsic-mode.py
+          python scripts/recovery-10-6-structural-objective.py
+          python scripts/recovery-10-6-frozen-legacy-candidate.py
+          python scripts/recovery-10-6-doc-notes.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Prompt 10.6 garment and topology suite
+        env:
+          MOLDEON_10_6_REPORT: "1"
+        run: |
+          npx vitest run \
+            apps/web/src/garment3d/constraintSpatialAssembly.test.ts \
+            apps/web/src/garment3d/constraintSpatialAssembly.extended.test.ts \
+            apps/web/src/garment3d/constraintSpatialAssembly.metrics.test.ts \
+            apps/web/src/garment3d/constraintShortsTopology.test.ts \
+            apps/web/src/domain/pairedCopySeam.test.ts \
+            --reporter=verbose | tee /tmp/moldeon-10-6-metrics.log
+      - name: Legacy 10.5 general shell
+        run: npx vitest run apps/web/src/garment3d/generalGarmentSpatialAssembly.test.ts --reporter=verbose
+      - name: Semantic avatar arrangement regressions
+        run: npx vitest run apps/web/src/garment3d/SemanticAvatarArrangement.test.ts --reporter=verbose
+      - name: Physical and resolved assembly regressions
+        run: npx vitest run apps/web/src/garment3d/PhysicalGarmentAssembly.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedGarmentAssembly.test.ts --reporter=verbose
+      - name: Initial seam residual regressions
+        run: npx vitest run apps/web/src/physics/initialSeamResidual.test.ts --reporter=verbose
+      - name: XPBD garment integration regressions
+        run: npx vitest run apps/web/src/physics/xpbdGarmentIntegration.test.ts --reporter=verbose
+      - name: XPBD canonical scenes and worker lifecycle
+        run: npx vitest run apps/web/src/physics/xpbdCanonicalScenes.test.ts apps/web/src/physics/XpbdWorkerClient.test.ts --reporter=verbose
+      - name: Template assembly seam regressions
+        run: npx vitest run apps/web/src/domain/templateAssemblySeams.test.ts --reporter=verbose
+      - name: PatternDocumentV3 regressions
+        run: npx vitest run apps/web/src/domain/patternDocumentV3.test.ts --reporter=verbose
+      - name: Assembly history regressions
+        run: npx vitest run apps/web/src/state/assemblyHistory.test.ts --reporter=verbose
+      - name: Prompt 10.4-A hot-loop regression benchmark
+        env:
+          MOLDEON_PERF_BENCH: "1"
+        run: npx vitest run apps/web/src/physics/xpbdHotloopPerformance.test.ts --reporter=verbose | tee /tmp/moldeon-10-6-perf.log
+      - name: Full test suite
+        run: npm test | tee /tmp/moldeon-10-6-full-test.log
+      - name: Build fallback application
+        run: npm run build
+      - name: Install Chromium for real-browser smoke
+        run: |
+          npm install --no-save --package-lock=false playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Real-browser pants and constraint smoke
+        run: |
+          (cd apps/web && npx vite --mode fallback --host 127.0.0.1) > /tmp/moldeon-10-6-vite.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          READY=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" != "1" ]; then
+            cat /tmp/moldeon-10-6-vite.log
+            exit 1
+          fi
+          node scripts/recovery-10-6-browser-smoke.mjs | tee /tmp/moldeon-10-6-browser.log
+      - name: Append final measured metrics to progress report
+        run: |
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+          path = Path('docs/progress/PROMPT_10_6_CONSTRAINT_SPATIAL_ASSEMBLY.md')
+          perf = Path('/tmp/moldeon-10-6-perf.log').read_text(errors='ignore')
+          browser = Path('/tmp/moldeon-10-6-browser.log').read_text(errors='ignore')
+          appendix = ['\n## Métricas da validação final\n\n']
+          match = re.search(r'MOLDEON_XPBD_PERF (\[.*\])', perf)
+          if match:
+              rows = json.loads(match.group(1))
+              heavy = next((row for row in rows if row.get('scene') == 'D-heavy-garment'), None)
+              if heavy:
+                  appendix.append(f"- Prompt 10.4-A heavy fixture: median {heavy['medianMs']:.3f} ms, p95 {heavy['p95Ms']:.3f} ms, invalid={heavy['invalid']}.\n")
+          match = re.search(r'MOLDEON_10_6_BROWSER (\{.*\})', browser)
+          if match:
+              row = json.loads(match.group(1))
+              appendix.append(
+                  f"- Chromium real pants smoke: strategy `{row['strategy']}`, nodes {row['nodeCount']}, "
+                  f"STEP0 {row['initialMeanMm']:.3f}/{row['initialMaxMm']:.3f} mm, "
+                  f"STEP240 {row['finalMeanMm']:.3f}/{row['finalMaxMm']:.3f} mm, "
+                  f"one-step max {row['oneStepMaxM']:.5f} m, solve {row['solveMs']:.2f} ms, invalid={row['invalid']}.\n"
+              )
+          path.write_text(path.read_text() + ''.join(appendix))
+          PY
+      - name: Diff check
+        run: git diff --check
+      - name: Remove recovery scaffolding
+        run: |
+          rm -f scripts/recovery-10-6-integration.py
+          rm -f scripts/recovery-10-6-fix1.py
+          rm -f scripts/recovery-10-6-paired-copies.py
+          rm -f scripts/recovery-10-6-paired-fix.py
+          rm -f scripts/recovery-10-6-relation-frames.py
+          rm -f scripts/recovery-10-6-test-fixes.py
+          rm -f scripts/recovery-10-6-material-flat-seed.py
+          rm -f scripts/recovery-10-6-intrinsic-mode.py
+          rm -f scripts/recovery-10-6-structural-objective.py
+          rm -f scripts/recovery-10-6-frozen-legacy-candidate.py
+          rm -f scripts/recovery-10-6-euclidean-intrinsic.py
+          rm -f scripts/recovery-10-6-doc-notes.py
+          rm -f scripts/recovery-10-6-browser-smoke.mjs
+          rm -f .github/workflows/recovery-10-6-apply.yml
+          rm -f .github/workflows/recovery-10-6-diagnose.yml
+          rm -f .github/workflows/recovery-10-6-finalize-v2.yml
+      - name: Commit push and verify branch identity
+        run: |
+          git config user.name "Moldeon Recovery Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git status --short
+          git commit -m "refactor(assembly): solve garment poses from seam constraints"
+          git push origin HEAD:recovery/10.6-constraint-spatial-assembly
+          LOCAL_SHA=$(git rev-parse HEAD)
+          REMOTE_SHA=$(git ls-remote origin refs/heads/recovery/10.6-constraint-spatial-assembly | cut -f1)
+          echo "LOCAL_SHA=$LOCAL_SHA"
+          echo "REMOTE_SHA=$REMOTE_SHA"
+          test "$LOCAL_SHA" = "$REMOTE_SHA"
+          test -z "$(git status --porcelain)"
