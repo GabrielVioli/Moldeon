@@ -1,12 +1,17 @@
-import type {
-  AssemblyPlacement,
-  EdgeRange,
-  GarmentDraft,
-  PatternPiece,
-  PatternPreviewPlacement,
-  PatternSnapshot,
-  Seam,
-  SeamTreatment,
+import {
+  edgeRangeSequenceLength,
+  resolveEdgeRangeSequenceProgress,
+  seamSidesMateriallyOverlap,
+  seamSideRanges,
+  type EdgeRange,
+  type GarmentDraft,
+  type PatternPiece,
+  type PatternPreviewPlacement,
+  type PatternSnapshot,
+  type Seam,
+  type SeamDistribution,
+  type SeamTreatment,
+  type AssemblyPlacement,
 } from "../domain/pattern";
 import {
   buildPanelTopology,
@@ -14,9 +19,10 @@ import {
 } from "./PanelTopology";
 import {
   recommendedPanelRefinement,
+  remeshStructuredQuadrilateral,
   refinePanelTopology,
 } from "./PanelRefinement";
-import type { PanelEdgePath } from "./types";
+import type { PanelEdgePath, PanelVertexSourceMapping } from "./types";
 
 export interface GlobalPointReference {
   particleIndices: number[];
@@ -33,12 +39,25 @@ export interface AssemblyDistanceConstraint {
 export interface AssemblyStitchConstraint {
   id: string;
   seamId: string;
+  seamGroupId: string;
+  treatment: string;
+  distribution: SeamDistribution;
+  targetRatio: number;
+  slackMm: number;
+  /** Original material correspondence direction from the canonical SeamGroup. */
+  direction?: "same" | "opposite";
   a: GlobalPointReference;
   b: GlobalPointReference;
   restDistance: number;
   stiffness: number;
   instanceA?: string;
   instanceB?: string;
+  /** Correspondência canônica preservada para placement e futuro XPBD. */
+  rangeA?: EdgeRange;
+  rangeB?: EdgeRange;
+  rangeLengthAMm?: number;
+  rangeLengthBMm?: number;
+  progress?: number;
 }
 
 export interface AssemblyAnchorConstraint {
@@ -53,19 +72,27 @@ export interface AssemblyInstanceArrangement {
   anchorId: string;
   outwardNormal: [number, number, number];
   axis: [number, number, number];
+  /** Centro geométrico usado por mapeamentos tubulares analíticos. */
+  tubeCenter?: [number, number, number];
+  tubeRadiusM?: number;
+  tubeGroupId?: string;
+  tubeScoreMm2?: number;
   bodySide: PatternPreviewPlacement["bodySide"];
   marginM: number;
-  mapping: "body-surface" | "local-tube" | "anatomical-half-tube";
+  mapping: "rigid-panel" | "body-surface" | "local-tube" | "anatomical-half-tube" | "seam-derived-tube" | "multipanel-surface-shell" | "constraint-spatial-shell";
   flipWinding: boolean;
 }
 
 export interface AssemblyPanelInstance {
   id: string;
   pieceId: string;
+  sourcePatternId: string;
+  geometrySignature: string;
   placement: PatternPreviewPlacement;
   topology: PanelTopology;
   particleStart: number;
   vertexCount: number;
+  vertexSources: Array<PanelVertexSourceMapping & { panelInstanceId: string; meshVertexIndex: number }>;
   arrangement?: AssemblyInstanceArrangement;
 }
 
@@ -82,27 +109,144 @@ export interface GarmentAssemblyState {
   invalid: boolean;
 }
 
+export interface IntrinsicDistortionMetric {
+  maxRelativeDistortion: number;
+  maxAbsoluteDistortionM: number;
+  evaluatedConstraintCount: number;
+  byInstance: Record<string, {
+    maxRelativeDistortion: number;
+    maxAbsoluteDistortionM: number;
+    evaluatedConstraintCount: number;
+  }>;
+}
+
 const METERS_PER_MM = 0.001;
 const SEAM_SAMPLE_SPACING_MM = 14;
 const MAX_SEAM_SAMPLES = 220;
 const DISTANCE_EPSILON = 1e-8;
 
+/**
+ * Mede somente comprimentos estruturais internos, nunca distâncias de costura.
+ * Assim a métrica continua válida mesmo quando o initial assembly aceita gaps.
+ */
+export function measureIntrinsicDistortion(
+  state: Pick<GarmentAssemblyState, "positions" | "structuralConstraints" | "instances">,
+): IntrinsicDistortionMetric {
+  let maxRelativeDistortion = 0;
+  let maxAbsoluteDistortionM = 0;
+  let evaluatedConstraintCount = 0;
+  const byInstance: IntrinsicDistortionMetric["byInstance"] = Object.fromEntries(
+    state.instances.map((instance) => [instance.id, {
+      maxRelativeDistortion: 0,
+      maxAbsoluteDistortionM: 0,
+      evaluatedConstraintCount: 0,
+    }]),
+  );
+  const instanceByParticle = new Map<number, AssemblyPanelInstance>();
+  for (const instance of state.instances) {
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      instanceByParticle.set(instance.particleStart + local, instance);
+    }
+  }
+
+  for (const constraint of state.structuralConstraints) {
+    if (constraint.restLength <= DISTANCE_EPSILON) continue;
+    const offsetA = constraint.a * 3;
+    const offsetB = constraint.b * 3;
+    const instance = instanceByParticle.get(constraint.a);
+    const currentLength = intrinsicConstraintLength(state.positions, offsetA, offsetB, instance);
+    const absolute = Math.abs(currentLength - constraint.restLength);
+    maxAbsoluteDistortionM = Math.max(maxAbsoluteDistortionM, absolute);
+    maxRelativeDistortion = Math.max(
+      maxRelativeDistortion,
+      absolute / constraint.restLength,
+    );
+    evaluatedConstraintCount += 1;
+    const instanceId = instance?.id;
+    const perInstance = instanceId ? byInstance[instanceId] : undefined;
+    if (perInstance) {
+      perInstance.maxAbsoluteDistortionM = Math.max(perInstance.maxAbsoluteDistortionM, absolute);
+      perInstance.maxRelativeDistortion = Math.max(
+        perInstance.maxRelativeDistortion,
+        absolute / constraint.restLength,
+      );
+      perInstance.evaluatedConstraintCount += 1;
+    }
+  }
+
+  return {
+    maxRelativeDistortion,
+    maxAbsoluteDistortionM,
+    evaluatedConstraintCount,
+    byInstance,
+  };
+}
+
+function intrinsicConstraintLength(
+  positions: Float32Array,
+  offsetA: number,
+  offsetB: number,
+  instance: AssemblyPanelInstance | undefined,
+): number {
+  const arrangement = instance?.arrangement;
+  const center = arrangement?.tubeCenter;
+  const radius = arrangement?.tubeRadiusM;
+  if (arrangement?.mapping !== "seam-derived-tube" || !center || !radius || radius <= DISTANCE_EPSILON) {
+    return Math.hypot(
+      positions[offsetB] - positions[offsetA],
+      positions[offsetB + 1] - positions[offsetA + 1],
+      positions[offsetB + 2] - positions[offsetA + 2],
+    );
+  }
+
+  const axisLength = Math.hypot(...arrangement.axis);
+  const axis = arrangement.axis.map((value) => value / Math.max(axisLength, DISTANCE_EPSILON));
+  const first = [
+    positions[offsetA] - center[0],
+    positions[offsetA + 1] - center[1],
+    positions[offsetA + 2] - center[2],
+  ];
+  const second = [
+    positions[offsetB] - center[0],
+    positions[offsetB + 1] - center[1],
+    positions[offsetB + 2] - center[2],
+  ];
+  const axialFirst = first[0] * axis[0] + first[1] * axis[1] + first[2] * axis[2];
+  const axialSecond = second[0] * axis[0] + second[1] * axis[1] + second[2] * axis[2];
+  const radialFirst = first.map((value, index) => value - axis[index] * axialFirst);
+  const radialSecond = second.map((value, index) => value - axis[index] * axialSecond);
+  const cosine = (
+    radialFirst[0] * radialSecond[0]
+    + radialFirst[1] * radialSecond[1]
+    + radialFirst[2] * radialSecond[2]
+  ) / Math.max(DISTANCE_EPSILON, Math.hypot(...radialFirst) * Math.hypot(...radialSecond));
+  const angle = Math.acos(Math.min(1, Math.max(-1, cosine)));
+  return Math.hypot(axialSecond - axialFirst, angle * radius);
+}
+
 export function buildGarmentAssembly(
   snapshots: readonly PatternSnapshot[],
   garment: GarmentDraft,
+  geometrySignatures: ReadonlyMap<string, string> = new Map(),
 ): GarmentAssemblyState {
   const warnings: string[] = [];
   const instances: AssemblyPanelInstance[] = [];
   const positionValues: number[] = [];
+  const structuredSelfSeamPieces = findStructuredSelfSeamPieces(snapshots, garment);
   for (const snapshot of snapshots) {
     let topology: PanelTopology;
 
     try {
-      const baseTopology = buildPanelTopology(snapshot.piece);
-      topology = refinePanelTopology(
-        baseTopology,
-        recommendedPanelRefinement(baseTopology),
-      );
+      const baseTopology = buildPanelTopology(snapshot.piece, METERS_PER_MM, geometrySignatures.get(snapshot.piece.id));
+      topology = structuredSelfSeamPieces.has(snapshot.piece.id)
+        ? remeshStructuredQuadrilateral(baseTopology) ?? refinePanelTopology(
+            baseTopology,
+            recommendedPanelRefinement(baseTopology),
+          )
+        : refinePanelTopology(
+            baseTopology,
+            recommendedPanelRefinement(baseTopology),
+          );
     } catch (error) {
       warnings.push(
         `${snapshot.piece.name}: ${
@@ -121,12 +265,19 @@ export function buildGarmentAssembly(
     for (const placement of placements) {
       const particleStart = positionValues.length / 3;
       const instance: AssemblyPanelInstance = {
-        id: `${snapshot.piece.id}/${placement.id}`,
+        id: placement.id,
         pieceId: snapshot.piece.id,
+        sourcePatternId: snapshot.piece.id,
+        geometrySignature: topology.geometrySignature,
         placement,
         topology,
         particleStart,
         vertexCount: topology.positions2DMm.length / 2,
+        vertexSources: topology.vertexSources.map((source) => ({
+          ...source,
+          panelInstanceId: placement.id,
+          meshVertexIndex: source.vertexIndex,
+        })),
       };
 
       appendInitialPositions(positionValues, instance);
@@ -179,6 +330,30 @@ export function buildGarmentAssembly(
   };
 }
 
+function findStructuredSelfSeamPieces(
+  snapshots: readonly PatternSnapshot[],
+  garment: GarmentDraft,
+): Set<string> {
+  const availablePieces = new Set(
+    snapshots
+      .filter((snapshot) => resolvePiecePlacements(snapshot.piece, garment).length === 1)
+      .map((snapshot) => snapshot.piece.id),
+  );
+  const result = new Set<string>();
+  for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
+    const first = seamSideRanges(seam, "first");
+    const second = seamSideRanges(seam, "second");
+    if (first.length !== 1
+      || second.length !== 1
+      || first[0].pieceId !== second[0].pieceId
+      || !availablePieces.has(first[0].pieceId)
+      || seamSidesMateriallyOverlap(first, second)) continue;
+    result.add(first[0].pieceId);
+  }
+  return result;
+}
+
 function appendInitialPositions(
   target: number[],
   instance: AssemblyPanelInstance,
@@ -186,7 +361,6 @@ function appendInitialPositions(
   const { topology, placement } = instance;
   const centerX = (topology.boundsMm.minX + topology.boundsMm.maxX) / 2;
   const topY = topology.boundsMm.minY;
-  const scale = validScale(placement.scale);
   const rotation = placement.rotationDeg * Math.PI / 180;
 
   for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
@@ -194,10 +368,8 @@ function appendInitialPositions(
     const yMm = topology.positions2DMm[localIndex * 2 + 1];
     const rawX = (xMm - centerX) * METERS_PER_MM * (placement.mirrorX ? -1 : 1);
     const rawY = -(yMm - topY) * METERS_PER_MM;
-    const scaledX = rawX * scale;
-    const scaledY = rawY * scale;
-    const rotatedX = scaledX * Math.cos(rotation) - scaledY * Math.sin(rotation);
-    const rotatedY = scaledX * Math.sin(rotation) + scaledY * Math.cos(rotation);
+    const rotatedX = rawX * Math.cos(rotation) - rawY * Math.sin(rotation);
+    const rotatedY = rawX * Math.sin(rotation) + rawY * Math.cos(rotation);
     target.push(rotatedX, rotatedY, 0);
   }
 }
@@ -239,7 +411,7 @@ function addStructuralEdge(
   target.push({
     a: instance.particleStart + localA,
     b: instance.particleStart + localB,
-    restLength: Math.hypot(dx, dy) * validScale(instance.placement.scale),
+    restLength: Math.hypot(dx, dy),
     stiffness: 0.86,
   });
 }
@@ -260,50 +432,55 @@ function buildGlobalStitchConstraints(
 
   for (const seam of seams) {
     if (seam.active === false) continue;
-    if (rangesAreIdentical(seam.first, seam.second)) {
-      warnings.push(`${seam.name ?? seam.id}: a mesma faixa não pode ser costurada sobre ela mesma.`);
+    const firstRanges = seamSideRanges(seam, "first");
+    const secondRanges = seamSideRanges(seam, "second");
+    const hasDistinctPhysicalCopyBinding = (seam.physicalBindings ?? []).some((binding) =>
+      binding.first.some((first) => binding.second.some((second) =>
+        first.patternId === second.patternId && first.panelInstanceId !== second.panelInstanceId,
+      )),
+    );
+    if (seamSidesMateriallyOverlap(firstRanges, secondRanges) && !hasDistinctPhysicalCopyBinding) {
+      warnings.push(`${seam.name ?? seam.id}: a mesma faixa material exige cópias físicas distintas explícitas.`);
       continue;
     }
-
-    const firstInstances = byPiece.get(seam.first.pieceId) ?? [];
-    const secondInstances = byPiece.get(seam.second.pieceId) ?? [];
-
-    if (firstInstances.length === 0 || secondInstances.length === 0) {
+    const pieces = [...new Map(instances.map((instance) => [instance.pieceId, instance.topology.sourcePiece])).values()];
+    const firstLength = edgeRangeSequenceLength(pieces, firstRanges);
+    const secondLength = edgeRangeSequenceLength(pieces, secondRanges);
+    if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
+    if ([...firstRanges, ...secondRanges].some((range) => (byPiece.get(range.pieceId) ?? []).length === 0)) {
       warnings.push(`${seam.name ?? seam.id}: uma das peças da costura não está no preview 3D.`);
       continue;
     }
-
-    const pairs = seam.first.pieceId === seam.second.pieceId
-      ? firstInstances.map((instance) => [instance, instance] as const)
-      : pairInstances(firstInstances, secondInstances);
-
-    for (const [firstInstance, secondInstance] of pairs) {
-      const firstPath = firstInstance.topology.edges.get(seam.first.edgeId);
-      const secondPath = secondInstance.topology.edges.get(seam.second.edgeId);
-
-      if (!firstPath || !secondPath) {
-        warnings.push(`${seam.name ?? seam.id}: uma borda da costura não existe na topologia.`);
-        continue;
-      }
-
-      const firstLength = edgeRangeLength(firstPath, seam.first);
-      const secondLength = edgeRangeLength(secondPath, seam.second);
-      if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
-
-      const sampleCount = Math.min(
-        MAX_SEAM_SAMPLES,
-        Math.max(
-          2,
-          Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1,
-        ),
+    const sampleCount = Math.min(MAX_SEAM_SAMPLES, Math.max(2,
+      Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1));
+    const stiffness = seamStiffness(seam.treatment);
+    const targetRatio = Number.isFinite(seam.targetRatio) && (seam.targetRatio ?? 0) > 0
+      ? seam.targetRatio! : Math.max(0.000001, 1 + seam.easeRatio);
+    const slackMm = Number.isFinite(seam.slackMm) && (seam.slackMm ?? 0) >= 0 ? seam.slackMm! : 0;
+    const distribution = seam.distribution ?? "uniform";
+    const mismatchMm = Math.abs(firstLength - secondLength * targetRatio);
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
+      const firstPoint = resolveEdgeRangeSequenceProgress(pieces, firstRanges, progress);
+      const secondProgress = seam.direction === "opposite" ? 1 - progress : progress;
+      const secondPoint = resolveEdgeRangeSequenceProgress(pieces, secondRanges, secondProgress);
+      if (!firstPoint || !secondPoint) continue;
+      const firstInstances = byPiece.get(firstPoint.range.pieceId) ?? [];
+      const secondInstances = byPiece.get(secondPoint.range.pieceId) ?? [];
+      const pairs = resolvePhysicalSeamPairs(
+        seam,
+        firstPoint.range.pieceId,
+        secondPoint.range.pieceId,
+        firstInstances,
+        secondInstances,
+        instances,
       );
-      const stiffness = seamStiffness(seam.treatment);
-
-      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-        const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
-        const firstT = interpolateRange(seam.first, progress);
-        const secondProgress = seam.direction === "opposite" ? 1 - progress : progress;
-        const secondT = interpolateRange(seam.second, secondProgress);
+      for (const [firstInstance, secondInstance] of pairs) {
+        const firstPath = firstInstance.topology.edges.get(firstPoint.range.edgeId);
+        const secondPath = secondInstance.topology.edges.get(secondPoint.range.edgeId);
+        if (!firstPath || !secondPath) continue;
+        const firstT = firstPoint.t;
+        const secondT = secondPoint.t;
         const a = pointReference(firstInstance, firstPath, firstT);
         const b = pointReference(secondInstance, secondPath, secondT);
 
@@ -312,12 +489,23 @@ function buildGlobalStitchConstraints(
         result.push({
           id: `${seam.id}/${firstInstance.id}/${secondInstance.id}/${sampleIndex}`,
           seamId: seam.id,
+          seamGroupId: seam.groupId ?? seam.id,
+          treatment: seam.canonicalTreatment ?? seam.treatment ?? "standard",
+          distribution,
+          targetRatio,
+          slackMm,
+          direction: seam.direction,
           a,
           b,
-          restDistance: 0.0015,
+          restDistance: 0.0015 + (mismatchMm + slackMm) * METERS_PER_MM / sampleCount,
           stiffness,
           instanceA: firstInstance.id,
           instanceB: secondInstance.id,
+          rangeA: { ...firstPoint.range },
+          rangeB: { ...secondPoint.range },
+          rangeLengthAMm: firstPoint.rangeLengthMm,
+          rangeLengthBMm: secondPoint.rangeLengthMm,
+          progress,
         });
       }
     }
@@ -340,6 +528,11 @@ function buildDartConstraints(
       result.push({
         id: `dart/${instance.id}/${dart.dart.id}`,
         seamId: `dart:${dart.dart.id}`,
+        seamGroupId: `dart:${dart.dart.id}`,
+        treatment: "dart",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: directPoint(instance.particleStart + legA),
         b: directPoint(instance.particleStart + legB),
         restDistance: 0.001,
@@ -599,6 +792,47 @@ function directPoint(particleIndex: number): GlobalPointReference {
   return { particleIndices: [particleIndex], weights: [1] };
 }
 
+function pairDistinctPhysicalCopies(
+  instances: readonly AssemblyPanelInstance[],
+): Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> {
+  const ordered = [...instances].sort((left, right) => {
+    const leftSide = left.placement.bodySide === "left" ? 0 : left.placement.bodySide === "right" ? 1 : 2;
+    const rightSide = right.placement.bodySide === "left" ? 0 : right.placement.bodySide === "right" ? 1 : 2;
+    return leftSide - rightSide || left.id.localeCompare(right.id);
+  });
+  const result: Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> = [];
+  for (let index = 0; index + 1 < ordered.length; index += 2) {
+    result.push([ordered[index], ordered[index + 1]] as const);
+  }
+  return result;
+}
+
+function resolvePhysicalSeamPairs(
+  seam: Seam,
+  firstPatternId: string,
+  secondPatternId: string,
+  first: readonly AssemblyPanelInstance[],
+  second: readonly AssemblyPanelInstance[],
+  allInstances: readonly AssemblyPanelInstance[],
+): Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> {
+  const byId = new Map(allInstances.map((instance) => [instance.id, instance]));
+  if ((seam.physicalBindings?.length ?? 0) > 0) {
+    const result: Array<readonly [AssemblyPanelInstance, AssemblyPanelInstance]> = [];
+    for (const binding of seam.physicalBindings ?? []) {
+      const firstRef = binding.first.find((ref) => ref.patternId === firstPatternId);
+      const secondRef = binding.second.find((ref) => ref.patternId === secondPatternId);
+      if (!firstRef || !secondRef) continue;
+      const firstInstance = byId.get(firstRef.panelInstanceId);
+      const secondInstance = byId.get(secondRef.panelInstanceId);
+      if (firstInstance && secondInstance) result.push([firstInstance, secondInstance] as const);
+    }
+    return result;
+  }
+  // Strict legacy fallback only for an already-unambiguous physical relation.
+  if (first.length === 1 && second.length === 1) return [[first[0], second[0]] as const];
+  return [];
+}
+
 function pairInstances(
   first: readonly AssemblyPanelInstance[],
   second: readonly AssemblyPanelInstance[],
@@ -713,15 +947,6 @@ function pointReferenceKey(reference: GlobalPointReference): string {
     .join("|");
 }
 
-function rangesAreIdentical(first: EdgeRange, second: EdgeRange): boolean {
-  return (
-    first.pieceId === second.pieceId &&
-    first.edgeId === second.edgeId &&
-    Math.abs(first.startT - second.startT) <= 1e-7 &&
-    Math.abs(first.endT - second.endT) <= 1e-7
-  );
-}
-
 function pairKey(first: string, second: string): string {
   return first < second ? `${first}|${second}` : `${second}|${first}`;
 }
@@ -730,10 +955,6 @@ function sideOrder(side: PatternPreviewPlacement["bodySide"]): number {
   if (side === "left") return 0;
   if (side === "center") return 1;
   return 2;
-}
-
-function validScale(value: number): number {
-  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function clamp01(value: number): number {

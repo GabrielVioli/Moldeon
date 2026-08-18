@@ -1,6 +1,8 @@
 import {
   createDocumentId,
+  createUnclassifiedBodyPlacement,
   migrateLegacyPieceToSegments,
+  seamSideRanges,
   syncLegacyPointsFromSegments,
   type EdgeRange,
   type GarmentDraft,
@@ -32,6 +34,25 @@ const MIN_REGION_AREA_MM2 = 4;
 const TANGENCY_SINE = 0.035;
 const PATH_CURVE_STEPS = 32;
 const CONTOUR_CURVE_STEPS = 48;
+const PATH_LINE_SAMPLE_SPACING_MM = 18;
+const DART_SNAP_THRESHOLD_MM = 18;
+const STRUCTURAL_EPSILON_MM = 1e-6;
+
+export interface NormalizedDartGeometry {
+  path: InternalPath;
+  apex: InternalPathNode;
+  legA: InternalPathNode;
+  legB: InternalPathNode;
+  center: InternalPathNode;
+  widthMm: number;
+  lengthMm: number;
+}
+
+export interface DartGeometryNormalization {
+  valid: boolean;
+  geometry?: NormalizedDartGeometry;
+  diagnostics: InternalPathDiagnostic[];
+}
 
 export interface InternalPathAnalysis {
   valid: boolean;
@@ -280,10 +301,26 @@ export function sampleInternalPath(pathValue: InternalPath): PatternPoint[] {
       yMm: end.yMm,
       ...(segment.kind === "cubic" && end.handleIn ? { handleIn: end.handleIn } : {}),
     };
-    const sampled = samplePatternSegment(startPoint, endPoint);
+    const sampled = segment.kind === "line"
+      ? sampleStraightInternalSegment(startPoint, endPoint)
+      : samplePatternSegment(startPoint, endPoint);
     points.push(...(points.length === 0 ? sampled : sampled.slice(1)));
   }
   return points;
+}
+
+function sampleStraightInternalSegment(start: PatternPoint, end: PatternPoint): PatternPoint[] {
+  const lengthMm = distance(start, end);
+  const steps = Math.min(256, Math.max(1, Math.ceil(lengthMm / PATH_LINE_SAMPLE_SPACING_MM)));
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    if (index === 0) return { ...start };
+    if (index === steps) return { ...end };
+    const t = index / steps;
+    return {
+      id: `${start.id}::${end.id}::line:${index}`,
+      ...lerp(start, end, t),
+    };
+  });
 }
 
 export function findNearestInternalPathSegment(
@@ -326,26 +363,17 @@ export function analyzeInternalPath(
   const affectedSeamIds = [...new Set(
     seams
       .filter((seam) =>
-        seam.first.pieceId === piece.id || seam.second.pieceId === piece.id,
+        [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+          .some((range) => range.pieceId === piece.id),
       )
       .map((seam) => seam.id),
   )];
 
   if (path.purpose === "dart") {
-    const first = path.nodes[0];
-    const apex = path.nodes.at(-1)!;
-    const boundaryDistance = nearestContourDistance(sampledContour, first);
-    if (boundaryDistance > 6) {
-      diagnostics.push(errorDiagnostic("dart-not-on-boundary", "O primeiro nó da pence precisa estar sobre a borda do molde.", first));
-    }
-    if (!pointInPolygon(apex, samplePatternContour(piece.points))) {
-      diagnostics.push(errorDiagnostic("dart-apex-outside", "O ápice da pence precisa ficar dentro da peça.", apex));
-    }
-    if (distance(first, apex) < 4) {
-      diagnostics.push(errorDiagnostic("dart-too-short", "A pence precisa ter comprimento maior que 4 mm.", apex));
-    }
+    const normalized = normalizeDartPathGeometry(piece, path);
+    diagnostics.push(...normalized.diagnostics);
     return {
-      valid: diagnostics.every((diagnostic) => diagnostic.severity !== "error"),
+      valid: normalized.valid && diagnostics.every((diagnostic) => diagnostic.severity !== "error"),
       operation: "dart",
       diagnostics,
       intersections,
@@ -397,6 +425,139 @@ export function analyzeInternalPath(
     intersections,
     affectedSeamIds,
     regionAreasMm2,
+  };
+}
+
+export function normalizeDartPathGeometry(
+  pieceValue: PatternPiece,
+  pathValue: InternalPath,
+): DartGeometryNormalization {
+  const piece = migrateLegacyPieceToSegments(structuredClone(pieceValue));
+  const path = normalizeInternalPath(pathValue);
+  const contour = sampleContourWithMetadata(piece);
+  const polygon = samplePatternContour(piece.points);
+  const diagnostics: InternalPathDiagnostic[] = [];
+  const total = contour.at(-1)?.distanceMm ?? 0;
+  if (total <= STRUCTURAL_EPSILON_MM) {
+    return { valid: false, diagnostics: [errorDiagnostic("dart-contour-invalid", "O contorno da peça não permite criar a pence.")] };
+  }
+
+  const roleNode = (key: string) => {
+    const id = path.metadata[key];
+    return typeof id === "string" ? path.nodes.find((node) => node.id === id) : undefined;
+  };
+  let apexSource = roleNode("dartApexNodeId");
+  let legASource = roleNode("dartLegANodeId");
+  let legBSource = roleNode("dartLegBNodeId");
+
+  if (!apexSource || !legASource || !legBSource) {
+    if (path.nodes.length === 2) {
+      const centerSource = path.nodes[0];
+      apexSource = path.nodes[1];
+      const centerProjection = nearestContourProjection(contour, centerSource);
+      if (centerProjection.distanceMm > DART_SNAP_THRESHOLD_MM) {
+        diagnostics.push(errorDiagnostic("dart-legs-not-found", "Não foi possível identificar duas pernas da pence."));
+      } else {
+        const legacyWidth = Math.abs(Number(path.metadata.dartWidthMm ?? 20));
+        const first = projectionAtContourDistance(contour, centerProjection.distanceAlongMm - legacyWidth / 2, total);
+        const second = projectionAtContourDistance(contour, centerProjection.distanceAlongMm + legacyWidth / 2, total);
+        legASource = { id: `${path.id}:leg-a`, ...first.point };
+        legBSource = { id: `${path.id}:leg-b`, ...second.point };
+      }
+    } else if (path.nodes.length === 3) {
+      const candidates = path.nodes.flatMap((candidateApex, apexIndex) => {
+        const apexProjection = nearestContourProjection(contour, candidateApex);
+        if (!pointInPolygon(candidateApex, polygon) || apexProjection.distanceMm <= STRUCTURAL_EPSILON_MM) return [];
+        const legs = path.nodes.filter((_, index) => index !== apexIndex);
+        const projections = legs.map((node) => ({ node, projection: nearestContourProjection(contour, node) }));
+        if (projections.some(({ projection }) => projection.distanceMm > DART_SNAP_THRESHOLD_MM)) return [];
+        const [first, second] = projections;
+        const signedArea = Math.abs(cross(subtract(candidateApex, first.projection.point), subtract(second.projection.point, first.projection.point)));
+        if (distance(first.projection.point, second.projection.point) <= STRUCTURAL_EPSILON_MM || signedArea <= STRUCTURAL_EPSILON_MM) return [];
+        return [{
+          apex: candidateApex,
+          legs: projections,
+          score: first.projection.distanceMm + second.projection.distanceMm,
+        }];
+      }).sort((left, right) => left.score - right.score);
+
+      const winner = candidates[0];
+      if (winner) {
+        apexSource = winner.apex;
+        const ordered = [...winner.legs].sort((left, right) => left.projection.distanceAlongMm - right.projection.distanceAlongMm);
+        legASource = ordered[0].node;
+        legBSource = ordered[1].node;
+      }
+    }
+  }
+
+  if (!legASource || !legBSource) {
+    diagnostics.push(errorDiagnostic("dart-legs-not-found", "Não foi possível identificar duas pernas da pence."));
+  }
+  if (!apexSource) {
+    diagnostics.push(errorDiagnostic("dart-apex-not-found", "Não foi possível identificar o ápice da pence."));
+  }
+  if (diagnostics.length > 0 || !legASource || !legBSource || !apexSource) {
+    return { valid: false, diagnostics: dedupeDiagnostics(diagnostics) };
+  }
+
+  const legAProjection = nearestContourProjection(contour, legASource);
+  const legBProjection = nearestContourProjection(contour, legBSource);
+  if (legAProjection.distanceMm > DART_SNAP_THRESHOLD_MM || legBProjection.distanceMm > DART_SNAP_THRESHOLD_MM) {
+    return { valid: false, diagnostics: [errorDiagnostic("dart-legs-not-found", "Não foi possível identificar duas pernas da pence.")] };
+  }
+  if (!pointInPolygon(apexSource, polygon) || nearestContourDistance(contour, apexSource) <= STRUCTURAL_EPSILON_MM) {
+    return { valid: false, diagnostics: [errorDiagnostic("dart-apex-not-found", "Não foi possível identificar o ápice da pence.")] };
+  }
+
+  const forward = wrappedContourDelta(legAProjection.distanceAlongMm, legBProjection.distanceAlongMm, total);
+  const signedWidth = forward <= total / 2 ? forward : forward - total;
+  const widthMm = Math.abs(signedWidth);
+  const centerProjection = projectionAtContourDistance(contour, legAProjection.distanceAlongMm + signedWidth / 2, total);
+  const lengthMm = distance(centerProjection.point, apexSource);
+  const area = Math.abs(cross(subtract(apexSource, legAProjection.point), subtract(legBProjection.point, legAProjection.point)));
+  if (widthMm <= STRUCTURAL_EPSILON_MM || lengthMm <= STRUCTURAL_EPSILON_MM || area <= STRUCTURAL_EPSILON_MM) {
+    return { valid: false, diagnostics: [errorDiagnostic("dart-region-invalid", "Os pontos não formam uma região válida.")] };
+  }
+
+  const legA: InternalPathNode = { ...legASource, xMm: round(legAProjection.point.xMm), yMm: round(legAProjection.point.yMm) };
+  const legB: InternalPathNode = { ...legBSource, xMm: round(legBProjection.point.xMm), yMm: round(legBProjection.point.yMm) };
+  const apex: InternalPathNode = { ...apexSource, xMm: round(apexSource.xMm), yMm: round(apexSource.yMm) };
+  const existingCenter = roleNode("dartCenterNodeId");
+  const center: InternalPathNode = {
+    id: existingCenter?.id ?? `${path.id}:center`,
+    xMm: round(centerProjection.point.xMm),
+    yMm: round(centerProjection.point.yMm),
+  };
+  const closed = path.metadata.closed === true;
+  const nodes = closed ? [legA, apex, legB, center] : [legA, apex, legB];
+  const segments: InternalPathSegment[] = [
+    { id: `${path.id}:dart-leg-a`, startNodeId: legA.id, endNodeId: apex.id, kind: "line" },
+    { id: `${path.id}:dart-leg-b`, startNodeId: apex.id, endNodeId: legB.id, kind: "line" },
+    ...(closed ? [{ id: `${path.id}:dart-center`, startNodeId: center.id, endNodeId: apex.id, kind: "line" } as InternalPathSegment] : []),
+  ];
+  const normalizedPath: InternalPath = {
+    ...path,
+    nodes,
+    segments,
+    metadata: {
+      ...path.metadata,
+      dartApexNodeId: apex.id,
+      dartLegANodeId: legA.id,
+      dartLegBNodeId: legB.id,
+      dartCenterNodeId: center.id,
+      dartLegAEdgeId: legAProjection.edgeId,
+      dartLegAT: legAProjection.edgeT,
+      dartLegBEdgeId: legBProjection.edgeId,
+      dartLegBT: legBProjection.edgeT,
+      dartBoundaryAnchorVersion: 1,
+      dartWidthMm: widthMm,
+    },
+  };
+  return {
+    valid: true,
+    diagnostics: [],
+    geometry: { path: normalizedPath, apex, legA, legB, center, widthMm, lengthMm },
   };
 }
 
@@ -510,7 +671,8 @@ function applyCutPath(
   for (const seam of seams) {
     const remapped = remapSeamToCutResults(seam, source.id, mapping);
     if (remapped) remappedSeams.push(remapped);
-    else if (seam.first.pieceId === source.id || seam.second.pieceId === source.id) {
+    else if ([...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+      .some((range) => range.pieceId === source.id)) {
       diagnostics.push({
         code: "seam-invalidated",
         severity: "warning",
@@ -588,16 +750,17 @@ function applyDartPath(
   pathValue: InternalPath,
   previousDiagnostics: InternalPathDiagnostic[],
 ): InternalPathOperationResult {
-  const path = normalizeInternalPath(pathValue);
-  const contour = sampleContourWithMetadata(source);
-  const center = path.nodes[0];
-  const apex = path.nodes.at(-1)!;
-  const widthMm = Number(path.metadata.dartWidthMm ?? 20);
-  const centerDistance = nearestContourProjection(contour, center).distanceAlongMm;
-  const total = contour.at(-1)?.distanceMm ?? 0;
-  if (total <= 0) return failure(garment, source.id, "dart-contour-invalid", "O contorno não possui comprimento suficiente para posicionar a pence.");
-  const legA = pointAtWrappedContourDistance(contour, centerDistance - widthMm / 2, total);
-  const legB = pointAtWrappedContourDistance(contour, centerDistance + widthMm / 2, total);
+  const normalized = normalizeDartPathGeometry(source, pathValue);
+  if (!normalized.valid || !normalized.geometry) {
+    return {
+      ok: false,
+      garment,
+      activePieceId: source.id,
+      diagnostics: normalized.diagnostics,
+      createdPieceIds: [],
+    };
+  }
+  const { path, center, apex, legA, legB, widthMm, lengthMm } = normalized.geometry;
   const pathId = path.id;
   const firstLegId = `${pathId}:dart-leg-a`;
   const secondLegId = `${pathId}:dart-leg-b`;
@@ -606,15 +769,15 @@ function applyDartPath(
     ...path,
     purpose: "dart",
     nodes: [
-      { id: `${pathId}:leg-a`, xMm: round(legA.xMm), yMm: round(legA.yMm) },
-      { id: `${pathId}:apex`, xMm: round(apex.xMm), yMm: round(apex.yMm) },
-      { id: `${pathId}:leg-b`, xMm: round(legB.xMm), yMm: round(legB.yMm) },
-      { id: `${pathId}:center`, xMm: round(center.xMm), yMm: round(center.yMm) },
+      legA,
+      apex,
+      legB,
+      center,
     ],
     segments: [
-      { id: firstLegId, startNodeId: `${pathId}:leg-a`, endNodeId: `${pathId}:apex`, kind: "line" },
-      { id: secondLegId, startNodeId: `${pathId}:apex`, endNodeId: `${pathId}:leg-b`, kind: "line" },
-      { id: centerId, startNodeId: `${pathId}:center`, endNodeId: `${pathId}:apex`, kind: "line" },
+      { id: firstLegId, startNodeId: legA.id, endNodeId: apex.id, kind: "line" },
+      { id: secondLegId, startNodeId: apex.id, endNodeId: legB.id, kind: "line" },
+      { id: centerId, startNodeId: center.id, endNodeId: apex.id, kind: "line" },
     ],
     metadata: {
       ...path.metadata,
@@ -632,7 +795,7 @@ function applyDartPath(
     legB: { xMm: legB.xMm, yMm: legB.yMm },
     centerLine: { start: { xMm: center.xMm, yMm: center.yMm }, end: { xMm: apex.xMm, yMm: apex.yMm } },
     widthMm,
-    lengthMm: distance(center, apex),
+    lengthMm,
     directionDeg: Math.atan2(apex.yMm - center.yMm, apex.xMm - center.xMm) * 180 / Math.PI,
     closed: true,
     legSegmentIds: [firstLegId, secondLegId],
@@ -723,11 +886,6 @@ function buildResultPiece(
     const finish = source.edgeFinishes?.[sourceEdgeId];
     if (finish) edgeFinishes[targetEdgeId] = finish;
   }
-  const previewPlacements = source.previewPlacements?.map((placement) => ({
-    ...placement,
-    id: `${placement.id}:cut:${index + 1}`,
-    pieceId: id,
-  }));
   const model: PatternPiece = {
     ...structuredClone(source),
     id,
@@ -741,7 +899,8 @@ function buildResultPiece(
     darts: inheritedDarts.map((dart) => ({ ...dart, pieceId: id })),
     annotations: inheritedAnnotations,
     edgeFinishes,
-    ...(previewPlacements ? { previewPlacements } : { previewPlacements: undefined }),
+    bodyPlacement: createUnclassifiedBodyPlacement(true, "migration"),
+    previewPlacements: undefined,
   };
   return {
     piece: syncLegacyPointsFromSegments(model),
@@ -841,9 +1000,18 @@ function remapSeamToCutResults(
     const target = mapping.get(range.edgeId);
     return target ? { ...range, pieceId: target.pieceId, edgeId: target.edgeId } : null;
   };
-  const first = remap(seam.first);
-  const second = remap(seam.second);
-  return first && second ? { ...seam, first, second } : null;
+  const firstRanges = seamSideRanges(seam, "first").map(remap);
+  const secondRanges = seamSideRanges(seam, "second").map(remap);
+  if (firstRanges.some((range) => !range) || secondRanges.some((range) => !range)) return null;
+  const first = firstRanges as EdgeRange[];
+  const second = secondRanges as EdgeRange[];
+  return {
+    ...seam,
+    first: first[0],
+    second: second[0],
+    ...(first.length > 1 ? { firstRanges: first } : { firstRanges: undefined }),
+    ...(second.length > 1 ? { secondRanges: second } : { secondRanges: undefined }),
+  };
 }
 
 function collectIntersections(
@@ -1005,13 +1173,35 @@ function nearestContourDistance(contour: SampledContourPoint[], point: PatternVe
   return nearestContourProjection(contour, point).distanceMm;
 }
 function nearestContourProjection(contour: SampledContourPoint[], point: PatternVector) {
-  let best = { distanceMm: Number.POSITIVE_INFINITY, distanceAlongMm: 0, point: vector(contour[0] ?? point) };
+  let best = { distanceMm: Number.POSITIVE_INFINITY, distanceAlongMm: 0, point: vector(contour[0] ?? point), edgeId: contour[0]?.edgeId ?? "", edgeT: 0 };
   for (let i=0;i<contour.length-1;i+=1) {
     const a=contour[i], b=contour[i+1]; if (a.edgeId!==b.edgeId) continue;
     const hit=projectPointOnSegment(point,a,b); if(hit.distanceMm>=best.distanceMm) continue;
-    best={distanceMm:hit.distanceMm,distanceAlongMm:a.distanceMm+(b.distanceMm-a.distanceMm)*hit.t,point:lerp(a,b,hit.t)};
+    best={distanceMm:hit.distanceMm,distanceAlongMm:a.distanceMm+(b.distanceMm-a.distanceMm)*hit.t,point:lerp(a,b,hit.t),edgeId:a.edgeId,edgeT:a.edgeT+(b.edgeT-a.edgeT)*hit.t};
   }
   return best;
+}
+
+function projectionAtContourDistance(contour: SampledContourPoint[], rawDistance: number, total: number) {
+  const target = ((rawDistance % total) + total) % total;
+  for (let index = 0; index < contour.length - 1; index += 1) {
+    const start = contour[index];
+    const end = contour[index + 1];
+    if (start.edgeId !== end.edgeId || target < start.distanceMm || target > end.distanceMm) continue;
+    const t = (target - start.distanceMm) / Math.max(STRUCTURAL_EPSILON_MM, end.distanceMm - start.distanceMm);
+    return {
+      distanceMm: 0,
+      distanceAlongMm: target,
+      point: lerp(start, end, t),
+      edgeId: start.edgeId,
+      edgeT: start.edgeT + (end.edgeT - start.edgeT) * t,
+    };
+  }
+  return nearestContourProjection(contour, contour[0] ?? { xMm: 0, yMm: 0 });
+}
+
+function wrappedContourDelta(from: number, to: number, total: number): number {
+  return ((to - from) % total + total) % total;
 }
 function findBoundaryTangency(path: SampledPathPoint[], contour: SampledContourPoint[]): PatternVector | undefined {
   for(let i=0;i<path.length-1;i+=1){const a=path[i],b=path[i+1];if(a.segmentId!==b.segmentId||distance(a,b)<1e-9)continue;
@@ -1085,6 +1275,16 @@ function workspaceStateFor(garment: GarmentDraft, pieceId: string): PieceWorkspa
 
 function errorDiagnostic(code: InternalPathDiagnostic["code"], message: string, point?: PatternVector): InternalPathDiagnostic {
   return { code, severity: "error", message, ...(point ? { point: vector(point) } : {}) };
+}
+
+function dedupeDiagnostics(diagnostics: readonly InternalPathDiagnostic[]): InternalPathDiagnostic[] {
+  const seen = new Set<string>();
+  return diagnostics.filter((diagnostic) => {
+    const key = `${diagnostic.code}:${diagnostic.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function failure(garment: GarmentDraft, activePieceId: string, code: InternalPathDiagnostic["code"], message: string): InternalPathOperationResult {

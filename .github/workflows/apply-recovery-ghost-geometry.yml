@@ -1,0 +1,72 @@
+name: Apply recovery ghost geometry fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "recovery/9.5-03-empty-workspace"
+    paths:
+      - "scripts/apply-recovery-ghost-geometry.py"
+      - ".github/workflows/apply-recovery-ghost-geometry.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-9-5-03-ghost-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: "recovery/9.5-03-empty-workspace"
+          fetch-depth: 0
+
+      - name: Verify triggering commit is branch head
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Apply scoped Canvas fix
+        run: python3 scripts/apply-recovery-ghost-geometry.py
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit validated fix to current branch
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/App.tsx \
+            apps/web/src/editor/PatternCanvas.tsx \
+            apps/web/src/editor/canvasRenderState.ts \
+            apps/web/src/editor/canvasRenderState.test.ts \
+            scripts/recovery-empty-workspace-visual.mjs \
+            docs/progress/RECOVERY_9_5_DEFERRED_ISSUES.md
+          git commit -m "fix: remove ghost canvas geometry after zoom"
+          git push origin HEAD:recovery/9.5-03-empty-workspace

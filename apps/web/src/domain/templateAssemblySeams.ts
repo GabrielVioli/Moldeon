@@ -1,6 +1,7 @@
 import {
   edgeRangeLength,
   getPatternEdges,
+  seamSideRanges,
   type GarmentDraft,
   type PatternEdge,
   type PatternPiece,
@@ -9,6 +10,7 @@ import {
   type SeamTreatment,
   type SegmentRole,
 } from "./pattern";
+import { buildGuidedSleeveAssemblySeams } from "./sleeveSystem";
 
 interface SeamDefinition {
   key: string;
@@ -32,9 +34,6 @@ interface SeamDefinition {
 export function resolveTemplateAssemblyGarment(
   garment: GarmentDraft,
 ): GarmentDraft {
-  if ((garment.seams ?? []).some((seam) => seam.groupId?.startsWith("guided-sleeve:"))) {
-    return garment;
-  }
   const canonical = buildTemplateAssemblySeams(garment);
 
   if (canonical.length === 0) {
@@ -42,18 +41,17 @@ export function resolveTemplateAssemblyGarment(
   }
 
   const reservedEdges = new Set(
-    canonical.flatMap((seam) => [
-      edgeReferenceKey(seam.first.pieceId, seam.first.edgeId),
-      edgeReferenceKey(seam.second.pieceId, seam.second.edgeId),
-    ]),
+    canonical.flatMap((seam) =>
+      [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+        .map((range) => edgeReferenceKey(range.pieceId, range.edgeId))),
   );
   const existingByPair = new Map(
     (garment.seams ?? []).map((seam) => [seamPairKey(seam), seam]),
   );
   const preservedCustom = (garment.seams ?? []).filter((seam) =>
     !isGenericSeamName(seam.name) &&
-    !reservedEdges.has(edgeReferenceKey(seam.first.pieceId, seam.first.edgeId)) &&
-    !reservedEdges.has(edgeReferenceKey(seam.second.pieceId, seam.second.edgeId)),
+    [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+      .every((range) => !reservedEdges.has(edgeReferenceKey(range.pieceId, range.edgeId))),
   );
   const resolvedCanonical = canonical.map((seam) => {
     const existing = existingByPair.get(seamPairKey(seam));
@@ -81,16 +79,16 @@ export function resolveTemplateAssemblyGarment(
 export function buildTemplateAssemblySeams(
   garment: Pick<GarmentDraft, "pieces">,
 ): Seam[] {
-  const topDefinitions = buildTopDefinitions(garment.pieces);
-
-  if (topDefinitions.length > 0) {
-    return topDefinitions.map(createSeam);
-  }
+  const topSeams = buildGuidedSleeveAssemblySeams(garment.pieces);
+  if (topSeams.length > 0) return topSeams;
 
   const trouserDefinitions = buildTrouserDefinitions(garment.pieces);
 
   if (trouserDefinitions.length > 0) {
-    return trouserDefinitions.map(createSeam);
+    return [
+      ...trouserDefinitions.map(createSeam),
+      ...buildTrouserPairedCopyClosures(garment.pieces),
+    ];
   }
 
   const skirtDefinitions = buildSkirtDefinitions(garment.pieces);
@@ -117,95 +115,22 @@ export function seamSetSignature(
     .join("|");
 }
 
-function buildTopDefinitions(
-  pieces: readonly PatternPiece[],
-): SeamDefinition[] {
-  const front = pieces.find((piece) => hasRole(piece, "frontArmhole"));
-  const back = pieces.find((piece) => hasRole(piece, "backArmhole"));
-  const sleeve = pieces.find(
-    (piece) => hasRole(piece, "sleeveCapFront") && hasRole(piece, "sleeveCapBack"),
-  );
-
-  if (!front || !back || !sleeve) return [];
-
-  const frontShoulder = firstEdge(front, "shoulder");
-  const backShoulder = firstEdge(back, "shoulder");
-  const frontSide = firstEdge(front, "sideSeam");
-  const backSide = firstEdge(back, "sideSeam");
-  const frontArmhole = firstEdge(front, "frontArmhole");
-  const backArmhole = firstEdge(back, "backArmhole");
-  const sleeveCapFront = firstEdge(sleeve, "sleeveCapFront");
-  const sleeveCapBack = firstEdge(sleeve, "sleeveCapBack");
-  const sleeveSides = edgesWithRole(sleeve, "sideSeam");
-
-  if (
-    !frontShoulder ||
-    !backShoulder ||
-    !frontSide ||
-    !backSide ||
-    !frontArmhole ||
-    !backArmhole ||
-    !sleeveCapFront ||
-    !sleeveCapBack ||
-    sleeveSides.length < 2
-  ) {
-    return [];
+export function groupSeamsByRelation(
+  seams: readonly Seam[] | undefined,
+): Seam[][] {
+  const groups = new Map<string, Seam[]>();
+  for (const seam of seams ?? []) {
+    const key = seam.groupId?.trim() || seam.id;
+    const group = groups.get(key);
+    if (group) group.push(seam);
+    else groups.set(key, [seam]);
   }
-
-  return [
-    {
-      key: "shoulder",
-      name: "Ombros",
-      firstPiece: front,
-      firstEdge: frontShoulder,
-      secondPiece: back,
-      secondEdge: backShoulder,
-      direction: "same",
-      treatment: "standard",
-    },
-    {
-      key: "body-side",
-      name: "Laterais do corpo",
-      firstPiece: front,
-      firstEdge: frontSide,
-      secondPiece: back,
-      secondEdge: backSide,
-      direction: "same",
-      treatment: "standard",
-    },
-    {
-      key: "sleeve-underarm",
-      name: "Costura inferior das mangas",
-      firstPiece: sleeve,
-      firstEdge: sleeveSides[0],
-      secondPiece: sleeve,
-      secondEdge: sleeveSides[1],
-      direction: "opposite",
-      treatment: "standard",
-    },
-    {
-      key: "front-armhole",
-      name: "Cava frontal",
-      firstPiece: front,
-      firstEdge: frontArmhole,
-      secondPiece: sleeve,
-      secondEdge: sleeveCapFront,
-      direction: "opposite",
-      treatment: "ease",
-    },
-    {
-      key: "back-armhole",
-      name: "Cava traseira",
-      firstPiece: back,
-      firstEdge: backArmhole,
-      secondPiece: sleeve,
-      secondEdge: sleeveCapBack,
-      direction: "same",
-      treatment: "ease",
-    },
-  ];
+  return [...groups.values()];
 }
 
+export function seamRelationLabel(group: readonly Seam[]): string {
+  return (group[0]?.name ?? "Costura").replace(/ · trecho \d+$/, "");
+}
 
 function buildTrouserDefinitions(
   pieces: readonly PatternPiece[],
@@ -253,6 +178,49 @@ function buildTrouserDefinitions(
       treatment: "ease",
     })),
   ];
+}
+
+function buildTrouserPairedCopyClosures(
+  pieces: readonly PatternPiece[],
+): Seam[] {
+  const result: Seam[] = [];
+  const definitions: Array<{ role: "frontCrotch" | "backCrotch"; key: string; name: string }> = [
+    { role: "frontCrotch", key: "trouser-front-rise", name: "Fechamento do gancho frontal" },
+    { role: "backCrotch", key: "trouser-back-rise", name: "Fechamento do gancho traseiro" },
+  ];
+  for (const definition of definitions) {
+    const piece = pieces.find((candidate) => hasRole(candidate, definition.role));
+    if (!piece || (piece.cutQuantity ?? 1) < 2) continue;
+    const edges = edgesWithRole(piece, definition.role);
+    if (edges.length === 0) continue;
+    const ranges = edges.map((edge) => ({
+      pieceId: piece.id,
+      edgeId: edge.id,
+      startT: 0,
+      endT: 1,
+    }));
+    const first = ranges[0];
+    result.push({
+      id: `template-seam:${definition.key}`,
+      groupId: `template-seam:${definition.key}`,
+      name: definition.name,
+      first,
+      second: { ...first },
+      firstRanges: ranges.map((range) => ({ ...range })),
+      secondRanges: ranges.map((range) => ({ ...range })),
+      direction: "same",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      canonicalTreatment: "standard",
+      distribution: "uniform",
+      targetRatio: 1,
+      slackMm: 0,
+      physicalPairing: "paired-copies",
+      active: true,
+    });
+  }
+  return result;
 }
 
 function buildSkirtDefinitions(
@@ -342,8 +310,8 @@ function edgeReferenceKey(pieceId: string, edgeId: string): string {
 }
 
 function seamPairKey(seam: Seam): string {
-  const first = edgeReferenceKey(seam.first.pieceId, seam.first.edgeId);
-  const second = edgeReferenceKey(seam.second.pieceId, seam.second.edgeId);
+  const first = seamSideRanges(seam, "first").map((range) => edgeReferenceKey(range.pieceId, range.edgeId)).join(">");
+  const second = seamSideRanges(seam, "second").map((range) => edgeReferenceKey(range.pieceId, range.edgeId)).join(">");
   return first < second ? `${first}|${second}` : `${second}|${first}`;
 }
 

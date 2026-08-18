@@ -1,23 +1,9 @@
-import type { BodyMeasurements, BodyType, PatternPreviewPlacement, PreviewBodySide, PreviewRegion, PreviewSurface } from "../domain/pattern";
+import type { BodyAnchorId, BodyMeasurements, BodyType, PatternPreviewPlacement, PreviewBodySide, PreviewRegion, PreviewSurface } from "../domain/pattern";
 import { createMeasurementProfile, measurementProfileToBodyMeasurements } from "../domain/parametricMeasurements";
 
 export type AvatarVector3 = [number, number, number];
 
-export type AvatarArrangementAnchorId =
-  | "torso-front"
-  | "torso-back"
-  | "shoulder-left"
-  | "shoulder-right"
-  | "arm-left"
-  | "arm-right"
-  | "waist-front"
-  | "waist-back"
-  | "hip-front"
-  | "hip-back"
-  | "leg-left"
-  | "leg-right"
-  | "neck"
-  | "head";
+export type AvatarArrangementAnchorId = BodyAnchorId | "head";
 
 export interface AvatarResolvedMeasurements {
   heightMm: number;
@@ -241,8 +227,9 @@ export function buildAvatarParametricModel(
 
 export function resolveAvatarAnchor(
   model: AvatarParametricModel,
-  placement: Pick<PatternPreviewPlacement, "region" | "surface" | "bodySide">,
+  placement: Pick<PatternPreviewPlacement, "region" | "surface" | "bodySide" | "bodyAnchorId">,
 ): AvatarArrangementAnchor | undefined {
+  if (placement.bodyAnchorId) return anchorById(model, placement.bodyAnchorId);
   const surface = placement.surface === "back" ? "back" : "front";
   if (placement.region === "arm") {
     if (placement.bodySide === "left") return anchorById(model, "arm-left");
@@ -395,6 +382,8 @@ function createAnchors(model: AvatarParametricModel): AvatarArrangementAnchor[] 
     make("waist-back", "waist", "back", "center", [0, model.landmarks.waistY, -waist.halfDepth], back, down, [-1, 0, 0], 0.012),
     make("hip-front", "hip", "front", "center", [0, model.landmarks.hipY, hip.halfDepth], front, down, horizontal, 0.014),
     make("hip-back", "hip", "back", "center", [0, model.landmarks.hipY, -hip.halfDepth], back, down, [-1, 0, 0], 0.014),
+    make("hip-left", "hip", "side", "left", [-hip.halfWidth, model.landmarks.hipY, 0], [-1, 0, 0], down, front, 0.014),
+    make("hip-right", "hip", "side", "right", [hip.halfWidth, model.landmarks.hipY, 0], [1, 0, 0], down, front, 0.014),
     make("leg-left", "leg", "side", "left", model.joints.hipLeft, [-1, 0, 0], leftLegAxis, front, 0.012),
     make("leg-right", "leg", "side", "right", model.joints.hipRight, [1, 0, 0], rightLegAxis, front, 0.012),
     make("neck", "neck", "front", "center", [0, model.landmarks.neckY, 0], front, [0, 1, 0], horizontal, 0.01),

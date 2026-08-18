@@ -239,12 +239,14 @@ export function createDefaultSleeveSettings(
   const cuffCircumferenceMm = type === "long"
     ? bodyWrist + 45
     : Math.max(bodyBicep + sleeveEase * 0.65, bicepCircumferenceMm * 0.82);
-  const halfWidth = bicepCircumferenceMm / 2;
-  const capHeightLimit = Math.sqrt(Math.max(1, (Math.min(body.frontLengthMm, body.backLengthMm) + capEaseMm * 0.45) ** 2 - (halfWidth * 0.5) ** 2));
+  const capWidth = bicepCircumferenceMm / 2;
+  const frontTarget = body.frontLengthMm + capEaseMm * 0.42;
+  const backTarget = body.backLengthMm + capEaseMm * 0.58;
+  const capHeightLimit = maximumCapHeightForTargets(capWidth, frontTarget, backTarget);
   const capHeightMm = clamp(
-    body.armholeVerticalSpanMm * 0.72,
+    capHeightLimit * 0.82,
     90,
-    Math.max(92, capHeightLimit * 0.82),
+    220,
   );
 
   return sanitizeSleeveSettings({
@@ -276,7 +278,12 @@ export function draftGuidedSleeve(
     garment.fabrics[0]?.id ?? body.front.fabricId ?? body.back.fabricId,
   );
   const compatibility = analyzeGeneratedSleeve(body, sleevePiece, settings, cap.diagnostics);
-  const seams = buildGuidedSleeveSeams(body, sleevePiece, compatibility);
+  const seams = buildGuidedSleeveSeams(
+    body,
+    sleevePiece,
+    compatibility.totalDifferenceMm,
+    compatibility.totalArmholeMm,
+  );
 
   return {
     sleevePiece,
@@ -296,6 +303,24 @@ export function analyzeSleeveCompatibility(
   settings: SleeveDraftSettings,
 ): SleeveCompatibility {
   return draftGuidedSleeve(garment, frontPieceId, backPieceId, settings).compatibility;
+}
+
+export function buildGuidedSleeveAssemblySeams(
+  pieces: readonly PatternPiece[],
+): Seam[] {
+  const front = pieces.find((piece) => hasRole(piece, "frontArmhole"));
+  const back = pieces.find((piece) => hasRole(piece, "backArmhole"));
+  const sleeve = pieces.find(isSleevePiece);
+  if (!front || !back || !sleeve) return [];
+  const body = resolveSleeveBody(pieces, front.id, back.id);
+  const totalArmholeMm = body.frontLengthMm + body.backLengthMm;
+  const totalCapMm = roleLength(sleeve, "sleeveCapFront") + roleLength(sleeve, "sleeveCapBack");
+  return buildGuidedSleeveSeams(
+    body,
+    sleeve,
+    totalCapMm - totalArmholeMm,
+    totalArmholeMm,
+  );
 }
 
 export function stableSleevePieceId(frontPieceId: string, backPieceId: string): string {
@@ -571,7 +596,8 @@ function analyzeGeneratedSleeve(
 function buildGuidedSleeveSeams(
   body: ResolvedSleeveBody,
   sleeve: PatternPiece,
-  compatibility: SleeveCompatibility,
+  totalDifferenceMm: number,
+  totalArmholeMm: number,
 ): Seam[] {
   const seams: Seam[] = [];
   appendMappedConnectorSeams(
@@ -586,6 +612,7 @@ function buildGuidedSleeveSeams(
     "Cava frontal",
     "opposite",
     true,
+    "ease",
   );
   appendMappedConnectorSeams(
     seams,
@@ -599,6 +626,7 @@ function buildGuidedSleeveSeams(
     "Cava traseira",
     "same",
     false,
+    "ease",
   );
 
   const sideEdges = edgesWithRole(sleeve, "sideSeam");
@@ -627,24 +655,25 @@ function buildGuidedSleeveSeams(
       "standard",
     ));
   }
-  const frontSide = firstEdge(body.front, "sideSeam");
-  const backSide = firstEdge(body.back, "sideSeam");
-  if (frontSide && backSide) {
-    seams.push(seam(
-      "guided-sleeve:body-side",
-      "guided-sleeve:body-side",
-      "Laterais do corpo",
-      fullRange(body.front.id, frontSide.id),
-      fullRange(body.back.id, backSide.id),
-      "same",
-      "standard",
-    ));
-  }
+  appendMappedConnectorSeams(
+    seams,
+    body.front,
+    "sideSeam",
+    [],
+    body.back,
+    "sideSeam",
+    [],
+    "guided-sleeve:body-side",
+    "Laterais do corpo",
+    "same",
+    false,
+    "standard",
+  );
 
   return seams.map((current) => ({
     ...current,
     easeRatio: current.treatment === "ease"
-      ? Math.abs(compatibility.totalDifferenceMm) / Math.max(compatibility.totalArmholeMm, 1)
+      ? Math.abs(totalDifferenceMm) / Math.max(totalArmholeMm, 1)
       : 0,
   }));
 }
@@ -661,6 +690,7 @@ function appendMappedConnectorSeams(
   label: string,
   direction: Seam["direction"],
   reverseSecondIntervals: boolean,
+  treatment: NonNullable<Seam["treatment"]>,
 ): void {
   const firstBoundaries = connectorLandmarkBoundaries(firstLandmarks);
   const secondBoundaries = connectorLandmarkBoundaries(secondLandmarks);
@@ -728,7 +758,7 @@ function appendMappedConnectorSeams(
         first,
         second,
         direction,
-        "ease",
+        treatment,
       ));
     }
   }
@@ -944,18 +974,60 @@ function capCubic(
 ): CubicCurve {
   const dx = end.xMm - start.xMm;
   const dy = end.yMm - start.yMm;
-  const chord = Math.max(0.001, Math.hypot(dx, dy));
-  const normal = { xMm: dy / chord, yMm: -dx / chord };
-  const firstT = side === "front" ? 0.27 : 0.25;
-  const secondT = side === "front" ? 0.72 : 0.70;
-  const firstWeight = side === "front" ? 0.70 : 1.08;
-  const secondWeight = side === "front" ? 1.08 : 0.72;
+  if (side === "front") {
+    return {
+      p0: { ...start },
+      c1: {
+        xMm: start.xMm - offset * 0.30,
+        yMm: start.yMm + dy * 0.34,
+      },
+      c2: {
+        xMm: end.xMm - dx * 0.42,
+        yMm: end.yMm,
+      },
+      p3: { ...end },
+    };
+  }
   return {
     p0: { ...start },
-    c1: add(lerp(start, end, firstT), scale(normal, offset * firstWeight)),
-    c2: add(lerp(start, end, secondT), scale(normal, offset * secondWeight)),
+    c1: {
+      xMm: start.xMm + dx * 0.40,
+      yMm: start.yMm,
+    },
+    c2: {
+      xMm: end.xMm + offset * 0.26,
+      yMm: end.yMm - dy * 0.32,
+    },
     p3: { ...end },
   };
+}
+
+function maximumCapHeightForTargets(
+  capWidth: number,
+  frontTarget: number,
+  backTarget: number,
+): number {
+  let low = 55;
+  let high = 260;
+  for (let iteration = 0; iteration < 44; iteration += 1) {
+    const height = (low + high) / 2;
+    const apex = { xMm: capWidth * 0.5, yMm: 0 };
+    const frontLength = cubicArcLength(capCubic(
+      { xMm: 0, yMm: height },
+      apex,
+      0,
+      "front",
+    ));
+    const backLength = cubicArcLength(capCubic(
+      apex,
+      { xMm: capWidth, yMm: height },
+      0,
+      "back",
+    ));
+    if (frontLength <= frontTarget && backLength <= backTarget) low = height;
+    else high = height;
+  }
+  return low;
 }
 
 function splitCubicAtMany(curve: CubicCurve, positions: readonly number[]): CubicCurve[] {
@@ -1274,14 +1346,6 @@ function lerp(first: PatternVector, second: PatternVector, t: number): PatternVe
     xMm: first.xMm + (second.xMm - first.xMm) * t,
     yMm: first.yMm + (second.yMm - first.yMm) * t,
   };
-}
-
-function add(first: PatternVector, second: PatternVector): PatternVector {
-  return { xMm: first.xMm + second.xMm, yMm: first.yMm + second.yMm };
-}
-
-function scale(vector: PatternVector, factor: number): PatternVector {
-  return { xMm: vector.xMm * factor, yMm: vector.yMm * factor };
 }
 
 function distance(first: PatternVector, second: PatternVector): number {

@@ -12,6 +12,8 @@ import {
   migrateLegacyPieceToSegments,
   parseGarmentDraft,
   parsePatternPiece,
+  seamSidesMateriallyOverlap,
+  seamSideRanges,
   type AssemblyPlacement,
   type GarmentDraft,
   type PatternPiece,
@@ -26,6 +28,7 @@ import {
   type PanelArrangementAnchorV3,
   type PanelInstanceV3,
   type PatternConnectorV3,
+  type PatternBodyPlacementV3,
   type PatternDefinitionV3,
   type PatternDocumentIssueSeverity,
   type PatternDocumentMigrationResult,
@@ -36,6 +39,7 @@ import {
   type PatternProjectV2,
   type PatternSemanticRoleV3,
   type SeamGroupV3,
+  type SeamPhysicalBindingV3,
   type SeamTreatmentV3,
   type WorkspaceStateV3,
 } from "./patternDocumentV3.types";
@@ -64,6 +68,7 @@ const SEMANTIC_ROLES = [
   "leg-front",
   "leg-back",
   "collar",
+  "panel",
   "custom",
 ] as const;
 const CONNECTOR_ROLES = [
@@ -100,8 +105,8 @@ const SEAM_DISTRIBUTIONS = [
   "center-biased",
   "custom",
 ] as const;
-const PREVIEW_REGIONS = ["torso", "waist", "hip", "arm", "leg"] as const;
-const PREVIEW_SURFACES = ["front", "back", "side"] as const;
+const PREVIEW_REGIONS = ["torso", "waist", "hip", "arm", "leg", "neck", "custom"] as const;
+const PREVIEW_SURFACES = ["front", "back", "side", "custom"] as const;
 const BODY_SIDES = ["center", "left", "right"] as const;
 const BODY_TYPES = ["feminine", "masculine"] as const;
 const SIMULATION_QUALITIES = ["draft", "normal", "fitting", "high"] as const;
@@ -172,6 +177,8 @@ export function parsePatternDocumentV3(value: unknown): PatternDocumentV3 {
     garmentSettings: parseGarmentSettings(value.garmentSettings),
     simulationSettings: parseSimulationSettings(value.simulationSettings),
   };
+
+  document.seamGroups = normalizeSeamPhysicalBindings(document.seamGroups, document.panelInstances);
 
   const errors = validatePatternDocumentV3(document).filter(
     (issue) => issue.severity === "error",
@@ -277,7 +284,7 @@ export function garmentDraftToPatternDocumentV3(
     patternPieceToDefinition(piece, garment, warnings),
   );
   const panelInstances = derivePanelInstances(patternDefinitions, garment);
-  const seamGroups = legacySeamsToGroups(garment.seams ?? []);
+  const seamGroups = legacySeamsToGroups(garment.seams ?? [], panelInstances);
   const workspace = createWorkspaceState(
     garment,
     options.activePatternId,
@@ -328,6 +335,7 @@ export function garmentDraftToPatternDocumentV3(
     workspace,
     garmentSettings: {
       ...(garment.ease === undefined ? {} : { ease: garment.ease }),
+      ...(garment.dressing === undefined ? {} : { dressing: garment.dressing }),
     },
     simulationSettings: defaultSimulationSettings(),
   });
@@ -360,7 +368,9 @@ export function patternDocumentV3ToGarmentDraft(
   }));
   const assemblyPlacements = document.patternDefinitions
     .map((definition) =>
-      firstAssemblyPlacementForDefinition(definition.id, document.panelInstances),
+      definition.bodyPlacement.status === "confirmed"
+        ? firstAssemblyPlacementForDefinition(definition.id, document.panelInstances)
+        : undefined,
     )
     .filter((placement): placement is AssemblyPlacement => placement !== undefined);
 
@@ -408,51 +418,48 @@ export function patternDocumentV3ToGarmentDraft(
     ...(document.garmentSettings.ease === undefined
       ? {}
       : { ease: document.garmentSettings.ease }),
+    ...(document.garmentSettings.dressing === undefined
+      ? {}
+      : { dressing: document.garmentSettings.dressing }),
   });
 }
 
 export function derivePanelInstances(
   definitions: readonly PatternDefinitionV3[],
-  garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
+  _garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
 ): PanelInstanceV3[] {
-  const assemblyByPattern = new Map(
-    (garment?.assemblyPlacements ?? []).map((placement) => [
-      placement.pieceId,
-      placement,
-    ]),
-  );
-  const pieceById = new Map((garment?.pieces ?? []).map((piece) => [piece.id, piece]));
   const result: PanelInstanceV3[] = [];
 
   for (const definition of definitions) {
-    const legacyPiece = pieceById.get(definition.id);
-    const previewPlacements = legacyPiece?.previewPlacements ?? [];
-    const assemblyPlacement = assemblyByPattern.get(definition.id);
+    const classification = definition.bodyPlacement;
+    const confirmed = classification.status === "confirmed"
+      && classification.role !== undefined
+      && classification.region !== undefined
+      && classification.surface !== undefined
+      && classification.bodySide !== undefined
+      && classification.anchorId !== undefined;
     for (let copyIndex = 0; copyIndex < definition.cutQuantity; copyIndex += 1) {
-      const preview = previewPlacements[copyIndex] ?? previewPlacements[0];
-      const bodySide = resolveBodySide(preview, definition, copyIndex);
-      const surface = preview?.surface ?? resolveSurface(assemblyPlacement);
+      const bodySide = confirmed
+        ? resolveClassifiedBodySide(classification.bodySide!, definition, copyIndex)
+        : undefined;
+      const surface = confirmed ? classification.surface : undefined;
       const mirrored =
-        preview?.mirrorX ??
-        assemblyPlacement?.flipped ??
-        (definition.mirrorRule === "paired" && copyIndex % 2 === 1);
-      const anchor = createArrangementAnchor(
-        definition,
-        copyIndex,
-        bodySide,
-        surface,
-        preview,
-        assemblyPlacement,
-      );
+        classification.outwardFace === "flipped"
+        || (definition.mirrorRule === "paired" && copyIndex % 2 === 1);
+      const anchor = confirmed && bodySide && surface
+        ? createArrangementAnchor(definition, copyIndex, bodySide, surface)
+        : undefined;
       result.push({
         id: createPanelInstanceId(definition.id, copyIndex),
         sourcePatternId: definition.id,
         copyIndex,
-        bodySide,
-        surface,
+        placementStatus: confirmed ? "confirmed" : "unclassified",
+        ...(bodySide === undefined ? {} : { bodySide }),
+        ...(surface === undefined ? {} : { surface }),
         mirrored,
         fabricId: definition.fabricId,
-        arrangementAnchor: anchor,
+        ...(anchor === undefined ? {} : { arrangementAnchor: anchor }),
+        includedIn3D: classification.includeIn3D,
         simulationEnabled: true,
         metadata: {},
       });
@@ -555,8 +562,14 @@ export function validatePatternDocumentV3(
     ) {
       issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} possui copyIndex inválido.`, instance.id));
     }
-    if (instance.arrangementAnchor.bodySide !== instance.bodySide) {
+    if (instance.placementStatus === "confirmed" && (!instance.arrangementAnchor || !instance.bodySide || !instance.surface)) {
+      issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} está confirmada sem posicionamento corporal completo.`, instance.id));
+    }
+    if (instance.arrangementAnchor && instance.arrangementAnchor.bodySide !== instance.bodySide) {
       issues.push(issue("invalid-panel-instance", "error", `A instância ${instance.id} diverge do lado corporal do anchor.`, instance.id));
+    }
+    if (instance.arrangementAnchor && Math.abs(instance.arrangementAnchor.scale - 1) > 1e-9) {
+      issues.push(issue("invalid-panel-instance", "warning", `A instância ${instance.id} possui escala legada ${instance.arrangementAnchor.scale}; a montagem física usará escala 1.`, instance.id));
     }
   }
 
@@ -580,8 +593,14 @@ export function validatePatternDocumentV3(
     if (group.first.length === 0 || group.second.length === 0) {
       issues.push(issue("empty-range", "error", `O grupo ${group.id} precisa ter intervalos nos dois lados.`, group.id));
     }
-    if (rangesListsEqual(group.first, group.second)) {
-      issues.push(issue("degenerate-self-seam", "error", `O grupo ${group.id} costura exatamente os mesmos intervalos.`, group.id));
+    validatePhysicalBindings(group, document.panelInstances, issues);
+    const physicalDistinctCopy = (group.physicalBindings ?? []).some((binding) =>
+      binding.first.some((first) => binding.second.some((second) =>
+        first.patternId === second.patternId && first.panelInstanceId !== second.panelInstanceId,
+      )),
+    );
+    if (seamSidesMateriallyOverlap(group.first, group.second) && !physicalDistinctCopy) {
+      issues.push(issue("degenerate-self-seam", "error", `O grupo ${group.id} costura exatamente os mesmos intervalos sem cópias físicas distintas.`, group.id));
     }
     const signature = seamGroupSignature(group);
     const duplicateId = seamSignatures.get(signature);
@@ -628,6 +647,7 @@ function patternPieceToDefinition(
     name: piece.name,
     sourceTemplateId: garment.templateId,
     semanticRole: inferSemanticRole(piece.id, garment),
+    bodyPlacement: bodyPlacementForPiece(piece, garment),
     geometry: {
       geometryVersion: 2,
       points: structuredClone(piece.points),
@@ -658,23 +678,25 @@ function definitionToPatternPiece(
   instances: readonly PanelInstanceV3[],
 ): PatternPiece {
   const previewPlacements = instances
-    .filter((instance) => instance.sourcePatternId === definition.id)
+    .filter((instance) => instance.sourcePatternId === definition.id && instance.placementStatus === "confirmed" && instance.arrangementAnchor)
     .sort((left, right) => left.copyIndex - right.copyIndex)
-    .map((instance): PatternPreviewPlacement => ({
-      id:
-        instance.arrangementAnchor.legacyPreviewPlacementId ??
-        `${instance.id}:preview`,
+    .map((instance): PatternPreviewPlacement => {
+      const anchor = instance.arrangementAnchor!;
+      return ({
+      id: instance.id,
       pieceId: definition.id,
-      region: instance.arrangementAnchor.region,
-      surface: instance.arrangementAnchor.surface,
-      bodySide: instance.bodySide,
-      rotationDeg: instance.arrangementAnchor.rotationDeg,
-      offsetXMm: instance.arrangementAnchor.offsetXMm,
-      offsetYMm: instance.arrangementAnchor.offsetYMm,
-      offsetZMm: instance.arrangementAnchor.offsetZMm,
-      scale: instance.arrangementAnchor.scale,
+      region: anchor.region,
+      surface: anchor.surface,
+      bodySide: instance.bodySide!,
+      bodyAnchorId: anchor.bodyAnchorId,
+      rotationDeg: anchor.rotationDeg,
+      offsetXMm: anchor.offsetXMm,
+      offsetYMm: anchor.offsetYMm,
+      offsetZMm: anchor.offsetZMm,
+      scale: 1,
       mirrorX: instance.mirrored,
-    }));
+    });
+    });
 
   return parsePatternPiece({
     id: definition.id,
@@ -683,6 +705,7 @@ function definitionToPatternPiece(
     cutQuantity: definition.cutQuantity,
     cutOnFold: definition.cutOnFold,
     fabricId: definition.fabricId,
+    bodyPlacement: structuredClone(definition.bodyPlacement),
     ...(previewPlacements.length === 0 ? {} : { previewPlacements }),
     edgeFinishes: definition.edgeFinishes,
     points: definition.geometry.points,
@@ -806,10 +829,12 @@ function inferSemanticRole(
   pieceId: string,
   garment: GarmentDraft,
 ): PatternSemanticRoleV3 {
+  const explicitRole = garment.pieces.find((piece) => piece.id === pieceId)?.bodyPlacement?.role;
+  if (explicitRole) return explicitRole;
   const placement = garment.assemblyPlacements?.find(
     (candidate) => candidate.pieceId === pieceId,
   );
-  if (!placement) return "custom";
+  if (!placement || placement.source === "inferred") return "custom";
   switch (placement.role) {
     case "front":
       return "front";
@@ -828,13 +853,93 @@ function inferSemanticRole(
   }
 }
 
+function bodyPlacementForPiece(
+  piece: PatternPiece,
+  garment: GarmentDraft,
+): PatternDefinitionV3["bodyPlacement"] {
+  if (piece.bodyPlacement) return structuredClone(piece.bodyPlacement);
+  const preview = piece.previewPlacements?.[0];
+  const assembly = garment.assemblyPlacements?.find(
+    (candidate) => candidate.pieceId === piece.id && candidate.source !== "inferred",
+  );
+  if (!preview && !assembly) {
+    return {
+      version: 1,
+      status: "unclassified",
+      includeIn3D: true,
+      outwardFace: "normal",
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      rotationXDeg: 0,
+      rotationYDeg: 0,
+      rotationZDeg: 0,
+      source: "migration",
+    };
+  }
+  const role = inferSemanticRole(piece.id, garment);
+  const region = preview?.region ?? (assembly ? regionFromLegacyAssemblyRole(assembly.role) : undefined);
+  const surface = preview?.surface ?? assembly?.outwardSide;
+  const previewSides = new Set(piece.previewPlacements?.map((placement) => placement.bodySide) ?? []);
+  const bodySide = previewSides.has("left") && previewSides.has("right")
+    ? "paired"
+    : preview?.bodySide ?? "center";
+  return {
+    version: 1,
+    status: "confirmed",
+    includeIn3D: true,
+    role,
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    bodySide,
+    ...(anchorIdForPlacement(region, surface, preview?.bodySide ?? bodySide) === undefined ? {} : { anchorId: anchorIdForPlacement(region, surface, preview?.bodySide ?? bodySide) }),
+    outwardFace: preview?.mirrorX || assembly?.flipped ? "flipped" : "normal",
+    offsetXMm: preview?.offsetXMm ?? assembly?.positionMm[0] ?? 0,
+    offsetYMm: preview?.offsetYMm ?? assembly?.positionMm[1] ?? 0,
+    offsetZMm: preview?.offsetZMm ?? assembly?.positionMm[2] ?? 25,
+    rotationXDeg: assembly?.rotationDeg[0] ?? 0,
+    rotationYDeg: assembly?.rotationDeg[1] ?? 0,
+    rotationZDeg: preview?.rotationDeg ?? assembly?.rotationDeg[2] ?? 0,
+    source: "migration",
+  };
+}
+
+function regionFromLegacyAssemblyRole(role: AssemblyPlacement["role"]): PatternDefinitionV3["bodyPlacement"]["region"] {
+  if (role === "sleeve") return "arm";
+  if (role === "leg") return "leg";
+  if (role === "waist") return "waist";
+  if (role === "collar") return "neck";
+  return "torso";
+}
+
+function anchorIdForPlacement(
+  region: PatternDefinitionV3["bodyPlacement"]["region"],
+  surface: PatternDefinitionV3["bodyPlacement"]["surface"],
+  side: PatternDefinitionV3["bodyPlacement"]["bodySide"],
+): PatternDefinitionV3["bodyPlacement"]["anchorId"] {
+  if (region === "torso") return surface === "back" ? "torso-back" : surface === "front" ? "torso-front" : undefined;
+  if (region === "waist") return surface === "back" ? "waist-back" : surface === "front" ? "waist-front" : undefined;
+  if (region === "hip") {
+    if (side === "left") return "hip-left";
+    if (side === "right") return "hip-right";
+    return surface === "back" ? "hip-back" : surface === "front" ? "hip-front" : undefined;
+  }
+  if (region === "arm") return side === "left" ? "arm-left" : side === "right" ? "arm-right" : undefined;
+  if (region === "leg") return side === "left" ? "leg-left" : side === "right" ? "leg-right" : undefined;
+  if (region === "neck") return "neck";
+  return undefined;
+}
+
 function mirrorRuleForPiece(piece: PatternPiece): PatternMirrorRuleV3 {
   if (piece.cutOnFold) return "cut-on-fold";
   if ((piece.cutQuantity ?? 1) > 1) return "paired";
   return "none";
 }
 
-function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGroupV3[] {
+function legacySeamsToGroups(
+  seams: NonNullable<GarmentDraft["seams"]>,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3[] {
   const grouped = new Map<string, NonNullable<GarmentDraft["seams"]>>();
   for (const seam of seams) {
     const id = seam.groupId ?? seam.id;
@@ -845,47 +950,60 @@ function legacySeamsToGroups(seams: NonNullable<GarmentDraft["seams"]>): SeamGro
   return [...grouped.entries()].map(([groupId, parts]) => {
     const first = parts[0];
     const base = legacySeamToGroup(first);
-    return {
+    const group: SeamGroupV3 = {
       ...base,
       id: groupId,
       name: first.name ?? groupId,
-      first: parts.map((part) => structuredClone(part.first)),
-      second: parts.map((part) => structuredClone(part.second)),
+      first: parts.flatMap((part) => seamSideRanges(part, "first").map((range) => structuredClone(range))),
+      second: parts.flatMap((part) => seamSideRanges(part, "second").map((range) => structuredClone(range))),
       active: parts.every((part) => part.active !== false),
     };
+    const explicitBindings = parts.flatMap((part) => part.physicalBindings ?? []);
+    if (explicitBindings.length > 0) group.physicalBindings = structuredClone(explicitBindings);
+    return normalizeSeamPhysicalBinding(group, panelInstances);
   });
 }
 
 function groupToLegacySeams(group: SeamGroupV3): NonNullable<GarmentDraft["seams"]> {
-  if (group.first.length !== group.second.length) {
-    throw new PatternDocumentCompatibilityError("A costura " + group.id + " possui múltiplos intervalos com quantidades diferentes entre os lados.", group.id);
-  }
-  return group.first.map((first, index) => ({
-    id: group.first.length === 1 ? group.id : group.id + ":part:" + (index + 1),
+  const first = structuredClone(group.first[0]);
+  const second = structuredClone(group.second[0]);
+  return [{
+    id: group.id,
     groupId: group.id,
     name: group.name,
-    first: structuredClone(first),
-    second: structuredClone(group.second[index]),
+    first,
+    second,
+    ...(group.first.length > 1 ? { firstRanges: structuredClone(group.first) } : {}),
+    ...(group.second.length > 1 ? { secondRanges: structuredClone(group.second) } : {}),
     direction: group.direction,
     easeRatio: group.compatibility?.legacyEaseRatio ?? Math.abs(group.targetRatio - 1),
     type: group.compatibility?.legacyType ?? group.treatment,
     treatment: legacyTreatment(group),
+    canonicalTreatment: group.treatment,
+    distribution: group.distribution,
+    targetRatio: group.targetRatio,
+    slackMm: group.slackMm,
+    ...(group.physicalBindings === undefined ? {} : { physicalBindings: structuredClone(group.physicalBindings) }),
     active: group.active,
-  }));
+  }];
 }
 
 function legacySeamToGroup(seam: NonNullable<GarmentDraft["seams"]>[number]): SeamGroupV3 {
-  const treatment = legacyTreatmentToV3(seam.treatment, seam.type);
+  const treatment = seam.canonicalTreatment === "stretch"
+    ? "elastic"
+    : seam.canonicalTreatment ?? legacyTreatmentToV3(seam.treatment, seam.type);
   return {
     id: seam.id,
     name: seam.name ?? seam.id,
-    first: [structuredClone(seam.first)],
-    second: [structuredClone(seam.second)],
+    first: seamSideRanges(seam, "first").map((range) => structuredClone(range)),
+    second: seamSideRanges(seam, "second").map((range) => structuredClone(range)),
     direction: seam.direction,
     treatment,
-    distribution: treatment === "ease" || treatment === "gather" ? "proportional" : "uniform",
-    targetRatio: Math.max(0.000001, 1 + seam.easeRatio),
-    slackMm: 0,
+    distribution: seam.distribution ?? (treatment === "ease" || treatment === "gather" ? "proportional" : "uniform"),
+    targetRatio: seam.targetRatio ?? Math.max(0.000001, 1 + seam.easeRatio),
+    slackMm: seam.slackMm ?? 0,
+    ...(seam.physicalBindings === undefined ? {} : { physicalBindings: structuredClone(seam.physicalBindings) }),
+    ...(seam.physicalPairing === undefined ? {} : { physicalPairing: seam.physicalPairing }),
     active: seam.active !== false,
     compatibility: {
       legacyEaseRatio: seam.easeRatio,
@@ -923,6 +1041,134 @@ function legacyTreatment(group: SeamGroupV3): "standard" | "ease" | "gather" | "
     return legacy;
   }
   return group.treatment === "elastic" ? "stretch" : group.treatment === "zipper" ? "standard" : group.treatment;
+}
+
+function normalizeSeamPhysicalBindings(
+  groups: readonly SeamGroupV3[],
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3[] {
+  return groups.map((group) => normalizeSeamPhysicalBinding(group, panelInstances));
+}
+
+function normalizeSeamPhysicalBinding(
+  group: SeamGroupV3,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamGroupV3 {
+  const { physicalPairing, ...canonical } = group;
+  if ((group.physicalBindings?.length ?? 0) > 0) {
+    return { ...canonical, physicalBindings: structuredClone(group.physicalBindings) };
+  }
+  const physicalBindings = physicalPairing === "paired-copies"
+    ? buildPairedCopyBindings(group, panelInstances)
+    : inferPhysicalBindings(group, panelInstances);
+  return physicalBindings.length > 0 ? { ...canonical, physicalBindings } : canonical;
+}
+
+function inferPhysicalBindings(
+  group: Pick<SeamGroupV3, "id" | "first" | "second">,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamPhysicalBindingV3[] {
+  const firstPatternIds = uniqueSorted(group.first.map((range) => range.pieceId));
+  const secondPatternIds = uniqueSorted(group.second.map((range) => range.pieceId));
+  const allPatternIds = uniqueSorted([...firstPatternIds, ...secondPatternIds]);
+  const instancesByPattern = new Map<string, PanelInstanceV3[]>();
+  for (const patternId of allPatternIds) {
+    instancesByPattern.set(patternId, panelInstances
+      .filter((instance) => instance.sourcePatternId === patternId)
+      .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id)));
+  }
+  if (allPatternIds.some((patternId) => (instancesByPattern.get(patternId)?.length ?? 0) === 0)) return [];
+  const bindingCount = Math.max(1, ...allPatternIds.map((patternId) => instancesByPattern.get(patternId)?.length ?? 0));
+  if (allPatternIds.some((patternId) => {
+    const count = instancesByPattern.get(patternId)?.length ?? 0;
+    return count !== 1 && count !== bindingCount;
+  })) return [];
+
+  const pick = (patternId: string, index: number): PanelInstanceV3 | undefined => {
+    const list = instancesByPattern.get(patternId) ?? [];
+    return list.length === 1 ? list[0] : list.find((instance) => instance.copyIndex === index) ?? list[index];
+  };
+  return Array.from({ length: bindingCount }, (_, index) => ({
+    id: `${group.id}:physical:${index + 1}`,
+    first: firstPatternIds.map((patternId) => pick(patternId, index)!)
+      .map((instance) => ({ patternId: instance.sourcePatternId, panelInstanceId: instance.id })),
+    second: secondPatternIds.map((patternId) => pick(patternId, index)!)
+      .map((instance) => ({ patternId: instance.sourcePatternId, panelInstanceId: instance.id })),
+  }));
+}
+
+function buildPairedCopyBindings(
+  group: Pick<SeamGroupV3, "id" | "first" | "second">,
+  panelInstances: readonly PanelInstanceV3[],
+): SeamPhysicalBindingV3[] {
+  const patternIds = uniqueSorted([...group.first, ...group.second].map((range) => range.pieceId));
+  if (patternIds.length !== 1) return [];
+  const patternId = patternIds[0];
+  const instances = panelInstances
+    .filter((instance) => instance.sourcePatternId === patternId)
+    .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
+  if (instances.length < 2) return [];
+  const result: SeamPhysicalBindingV3[] = [];
+  for (let index = 0; index + 1 < instances.length; index += 2) {
+    result.push({
+      id: `${group.id}:physical:${result.length + 1}`,
+      first: [{ patternId, panelInstanceId: instances[index].id }],
+      second: [{ patternId, panelInstanceId: instances[index + 1].id }],
+    });
+  }
+  return result;
+}
+
+function validatePhysicalBindings(
+  group: SeamGroupV3,
+  panelInstances: readonly PanelInstanceV3[],
+  issues: PatternDocumentValidationIssue[],
+): void {
+  const instanceById = new Map(panelInstances.map((instance) => [instance.id, instance]));
+  const firstPatterns = new Set(group.first.map((range) => range.pieceId));
+  const secondPatterns = new Set(group.second.map((range) => range.pieceId));
+  const bindings = group.physicalBindings ?? [];
+  const ambiguous = [...firstPatterns, ...secondPatterns].some((patternId) =>
+    panelInstances.filter((instance) => instance.sourcePatternId === patternId).length > 1,
+  );
+  if (bindings.length === 0) {
+    if (ambiguous) {
+      issues.push(issue("ambiguous-physical-binding", "error", `O grupo ${group.id} possui múltiplas cópias físicas sem binding explícito.`, group.id));
+    }
+    return;
+  }
+  const bindingIds = new Set<string>();
+  for (const binding of bindings) {
+    if (bindingIds.has(binding.id)) {
+      issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} está duplicado.`, group.id));
+    }
+    bindingIds.add(binding.id);
+    const validateSide = (
+      refs: readonly { patternId: string; panelInstanceId: string }[],
+      patterns: ReadonlySet<string>,
+      side: string,
+    ) => {
+      const covered = new Set<string>();
+      for (const ref of refs) {
+        const instance = instanceById.get(ref.panelInstanceId);
+        if (!instance || instance.sourcePatternId !== ref.patternId || !patterns.has(ref.patternId)) {
+          issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} possui referência inválida ${ref.patternId}/${ref.panelInstanceId} no ${side}.`, group.id));
+        }
+        covered.add(ref.patternId);
+      }
+      for (const patternId of patterns) {
+        if (!covered.has(patternId)) {
+          issues.push(issue("invalid-physical-binding", "error", `O binding ${binding.id} não cobre ${patternId} no ${side}.`, group.id));
+        }
+      }
+    };
+    validateSide(binding.first, firstPatterns, "primeiro lado");
+    validateSide(binding.second, secondPatterns, "segundo lado");
+  }
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function createWorkspaceState(
@@ -968,68 +1214,51 @@ function createArrangementAnchor(
   definition: PatternDefinitionV3,
   copyIndex: number,
   bodySide: PanelInstanceV3["bodySide"],
-  surface: PanelInstanceV3["surface"],
-  preview: PatternPreviewPlacement | undefined,
-  assembly: AssemblyPlacement | undefined,
+  surface: NonNullable<PanelInstanceV3["surface"]>,
 ): PanelArrangementAnchorV3 {
+  const placement = definition.bodyPlacement;
+  if (!bodySide || !placement.region || !placement.anchorId) {
+    throw new Error(`A classificação de ${definition.id} não possui anchor completo.`);
+  }
   return {
     id: `${definition.id}:anchor:${copyIndex + 1}`,
-    region: preview?.region ?? regionFromSemanticRole(definition.semanticRole),
+    bodyAnchorId: resolvePairedAnchorId(placement.anchorId, bodySide),
+    region: placement.region,
     surface,
     bodySide,
-    rotationDeg: preview?.rotationDeg ?? 0,
-    offsetXMm: preview?.offsetXMm ?? 0,
-    offsetYMm: preview?.offsetYMm ?? 0,
-    offsetZMm: preview?.offsetZMm ?? 25,
-    scale: preview?.scale ?? 1,
-    ...(assembly === undefined
-      ? {}
-      : {
-          positionMm: structuredClone(assembly.positionMm),
-          orientationDeg: structuredClone(assembly.rotationDeg),
-          outwardSide: assembly.outwardSide,
-          legacyAssemblyRole: assembly.role,
-        }),
-    source: assembly?.source ?? "migration",
-    ...(preview?.id === undefined
-      ? {}
-      : { legacyPreviewPlacementId: preview.id }),
+    rotationDeg: placement.rotationZDeg,
+    offsetXMm: placement.offsetXMm,
+    offsetYMm: placement.offsetYMm,
+    offsetZMm: placement.offsetZMm,
+    scale: 1,
+    orientationDeg: [placement.rotationXDeg, placement.rotationYDeg, placement.rotationZDeg],
+    outwardSide: surface === "back" ? "back" : "front",
+    source: placement.source,
   };
 }
 
-function resolveBodySide(
-  preview: PatternPreviewPlacement | undefined,
+function resolveClassifiedBodySide(
+  configured: NonNullable<PatternDefinitionV3["bodyPlacement"]["bodySide"]>,
   definition: PatternDefinitionV3,
   copyIndex: number,
 ): PanelInstanceV3["bodySide"] {
-  if (preview?.bodySide && preview.bodySide !== "center") return preview.bodySide;
-  if (definition.cutQuantity === 2 || definition.mirrorRule === "paired") {
+  if (configured === "paired") {
     return copyIndex % 2 === 0 ? "left" : "right";
   }
-  return preview?.bodySide ?? "center";
-}
-
-function resolveSurface(
-  assembly: AssemblyPlacement | undefined,
-): PanelInstanceV3["surface"] {
-  if (!assembly) return "front";
-  return assembly.outwardSide;
-}
-
-function regionFromSemanticRole(
-  role: PatternSemanticRoleV3,
-): PanelArrangementAnchorV3["region"] {
-  switch (role) {
-    case "sleeve":
-      return "arm";
-    case "leg-front":
-    case "leg-back":
-      return "leg";
-    case "waistband":
-      return "waist";
-    default:
-      return "torso";
+  if (configured === "not-applicable") return "center";
+  if ((definition.mirrorRule === "paired" || definition.cutQuantity === 2) && configured === "center") {
+    return copyIndex % 2 === 0 ? "left" : "right";
   }
+  return configured;
+}
+
+function resolvePairedAnchorId(
+  anchorId: NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>,
+  bodySide: NonNullable<PanelInstanceV3["bodySide"]>,
+): NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]> {
+  if (bodySide === "left" && anchorId.endsWith("-right")) return anchorId.replace(/-right$/, "-left") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
+  if (bodySide === "right" && anchorId.endsWith("-left")) return anchorId.replace(/-left$/, "-right") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
+  return anchorId;
 }
 
 function firstAssemblyPlacementForDefinition(
@@ -1071,35 +1300,9 @@ function assemblyRoleFromRegion(
 }
 
 function ensureLegacyRuntimeCompatibility(document: PatternDocumentV3): void {
-  for (const group of document.seamGroups) {
-    if (group.first.length !== group.second.length) {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} possui múltiplos intervalos com quantidades diferentes entre os lados.`,
-        group.id,
-      );
-    }
-    if (group.slackMm !== 0) {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} possui slack e não pode ser projetada no runtime legado sem perda.`,
-        group.id,
-      );
-    }
-    if (
-      group.distribution !== "uniform" &&
-      group.distribution !== "proportional"
-    ) {
-      throw new PatternDocumentCompatibilityError(
-        `A distribuição ${group.distribution} da costura ${group.id} ainda não é suportada pelo runtime legado.`,
-        group.id,
-      );
-    }
-    if (group.treatment === "zipper") {
-      throw new PatternDocumentCompatibilityError(
-        `A costura ${group.id} usa zíper, ainda não representável no runtime legado.`,
-        group.id,
-      );
-    }
-  }
+  // A projeção runtime preserva sequências compostas em firstRanges e
+  // secondRanges; quantidades diferentes entre os lados não são mais lossy.
+  void document;
 }
 
 function parseMetadata(value: unknown): PatternDocumentV3["metadata"] {
@@ -1250,8 +1453,8 @@ function parseConstructionGraph(value: unknown): PatternDocumentV3["construction
 }
 
 function parsePatternDefinitions(value: unknown): PatternDefinitionV3[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new TypeError("O documento precisa ter ao menos uma definição de molde.");
+  if (!Array.isArray(value)) {
+    throw new TypeError("As definições de molde do documento são inválidas.");
   }
   return value.map(parsePatternDefinition);
 }
@@ -1297,6 +1500,7 @@ function parsePatternDefinition(value: unknown, index: number): PatternDefinitio
       ? {}
       : { sourceTemplateVersion: readString(value.sourceTemplateVersion, "A versão do template da definição") }),
     semanticRole: readEnum(value.semanticRole, SEMANTIC_ROLES, "O papel semântico da definição"),
+    bodyPlacement: parseBodyPlacementV3(value.bodyPlacement),
     geometry: {
       geometryVersion: 2,
       points: structuredClone(piece.points),
@@ -1317,6 +1521,50 @@ function parsePatternDefinition(value: unknown, index: number): PatternDefinitio
     fabricId: readString(value.fabricId, "O tecido da definição"),
     connectors,
     ...(value.generation === undefined ? {} : { generation: parsePatternGeneration(value.generation) }),
+  };
+}
+
+function parseBodyPlacementV3(value: unknown): PatternBodyPlacementV3 {
+  if (value === undefined) {
+    return {
+      version: 1,
+      status: "unclassified",
+      includeIn3D: true,
+      outwardFace: "normal",
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      rotationXDeg: 0,
+      rotationYDeg: 0,
+      rotationZDeg: 0,
+      source: "migration",
+    };
+  }
+  if (!isRecord(value)) throw new TypeError("A classificação corporal da definição é inválida.");
+  const optionalEnum = <T extends string>(raw: unknown, values: readonly T[], label: string): T | undefined =>
+    raw === undefined ? undefined : readEnum(raw, values, label);
+  const role = optionalEnum(value.role, ["front", "back", "sleeve", "waistband", "leg-front", "leg-back", "collar", "panel", "custom"] as const, "A função corporal");
+  const region = optionalEnum(value.region, PREVIEW_REGIONS, "A região corporal");
+  const surface = optionalEnum(value.surface, PREVIEW_SURFACES, "A superfície corporal");
+  const bodySide = optionalEnum(value.bodySide, ["center", "left", "right", "paired", "not-applicable"] as const, "O lado corporal");
+  const anchorId = optionalEnum(value.anchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, "O anchor corporal");
+  return {
+    version: 1,
+    status: readEnum(value.status ?? "unclassified", ["unclassified", "confirmed"] as const, "O estado da classificação corporal"),
+    includeIn3D: value.includeIn3D === undefined ? true : readBoolean(value.includeIn3D, "A inclusão da peça no 3D"),
+    ...(role === undefined ? {} : { role }),
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    ...(bodySide === undefined ? {} : { bodySide }),
+    ...(anchorId === undefined ? {} : { anchorId }),
+    outwardFace: readEnum(value.outwardFace ?? "normal", ["normal", "flipped"] as const, "A face externa"),
+    offsetXMm: readFiniteNumber(value.offsetXMm ?? 0, "O deslocamento lateral"),
+    offsetYMm: readFiniteNumber(value.offsetYMm ?? 0, "O deslocamento vertical"),
+    offsetZMm: readFiniteNumber(value.offsetZMm ?? 25, "O afastamento da superfície"),
+    rotationXDeg: readFiniteNumber(value.rotationXDeg ?? 0, "A rotação X"),
+    rotationYDeg: readFiniteNumber(value.rotationYDeg ?? 0, "A rotação Y"),
+    rotationZDeg: readFiniteNumber(value.rotationZDeg ?? 0, "A rotação Z"),
+    source: readEnum(value.source ?? "migration", ["manual", "migration"] as const, "A origem da classificação corporal"),
   };
 }
 
@@ -1361,19 +1609,28 @@ function parseConnectors(value: unknown, definitionIndex: number): PatternConnec
 function parsePanelInstances(value: unknown): PanelInstanceV3[] {
   if (!Array.isArray(value)) throw new TypeError("As instâncias físicas são inválidas.");
   return value.map((candidate, index) => {
-    if (!isRecord(candidate) || !isRecord(candidate.arrangementAnchor)) {
+    if (!isRecord(candidate)) {
       throw new TypeError(`A instância ${index + 1} é inválida.`);
     }
-    const anchor = parseArrangementAnchor(candidate.arrangementAnchor, index);
+    const anchor = candidate.arrangementAnchor === undefined
+      ? undefined
+      : isRecord(candidate.arrangementAnchor)
+        ? parseArrangementAnchor(candidate.arrangementAnchor, index)
+        : (() => { throw new TypeError(`O anchor da instância ${index + 1} é inválido.`); })();
+    const placementStatus = candidate.placementStatus === undefined
+      ? (anchor?.source === "manual" || anchor?.source === "template") && anchor.bodyAnchorId ? "confirmed" : "unclassified"
+      : readEnum(candidate.placementStatus, ["unclassified", "confirmed"] as const, `O estado da instância ${index + 1}`);
     return {
       id: readString(candidate.id, `O id da instância ${index + 1}`),
       sourcePatternId: readString(candidate.sourcePatternId, `O molde da instância ${index + 1}`),
       copyIndex: readNonNegativeInteger(candidate.copyIndex, `O índice da instância ${index + 1}`),
-      bodySide: readEnum(candidate.bodySide, BODY_SIDES, `O lado da instância ${index + 1}`),
-      surface: readEnum(candidate.surface, PREVIEW_SURFACES, `A superfície da instância ${index + 1}`),
+      placementStatus,
+      ...(candidate.bodySide === undefined ? {} : { bodySide: readEnum(candidate.bodySide, BODY_SIDES, `O lado da instância ${index + 1}`) }),
+      ...(candidate.surface === undefined ? {} : { surface: readEnum(candidate.surface, PREVIEW_SURFACES, `A superfície da instância ${index + 1}`) }),
       mirrored: readBoolean(candidate.mirrored, `O espelhamento da instância ${index + 1}`),
       fabricId: readString(candidate.fabricId, `O tecido da instância ${index + 1}`),
-      arrangementAnchor: anchor,
+      ...(anchor === undefined ? {} : { arrangementAnchor: anchor }),
+      includedIn3D: candidate.includedIn3D === undefined ? true : readBoolean(candidate.includedIn3D, `A inclusão da instância ${index + 1}`),
       simulationEnabled: readBoolean(candidate.simulationEnabled, `A simulação da instância ${index + 1}`),
       metadata: parsePrimitiveRecord(candidate.metadata, `Os metadados da instância ${index + 1}`),
     };
@@ -1395,11 +1652,20 @@ function parseArrangementAnchor(value: Record<string, unknown>, index: number): 
           ["front", "back", "sleeve", "waist", "leg", "collar", "custom"] as const,
           `O papel legado do anchor ${index + 1}`,
         );
+  const region = readEnum(value.region, PREVIEW_REGIONS, `A região do anchor ${index + 1}`);
+  const surface = readEnum(value.surface, PREVIEW_SURFACES, `A superfície do anchor ${index + 1}`);
+  const bodySide = readEnum(value.bodySide, BODY_SIDES, `O lado corporal do anchor ${index + 1}`);
+  const inferredAnchorId = anchorIdForPlacement(region, surface, bodySide);
   return {
     id: readString(value.id, `O id do anchor ${index + 1}`),
-    region: readEnum(value.region, PREVIEW_REGIONS, `A região do anchor ${index + 1}`),
-    surface: readEnum(value.surface, PREVIEW_SURFACES, `A superfície do anchor ${index + 1}`),
-    bodySide: readEnum(value.bodySide, BODY_SIDES, `O lado corporal do anchor ${index + 1}`),
+    ...(value.bodyAnchorId === undefined && inferredAnchorId === undefined
+      ? {}
+      : { bodyAnchorId: value.bodyAnchorId === undefined
+        ? inferredAnchorId!
+        : readEnum(value.bodyAnchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, `O anchor corporal ${index + 1}`) }),
+    region,
+    surface,
+    bodySide,
     rotationDeg: readFiniteNumber(value.rotationDeg, `A rotação do anchor ${index + 1}`),
     offsetXMm: readFiniteNumber(value.offsetXMm, `O deslocamento X do anchor ${index + 1}`),
     offsetYMm: readFiniteNumber(value.offsetYMm, `O deslocamento Y do anchor ${index + 1}`),
@@ -1440,8 +1706,35 @@ function parseSeamGroups(value: unknown): SeamGroupV3[] {
       distribution: readEnum(candidate.distribution, SEAM_DISTRIBUTIONS, `A distribuição da costura ${index + 1}`),
       targetRatio: readPositiveNumber(candidate.targetRatio, `A proporção da costura ${index + 1}`),
       slackMm: readNonNegativeNumber(candidate.slackMm, `A folga da costura ${index + 1}`),
+      ...(candidate.physicalBindings === undefined ? {} : {
+        physicalBindings: parsePhysicalBindings(candidate.physicalBindings, index),
+      }),
+      ...(candidate.physicalPairing === undefined ? {} : {
+        physicalPairing: readEnum(candidate.physicalPairing, ["paired-copies"] as const, `O pareamento físico legado da costura ${index + 1}`),
+      }),
       active: readBoolean(candidate.active, `O estado da costura ${index + 1}`),
       ...(compatibility === undefined ? {} : { compatibility }),
+    };
+  });
+}
+
+function parsePhysicalBindings(value: unknown, seamIndex: number): SeamPhysicalBindingV3[] {
+  if (!Array.isArray(value)) throw new TypeError(`As vinculações físicas da costura ${seamIndex + 1} são inválidas.`);
+  return value.map((binding, bindingIndex) => {
+    if (!isRecord(binding) || !Array.isArray(binding.first) || !Array.isArray(binding.second)) {
+      throw new TypeError(`A vinculação física ${bindingIndex + 1} da costura ${seamIndex + 1} é inválida.`);
+    }
+    const parseSide = (entries: unknown[], side: string) => entries.map((entry, entryIndex) => {
+      if (!isRecord(entry)) throw new TypeError(`A referência ${entryIndex + 1} do ${side} é inválida.`);
+      return {
+        patternId: readString(entry.patternId, `O molde da referência física ${entryIndex + 1}`),
+        panelInstanceId: readString(entry.panelInstanceId, `A instância da referência física ${entryIndex + 1}`),
+      };
+    });
+    return {
+      id: readString(binding.id, `O id da vinculação física ${bindingIndex + 1}`),
+      first: parseSide(binding.first, "primeiro lado"),
+      second: parseSide(binding.second, "segundo lado"),
     };
   });
 }
@@ -1500,7 +1793,22 @@ function parseWorkspace(value: unknown): WorkspaceStateV3 {
 
 function parseGarmentSettings(value: unknown): PatternDocumentV3["garmentSettings"] {
   if (!isRecord(value)) throw new TypeError("As configurações da roupa são inválidas.");
-  if (value.ease === undefined) return {};
+  const dressing = value.dressing === undefined
+    ? undefined
+    : (() => {
+        if (!isRecord(value.dressing)) throw new TypeError("A configuração de prova da roupa é inválida.");
+        const region = value.dressing.region === undefined
+          ? undefined
+          : readEnum(value.dressing.region, ["upper", "lower", "full", "arm", "neck", "custom"] as const, "A região de prova da roupa");
+        const frontReferencePieceId = value.dressing.frontReferencePieceId === undefined
+          ? undefined
+          : readString(value.dressing.frontReferencePieceId, "A peça de referência frontal");
+        return {
+          ...(region === undefined ? {} : { region }),
+          ...(frontReferencePieceId === undefined ? {} : { frontReferencePieceId }),
+        };
+      })();
+  if (value.ease === undefined) return dressing === undefined ? {} : { dressing };
   if (!isRecord(value.ease)) throw new TypeError("As folgas da roupa são inválidas.");
   return {
     ease: {
@@ -1509,6 +1817,7 @@ function parseGarmentSettings(value: unknown): PatternDocumentV3["garmentSetting
       hipMm: readFiniteNumber(value.ease.hipMm, "A folga de quadril"),
       sleeveMm: readFiniteNumber(value.ease.sleeveMm, "A folga de manga"),
     },
+    ...(dressing === undefined ? {} : { dressing }),
   };
 }
 
@@ -1601,23 +1910,13 @@ function issue(
 }
 
 function seamGroupSignature(group: SeamGroupV3): string {
-  const first = group.first.map(rangeSignature).sort().join("|");
-  const second = group.second.map(rangeSignature).sort().join("|");
+  const first = group.first.map(rangeSignature).join("|");
+  const second = group.second.map(rangeSignature).join("|");
   return [first, second].sort().join("<=>");
 }
 
 function rangeSignature(range: SeamGroupV3["first"][number]): string {
   return `${range.pieceId}:${range.edgeId}:${range.startT}:${range.endT}`;
-}
-
-function rangesListsEqual(
-  first: SeamGroupV3["first"],
-  second: SeamGroupV3["second"],
-): boolean {
-  if (first.length !== second.length) return false;
-  const firstSignatures = first.map(rangeSignature).sort();
-  const secondSignatures = second.map(rangeSignature).sort();
-  return firstSignatures.every((signature, index) => signature === secondSignatures[index]);
 }
 
 function parseOptionalTuple(

@@ -1,14 +1,10 @@
 import { memo } from "react";
 import type { EditorTool } from "../editor/PatternCanvas";
 import type { WorkspaceMode } from "../domain/assembly";
+import { useEditorStore } from "../state/editorStore";
 
 interface ToolbarProps {
   garmentName: string;
-  onOpenLibrary(): void;
-  onPrepareLibrary(): void;
-  onOpenSleeveWizard(): void;
-  onPrepareSleeveWizard(): void;
-  canAddSleeve: boolean;
   onOpenFitting(): void;
   onPrepareFitting(): void;
   onSimulate(): void;
@@ -31,11 +27,6 @@ interface ToolbarProps {
 
 export const Toolbar = memo(function Toolbar({
   garmentName,
-  onOpenLibrary,
-  onPrepareLibrary,
-  onOpenSleeveWizard,
-  onPrepareSleeveWizard,
-  canAddSleeve,
   onOpenFitting,
   onPrepareFitting,
   onSimulate,
@@ -55,6 +46,28 @@ export const Toolbar = memo(function Toolbar({
   canEditCurve,
   curveActive,
 }: ToolbarProps) {
+  const activateTool = (tool: EditorTool) => {
+    const before = useEditorStore.getState();
+    const modelingTargetId = before.activePieceId
+      && before.garment.pieces.some((piece) => piece.id === before.activePieceId)
+      ? before.activePieceId
+      : "";
+
+    onSelectTool(tool);
+
+    // 9.5-04 deliberately clears activePieceId when visual selection is cleared.
+    // Modeling tools, however, need to retain the piece that was explicitly
+    // chosen immediately before tool activation. Restore only that document
+    // context, never selectedPieceIds/pieceSelectionActive. A new free piece
+    // draft owns its own target and therefore does not use this bridge.
+    if (tool !== "select" && tool !== "draft" && modelingTargetId) {
+      const current = useEditorStore.getState();
+      if (current.garment.pieces.some((piece) => piece.id === modelingTargetId)) {
+        useEditorStore.setState({ activePieceId: modelingTargetId });
+      }
+    }
+  };
+
   return (
     <header className="toolbar">
       <div className="brand">
@@ -66,64 +79,43 @@ export const Toolbar = memo(function Toolbar({
       </div>
 
       <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
-        <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => onWorkspaceModeChange("modeling")}>Modelagem</button>
-        <button type="button" className={workspaceMode === "assembly" ? "active" : ""} onClick={() => onWorkspaceModeChange("assembly")}>Montagem</button>
-        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
+        <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => onWorkspaceModeChange("modeling")}>Desenhar e editar</button>
+        <button type="button" className={workspaceMode === "assembly" ? "active" : ""} onClick={() => onWorkspaceModeChange("assembly")}>Costurar</button>
+        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} aria-disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
       </nav>
 
       <nav className="tool-buttons" aria-label="Ferramentas">
         <button
-          className={`tool-button${activeTool === "select" ? " active" : ""}`}
-          type="button"
-          onClick={() => onSelectTool("select")}
-        >
-          Selecionar
-        </button>
-        <button
-          className={`tool-button seam-tool${activeTool === "seam" ? " active" : ""}${workspaceMode === "assembly" ? " is-essential" : ""}`}
-          type="button"
-          onClick={() => onSelectTool("seam")}
-          aria-pressed={activeTool === "seam"}
-          title="Costurar: clique em uma borda de cada peça"
-        >
-          Costurar
-        </button>
-        <button
           className={`tool-button${activeTool === "draft" ? " active" : ""}`}
           type="button"
-          onClick={() => onSelectTool("draft")}
+          onClick={() => activateTool("draft")}
           aria-pressed={activeTool === "draft"}
           title="Desenhar uma nova peça"
         >
           Desenhar
         </button>
-        <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => onSelectTool("cut")} title="Trace uma linha atravessando a peça">Recortar</button>
-        <button className={`tool-button${activeTool === "dart" ? " active" : ""}`} type="button" onClick={() => onSelectTool("dart")} title="Clique na borda e depois no ápice">Pence</button>
-        <button className={`tool-button${activeTool === "measure" ? " active" : ""}`} type="button" onClick={() => onSelectTool("measure")} title="Clique em dois pontos">Medir</button>
+        <button
+          className={`tool-button${activeTool === "select" ? " active" : ""}`}
+          type="button"
+          onClick={() => activateTool("select")}
+        >
+          Editar
+        </button>
+        <button className={`tool-button${activeTool === "cut" ? " active" : ""}`} type="button" onClick={() => activateTool("cut")} title="Comece no contorno, crie os nós internos e termine no contorno; não é preciso ultrapassar a borda">Recortar</button>
+        <button className={`tool-button${activeTool === "dart" ? " active" : ""}`} type="button" onClick={() => activateTool("dart")} title="Clique na borda e depois no ápice">Pence</button>
+        <button
+          className={`tool-button seam-tool${activeTool === "seam" ? " active" : ""}${workspaceMode === "assembly" ? " is-essential" : ""}`}
+          type="button"
+          onClick={() => activateTool("seam")}
+          aria-pressed={activeTool === "seam"}
+          title="Costurar: clique em uma borda de cada peça"
+        >
+          Costurar
+        </button>
+        <button className={`tool-button${activeTool === "measure" ? " active" : ""}`} type="button" onClick={() => activateTool("measure")} title="Clique em dois pontos">Medir</button>
       </nav>
 
       <div className="toolbar-actions">
-        <button
-          className="sleeve-button"
-          type="button"
-          disabled={!canAddSleeve}
-          onFocus={onPrepareSleeveWizard}
-          onPointerEnter={onPrepareSleeveWizard}
-          onClick={onOpenSleeveWizard}
-          title={canAddSleeve ? "Gerar manga a partir das cavas" : "Adicione frente e costas com cavas semânticas"}
-          data-testid="open-sleeve-wizard"
-        >
-          Adicionar manga
-        </button>
-        <button
-          className="library-button"
-          type="button"
-          onFocus={onPrepareLibrary}
-          onPointerEnter={onPrepareLibrary}
-          onClick={onOpenLibrary}
-        >
-          Moldes
-        </button>
         <button
           className="fitting-button"
           type="button"
@@ -169,7 +161,7 @@ export const Toolbar = memo(function Toolbar({
         >
           Restaurar
         </button>
-        <button className="primary-button" type="button" disabled={!canAssemble3D} onClick={onSimulate}>Vestir no manequim</button>
+        <button className="primary-button" type="button" disabled={!canAssemble3D} onClick={onSimulate}>Provar</button>
       </div>
     </header>
   );

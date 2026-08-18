@@ -8,6 +8,7 @@ import { createGarmentFromTemplate } from "./templateCatalog";
 
 export interface TrouserVisualEvidence {
   frontBackSvg: string;
+  blindFrontBackSvg: string;
   comparisonSvg: string;
   graphSvg: string;
   report: Record<string, unknown>;
@@ -27,6 +28,7 @@ export function createTrouserVisualEvidence(): TrouserVisualEvidence {
   }
   return {
     frontBackSvg: renderFrontBackSvg(garment.pieces),
+    blindFrontBackSvg: renderPatternEvidenceBoard("Teste cego", "Sem nomes de peça ou template", garment.pieces, true),
     comparisonSvg: renderComparisonSvg(),
     graphSvg: renderAssemblyGraphSvg(assembly),
     report: {
@@ -61,13 +63,34 @@ export function createTrouserVisualEvidence(): TrouserVisualEvidence {
   };
 }
 
+export function renderPatternEvidenceBoard(
+  title: string,
+  subtitle: string,
+  pieces: readonly PatternPiece[],
+  blind = false,
+): string {
+  const cardWidth = pieces.length > 2 ? 430 : 500;
+  const gap = 60;
+  const width = gap + pieces.length * (cardWidth + gap);
+  const cards = pieces.map((piece, index) =>
+    renderPieceCard(piece, gap + index * (cardWidth + gap), 100, cardWidth, 1120, !blind),
+  );
+  return svgDocument(
+    width,
+    1280,
+    `<text x="60" y="54" class="title">${escapeXml(title)}</text>
+     <text x="60" y="80" class="subtitle">${escapeXml(subtitle)}</text>
+     ${cards.join("\n")}`,
+  );
+}
+
 function renderFrontBackSvg(pieces: readonly PatternPiece[]): string {
   const cards = pieces.map((piece, index) => renderPieceCard(piece, 60 + index * 560, 100, 500, 1120));
   return svgDocument(
     1180,
     1280,
     `<text x="60" y="54" class="title">Calça reta paramétrica · frente e costas</text>
-     <text x="60" y="80" class="subtitle">Molde 2D autoritativo · straight-pants@2 · milímetros</text>
+     <text x="60" y="80" class="subtitle">Molde 2D autoritativo · straight-pants@3 · milímetros</text>
      ${cards.join("\n")}`,
   );
 }
@@ -171,12 +194,13 @@ function renderPieceCard(
   y: number,
   width: number,
   height: number,
+  showIdentity = true,
 ): string {
   return `<g>
     <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="18" class="card"/>
-    <text x="${x + 24}" y="${y + 42}" class="card-title">${escapeXml(piece.name)}</text>
-    <text x="${x + 24}" y="${y + 69}" class="small">${escapeXml(piece.id)} · cortar ${piece.cutQuantity ?? 1}x</text>
-    ${renderPieceOutline(piece, x + 35, y + 90, width - 70, height - 135)}
+    ${showIdentity ? `<text x="${x + 24}" y="${y + 42}" class="card-title">${escapeXml(piece.name)}</text>
+    <text x="${x + 24}" y="${y + 69}" class="small">${escapeXml(piece.id)} · cortar ${piece.cutQuantity ?? 1}x</text>` : ""}
+    ${renderPieceOutline(piece, x + 35, y + (showIdentity ? 90 : 35), width - 70, height - (showIdentity ? 135 : 70))}
   </g>`;
 }
 

@@ -19,6 +19,7 @@ import {
   analyzeInternalPath,
   applyInternalPathOperation,
   createInternalPath,
+  normalizeDartPathGeometry,
   setInternalPathSegmentKind,
 } from "./internalPaths";
 
@@ -127,6 +128,54 @@ function expectNoOrphanSeams(result: GarmentDraft): void {
 }
 
 describe("InternalPath e operações geométricas", () => {
+  it.each([
+    ["perna-apice-perna", [{ xMm: 70, yMm: 0 }, { xMm: 120, yMm: 95 }, { xMm: 170, yMm: 0 }]],
+    ["perna-invertida-apice-perna", [{ xMm: 170, yMm: 0 }, { xMm: 120, yMm: 95 }, { xMm: 70, yMm: 0 }]],
+    ["apice-perna-perna", [{ xMm: 120, yMm: 95 }, { xMm: 70, yMm: 0 }, { xMm: 170, yMm: 0 }]],
+  ])("normaliza a pence em V por geometria, não por ordem: %s", (_name, points) => {
+    const source = piece("dart-order", 240, 320);
+    const normalized = normalizeDartPathGeometry(source, createInternalPath(source.id, "dart", points));
+
+    expect(normalized.valid).toBe(true);
+    expect(normalized.diagnostics).toEqual([]);
+    expect(normalized.geometry).toMatchObject({
+      legA: { xMm: 70, yMm: 0 },
+      apex: { xMm: 120, yMm: 95 },
+      legB: { xMm: 170, yMm: 0 },
+      widthMm: 100,
+    });
+    expect(normalized.geometry?.path.metadata).toMatchObject({
+      dartBoundaryAnchorVersion: 1,
+      dartLegAEdgeId: expect.any(String),
+      dartLegBEdgeId: expect.any(String),
+    });
+  });
+
+  it.each([
+    ["muito pequena", [{ xMm: 119.9, yMm: 0 }, { xMm: 120, yMm: 0.1 }, { xMm: 120.1, yMm: 0 }]],
+    ["muito grande", [{ xMm: 1, yMm: 0 }, { xMm: 120, yMm: 319 }, { xMm: 239, yMm: 0 }]],
+    ["estreita e longa", [{ xMm: 118, yMm: 0 }, { xMm: 120, yMm: 280 }, { xMm: 122, yMm: 0 }]],
+    ["larga e curta", [{ xMm: 25, yMm: 0 }, { xMm: 120, yMm: 2 }, { xMm: 215, yMm: 0 }]],
+  ])("aceita uma pence %s sem proporção estética", (_name, points) => {
+    const source = piece(`dart-${_name}`, 240, 320);
+    const normalized = normalizeDartPathGeometry(source, createInternalPath(source.id, "dart", points));
+    expect(normalized.valid).toBe(true);
+    expect(normalized.geometry?.widthMm).toBeGreaterThan(0);
+    expect(normalized.geometry?.lengthMm).toBeGreaterThan(0);
+  });
+
+  it("rejeita somente um V estruturalmente ambíguo com diagnóstico sem ordem de clique", () => {
+    const source = piece("dart-ambiguous", 240, 320);
+    const normalized = normalizeDartPathGeometry(source, createInternalPath(source.id, "dart", [
+      { xMm: 60, yMm: 80 },
+      { xMm: 120, yMm: 120 },
+      { xMm: 180, yMm: 80 },
+    ]));
+    expect(normalized.valid).toBe(false);
+    expect(normalized.diagnostics.map((diagnostic) => diagnostic.message)).toContain("Não foi possível identificar duas pernas da pence.");
+    expect(normalized.diagnostics.map((diagnostic) => diagnostic.message).join(" ")).not.toMatch(/primeiro|ordem/i);
+  });
+
   it("corta por um caminho reto e conserva a área combinada", () => {
     const source = piece();
     const path = createInternalPath(source.id, "cut", [
@@ -228,7 +277,10 @@ describe("InternalPath e operações geométricas", () => {
     expect(group?.first.length).toBe(parts.length);
     expect(group?.second.length).toBe(parts.length);
     const restored = patternDocumentV3ToGarmentDraft(document);
-    expect(restored.seams?.filter((seam) => seam.groupId === result.createdSeamGroupId)).toHaveLength(parts.length);
+    const restoredGroup = restored.seams?.find((seam) => seam.groupId === result.createdSeamGroupId);
+    expect(restoredGroup).toBeDefined();
+    expect(restoredGroup?.firstRanges).toEqual(group?.first);
+    expect(restoredGroup?.secondRanges).toEqual(group?.second);
   });
 
   it.each([

@@ -1,6 +1,6 @@
 import type { PanelTopology } from "./PanelTopology";
 import type { StitchConstraint } from "./StitchConstraintBuilder";
-import { solveDistanceConstraints, type XpbdState, type DistanceConstraint } from "../physics/xpbd";
+import { solveDistanceConstraints, type LegacyXpbdState, type DistanceConstraint } from "../physics/xpbd";
 
 export interface PanelSimulationState {
   topology: PanelTopology;
@@ -50,7 +50,7 @@ export function simulatePanel(
   if (state.positions.length === 0) return state;
   if (state.constraints.length === 0) return state;
 
-  const xpbdState: XpbdState = {
+  const xpbdState: LegacyXpbdState = {
     positions: state.positions,
     previousPositions: state.previousPositions,
     inverseMasses: state.inverseMasses,

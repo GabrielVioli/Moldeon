@@ -1,0 +1,232 @@
+{
+  "afterFirst": {
+    "garmentId": "garment-empty-msqgplvc",
+    "templateId": "blank",
+    "activePieceId": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": {
+      "pieceId": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+      "edgeId": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:edge:piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:point-ccd19d88-e1da-43d1-a3b1-c6e84e747f6a->piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:point-bf9b4fd0-0979-491b-9d30-9a73169e8e97"
+    },
+    "seamProposal": null,
+    "seamCount": 0,
+    "seams": [],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "afterSecond": {
+    "garmentId": "garment-empty-msqgplvc",
+    "templateId": "blank",
+    "activePieceId": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": null,
+    "seamProposal": {
+      "firstPieceId": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+      "secondPieceId": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba"
+    },
+    "seamCount": 0,
+    "seams": [],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "afterEnter": {
+    "garmentId": "garment-empty-msqgplvc",
+    "templateId": "blank",
+    "activePieceId": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": null,
+    "seamProposal": null,
+    "seamCount": 1,
+    "seams": [
+      {
+        "id": "seam-6ce00979-6cf7-467c-8523-325d24bd608d",
+        "name": "Costura",
+        "direction": "opposite",
+        "active": true
+      }
+    ],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+        "name": "banana",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -60,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+        "name": "Painel 123",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "proposalVisible": true,
+  "contextConfirmationVisible": true,
+  "workspaceClass": "workspace mode-assembly",
+  "technicalClassificationVisible": false,
+  "assembly": {
+    "invalid": false,
+    "warningCount": 0,
+    "warnings": [],
+    "particleCount": 290,
+    "instanceCount": 2,
+    "triangleCount": 448,
+    "structuralConstraintCount": 736,
+    "stitchConstraintCount": 6,
+    "anchorConstraintCount": 2,
+    "instances": [
+      {
+        "id": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:panel:1",
+        "pieceId": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131",
+        "bodySide": "center",
+        "surface": "front",
+        "vertexCount": 145,
+        "triangleCount": 224
+      },
+      {
+        "id": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba:panel:1",
+        "pieceId": "piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba",
+        "bodySide": "center",
+        "surface": "back",
+        "vertexCount": 145,
+        "triangleCount": 224
+      }
+    ]
+  },
+  "viewport": {
+    "instanceCount": 2,
+    "signatures": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:panel:1:e8cff7a7,piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba:panel:1:d57a8a93"
+  },
+  "lifecycle": {
+    "editedSignature": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:panel:1:010fdb2d,piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba:panel:1:d57a8a93",
+    "originalSignature": "piece-9496be88-2fa9-41eb-9d25-71d49f4b3131:panel:1:e8cff7a7,piece-5b5f2c7e-4598-4f9a-824a-87de9e5e97ba:panel:1:d57a8a93",
+    "inverted": "same",
+    "directionAfterUndo": "opposite",
+    "directionAfterRedo": "same",
+    "invalidSeamMessage": "Costure as bordas que formam a roupa antes de provar.\n\nVoltar às costuras",
+    "instanceCountAfterRestore": 2,
+    "instanceCountAfterDelete": 0
+  },
+  "testedViewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "consoleErrors": []
+}

@@ -2,18 +2,23 @@ import { create } from "zustand";
 import { currentEngine } from "../core/engineRuntime";
 import {
   createDocumentId,
+  createUnclassifiedBodyPlacement,
   createPatternPieceFromDraft,
   createPreviewPlacement,
   makeEdgeId,
+  seamSideRanges,
   duplicatePatternPiece,
   validateSeam,
   type BodyMeasurements,
   type BodyType,
+  type AssemblyPlacement,
   type DraftContour,
   type EdgeRange,
   type GarmentDraft,
+  type GarmentDressingSetup,
   type Guide,
   type PatternPiece,
+  type PatternBodyPlacement,
   type PatternDart,
   type PatternPoint,
   type PatternVector,
@@ -23,11 +28,12 @@ import {
   type PieceWorkspaceTransform,
   type Seam,
   type SeamDirection,
+  type SeamDistribution,
   type SeamTreatment,
   type SeamValidationIssue,
 } from "../domain/pattern";
 import { closeDart, createDart, createPatternPiecesFromSplit, extendCutLine } from "../domain/patternOperations";
-import { analyzeSeamCompatibility, inferAssemblyPlacement, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
+import { analyzeSeamCompatibility, validateSeamForAssembly, type SeamCompatibility } from "../domain/assembly";
 import { validatePatternContour } from "../domain/polygonGeometry";
 import {
   draftGuidedSleeve,
@@ -62,6 +68,7 @@ import {
   type DocumentCommandType,
   type EditorDocumentState,
 } from "./documentCommandHistory";
+import { createBlankGarment } from "../domain/blankGarment";
 
 export interface EditorState {
   garment: GarmentDraft;
@@ -78,7 +85,14 @@ export interface EditorState {
   draftCursor: PatternPoint | null;
   draftError: string | null;
   seamIssues: SeamValidationIssue[];
-  seamProposal: { first: EdgeRange; second: EdgeRange; compatibility: SeamCompatibility } | null;
+  seamProposal: {
+    first: EdgeRange;
+    second: EdgeRange;
+    firstRanges?: EdgeRange[];
+    secondRanges?: EdgeRange[];
+    compatibility: SeamCompatibility;
+  } | null;
+  seamDraft: { first: EdgeRange[]; second: EdgeRange[]; activeSide: "first" | "second" } | null;
   seamFirstEdge: EdgeRange | null;
   nearbySeamSuggestion: { first: EdgeRange; second: EdgeRange } | null;
   cutDraft: { pieceId: string; start: PatternVector; end: PatternVector; phase: "placing" | "ready"; error?: string } | null;
@@ -112,7 +126,10 @@ export interface EditorState {
   removePoint(pointId: string): void;
   setSeamAllowance(valueMm: number): void;
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
-  proposeSeam(first: EdgeRange, second: EdgeRange): void;
+  proposeSeam(first: EdgeRange | EdgeRange[], second: EdgeRange | EdgeRange[]): void;
+  addSeamDraftRange(edge: EdgeRange): void;
+  finishSeamDraftSide(): void;
+  reviewSeamDraft(): void;
   selectFirstSeamEdge(edge: EdgeRange | null): void;
   setNearbySeamSuggestion(suggestion: EditorState["nearbySeamSuggestion"]): void;
   cancelSeamProposal(): void;
@@ -132,7 +149,15 @@ export interface EditorState {
   splitSelectedSegment(): void;
   setMeasureDraft(draft: EditorState["measureDraft"]): void;
   cancelIntent(): void;
-  updateSeam(seamId: string, update: { name?: string; direction?: SeamDirection; treatment?: SeamTreatment; active?: boolean }): void;
+  updateSeam(seamId: string, update: {
+    name?: string;
+    direction?: SeamDirection;
+    treatment?: SeamTreatment;
+    distribution?: SeamDistribution;
+    targetRatio?: number;
+    slackMm?: number;
+    active?: boolean;
+  }): void;
   removeSeam(seamId: string): void;
   toggleSeamDirection(seamId: string): void;
   toggleSeamActive(seamId: string): void;
@@ -149,9 +174,11 @@ export interface EditorState {
   removeFabric(fabricId: string): void;
   assignFabricToActivePiece(fabricId: string): void;
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
-  setAssemblyPlacement(pieceId: string, placement: Partial<ReturnType<typeof inferAssemblyPlacement>>): void;
+  setAssemblyPlacement(pieceId: string, placement: Partial<AssemblyPlacement>): void;
+  setBodyPlacement(pieceId: string, placement: PatternBodyPlacement): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
+  setGarmentDressing(update: GarmentDressingSetup): void;
   addGuidedSleeve(options: {
     frontPieceId: string;
     backPieceId: string;
@@ -181,12 +208,12 @@ export interface EditorState {
 
 const initialSnapshot = currentEngine().snapshot();
 const history = new DocumentCommandHistory();
-const initialGarment = ensureWorkspaceState(createLegacyGarment(initialSnapshot.piece));
+const initialGarment = ensureWorkspaceState(createBlankGarment());
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   garment: initialGarment,
   baselinePieces: clonePieces(initialGarment.pieces),
-  activePieceId: initialSnapshot.piece.id,
+  activePieceId: "",
   snapshot: initialSnapshot,
   engineBackend: "typescript",
   selectedPointId: null,
@@ -199,6 +226,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   draftError: null,
   seamIssues: [],
   seamProposal: null,
+  seamDraft: null,
   seamFirstEdge: null,
   nearbySeamSuggestion: null,
   cutDraft: null,
@@ -230,7 +258,33 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     history.clear();
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces.find((piece) => piece.id === requestedPieceId) ?? normalized.pieces[0];
-    if (!activePiece) return;
+    if (!activePiece) {
+      set({
+        garment: ensureWorkspaceState(normalized),
+        baselinePieces: [],
+        activePieceId: "",
+        engineBackend: backend,
+        selectedPointId: null,
+        selectedEdgeId: null,
+        selectedSeamId: null,
+        selectedDartId: null,
+        pieceSelectionActive: false,
+        selectedPieceIds: [],
+        draftContour: null,
+        draftCursor: null,
+        draftError: null,
+        seamIssues: [],
+        seamProposal: null,
+        seamDraft: null,
+        seamFirstEdge: null,
+        nearbySeamSuggestion: null,
+        cutDraft: null,
+        dartDraft: null,
+        measureDraft: null,
+        ...historyAvailability(),
+      });
+      return;
+    }
     const snapshot = restoreSnapshot(activePiece);
     set({
       garment: replacePiece(normalized, snapshot.piece),
@@ -248,6 +302,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       draftError: null,
       seamIssues: collectSeamIssues(normalized),
       seamProposal: null,
+      seamDraft: null,
       seamFirstEdge: null,
       nearbySeamSuggestion: null,
       cutDraft: null,
@@ -262,7 +317,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     history.clear();
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces[0];
-    if (!activePiece) return;
+    if (!activePiece) {
+      set({
+        garment: ensureWorkspaceState(normalized),
+        baselinePieces: [],
+        activePieceId: "",
+        selectedPointId: null,
+        selectedEdgeId: null,
+        selectedSeamId: null,
+        selectedDartId: null,
+        selectedPieceIds: [],
+        pieceSelectionActive: false,
+        seamIssues: [],
+        seamProposal: null,
+        seamDraft: null,
+        seamFirstEdge: null,
+        nearbySeamSuggestion: null,
+        cutDraft: null,
+        dartDraft: null,
+        measureDraft: null,
+        draftContour: null,
+        draftCursor: null,
+        draftError: null,
+        ...historyAvailability(),
+      });
+      return;
+    }
     applyDocumentState(set, get, { garment: normalized, activePieceId: activePiece.id });
     set({ baselinePieces: clonePieces(normalized.pieces), ...historyAvailability() });
   },
@@ -299,14 +379,51 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const piece = state.garment.pieces.find((candidate) => candidate.id === activePieceId);
     set({ selectedPieceIds, pieceSelectionActive: selectedPieceIds.length > 0, ...(piece ? { activePieceId, snapshot: restoreSnapshot(piece) } : {}), selectedPointId: null, selectedEdgeId: null, selectedSeamId: null });
   },
-  selectAllPieces: () => set((state) => ({ selectedPieceIds: state.garment.pieces.filter((piece) => workspaceStateFor(state.garment, piece.id).visible).map((piece) => piece.id), pieceSelectionActive: true, selectedPointId: null, selectedEdgeId: null, selectedSeamId: null })),
+  selectAllPieces: () => set((state) => {
+    const selectedPieceIds = state.garment.pieces
+      .filter((piece) => workspaceStateFor(state.garment, piece.id).visible)
+      .map((piece) => piece.id);
+    return {
+      selectedPieceIds,
+      pieceSelectionActive: selectedPieceIds.length > 0,
+      selectedPointId: null,
+      selectedEdgeId: null,
+      selectedSeamId: null,
+    };
+  }),
   deleteSelectedPieces: () => {
     const state = get();
     const removable = state.selectedPieceIds.filter((id) => !workspaceStateFor(state.garment, id).locked);
-    if (removable.length === 0 || removable.length >= state.garment.pieces.length) return;
+    if (removable.length === 0) return;
     changeDocument(set, get, "piece-delete", "Excluir peças selecionadas", (document) => {
       const pieces = document.garment.pieces.filter((piece) => !removable.includes(piece.id));
-      return { activePieceId: pieces[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces, seams: (document.garment.seams ?? []).filter((seam) => !removable.includes(seam.first.pieceId) && !removable.includes(seam.second.pieceId)), workspaceStates: (document.garment.workspaceStates ?? []).filter((item) => !removable.includes(item.pieceId)) }) };
+      return {
+        activePieceId: pieces[0]?.id ?? "",
+        garment: syncLegacyTransforms({
+          ...document.garment,
+          pieces,
+          seams: (document.garment.seams ?? []).filter(
+            (seam) => [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+              .every((range) => !removable.includes(range.pieceId)),
+          ),
+          workspaceStates: (document.garment.workspaceStates ?? []).filter(
+            (item) => !removable.includes(item.pieceId),
+          ),
+          assemblyPlacements: (document.garment.assemblyPlacements ?? []).filter(
+            (item) => !removable.includes(item.pieceId),
+          ),
+          ...(document.garment.parametric
+            ? {
+                parametric: {
+                  ...document.garment.parametric,
+                  generations: document.garment.parametric.generations.filter(
+                    (generation) => !removable.includes(generation.patternId),
+                  ),
+                },
+              }
+            : {}),
+        }),
+      };
     }, { selectedPieceIds: [], pieceSelectionActive: false });
   },
   rotateSelectedPieces: (deltaDeg) => {
@@ -613,7 +730,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     changeDocument(set, get, "placement", "Posicionar peça na montagem", (document) => {
     const piece = document.garment.pieces.find((candidate) => candidate.id === pieceId)!;
     const current = document.garment.assemblyPlacements?.find((placement) => placement.pieceId === pieceId)
-      ?? inferAssemblyPlacement(piece, document.garment.assemblyPlacements?.length ?? 0);
+      ?? {
+        pieceId,
+        role: "custom" as const,
+        outwardSide: "front" as const,
+        positionMm: [0, 0, 25] as [number, number, number],
+        rotationDeg: [0, 0, 0] as [number, number, number],
+        flipped: false,
+        source: "manual" as const,
+      };
     const placement = { ...current, ...update, pieceId, source: "manual" as const };
     return {
       ...document,
@@ -626,6 +751,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
     };
     });
+  },
+  setBodyPlacement: (pieceId, placement) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    changeDocument(set, get, "placement", placement.status === "confirmed" ? "Confirmar posição no corpo" : "Remover posição do corpo", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => piece.id === pieceId
+          ? { ...piece, bodyPlacement: structuredClone(placement) }
+          : piece),
+      },
+    }));
   },
   setEdgeFinish: (pieceId, edgeId, finish) => changeDocument(set, get, "metadata", "Alterar acabamento", (document) => ({
     ...document,
@@ -643,6 +780,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       garment: {
         ...document.garment,
         ease: { bustMm: 80, waistMm: 60, hipMm: 80, sleeveMm: 50, ...(document.garment.ease ?? {}), [region]: valueMm },
+      },
+    }));
+  },
+  setGarmentDressing: (update) => {
+    changeDocument(set, get, "metadata", "Preparar prova", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        dressing: { ...(document.garment.dressing ?? {}), ...update },
       },
     }));
   },
@@ -677,27 +823,65 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ garment });
     recordIfStandalone(set, get, "workspace", "Mover peças", before);
   },
-  proposeSeam: (first, second) => set((state) => ({
-    seamProposal: {
-      first: { ...first },
-      second: { ...second },
-      compatibility: analyzeSeamCompatibility(state.garment, first, second),
-    },
-    seamIssues: [],
-    seamFirstEdge: null,
-  })),
-  selectFirstSeamEdge: (seamFirstEdge) => set({ seamFirstEdge, seamProposal: null }),
+  proposeSeam: (first, second) => set((state) => {
+    const firstRanges = (Array.isArray(first) ? first : [first]).map((range) => ({ ...range }));
+    const secondRanges = (Array.isArray(second) ? second : [second]).map((range) => ({ ...range }));
+    if (!firstRanges[0] || !secondRanges[0]) return {};
+    return {
+      seamProposal: {
+        first: { ...firstRanges[0] },
+        second: { ...secondRanges[0] },
+        firstRanges,
+        secondRanges,
+        compatibility: analyzeSeamCompatibility(state.garment, firstRanges, secondRanges),
+      },
+      seamIssues: [],
+      seamDraft: null,
+      seamFirstEdge: null,
+    };
+  }),
+  addSeamDraftRange: (edge) => set((state) => {
+    const draft = state.seamDraft ?? { first: [], second: [], activeSide: "first" as const };
+    const side = draft.activeSide;
+    const ranges = draft[side];
+    if (ranges.some((range) => sameEdgeRange(range, edge))) return {};
+    const next = { ...draft, [side]: [...ranges, { ...edge }] };
+    return {
+      seamDraft: next,
+      seamFirstEdge: next.first[0] ?? null,
+      seamProposal: null,
+      seamIssues: [],
+    };
+  }),
+  finishSeamDraftSide: () => set((state) => {
+    if (!state.seamDraft || state.seamDraft.first.length === 0) return {};
+    return { seamDraft: { ...state.seamDraft, activeSide: "second" }, seamIssues: [] };
+  }),
+  reviewSeamDraft: () => {
+    const draft = get().seamDraft;
+    if (!draft || draft.first.length === 0 || draft.second.length === 0) return;
+    get().proposeSeam(draft.first, draft.second);
+  },
+  selectFirstSeamEdge: (seamFirstEdge) => set({
+    seamFirstEdge,
+    seamDraft: seamFirstEdge ? { first: [{ ...seamFirstEdge }], second: [], activeSide: "first" } : null,
+    seamProposal: null,
+  }),
   setNearbySeamSuggestion: (nearbySeamSuggestion) => set({ nearbySeamSuggestion }),
-  cancelSeamProposal: () => set({ seamProposal: null, seamFirstEdge: null }),
+  cancelSeamProposal: () => set({ seamProposal: null, seamDraft: null, seamFirstEdge: null }),
   confirmSeamProposal: (options) => {
     const state = get();
     const proposal = state.seamProposal;
     if (!proposal) return;
+    const firstRanges = proposal.firstRanges ?? [proposal.first];
+    const secondRanges = proposal.secondRanges ?? [proposal.second];
     const seam: Seam = {
       id: createDocumentId("seam"),
       name: options.name.trim() || `Costura ${(state.garment.seams?.length ?? 0) + 1}`,
       first: { ...proposal.first },
       second: { ...proposal.second },
+      ...(firstRanges.length > 1 ? { firstRanges: structuredClone(firstRanges) } : {}),
+      ...(secondRanges.length > 1 ? { secondRanges: structuredClone(secondRanges) } : {}),
       direction: options.direction,
       treatment: options.treatment,
       type: options.treatment,
@@ -712,7 +896,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
     }));
-    set({ seamProposal: null, seamIssues: [], nearbySeamSuggestion: null });
+    set({ seamProposal: null, seamDraft: null, seamFirstEdge: null, seamIssues: [], nearbySeamSuggestion: null });
   },
   setCutDraft: (cutDraft) => set({ cutDraft: cutDraft ? { ...cutDraft, phase: cutDraft.phase ?? "placing" } : null }),
   freezeCutDraft: () => set((state) => {
@@ -730,7 +914,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const workspace = workspaceStateFor(state.garment, source.id);
     const workspaceStates = split.map((piece) => ({ ...workspace, pieceId: piece.id, transform: { ...workspace.transform, pieceId: piece.id } }));
     const cutSeam: Seam | null = keepJoined ? { id: createDocumentId("seam"), name: "Recorte unido", first: { pieceId: split[0].id, edgeId: makeLastEdgeId(split[0]), startT: 0, endT: 1 }, second: { pieceId: split[1].id, edgeId: makeLastEdgeId(split[1]), startT: 0, endT: 1 }, direction: "opposite", easeRatio: 0, type: "standard", treatment: "standard" } : null;
-    changeDocument(set, get, "cut", keepJoined ? "Cortar e manter unidas" : "Cortar peça", (document) => ({ activePieceId: split[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces: document.garment.pieces.flatMap((piece) => piece.id === source.id ? split : [piece]), seams: [...(document.garment.seams ?? []).filter((seam) => seam.first.pieceId !== source.id && seam.second.pieceId !== source.id), ...(cutSeam ? [cutSeam] : [])], workspaceStates: [...(document.garment.workspaceStates ?? []).filter((item) => item.pieceId !== source.id), ...workspaceStates] }) }), { cutDraft: null, selectedPieceIds: [split[0].id], pieceSelectionActive: true });
+    changeDocument(set, get, "cut", keepJoined ? "Cortar e manter unidas" : "Cortar peça", (document) => ({ activePieceId: split[0].id, garment: syncLegacyTransforms({ ...document.garment, pieces: document.garment.pieces.flatMap((piece) => piece.id === source.id ? split : [piece]), seams: [...(document.garment.seams ?? []).filter((seam) => [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")].every((range) => range.pieceId !== source.id)), ...(cutSeam ? [cutSeam] : [])], workspaceStates: [...(document.garment.workspaceStates ?? []).filter((item) => item.pieceId !== source.id), ...workspaceStates] }) }), { cutDraft: null, selectedPieceIds: [split[0].id], pieceSelectionActive: true });
   },
   setDartDraft: (dartDraft) => set({ dartDraft: dartDraft ? { ...dartDraft, phase: dartDraft.phase ?? "placing" } : null }),
   freezeDartDraft: () => set((state) => state.dartDraft ? { dartDraft: { ...state.dartDraft, phase: "ready" } } : {}),
@@ -783,7 +967,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ selectedEdgeId: replacement?.id ?? null });
   },
   setMeasureDraft: (measureDraft) => set({ measureDraft }),
-  cancelIntent: () => set({ seamProposal: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
+  cancelIntent: () => set({ seamProposal: null, seamDraft: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
   updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
     ...document,
     garment: {
@@ -900,8 +1084,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         };
         const retainedSeams = (document.garment.seams ?? []).filter((seam) =>
           !seam.groupId?.startsWith("guided-sleeve:")
-          && !removableIds.has(seam.first.pieceId)
-          && !removableIds.has(seam.second.pieceId),
+          && [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+            .every((range) => !removableIds.has(range.pieceId)),
+        );
+        const retainedSeamKeys = new Set(retainedSeams.map(seamRangePairKey));
+        const newGuidedSeams = guided.seams.filter(
+          (seam) => !retainedSeamKeys.has(seamRangePairKey(seam)),
         );
         const retainedPlacements = (document.garment.assemblyPlacements ?? []).filter(
           (placement) => !removableIds.has(placement.pieceId),
@@ -911,7 +1099,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           garment: syncLegacyTransforms({
             ...document.garment,
             pieces: [...retainedPieces, guided.sleevePiece],
-            seams: [...retainedSeams, ...guided.seams],
+            seams: [...retainedSeams, ...newGuidedSeams],
             workspaceStates: [...retainedStates, workspace],
             assemblyPlacements: [
               ...retainedPlacements,
@@ -1020,19 +1208,35 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cancelDraft: () => set({ draftContour: null, draftCursor: null, draftError: null }),
 
   deletePiece: (pieceId) => {
-    if (get().garment.pieces.length <= 1) return;
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
     changeDocument(set, get, "piece-delete", "Excluir peça", (document) => {
       const pieces = document.garment.pieces.filter((piece) => piece.id !== pieceId);
-      const activePieceId = document.activePieceId === pieceId ? pieces[0].id : document.activePieceId;
+      const activePieceId = document.activePieceId === pieceId
+        ? (pieces[0]?.id ?? "")
+        : document.activePieceId;
       return {
         activePieceId,
         garment: syncLegacyTransforms({
           ...document.garment,
           pieces,
           seams: (document.garment.seams ?? []).filter(
-            (seam) => seam.first.pieceId !== pieceId && seam.second.pieceId !== pieceId,
+            (seam) => [...seamSideRanges(seam, "first"), ...seamSideRanges(seam, "second")]
+              .every((range) => range.pieceId !== pieceId),
           ),
           workspaceStates: (document.garment.workspaceStates ?? []).filter((state) => state.pieceId !== pieceId),
+          assemblyPlacements: (document.garment.assemblyPlacements ?? []).filter(
+            (placement) => placement.pieceId !== pieceId,
+          ),
+          ...(document.garment.parametric
+            ? {
+                parametric: {
+                  ...document.garment.parametric,
+                  generations: document.garment.parametric.generations.filter(
+                    (generation) => generation.patternId !== pieceId,
+                  ),
+                },
+              }
+            : {}),
         }),
       };
     }, { pieceSelectionActive: false });
@@ -1074,6 +1278,16 @@ function captureDocument(get: StoreGetter): EditorDocumentState {
   return { garment: structuredClone(state.garment), activePieceId: state.activePieceId };
 }
 
+function seamRangePairKey(seam: Seam): string {
+  const first = seamSideRanges(seam, "first").map(edgeRangeKey).join(">");
+  const second = seamSideRanges(seam, "second").map(edgeRangeKey).join(">");
+  return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
+function edgeRangeKey(range: EdgeRange): string {
+  return `${range.pieceId}/${range.edgeId}/${range.startT.toFixed(7)}/${range.endT.toFixed(7)}`;
+}
+
 function applyDocumentState(
   set: StoreSetter,
   get: StoreGetter,
@@ -1082,7 +1296,29 @@ function applyDocumentState(
 ): void {
   const garment = ensureWorkspaceState(document.garment);
   const piece = garment.pieces.find((candidate) => candidate.id === document.activePieceId) ?? garment.pieces[0];
-  if (!piece) return;
+  if (!piece) {
+    set({
+      garment,
+      activePieceId: "",
+      selectedPointId: null,
+      selectedEdgeId: null,
+      selectedSeamId: null,
+      selectedDartId: null,
+      selectedPieceIds: [],
+      pieceSelectionActive: false,
+      seamIssues: [],
+      seamProposal: null,
+      seamDraft: null,
+      seamFirstEdge: null,
+      nearbySeamSuggestion: null,
+      cutDraft: null,
+      dartDraft: null,
+      measureDraft: null,
+      ...historyAvailability(),
+      ...additional,
+    });
+    return;
+  }
   const snapshot = restoreSnapshot(piece);
   const selectedPieceIds = get().selectedPieceIds.filter((id) => garment.pieces.some((candidate) => candidate.id === id));
   set({
@@ -1094,6 +1330,7 @@ function applyDocumentState(
     selectedSeamId: null,
     seamIssues: collectSeamIssues(garment),
     seamProposal: null,
+    seamDraft: null,
     seamFirstEdge: null,
     nearbySeamSuggestion: null,
     cutDraft: null,
@@ -1249,18 +1486,22 @@ function migrateLegacyDocument(garment: GarmentDraft): GarmentDraft {
   const withWorkspace = ensureWorkspaceState(garment);
   return {
     ...withWorkspace,
-    pieces: withWorkspace.pieces.map((piece) => {
-      if (piece.previewPlacements?.length) return piece;
-      const name = piece.name.toLowerCase();
-      const region = name.includes("saia") || name.includes("calça") ? "hip" : "torso";
-      const surface = name.includes("costas") ? "back" : "front";
-      return { ...piece, previewPlacements: [createPreviewPlacement(piece.id, { region, surface })] };
-    }),
+    pieces: withWorkspace.pieces.map((piece) => ({
+      ...piece,
+      bodyPlacement: piece.bodyPlacement ?? createUnclassifiedBodyPlacement(true, "migration"),
+    })),
   };
 }
 
 function collectSeamIssues(garment: GarmentDraft): SeamValidationIssue[] {
   return (garment.seams ?? []).flatMap((seam) => validateSeamForAssembly(seam, garment));
+}
+
+function sameEdgeRange(first: EdgeRange, second: EdgeRange): boolean {
+  return first.pieceId === second.pieceId
+    && first.edgeId === second.edgeId
+    && Math.abs(first.startT - second.startT) <= 1e-7
+    && Math.abs(first.endT - second.endT) <= 1e-7;
 }
 
 function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {

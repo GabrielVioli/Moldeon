@@ -27,9 +27,10 @@ describe("PatternDocumentV3 paramétrico", () => {
   it("round trips formula versions and generation snapshots", () => {
     const garment = createGarmentFromTemplate("tshirt", DEFAULT_BODY_MEASUREMENTS, "feminine");
     const document = garmentDraftToPatternDocumentV3(garment);
-    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@2");
+    expect(document.metadata.sourceTemplateVersion).toBe("tshirt@4");
     expect(document.measurements.profile?.schemaVersion).toBe(1);
-    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@2")).toBe(true);
+    expect(document.patternDefinitions.every((definition) => definition.generation?.templateVersion === "tshirt@4")).toBe(true);
+    expect(document.patternDefinitions.every((definition) => definition.generation?.methodology?.id === "freesewing-brian-teagan-moldeon-adaptation")).toBe(true);
 
     const serialized = serializePatternDocumentV3(document);
     const parsed = parsePatternDocumentV3(JSON.parse(serialized));
@@ -40,5 +41,18 @@ describe("PatternDocumentV3 paramétrico", () => {
     expect(regenerated.patternDefinitions.map((definition) => definition.generation)).toEqual(
       document.patternDefinitions.map((definition) => definition.generation),
     );
+    expect(restored.templateId).toBe("tshirt");
+    expect(restored.pieces.map(pieceGeometry)).toEqual(garment.pieces.map(pieceGeometry));
   });
 });
+
+function pieceGeometry(piece: { id: string; points: Array<{ id: string; xMm: number; yMm: number }> }) {
+  return {
+    id: piece.id,
+    points: piece.points.map((point) => ({
+      id: point.id,
+      xMm: Number(point.xMm.toFixed(6)),
+      yMm: Number(point.yMm.toFixed(6)),
+    })),
+  };
+}

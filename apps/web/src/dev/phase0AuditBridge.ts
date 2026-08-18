@@ -1,4 +1,5 @@
 import type { BaselineFixtureId } from "../testFixtures/baselineGarments";
+import { getPatternEdges } from "../domain/pattern";
 
 export interface Phase0AuditState {
   garmentId: string;
@@ -9,6 +10,8 @@ export interface Phase0AuditState {
   selectedPointId: string | null;
   selectedEdgeId: string | null;
   selectedSeamId: string | null;
+  seamFirstEdge: { pieceId: string; edgeId: string } | null;
+  seamProposal: { firstPieceId: string; secondPieceId: string } | null;
   seamCount: number;
   seams: Array<{ id: string; name: string; direction: string; active: boolean }>;
   simulateVersion: number;
@@ -53,7 +56,11 @@ export interface Phase0AuditBridge {
   loadFixture(id: BaselineFixtureId): Phase0AuditState;
   state(): Phase0AuditState;
   assembly(): Phase0AssemblySummary;
+  assemblySignature(): string;
+  point(index: number): { id: string; xMm: number; yMm: number };
+  createSimpleSeam(): Phase0AuditState;
   movePiece(pieceId: string, xMm: number, yMm: number): Phase0AuditState;
+  selectPoint(index: number): Phase0AuditState;
   resetSelection(): Phase0AuditState;
 }
 
@@ -66,11 +73,11 @@ declare global {
 export async function installPhase0AuditBridge(): Promise<void> {
   if (!import.meta.env.DEV || window.__moldeonPhase0) return;
 
-  const [{ useEditorStore }, fixtures, engine, assemblyModule] = await Promise.all([
+  const [{ useEditorStore }, fixtures, assemblyModule, inputModule] = await Promise.all([
     import("../state/editorStore"),
     import("../testFixtures/baselineGarments"),
-    import("../core/fallbackPatternEngine"),
     import("../garment3d/ResolvedGarmentAssembly"),
+    import("../garment3d/ResolvedAssemblyInput"),
   ]);
 
   const state = (): Phase0AuditState => {
@@ -84,6 +91,15 @@ export async function installPhase0AuditBridge(): Promise<void> {
       selectedPointId: current.selectedPointId,
       selectedEdgeId: current.selectedEdgeId,
       selectedSeamId: current.selectedSeamId,
+      seamFirstEdge: current.seamFirstEdge
+        ? { pieceId: current.seamFirstEdge.pieceId, edgeId: current.seamFirstEdge.edgeId }
+        : null,
+      seamProposal: current.seamProposal
+        ? {
+            firstPieceId: current.seamProposal.first.pieceId,
+            secondPieceId: current.seamProposal.second.pieceId,
+          }
+        : null,
       seamCount: current.garment.seams?.length ?? 0,
       seams: (current.garment.seams ?? []).map((seam) => ({
         id: seam.id,
@@ -126,10 +142,8 @@ export async function installPhase0AuditBridge(): Promise<void> {
 
   const assembly = (): Phase0AssemblySummary => {
     const current = useEditorStore.getState();
-    const snapshots = current.garment.pieces.map(engine.createPatternSnapshot);
     const built = assemblyModule.buildResolvedGarmentAssembly(
-      snapshots,
-      current.garment,
+      inputModule.buildResolvedAssemblyInput(current.garment),
     );
 
     return {
@@ -164,8 +178,41 @@ export async function installPhase0AuditBridge(): Promise<void> {
     },
     state,
     assembly,
+    assemblySignature() {
+      return inputModule.buildResolvedAssemblyInput(useEditorStore.getState().garment).signature;
+    },
+    point(index) {
+      const point = useEditorStore.getState().snapshot.piece.points[index];
+      if (!point) throw new RangeError(`O ponto ${index} não existe na peça ativa.`);
+      return { id: point.id, xMm: point.xMm, yMm: point.yMm };
+    },
+    createSimpleSeam() {
+      const current = useEditorStore.getState();
+      const firstPiece = current.garment.pieces[0];
+      const secondPiece = current.garment.pieces[1];
+      const firstEdge = firstPiece ? getPatternEdges(firstPiece)[0] : undefined;
+      const secondEdge = secondPiece ? getPatternEdges(secondPiece)[0] : undefined;
+      if (!firstEdge || !secondEdge) throw new Error("Duas peças com bordas válidas são necessárias.");
+      current.proposeSeam(
+        { pieceId: firstPiece.id, edgeId: firstEdge.id, startT: 0.15, endT: 0.85 },
+        { pieceId: secondPiece.id, edgeId: secondEdge.id, startT: 0.15, endT: 0.85 },
+      );
+      useEditorStore.getState().confirmSeamProposal({
+        name: "Costura mobile",
+        direction: "opposite",
+        treatment: "standard",
+      });
+      return state();
+    },
     movePiece(pieceId, xMm, yMm) {
       useEditorStore.getState().movePieceInWorkspace(pieceId, xMm, yMm);
+      return state();
+    },
+    selectPoint(index) {
+      const current = useEditorStore.getState();
+      const point = current.snapshot.piece.points[index];
+      if (!point) throw new RangeError(`O ponto ${index} não existe na peça ativa.`);
+      current.selectPoint(point.id);
       return state();
     },
     resetSelection() {

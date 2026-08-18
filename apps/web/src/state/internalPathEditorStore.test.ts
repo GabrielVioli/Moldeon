@@ -142,8 +142,9 @@ describe("internal path editor transactions", () => {
 
   it("closes a structural dart and preserves its topology through undo and redo", () => {
     let editor = useInternalPathEditorStore.getState();
-    editor.startPath("panel", "dart", { xMm: 110, yMm: 0 });
+    editor.startPath("panel", "dart", { xMm: 80, yMm: 0 });
     editor.appendDraftPoint({ xMm: 110, yMm: 90 });
+    editor.appendDraftPoint({ xMm: 140, yMm: 0 });
     expect(editor.confirmDraft()).toBe(true);
     const beforeApply = structuredClone(useEditorStore.getState().garment);
 
@@ -162,6 +163,55 @@ describe("internal path editor transactions", () => {
     dart = useEditorStore.getState().garment.pieces[0].darts?.at(-1);
     expect(dart?.closed).toBe(true);
     expect(dart?.legSegmentIds).toHaveLength(2);
+  });
+
+  it("keeps a closed dart editable by apex and snapped legs with undo and redo", () => {
+    let editor = useInternalPathEditorStore.getState();
+    editor.startPath("panel", "dart", { xMm: 80, yMm: 0 });
+    editor.appendDraftPoint({ xMm: 110, yMm: 90 });
+    editor.appendDraftPoint({ xMm: 140, yMm: 0 });
+    expect(editor.confirmDraft()).toBe(true);
+    expect(editor.applySelectedPath(false)).toBe(true);
+
+    const applied = useEditorStore.getState().garment.pieces[0];
+    const dart = applied.darts?.at(-1)!;
+    const path = (applied.internalLines ?? []).find((line) => isInternalPath(line) && line.id === dart.pathId);
+    expect(path && isInternalPath(path)).toBe(true);
+    if (!path || !isInternalPath(path)) return;
+
+    useEditorStore.getState().setPieceWorkspaceTransform("panel", {
+      pieceId: "panel",
+      xMm: 85,
+      yMm: -35,
+      rotationDeg: 37,
+    });
+
+    editor = useInternalPathEditorStore.getState();
+    editor.selectPath(path.id);
+    editor.selectNode(String(path.metadata.dartApexNodeId));
+    editor.beginGeometryEdit("Mover ápice da pence");
+    editor.moveSelectedNode({ xMm: 120, yMm: 130 });
+    editor.commitGeometryEdit();
+    expect(useEditorStore.getState().garment.pieces[0].darts?.at(-1)?.apex).toEqual({ xMm: 120, yMm: 130 });
+    expect(useEditorStore.getState().garment.workspaceStates?.find((state) => state.pieceId === "panel")?.transform).toMatchObject({
+      xMm: 85,
+      yMm: -35,
+      rotationDeg: 37,
+    });
+
+    const movedPath = (useEditorStore.getState().garment.pieces[0].internalLines ?? []).find((line) => isInternalPath(line) && line.id === path.id);
+    if (!movedPath || !isInternalPath(movedPath)) return;
+    editor.selectNode(String(movedPath.metadata.dartLegANodeId));
+    editor.beginGeometryEdit("Mover perna da pence");
+    editor.moveSelectedNode({ xMm: 70, yMm: 5 });
+    editor.commitGeometryEdit();
+    expect(useEditorStore.getState().garment.pieces[0].darts?.at(-1)?.legA.yMm).toBe(0);
+
+    const afterEdits = structuredClone(useEditorStore.getState().garment);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment).not.toEqual(afterEdits);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment).toEqual(afterEdits);
   });
 
   it("cancels an unfinished path without leaving document debris", () => {

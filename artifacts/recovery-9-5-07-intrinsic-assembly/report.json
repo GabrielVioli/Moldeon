@@ -1,0 +1,186 @@
+{
+  "tube-only": {
+    "finite": true,
+    "maxIntrinsicDistortion": 0.000011503486571293187,
+    "maxAbsoluteDistortionM": 8.012846448510191e-8,
+    "byInstance": {
+      "tube-front:panel:1": {
+        "maxRelativeDistortion": 0.000011447435386939542,
+        "maxAbsoluteDistortionM": 8.012846448510191e-8,
+        "evaluatedConstraintCount": 888
+      },
+      "tube-back:panel:1": {
+        "maxRelativeDistortion": 0.000011503486571293187,
+        "maxAbsoluteDistortionM": 7.968556073323363e-8,
+        "evaluatedConstraintCount": 888
+      }
+    },
+    "seamGroupIds": [
+      "tube-top",
+      "tube-bottom"
+    ],
+    "panels": [
+      {
+        "id": "tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      }
+    ],
+    "warnings": [],
+    "diagnostics": []
+  },
+  "tube-plus-one": {
+    "finite": true,
+    "maxIntrinsicDistortion": 0.000022888183593729183,
+    "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+    "byInstance": {
+      "tube-front:panel:1": {
+        "maxRelativeDistortion": 0.000011447435386939542,
+        "maxAbsoluteDistortionM": 8.012846448510191e-8,
+        "evaluatedConstraintCount": 888
+      },
+      "tube-back:panel:1": {
+        "maxRelativeDistortion": 0.000011503486571293187,
+        "maxAbsoluteDistortionM": 7.968556073323363e-8,
+        "evaluatedConstraintCount": 888
+      },
+      "extra-1:panel:1": {
+        "maxRelativeDistortion": 0.000022888183593729183,
+        "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+        "evaluatedConstraintCount": 316
+      }
+    },
+    "seamGroupIds": [
+      "tube-top",
+      "tube-bottom",
+      "extra-seam-1"
+    ],
+    "panels": [
+      {
+        "id": "tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "extra-1:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "warnings": [],
+    "diagnostics": []
+  },
+  "tube-plus-two": {
+    "finite": true,
+    "maxIntrinsicDistortion": 0.000022888183593729183,
+    "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+    "byInstance": {
+      "tube-front:panel:1": {
+        "maxRelativeDistortion": 0.000011447435386939542,
+        "maxAbsoluteDistortionM": 8.012846448510191e-8,
+        "evaluatedConstraintCount": 888
+      },
+      "tube-back:panel:1": {
+        "maxRelativeDistortion": 0.000011503486571293187,
+        "maxAbsoluteDistortionM": 7.968556073323363e-8,
+        "evaluatedConstraintCount": 888
+      },
+      "extra-1:panel:1": {
+        "maxRelativeDistortion": 0.000022888183593729183,
+        "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+        "evaluatedConstraintCount": 316
+      },
+      "extra-2:panel:1": {
+        "maxRelativeDistortion": 0.000022888183593729183,
+        "maxAbsoluteDistortionM": 1.1444091796864592e-7,
+        "evaluatedConstraintCount": 316
+      }
+    },
+    "seamGroupIds": [
+      "tube-top",
+      "tube-bottom",
+      "extra-seam-1",
+      "extra-seam-2"
+    ],
+    "panels": [
+      {
+        "id": "tube-front:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "tube-back:panel:1",
+        "mapping": "seam-derived-tube"
+      },
+      {
+        "id": "extra-1:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "extra-2:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "warnings": [],
+    "diagnostics": []
+  },
+  "four-generic": {
+    "finite": true,
+    "maxIntrinsicDistortion": 0.000048473024463528034,
+    "maxAbsoluteDistortionM": 2.199339501560149e-7,
+    "byInstance": {
+      "generic-1:panel:1": {
+        "maxRelativeDistortion": 0.00002288818359376777,
+        "maxAbsoluteDistortionM": 1.0039092670100641e-7,
+        "evaluatedConstraintCount": 576
+      },
+      "generic-2:panel:1": {
+        "maxRelativeDistortion": 0.000048473024463528034,
+        "maxAbsoluteDistortionM": 2.1260978731642982e-7,
+        "evaluatedConstraintCount": 576
+      },
+      "generic-3:panel:1": {
+        "maxRelativeDistortion": 0.00004059614519398019,
+        "maxAbsoluteDistortionM": 1.7772136962166535e-7,
+        "evaluatedConstraintCount": 576
+      },
+      "generic-4:panel:1": {
+        "maxRelativeDistortion": 0.00004493407488425587,
+        "maxAbsoluteDistortionM": 2.199339501560149e-7,
+        "evaluatedConstraintCount": 576
+      }
+    },
+    "seamGroupIds": [
+      "generic-seam-1",
+      "generic-seam-2",
+      "generic-seam-3"
+    ],
+    "panels": [
+      {
+        "id": "generic-1:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "generic-2:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "generic-3:panel:1",
+        "mapping": "rigid-panel"
+      },
+      {
+        "id": "generic-4:panel:1",
+        "mapping": "rigid-panel"
+      }
+    ],
+    "warnings": [],
+    "diagnostics": []
+  },
+  "tubeCoordinateDeltaAfterOne": 0,
+  "tubeCoordinateDeltaAfterTwo": 0,
+  "consoleErrors": []
+}

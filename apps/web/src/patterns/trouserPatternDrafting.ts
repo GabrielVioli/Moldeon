@@ -19,8 +19,10 @@ import type {
   BodyMeasurementKey,
   ParametricConstructionGraphRecord,
   ParametricVariableRecord,
+  PatternMethodologyRecord,
 } from "../domain/parametricMeasurements";
 import type { PatternValidationStatus } from "./basePatternDrafting";
+import { TROUSER_BLOCK_METHODOLOGY } from "./templateMethodology";
 
 export interface TrouserPatternLimits {
   minimumAreaMm2: number;
@@ -33,6 +35,7 @@ export interface TrouserPatternMetadata {
   templateId: "straight-pants";
   templateVersion: string;
   constructionSystem: string;
+  methodology: PatternMethodologyRecord;
   validationStatus: PatternValidationStatus;
   componentStatus: { body: PatternValidationStatus };
   requiredMeasurements: BodyMeasurementKey[];
@@ -56,13 +59,14 @@ export interface TrouserPatternDraftOptions {
   dartScale?: number;
 }
 
-const TEMPLATE_VERSION = "straight-pants@2";
+const TEMPLATE_VERSION = "straight-pants@3";
 const FORMULA_VERSION = `${TEMPLATE_VERSION}:formula-v1`;
 
 export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
   templateId: "straight-pants",
   templateVersion: TEMPLATE_VERSION,
-  constructionSystem: "Moldeon Reference Trouser Block 2026",
+  constructionSystem: "Titan trouser block adaptation for Moldeon 2026.3",
+  methodology: TROUSER_BLOCK_METHODOLOGY,
   validationStatus: "geometrically-validated",
   componentStatus: { body: "geometrically-validated" },
   requiredMeasurements: [
@@ -73,6 +77,10 @@ export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
     "crotchDepthMm",
     "seatDepthMm",
     "waistDropMm",
+    "waistFrontArcMm",
+    "waistBackArcMm",
+    "hipFrontArcMm",
+    "hipBackArcMm",
     "thighMm",
     "kneeCircumferenceMm",
     "ankleCircumferenceMm",
@@ -86,6 +94,10 @@ export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
     "crotchDepthMm",
     "seatDepthMm",
     "waistDropMm",
+    "waistFrontArcMm",
+    "waistBackArcMm",
+    "hipFrontArcMm",
+    "hipBackArcMm",
     "thighMm",
     "kneeCircumferenceMm",
     "ankleCircumferenceMm",
@@ -93,7 +105,7 @@ export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
     "outseamLengthMm",
     "insideLegLengthMm",
   ],
-  ease: { bustMm: 0, waistMm: 30, hipMm: 55, sleeveMm: 0 },
+  ease: { bustMm: 0, waistMm: 0, hipMm: 0, sleeveMm: 0 },
   limits: {
     minimumAreaMm2: 30_000,
     sideSeamToleranceMm: 18,
@@ -102,8 +114,9 @@ export const TROUSER_PATTERN_METADATA: TrouserPatternMetadata = {
   },
   manualReview: false,
   notes: [
-    "Frente e costas usam distribuição, cintura, extensão e curva de gancho próprias.",
-    "A construção passou por invariantes geométricos e montagem lógica, mas não por toile ou revisão presencial.",
+    "Adaptação do bloco Titan: folga percentual, forquilha única, fio calculado entre lateral e gancho e perna traseira mais larga.",
+    "Os semiarcos frontal e traseiro podem ser medidos; a divisão 48/52 aparece apenas como estimativa declarada no perfil corporal.",
+    "A construção passou por invariantes geométricos, mas continua aguardando toile e aprovação visual manual.",
     "Braguilha, cós, bolsos, zíper e preparação industrial permanecem fora desta versão.",
   ],
 };
@@ -131,63 +144,58 @@ export function draftTrouserPattern(
 
 function trouserDefinitions(dartScale: number): FormulaDefinition[] {
   return [
-    formula("halfDressedHip", "(hipMm + 55mm) / 2", "mm"),
-    formula("halfDressedWaist", "(waistMm + 30mm) / 2", "mm"),
-    formula("frontHipShare", "0.48", "ratio"),
-    formula("frontWaistShare", "0.47", "ratio"),
-    formula("frontHipWidth", "halfDressedHip * frontHipShare", "mm"),
-    formula("backHipWidth", "halfDressedHip - frontHipWidth", "mm"),
-    formula("frontWaistFinal", "halfDressedWaist * frontWaistShare", "mm"),
-    formula("backWaistFinal", "halfDressedWaist - frontWaistFinal", "mm"),
+    formula("waistEaseRatio", "0.02", "ratio"),
+    formula("seatEaseRatio", "0.02", "ratio"),
+    formula("kneeEaseRatio", "0.06", "ratio"),
+    formula("crotchDropRatio", "0.02", "ratio"),
+    formula("legBalance", "0.575", "ratio"),
+    formula("grainlinePosition", "0.45", "ratio"),
+    formula("frontWaistFinal", "waistFrontArcMm * (1 + waistEaseRatio)", "mm"),
+    formula("backWaistFinal", "waistBackArcMm * (1 + waistEaseRatio)", "mm"),
+    formula("frontSeatWidth", "hipFrontArcMm * (1 + seatEaseRatio)", "mm"),
+    formula("backSeatWidth", "hipBackArcMm * (1 + seatEaseRatio)", "mm"),
     formula("dartScale", String(dartScale), "ratio"),
-    formula("frontSuppression", "max(0mm, frontHipWidth - frontWaistFinal)", "mm"),
-    formula("backSuppression", "max(0mm, backHipWidth - backWaistFinal)", "mm"),
-    formula("frontDartWidth", "min(24mm, max(0mm, frontSuppression * 0.22)) * dartScale", "mm"),
-    formula("backDartWidth", "min(40mm, max(16mm, backSuppression * 0.40)) * dartScale", "mm"),
+    formula("frontSuppression", "max(0mm, frontSeatWidth - frontWaistFinal)", "mm"),
+    formula("backSuppression", "max(0mm, backSeatWidth - backWaistFinal)", "mm"),
+    formula("frontDartWidth", "min(20mm, max(0mm, frontSuppression - 35mm)) * dartScale", "mm"),
+    formula("backDartWidth", "min(36mm, max(18mm, backSuppression - 30mm)) * dartScale", "mm"),
     formula("frontWaistOpen", "frontWaistFinal + frontDartWidth", "mm"),
     formula("backWaistOpen", "backWaistFinal + backDartWidth", "mm"),
-    formula("hipLineY", "clamp(hipHeightMm, 120mm, sittingCrotchHeightMm - 48mm)", "mm"),
-    formula("crotchLineY", "clamp(sittingCrotchHeightMm + 6mm, hipLineY + 48mm, 430mm)", "mm"),
-    formula("insideLeg", "insideLegLengthMm", "mm"),
-    formula("outseam", "max(outseamLengthMm, insideLeg + crotchLineY - 5mm)", "mm"),
-    formula("kneeDistance", "clamp(kneeHeightMm, 220mm, insideLeg - 170mm)", "mm"),
-    formula("kneeLineY", "crotchLineY + kneeDistance", "mm"),
-    formula("frontCrotchExtension", "max(38mm, crotchDepthMm * 0.16 + seatDepthMm * 0.035)", "mm"),
-    formula("backCrotchExtension", "max(82mm, crotchDepthMm * 0.34 + seatDepthMm * 0.10)", "mm"),
-    formula("frontCenterWaistY", "waistDropMm * 0.52", "mm"),
-    formula("frontSideWaistY", "waistDropMm * 0.12", "mm"),
-    formula("backCenterRise", "max(18mm, waistDropMm * 0.72 + seatDepthMm * 0.035)", "mm"),
+    formula("hipLineY", "clamp(hipHeightMm, 120mm, sittingCrotchHeightMm - 40mm)", "mm"),
+    formula("crotchLineY", "max(hipLineY + 40mm, sittingCrotchHeightMm * (1 + crotchDropRatio))", "mm"),
+    formula("outseam", "outseamLengthMm", "mm"),
+    formula("kneeLineY", "clamp(crotchLineY + kneeHeightMm, crotchLineY + 220mm, outseam - 170mm)", "mm"),
+    formula("frontForkExtension", "frontSeatWidth * 0.25", "mm"),
+    formula("backForkExtension", "backSeatWidth * 0.25", "mm"),
+    formula("frontForkX", "0mm - frontForkExtension", "mm"),
+    formula("backForkX", "0mm - backForkExtension", "mm"),
+    formula("frontCenterWaistY", "max(8mm, waistDropMm * 0.60)", "mm"),
+    formula("frontSideWaistY", "0mm", "mm"),
+    formula("backCenterRise", "max(25mm, seatDepthMm * 0.12)", "mm"),
     formula("backCenterWaistY", "0mm - backCenterRise", "mm"),
-    formula("backSideWaistY", "0mm - waistDropMm * 0.08", "mm"),
-    formula("frontDartLength", "clamp(hipLineY * 0.48, 75mm, 115mm)", "mm"),
-    formula("backDartLength", "clamp(hipLineY * 0.66, 105mm, 155mm)", "mm"),
+    formula("backSideWaistY", "0mm", "mm"),
+    formula("backCenterWaistX", "backSeatWidth * 0.08", "mm"),
+    formula("frontDartLength", "clamp(hipLineY * 0.50, 75mm, 110mm)", "mm"),
+    formula("backDartLength", "clamp(hipLineY * 0.72, 115mm, 160mm)", "mm"),
     formula("frontDartX", "frontWaistOpen * 0.58", "mm"),
-    formula("backDartX", "backWaistOpen * 0.46", "mm"),
-    formula("dressedThigh", "thighMm + 40mm", "mm"),
-    formula("frontThighWidth", "dressedThigh * 0.48", "mm"),
-    formula("backThighWidth", "dressedThigh - frontThighWidth", "mm"),
-    formula("frontSideCrotchX", "max(frontHipWidth * 0.93, frontThighWidth * 0.54)", "mm"),
-    formula("backSideCrotchX", "max(backHipWidth * 0.95, backThighWidth * 0.52)", "mm"),
-    formula("frontInseamCrotchX", "frontSideCrotchX - frontThighWidth", "mm"),
-    formula("backInseamCrotchX", "backSideCrotchX - backThighWidth", "mm"),
-    formula("frontCrotchTipX", "frontInseamCrotchX - frontCrotchExtension", "mm"),
-    formula("backCrotchTipX", "backInseamCrotchX - backCrotchExtension", "mm"),
-    formula("frontCreaseX", "(frontSideCrotchX + frontInseamCrotchX) / 2", "mm"),
-    formula("backCreaseX", "(backSideCrotchX + backInseamCrotchX) / 2", "mm"),
-    formula("dressedKnee", "kneeCircumferenceMm + 50mm", "mm"),
-    formula("frontKneeWidth", "dressedKnee * 0.48", "mm"),
-    formula("backKneeWidth", "dressedKnee - frontKneeWidth", "mm"),
-    formula("hemCircumference", "max(380mm, ankleCircumferenceMm + 120mm)", "mm"),
-    formula("frontHemWidth", "hemCircumference * 0.48", "mm"),
-    formula("backHemWidth", "hemCircumference - frontHemWidth", "mm"),
-    formula("frontKneeOutsideX", "frontCreaseX + frontKneeWidth * 0.53", "mm"),
-    formula("frontKneeInsideX", "frontCreaseX - frontKneeWidth * 0.47", "mm"),
-    formula("backKneeOutsideX", "backCreaseX + backKneeWidth * 0.51", "mm"),
-    formula("backKneeInsideX", "backCreaseX - backKneeWidth * 0.49", "mm"),
-    formula("frontHemOutsideX", "frontCreaseX + frontHemWidth * 0.53", "mm"),
-    formula("frontHemInsideX", "frontCreaseX - frontHemWidth * 0.47", "mm"),
-    formula("backHemOutsideX", "backCreaseX + backHemWidth * 0.51", "mm"),
-    formula("backHemInsideX", "backCreaseX - backHemWidth * 0.49", "mm"),
+    formula("backDartX", "backCenterWaistX + backWaistOpen * 0.48", "mm"),
+    formula("frontSideCrotchX", "frontSeatWidth + 4mm", "mm"),
+    formula("backSideCrotchX", "backSeatWidth + 4mm", "mm"),
+    formula("frontCreaseX", "frontSeatWidth + (frontForkX - frontSeatWidth) * grainlinePosition", "mm"),
+    formula("backCreaseX", "backSeatWidth + (backForkX - backSeatWidth) * grainlinePosition", "mm"),
+    formula("dressedKnee", "kneeCircumferenceMm * (1 + kneeEaseRatio)", "mm"),
+    formula("frontKneeWidth", "dressedKnee * (1 - legBalance)", "mm"),
+    formula("backKneeWidth", "dressedKnee * legBalance", "mm"),
+    formula("frontHemWidth", "max(frontKneeWidth, (ankleCircumferenceMm + 120mm) * (1 - legBalance))", "mm"),
+    formula("backHemWidth", "max(backKneeWidth, (ankleCircumferenceMm + 120mm) * legBalance)", "mm"),
+    formula("frontKneeOutsideX", "frontCreaseX + frontKneeWidth / 2", "mm"),
+    formula("frontKneeInsideX", "frontCreaseX - frontKneeWidth / 2", "mm"),
+    formula("backKneeOutsideX", "backCreaseX + backKneeWidth / 2", "mm"),
+    formula("backKneeInsideX", "backCreaseX - backKneeWidth / 2", "mm"),
+    formula("frontHemOutsideX", "frontCreaseX + frontHemWidth / 2", "mm"),
+    formula("frontHemInsideX", "frontCreaseX - frontHemWidth / 2", "mm"),
+    formula("backHemOutsideX", "backCreaseX + backHemWidth / 2", "mm"),
+    formula("backHemInsideX", "backCreaseX - backHemWidth / 2", "mm"),
   ];
 }
 
@@ -200,10 +208,10 @@ function createTrouserPiece(
   const isFront = surface === "front";
   const prefix = isFront ? "front" : "back";
   const waistOpen = values[`${prefix}WaistOpen`];
-  const hipWidth = values[`${prefix}HipWidth`];
+  const seatWidth = values[`${prefix}SeatWidth`];
   const sideCrotchX = values[`${prefix}SideCrotchX`];
-  const inseamCrotchX = values[`${prefix}InseamCrotchX`];
-  const crotchTipX = values[`${prefix}CrotchTipX`];
+  const forkX = values[`${prefix}ForkX`];
+  const forkExtension = values[`${prefix}ForkExtension`];
   const creaseX = values[`${prefix}CreaseX`];
   const kneeOutsideX = values[`${prefix}KneeOutsideX`];
   const kneeInsideX = values[`${prefix}KneeInsideX`];
@@ -211,42 +219,53 @@ function createTrouserPiece(
   const hemInsideX = values[`${prefix}HemInsideX`];
   const centerWaistY = values[`${prefix}CenterWaistY`];
   const sideWaistY = values[`${prefix}SideWaistY`];
+  const centerWaistX = isFront ? 0 : values.backCenterWaistX;
+  const sideWaistX = centerWaistX + waistOpen;
   const dartWidth = values[`${prefix}DartWidth`];
   const dartLength = values[`${prefix}DartLength`];
   const dartX = values[`${prefix}DartX`];
-  const dartY = interpolateY(centerWaistY, sideWaistY, waistOpen === 0 ? 0 : dartX / waistOpen);
+  const dartY = interpolateY(centerWaistY, sideWaistY, waistOpen === 0 ? 0 : (dartX - centerWaistX) / waistOpen);
   const darts = dartWidth > 0.05
     ? [closeDart(createDart(id, { xMm: dartX, yMm: dartY }, { xMm: dartX, yMm: dartY + dartLength }, dartWidth))]
     : [];
-  const extension = Math.abs(crotchTipX - inseamCrotchX);
+  const riseHeight = values.crotchLineY - values.hipLineY;
+  const legCurveHeight = values.kneeLineY - values.crotchLineY;
 
   return piece(
     id,
     name,
     [
-      point("center-waist", 0, centerWaistY, {
-        in: { xMm: -Math.max(18, extension * 0.24), yMm: values.crotchLineY * 0.31 },
+      point("center-waist", centerWaistX, centerWaistY, {
+        in: { xMm: isFront ? 0 : -centerWaistX * 0.38, yMm: values.hipLineY * 0.30 },
+        out: { xMm: waistOpen * 0.28, yMm: (sideWaistY - centerWaistY) * 0.45 },
       }),
-      point("side-waist", waistOpen, sideWaistY, {
-        out: { xMm: Math.max(4, (hipWidth - waistOpen) * 0.54), yMm: values.hipLineY * 0.30 },
+      point("side-waist", sideWaistX, sideWaistY, {
+        in: { xMm: -waistOpen * 0.28, yMm: (centerWaistY - sideWaistY) * 0.45 },
+        out: { xMm: Math.max(8, (seatWidth - sideWaistX) * 0.62), yMm: values.hipLineY * 0.36 },
       }),
-      point("side-hip", hipWidth, values.hipLineY, {
-        in: { xMm: -Math.max(4, Math.abs(hipWidth - waistOpen) * 0.28), yMm: -values.hipLineY * 0.33 },
-        out: { xMm: (sideCrotchX - hipWidth) * 0.48, yMm: (values.crotchLineY - values.hipLineY) * 0.46 },
+      point("side-hip", seatWidth, values.hipLineY, {
+        in: { xMm: -Math.max(7, Math.abs(seatWidth - sideWaistX) * 0.32), yMm: -values.hipLineY * 0.34 },
+        out: { xMm: (sideCrotchX - seatWidth) * 0.55, yMm: riseHeight * 0.42 },
       }),
       point("side-crotch", sideCrotchX, values.crotchLineY, {
-        in: { xMm: (hipWidth - sideCrotchX) * 0.30, yMm: -(values.crotchLineY - values.hipLineY) * 0.34 },
+        in: { xMm: (seatWidth - sideCrotchX) * 0.45, yMm: -riseHeight * 0.42 },
+        out: { xMm: (kneeOutsideX - sideCrotchX) * 0.22, yMm: legCurveHeight * 0.30 },
       }),
-      point("knee-outside", kneeOutsideX, values.kneeLineY),
+      point("knee-outside", kneeOutsideX, values.kneeLineY, {
+        in: { xMm: (sideCrotchX - kneeOutsideX) * 0.14, yMm: -legCurveHeight * 0.34 },
+      }),
       point("hem-outside", hemOutsideX, values.outseam),
       point("hem-inside", hemInsideX, values.outseam),
-      point("knee-inside", kneeInsideX, values.kneeLineY),
-      point("inseam-crotch", inseamCrotchX, values.crotchLineY + (isFront ? 16 : 4), {
-        out: { xMm: (crotchTipX - inseamCrotchX) * 0.36, yMm: isFront ? -3 : -8 },
+      point("knee-inside", kneeInsideX, values.kneeLineY, {
+        out: { xMm: (forkX - kneeInsideX) * 0.18, yMm: -legCurveHeight * 0.34 },
       }),
-      point("crotch-tip", crotchTipX, values.crotchLineY, {
-        in: { xMm: Math.max(12, extension * 0.30), yMm: isFront ? 10 : 18 },
-        out: { xMm: Math.max(24, extension * 0.78), yMm: isFront ? -24 : -38 },
+      point("fork", forkX, values.crotchLineY, {
+        in: { xMm: Math.max(34, Math.abs(kneeInsideX - forkX) * 0.42), yMm: legCurveHeight * 0.16 },
+        out: { xMm: forkExtension * (isFront ? 0.82 : 0.72), yMm: isFront ? -2 : -8 },
+      }),
+      point("center-hip", 0, values.hipLineY, {
+        in: { xMm: -forkExtension * (isFront ? 0.08 : 0.20), yMm: riseHeight * (isFront ? 0.58 : 0.70) },
+        out: { xMm: isFront ? 0 : centerWaistX * 0.22, yMm: -values.hipLineY * 0.32 },
       }),
     ],
     {
@@ -273,14 +292,14 @@ function createTrouserPiece(
         end: { xMm: creaseX, yMm: values.outseam - 45 },
       },
       internalLines: [
-        referenceLine(`${id}:hip-line`, id, "Linha do quadril", Math.min(0, crotchTipX * 0.18), values.hipLineY, hipWidth, values.hipLineY),
-        referenceLine(`${id}:crotch-line`, id, "Linha do gancho", crotchTipX, values.crotchLineY, sideCrotchX, values.crotchLineY),
+        referenceLine(`${id}:hip-line`, id, "Linha do quadril", 0, values.hipLineY, seatWidth, values.hipLineY),
+        referenceLine(`${id}:crotch-line`, id, "Linha do gancho", forkX, values.crotchLineY, sideCrotchX, values.crotchLineY),
         referenceLine(`${id}:knee-line`, id, "Linha do joelho", kneeInsideX, values.kneeLineY, kneeOutsideX, values.kneeLineY),
         referenceLine(`${id}:crease-line`, id, "Centro da perna", creaseX, values.crotchLineY + 18, creaseX, values.outseam - 18),
       ],
       annotations: [
-        { id: `${id}:hip-landmark`, label: "Landmark do quadril", xMm: hipWidth - 34, yMm: values.hipLineY - 8 },
-        { id: `${id}:crotch-landmark`, label: isFront ? "Gancho frontal" : "Gancho traseiro", xMm: crotchTipX + 10, yMm: values.crotchLineY - 10 },
+        { id: `${id}:hip-landmark`, label: "Landmark do quadril", xMm: seatWidth - 34, yMm: values.hipLineY - 8 },
+        { id: `${id}:crotch-landmark`, label: isFront ? "Forquilha / gancho frontal" : "Forquilha / gancho traseiro", xMm: forkX + 10, yMm: values.crotchLineY - 10 },
         { id: `${id}:knee-landmark`, label: "Pique de joelho", xMm: kneeOutsideX - 22, yMm: values.kneeLineY - 8 },
         { id: `${id}:grain`, label: "Fio / centro da perna", xMm: creaseX + 8, yMm: (values.crotchLineY + values.outseam) / 2 },
         { id: `${id}:dart`, label: isFront ? "Pence frontal opcional" : "Pence traseira", xMm: dartX + 7, yMm: dartY + dartLength * 0.55 },
@@ -302,6 +321,10 @@ function trouserMeasurementInputs(
     "crotchDepthMm",
     "seatDepthMm",
     "waistDropMm",
+    "waistFrontArcMm",
+    "waistBackArcMm",
+    "hipFrontArcMm",
+    "hipBackArcMm",
     "thighMm",
     "kneeCircumferenceMm",
     "ankleCircumferenceMm",
@@ -387,18 +410,21 @@ function constructionGraph(definitions: readonly FormulaDefinition[]): Parametri
 
 function formulaDescription(id: string): string {
   const descriptions: Record<string, string> = {
-    frontHipShare: "Distribuição estrutural de quadril entre frente e costas.",
-    frontWaistShare: "Distribuição estrutural de cintura entre frente e costas.",
+    waistEaseRatio: "Folga de cintura de 2% do bloco Titan.",
+    seatEaseRatio: "Folga de assento de 2% do bloco Titan.",
+    legBalance: "Distribuição Titan: costas ocupam 57,5% da circunferência da perna.",
+    grainlinePosition: "Posição Titan do fio a 45% entre a lateral superior e a forquilha.",
     crotchLineY: "Altura vertical do gancho derivada da medida sentada.",
-    frontCrotchExtension: "Extensão frontal do gancho, menor que a traseira.",
-    backCrotchExtension: "Extensão traseira do gancho com participação da profundidade do assento.",
+    frontForkExtension: "Extensão frontal da forquilha: 25% do semiarco frontal do assento com folga.",
+    backForkExtension: "Extensão traseira da forquilha: 25% do semiarco traseiro do assento com folga.",
     backCenterRise: "Elevação funcional da cintura traseira.",
     frontDartWidth: "Tomada opcional da pence frontal.",
     backDartWidth: "Tomada estrutural da pence traseira.",
     frontCreaseX: "Centro geométrico da perna frontal.",
     backCreaseX: "Centro geométrico da perna traseira.",
     kneeLineY: "Linha do joelho medida a partir do gancho.",
-    hemCircumference: "Regra estética versionada da barra reta.",
+    frontHemWidth: "Barra frontal reta, nunca menor que a largura frontal do joelho.",
+    backHemWidth: "Barra traseira reta, nunca menor que a largura traseira do joelho.",
   };
   return descriptions[id] ?? "Variável versionada da construção de calça.";
 }

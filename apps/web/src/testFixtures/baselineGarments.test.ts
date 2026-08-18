@@ -22,12 +22,19 @@ describe("baseline garment fixtures", () => {
       "equal-length-seam",
       "length-mismatch-seam",
       "self-seam-tube",
+      "xpbd-tube-with-flap",
+      "xpbd-four-panel-composite",
+      "spatial-two-panel-tube",
+      "spatial-four-panel-tube",
+      "spatial-open-chain",
+      "spatial-notched-tube",
+      "spatial-notched-tube-waistband",
       "sleeve-with-body",
       "multiple-fabrics",
       "legacy-valid",
       "intentionally-invalid",
     ]);
-    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(16);
+    expect(Object.keys(createAllBaselineFixtures())).toHaveLength(23);
   });
 
   it.each(BASELINE_FIXTURE_IDS)("creates %s deterministically", (id) => {

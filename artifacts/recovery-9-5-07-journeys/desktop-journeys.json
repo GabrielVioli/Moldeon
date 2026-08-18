@@ -1,0 +1,20 @@
+{
+  "journeys": {
+    "1": "pass",
+    "2": "pass",
+    "3": "pass",
+    "4": "pass",
+    "5": "pass",
+    "6": "pass",
+    "7": "pass",
+    "13": "pass"
+  },
+  "signatures": {
+    "originalSignature": "piece-e67ca36c-1785-44d3-9672-8f21c74b3c3d:panel:1:30bf1eaf",
+    "pointEditedSignature": "piece-e67ca36c-1785-44d3-9672-8f21c74b3c3d:panel:1:9ee51dcf",
+    "curveEditedSignature": "piece-e67ca36c-1785-44d3-9672-8f21c74b3c3d:panel:1:9002c95a"
+  },
+  "finalGarmentMeshCount": 0,
+  "avatarConfigured": false,
+  "consoleErrors": []
+}

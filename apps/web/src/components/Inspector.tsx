@@ -1,7 +1,9 @@
 import { memo } from "react";
-import { edgeRangeLength, type PatternSnapshot } from "../domain/pattern";
+import { edgeRangeSequenceLength, seamSideRanges, type PatternSnapshot } from "../domain/pattern";
 import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
+import { BodyPositionPanel } from "./BodyPositionPanel";
 import { useEditorStore } from "../state/editorStore";
+import { groupSeamsByRelation, seamRelationLabel } from "../domain/templateAssemblySeams";
 
 interface InspectorProps {
   id: string;
@@ -56,6 +58,7 @@ export const Inspector = memo(function Inspector({
     visible: true,
     locked: false,
   };
+  const seamGroups = groupSeamsByRelation(garment.seams);
 
   return (
     <aside
@@ -95,6 +98,8 @@ export const Inspector = memo(function Inspector({
           value={snapshot.piece.points.length.toString()}
         />
       </section>
+
+      <BodyPositionPanel key={snapshot.piece.id} piece={snapshot.piece} />
 
       <section>
         <label className="field-label" htmlFor="seam-allowance">Margem de costura</label>
@@ -205,14 +210,34 @@ export const Inspector = memo(function Inspector({
 
       <section>
         <div className="section-eyebrow">Costuras</div>
-        {(garment.seams ?? []).length === 0 ? <p className="muted">Selecione duas bordas no modo costura.</p> : (
-          <ul className="seam-list">{(garment.seams ?? []).map((seam) => {
-            const firstPiece = garment.pieces.find((piece) => piece.id === seam.first.pieceId);
-            const secondPiece = garment.pieces.find((piece) => piece.id === seam.second.pieceId);
-            const firstLength = firstPiece ? edgeRangeLength(firstPiece, seam.first) : 0;
-            const secondLength = secondPiece ? edgeRangeLength(secondPiece, seam.second) : 0;
-            const issue = seamIssues.find((item) => item.seamId === seam.id);
-            return <li key={seam.id} className={`${selectedSeamId === seam.id ? "is-selected " : ""}${seam.active === false ? "is-inactive" : ""}`} onClick={() => selectSeam(seam.id)}><strong>{seam.name ?? ((firstPiece?.name ?? "Peça ausente") + " ↔ " + (secondPiece?.name ?? "Peça ausente"))}</strong><small>{firstPiece?.name ?? "Peça ausente"} ↔ {secondPiece?.name ?? "Peça ausente"} · {firstLength.toFixed(1)} / {secondLength.toFixed(1)} mm · Δ {Math.abs(firstLength - secondLength).toFixed(1)} mm</small>{issue ? <span>{issue.message}</span> : null}<div><button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamActive(seam.id); }}>{seam.active === false ? "Reativar" : "Desativar"}</button><button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamDirection(seam.id); }}>{seam.direction === "same" ? "Mesmo sentido" : "Sentido oposto"}</button><button type="button" onClick={(event) => { event.stopPropagation(); removeSeam(seam.id); }}>Remover</button></div></li>;
+        {seamGroups.length === 0 ? <p className="muted">Selecione duas bordas no modo costura.</p> : (
+          <ul className="seam-list">{seamGroups.map((group) => {
+            const representative = group[0];
+            const firstPiece = garment.pieces.find((piece) => piece.id === representative.first.pieceId);
+            const secondPiece = garment.pieces.find((piece) => piece.id === representative.second.pieceId);
+            const firstLength = group.reduce((sum, seam) => {
+              return sum + edgeRangeSequenceLength(garment.pieces, seamSideRanges(seam, "first"));
+            }, 0);
+            const secondLength = group.reduce((sum, seam) => {
+              return sum + edgeRangeSequenceLength(garment.pieces, seamSideRanges(seam, "second"));
+            }, 0);
+            const issues = seamIssues.filter((item) => group.some((seam) => seam.id === item.seamId));
+            const selected = group.some((seam) => seam.id === selectedSeamId);
+            const inactive = group.every((seam) => seam.active === false);
+            const sameDirection = group.every((seam) => seam.direction === "same");
+            const relationId = representative.groupId ?? representative.id;
+            return (
+              <li key={relationId} className={`${selected ? "is-selected " : ""}${inactive ? "is-inactive" : ""}`} onClick={() => selectSeam(representative.id)}>
+                <strong>{seamRelationLabel(group)}</strong>
+                <small>{firstPiece?.name ?? "Peça ausente"} ↔ {secondPiece?.name ?? "Peça ausente"} · {firstLength.toFixed(1)} / {secondLength.toFixed(1)} mm · Δ {Math.abs(firstLength - secondLength).toFixed(1)} mm</small>
+                {issues.map((issue) => <span key={issue.seamId}>{issue.message}</span>)}
+                <div>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) if ((seam.active === false) === inactive) toggleSeamActive(seam.id); }}>{inactive ? "Reativar" : "Desativar"}</button>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) toggleSeamDirection(seam.id); }}>{sameDirection ? "Mesmo sentido" : "Sentido oposto"}</button>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) removeSeam(seam.id); }}>Remover</button>
+                </div>
+              </li>
+            );
           })}</ul>
         )}
       </section>

@@ -1,0 +1,258 @@
+{
+  "label": "fallback-current",
+  "generatedAt": "2026-08-10T18:34:23.528Z",
+  "directory": "apps/web/dist",
+  "fileCount": 12,
+  "total": {
+    "rawBytes": 1838613,
+    "gzipBytes": 501827,
+    "brotliBytes": 419738
+  },
+  "javascript": {
+    "rawBytes": 1775274,
+    "gzipBytes": 486004,
+    "brotliBytes": 405781
+  },
+  "css": {
+    "rawBytes": 51700,
+    "gzipBytes": 10975,
+    "brotliBytes": 9633
+  },
+  "wasm": {
+    "rawBytes": 0,
+    "gzipBytes": 0,
+    "brotliBytes": 0
+  },
+  "initial": {
+    "rawBytes": 566944,
+    "gzipBytes": 163540,
+    "brotliBytes": 138340
+  },
+  "initialPaths": [
+    "assets/index-B0Ur51v_.js",
+    "assets/index-DDyyOwSV.css"
+  ],
+  "categories": {
+    "webgpu": {
+      "rawBytes": 568009,
+      "gzipBytes": 157337,
+      "brotliBytes": 128719
+    },
+    "javascript-other": {
+      "rawBytes": 581566,
+      "gzipBytes": 171591,
+      "brotliBytes": 145828
+    },
+    "threejs": {
+      "rawBytes": 625699,
+      "gzipBytes": 157076,
+      "brotliBytes": 131234
+    },
+    "styles": {
+      "rawBytes": 51700,
+      "gzipBytes": 10975,
+      "brotliBytes": 9633
+    },
+    "assets": {
+      "rawBytes": 11639,
+      "gzipBytes": 4848,
+      "brotliBytes": 4324
+    }
+  },
+  "largestFiles": [
+    {
+      "path": "assets/three.webgpu-Bs4su18E.js",
+      "extension": ".js",
+      "category": "webgpu",
+      "rawBytes": 568009,
+      "gzipBytes": 157337,
+      "brotliBytes": 128719
+    },
+    {
+      "path": "assets/index-B0Ur51v_.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 515244,
+      "gzipBytes": 152565,
+      "brotliBytes": 128707
+    },
+    {
+      "path": "assets/GarmentViewport-BkL6nFbg.js",
+      "extension": ".js",
+      "category": "threejs",
+      "rawBytes": 414321,
+      "gzipBytes": 102995,
+      "brotliBytes": 86870
+    },
+    {
+      "path": "assets/three.core-BArjhaJA.js",
+      "extension": ".js",
+      "category": "threejs",
+      "rawBytes": 211378,
+      "gzipBytes": 54081,
+      "brotliBytes": 44364
+    },
+    {
+      "path": "assets/index-DDyyOwSV.css",
+      "extension": ".css",
+      "category": "styles",
+      "rawBytes": 51700,
+      "gzipBytes": 10975,
+      "brotliBytes": 9633
+    },
+    {
+      "path": "assets/PatternLibraryDialog-DKOjcPKH.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 42499,
+      "gzipBytes": 11745,
+      "brotliBytes": 10516
+    },
+    {
+      "path": "assets/SleeveWizardDialog-CyJ8tOai.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 14084,
+      "gzipBytes": 4357,
+      "brotliBytes": 3944
+    },
+    {
+      "path": "assets/FittingRoomDialog-C8mn_9U0.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 9739,
+      "gzipBytes": 2924,
+      "brotliBytes": 2661
+    },
+    {
+      "path": "models/MIXAMO_GUIDE.md",
+      "extension": ".md",
+      "category": "assets",
+      "rawBytes": 7286,
+      "gzipBytes": 2665,
+      "brotliBytes": 2414
+    },
+    {
+      "path": "models/README.md",
+      "extension": ".md",
+      "category": "assets",
+      "rawBytes": 3358,
+      "gzipBytes": 1560,
+      "brotliBytes": 1430
+    },
+    {
+      "path": "index.html",
+      "extension": ".html",
+      "category": "assets",
+      "rawBytes": 861,
+      "gzipBytes": 528,
+      "brotliBytes": 395
+    },
+    {
+      "path": "_headers",
+      "extension": "none",
+      "category": "assets",
+      "rawBytes": 134,
+      "gzipBytes": 95,
+      "brotliBytes": 85
+    }
+  ],
+  "files": [
+    {
+      "path": "assets/three.webgpu-Bs4su18E.js",
+      "extension": ".js",
+      "category": "webgpu",
+      "rawBytes": 568009,
+      "gzipBytes": 157337,
+      "brotliBytes": 128719
+    },
+    {
+      "path": "assets/index-B0Ur51v_.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 515244,
+      "gzipBytes": 152565,
+      "brotliBytes": 128707
+    },
+    {
+      "path": "assets/GarmentViewport-BkL6nFbg.js",
+      "extension": ".js",
+      "category": "threejs",
+      "rawBytes": 414321,
+      "gzipBytes": 102995,
+      "brotliBytes": 86870
+    },
+    {
+      "path": "assets/three.core-BArjhaJA.js",
+      "extension": ".js",
+      "category": "threejs",
+      "rawBytes": 211378,
+      "gzipBytes": 54081,
+      "brotliBytes": 44364
+    },
+    {
+      "path": "assets/index-DDyyOwSV.css",
+      "extension": ".css",
+      "category": "styles",
+      "rawBytes": 51700,
+      "gzipBytes": 10975,
+      "brotliBytes": 9633
+    },
+    {
+      "path": "assets/PatternLibraryDialog-DKOjcPKH.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 42499,
+      "gzipBytes": 11745,
+      "brotliBytes": 10516
+    },
+    {
+      "path": "assets/SleeveWizardDialog-CyJ8tOai.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 14084,
+      "gzipBytes": 4357,
+      "brotliBytes": 3944
+    },
+    {
+      "path": "assets/FittingRoomDialog-C8mn_9U0.js",
+      "extension": ".js",
+      "category": "javascript-other",
+      "rawBytes": 9739,
+      "gzipBytes": 2924,
+      "brotliBytes": 2661
+    },
+    {
+      "path": "models/MIXAMO_GUIDE.md",
+      "extension": ".md",
+      "category": "assets",
+      "rawBytes": 7286,
+      "gzipBytes": 2665,
+      "brotliBytes": 2414
+    },
+    {
+      "path": "models/README.md",
+      "extension": ".md",
+      "category": "assets",
+      "rawBytes": 3358,
+      "gzipBytes": 1560,
+      "brotliBytes": 1430
+    },
+    {
+      "path": "index.html",
+      "extension": ".html",
+      "category": "assets",
+      "rawBytes": 861,
+      "gzipBytes": 528,
+      "brotliBytes": 395
+    },
+    {
+      "path": "_headers",
+      "extension": "none",
+      "category": "assets",
+      "rawBytes": 134,
+      "gzipBytes": 95,
+      "brotliBytes": 85
+    }
+  ]
+}

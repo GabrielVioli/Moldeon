@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import type { GarmentDraft } from "../domain/pattern";
+import { createBlankGarment } from "../domain/blankGarment";
 import {
   changeMeasurementBodyType,
   createDefaultMeasurementProfile,
@@ -11,6 +12,7 @@ import {
 import { resolveTemplateAssemblyGarment } from "../domain/templateAssemblySeams";
 import {
   PATTERN_TEMPLATES,
+  PUBLIC_PATTERN_TEMPLATES,
   createGarmentFromTemplate,
   type PatternTemplateId,
 } from "../patterns/templateCatalog";
@@ -55,19 +57,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
     try {
       setError(null);
       if (choice === "blank") {
-        const base = createGarmentFromTemplate("tshirt", measurements, bodyType, profile);
-        onChoose({
-          ...base,
-          id: `garment-empty-${Date.now().toString(36)}`,
-          templateId: "blank",
-          name: "Projeto vazio",
-          description: "Bancada vazia pronta para desenhar.",
-          pieces: [],
-          seams: [],
-          workspaceTransforms: [],
-          workspaceStates: [],
-          assemblyPlacements: [],
-        });
+        onChoose(createBlankGarment(profile));
         return;
       }
       const generated = createGarmentFromTemplate(choice, measurements, bodyType, profile);
@@ -94,17 +84,17 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
         >
           <header className="dialog-header">
             <div>
-              <span className="section-eyebrow">Começar por uma base</span>
-              <h1 id="pattern-library-title">Moldes essenciais</h1>
-              <p>Escolha primeiro o que deseja criar. As medidas aparecem na etapa seguinte.</p>
+              <span className="section-eyebrow">Novo projeto</span>
+              <h1 id="pattern-library-title">Biblioteca de moldes</h1>
+              <p>Crie um molde do zero para começar.</p>
             </div>
             <button className="dialog-close" type="button" onClick={onClose} aria-label="Fechar biblioteca">×</button>
           </header>
 
           <div className="pattern-library-scroll">
             <div className="template-first-heading">
-              <h2>Qual molde vai para a bancada?</h2>
-              <p>Todos os contornos continuarão editáveis depois da criação.</p>
+              <h2>Comece pela bancada vazia</h2>
+              <p>Os moldes automáticos estão fora da biblioteca enquanto passam por revisão técnica.</p>
             </div>
 
             <div className="template-grid recovery-template-grid">
@@ -123,7 +113,7 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                 </span>
               </button>
 
-              {PATTERN_TEMPLATES.map((template) => (
+              {PUBLIC_PATTERN_TEMPLATES.map((template) => (
                 <button
                   className={`template-card${choice === template.id ? " is-selected" : ""}`}
                   key={template.id}
@@ -138,7 +128,9 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
                     <strong>{template.name}</strong>
                     <span>{template.description}</span>
                     <small>{template.pieces}</small>
-                    <small className="template-status">{template.status === "development" ? "Em desenvolvimento" : validationLabel(template.validationStatus)}</small>
+                    <small className="template-status">{template.status === "development" ? "Indisponível · em desenvolvimento" : validationLabel(template.validationStatus)}</small>
+                    <small className="template-version">{template.formulaVersion}</small>
+                    {template.status === "development" ? <small>{template.reviewNotes[0]}</small> : null}
                   </span>
                 </button>
               ))}
@@ -146,6 +138,23 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
 
             {choice && choice !== "blank" ? (
               <section className="library-measurements" aria-label="Medidas do molde selecionado">
+                <div className="template-contract" aria-label="Informações técnicas do molde">
+                  <div>
+                    <strong>{validationLabel(selectedTemplate?.validationStatus ?? "experimental")}</strong>
+                    <span>{selectedTemplate?.methodology.name}</span>
+                  </div>
+                  <dl>
+                    <div><dt>ID</dt><dd>{selectedTemplate?.id}</dd></div>
+                    <div><dt>Versão</dt><dd>{selectedTemplate?.formulaVersion}</dd></div>
+                    <div><dt>Método</dt><dd>{selectedTemplate?.methodology.version}</dd></div>
+                  </dl>
+                  {selectedTemplate?.reviewNotes[0] ? <p>{selectedTemplate.reviewNotes[0]}</p> : null}
+                  {selectedTemplate?.instanceExpansion?.length ? (
+                    <ul>
+                      {selectedTemplate.instanceExpansion.map((instance) => <li key={instance}>{instance}</li>)}
+                    </ul>
+                  ) : null}
+                </div>
                 <div className="template-first-heading">
                   <h2>Medidas para {selectedTemplate?.name}</h2>
                   <p>Os valores informados têm prioridade. Estimativas ficam claramente marcadas.</p>
@@ -176,11 +185,11 @@ export const PatternLibraryDialog = memo(function PatternLibraryDialog({
           </div>
 
           <footer className="library-actions">
-            <span>{choice === "blank" ? "A bancada será criada sem peças." : selectedTemplate ? `${selectedTemplate.name} selecionado.` : "Selecione um molde ou uma bancada vazia."}</span>
+            <span>{choice === "blank" ? "A bancada será criada sem peças." : selectedTemplate ? `${selectedTemplate.name} selecionado.` : "Selecione a bancada vazia para continuar."}</span>
             <div>
               <button className="secondary-dialog-button" type="button" onClick={onClose}>Cancelar</button>
               <button className="primary-dialog-button" type="button" disabled={!choice} onClick={createSelection}>
-                {choice === "blank" ? "Criar bancada vazia" : "Criar molde"}
+                {choice === "blank" ? "Criar bancada vazia" : "Criar bancada"}
               </button>
             </div>
           </footer>

@@ -4,12 +4,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { initializeEngine } from "./core/engineRuntime";
 import { createPatternSnapshot } from "./core/fallbackPatternEngine";
 import { PatternCanvas } from "./editor/PatternCanvas";
 import type { EditorTool } from "./editor/PatternCanvas";
+import { clearEditorSelection } from "./editor/editorCoreSelection";
 import { Inspector } from "./components/Inspector";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
@@ -17,13 +19,14 @@ import { PiecesPanel } from "./components/PiecesPanel";
 import { PreviewPlacementPanel } from "./components/PreviewPlacementPanel";
 import { AssemblyPanel } from "./components/AssemblyPanel";
 import { ContextBar } from "./components/ContextBar";
+import { DressingPreflightDialog } from "./components/DressingPreflightDialog";
 import { exportPatternAsSvg } from "./export/svg";
 import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
-import type { GarmentDraft } from "./domain/pattern";
-import { evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
-import { canAddGuidedSleeve } from "./domain/sleeveSystem";
+import { evaluateDressingPreflight, evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
+import { createBlankGarment } from "./domain/blankGarment";
+import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -31,16 +34,11 @@ type RenderBackend = "deferred" | "webgpu" | "webgl2";
 const MOBILE_QUERY = "(max-width: 760px)";
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1180px)";
 const loadGarmentViewport = () => import("./viewport/GarmentViewport");
-const loadPatternLibrary = () => import("./components/PatternLibraryDialog");
 const loadFittingRoom = () => import("./components/FittingRoomDialog");
 const loadSleeveWizard = () => import("./components/SleeveWizardDialog");
 const LazyGarmentViewport = lazy(async () => {
   const module = await loadGarmentViewport();
   return { default: module.GarmentViewport };
-});
-const LazyPatternLibraryDialog = lazy(async () => {
-  const module = await loadPatternLibrary();
-  return { default: module.PatternLibraryDialog };
 });
 const LazyFittingRoomDialog = lazy(async () => {
   const module = await loadFittingRoom();
@@ -97,62 +95,68 @@ export function App() {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const simulate = useEditorStore((state) => state.simulate);
+  const setGarmentDressing = useEditorStore((state) => state.setGarmentDressing);
   const addGuidedSleeve = useEditorStore((state) => state.addGuidedSleeve);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
+  const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const autosaveRevisionRef = useRef(0);
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [fittingOpen, setFittingOpen] = useState(false);
   const [sleeveWizardOpen, setSleeveWizardOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>("select");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("modeling");
+  const [dressingPreflightOpen, setDressingPreflightOpen] = useState(false);
   const [renderBackend, setRenderBackend] =
     useState<RenderBackend>("deferred");
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
-  const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
+  const dressingPreflight = useMemo(() => evaluateDressingPreflight(garment), [garment]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
-  const garmentSnapshots = useMemo(
-    () => (showViewport ? garment.pieces.map(createPatternSnapshot) : []),
-    [garment, showViewport],
-  );
-  const handleSimulate = useCallback(() => {
-    setWorkspaceMode("assembly");
+  const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
+  const openDressedViewport = useCallback((mode: "assembly" | "fitting") => {
+    setWorkspaceMode(mode);
     setPreviewRequested(true);
     setIsRightPanelOpen(true);
     if (isCompactWorkspace) setMobileView("preview");
     simulate();
   }, [isCompactWorkspace, simulate]);
+  const handleSimulate = useCallback(() => {
+    if (!dressingPreflight.canDress) {
+      setDressingPreflightOpen(true);
+      return;
+    }
+    openDressedViewport("assembly");
+  }, [dressingPreflight.canDress, openDressedViewport]);
   const handleDressBody = useCallback(() => {
-    setWorkspaceMode("fitting");
-    setPreviewRequested(true);
-    setIsRightPanelOpen(true);
-    if (isCompactWorkspace) setMobileView("preview");
-  }, [isCompactWorkspace]);
+    if (!dressingPreflight.canDress) {
+      setDressingPreflightOpen(true);
+      return;
+    }
+    openDressedViewport("fitting");
+  }, [dressingPreflight.canDress, openDressedViewport]);
+  useEffect(() => {
+    if (!dressingPreflightOpen || !dressingPreflight.canDress) return;
+    setDressingPreflightOpen(false);
+    openDressedViewport("fitting");
+  }, [dressingPreflight.canDress, dressingPreflightOpen, openDressedViewport]);
   const closeRightPanel = useCallback(() => {
     setIsRightPanelOpen(false);
+    setPreviewRequested(false);
     if (isCompactWorkspace) setMobileView("editor");
   }, [isCompactWorkspace]);
   const openRightPanel = useCallback((view: WorkspaceView = "preview") => {
     setIsRightPanelOpen(true);
+    if (view === "preview" && eligibility.canOpenViewport) setPreviewRequested(true);
     if (isCompactWorkspace) setMobileView(view);
-  }, [isCompactWorkspace]);
+  }, [eligibility.canOpenViewport, isCompactWorkspace]);
   const handleExportSvg = useCallback(() => {
     const currentGarment = useEditorStore.getState().garment;
     exportPatternAsSvg(currentGarment.pieces.map(createPatternSnapshot), currentGarment.name);
   }, []);
-  const handleChooseTemplate = useCallback(
-    (nextGarment: GarmentDraft) => {
-      loadGarment(nextGarment);
-      setActiveTool("select");
-      setLibraryOpen(false);
-      if (isCompactWorkspace) setMobileView("editor");
-    },
-    [isCompactWorkspace, loadGarment],
-  );
   const handleConfirmSleeve = useCallback((options: Parameters<typeof addGuidedSleeve>[0]) => {
     const result = addGuidedSleeve(options);
     if (!result.accepted) {
@@ -179,14 +183,24 @@ export function App() {
   }, [startDraft]);
   const handleSelectTool = useCallback((tool: EditorTool) => {
     cancelIntent();
-    if (tool !== "select") {
-      const state = useEditorStore.getState();
-      state.clearSelection();
-      state.selectDart(null);
-    }
+    const pathState = useInternalPathEditorStore.getState();
+    if (pathState.draftPathId) pathState.cancelDraft();
+    else if (pathState.selectedPathId) pathState.selectPath(null);
+    if (tool !== "select") clearEditorSelection({ preservePieces: tool === "cut" });
     if (tool === "draft") handleCreateBlankPiece();
-    else setActiveTool(tool);
-  }, [cancelIntent, handleCreateBlankPiece]);
+    else {
+      setActiveTool(tool);
+      if (tool === "seam") {
+        if (isCompactWorkspace) {
+          setWorkspaceMode("modeling");
+          setMobileView("editor");
+        } else {
+          setWorkspaceMode("assembly");
+          setIsRightPanelOpen(true);
+        }
+      }
+    }
+  }, [cancelIntent, handleCreateBlankPiece, isCompactWorkspace]);
   const handleDuplicatePiece = useCallback(
     (pieceId: string, mirrored = false) => {
       duplicatePiece(pieceId, mirrored);
@@ -222,9 +236,10 @@ export function App() {
     },
     [deletePiece, garment.pieces],
   );
-  const selectedPointIndex = snapshot.piece.points.findIndex(
-    (point) => point.id === selectedPointId,
-  );
+  const hasPieces = garment.pieces.length > 0;
+  const selectedPointIndex = hasPieces
+    ? snapshot.piece.points.findIndex((point) => point.id === selectedPointId)
+    : -1;
   const selectedPoint =
     selectedPointIndex >= 0 ? snapshot.piece.points[selectedPointIndex] : null;
   const nextPoint =
@@ -270,12 +285,12 @@ export function App() {
               autosave.document.activePieceId,
               engine.backend,
             );
-          } else {
+          } else if (autosave?.document.kind === "snapshot") {
             const nextSnapshot =
-              autosave?.document.kind === "snapshot"
-                ? engine.restorePiece(autosave.document.snapshot.piece)
-                : engine.snapshot();
+              engine.restorePiece(autosave.document.snapshot.piece);
             setEngineSnapshot(nextSnapshot, engine.backend);
+          } else {
+            loadGarment(createBlankGarment());
           }
           if (autosave) setAutosaveStatus(`Restaurado · ${autosave.method}`);
         }
@@ -290,18 +305,27 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [restoreGarment, setEngineSnapshot]);
+  }, [loadGarment, restoreGarment, setEngineSnapshot]);
 
   useEffect(() => {
     if (!persistenceReady) return;
+    const revision = autosaveRevisionRef.current + 1;
+    autosaveRevisionRef.current = revision;
 
     const timeout = window.setTimeout(() => {
-      void saveAutosave(garment, activePieceId)
-        .then((method) => setAutosaveStatus(`Salvo localmente · ${method}`))
-        .catch((error: unknown) => {
-          console.warn("Autosave falhou", error);
+      setAutosaveStatus("Salvando alterações…");
+      const request = autosaveQueueRef.current.then(async () => {
+        const method = await saveAutosave(garment, activePieceId);
+        if (autosaveRevisionRef.current === revision) {
+          setAutosaveStatus(`Salvo localmente · ${method}`);
+        }
+      });
+      autosaveQueueRef.current = request.catch((error: unknown) => {
+        console.warn("Autosave falhou", error);
+        if (autosaveRevisionRef.current === revision) {
           setAutosaveStatus("Falha no autosave");
-        });
+        }
+      });
     }, 500);
 
     return () => window.clearTimeout(timeout);
@@ -309,25 +333,19 @@ export function App() {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (!persistenceReady) return;
       if (event.key === "Escape" && !isEditableTarget(event.target)) {
+        event.preventDefault();
         const pathState = useInternalPathEditorStore.getState();
-        if (pathState.draftPathId) {
-          pathState.cancelDraft();
-          setActiveTool("select");
-          return;
-        }
         const state = useEditorStore.getState();
-        if (state.draftContour) {
-          cancelDraft();
-          setActiveTool("select");
-        } else if (state.selectedPointId || state.selectedEdgeId || state.selectedSeamId || state.selectedDartId || state.pieceSelectionActive || state.selectedPieceIds.length > 1) {
-          state.clearSelection();
-          state.selectDart(null);
-          state.selectFirstSeamEdge(null);
-        } else {
+        if (pathState.draftPathId) pathState.cancelDraft();
+        else if (state.draftContour) cancelDraft();
+        else {
+          state.cancelEdit();
           state.cancelIntent();
-          setActiveTool("select");
         }
+        clearEditorSelection();
+        setActiveTool("select");
         return;
       }
       if (!isEditableTarget(event.target) && useInternalPathEditorStore.getState().draftPathId) {
@@ -354,10 +372,16 @@ export function App() {
           event.preventDefault();
           removeDraftPoint();
           return;
-          }
+        }
       }
       if (event.key === "Enter" && !isEditableTarget(event.target)) {
         const state = useEditorStore.getState();
+        if (state.seamDraft) {
+          event.preventDefault();
+          if (state.seamDraft.activeSide === "first") state.finishSeamDraftSide();
+          else state.reviewSeamDraft();
+          return;
+        }
         if (state.seamProposal) {
           event.preventDefault();
           state.confirmSeamProposal({ name: "Costura", direction: state.seamProposal.compatibility.recommendedDirection, treatment: state.seamProposal.compatibility.recommendedTreatment });
@@ -406,10 +430,11 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, redo, removeDraftPoint, selectAllPieces, undo]);
+  }, [activePieceId, cancelDraft, closeDraft, duplicatePiece, persistenceReady, redo, removeDraftPoint, selectAllPieces, undo]);
 
   useEffect(() => {
     const handleDelete = (event: KeyboardEvent) => {
+      if (!persistenceReady) return;
       if (
         isEditableTarget(event.target) ||
         useEditorStore.getState().draftContour !== null ||
@@ -443,30 +468,21 @@ export function App() {
     };
     window.addEventListener("keydown", handleDelete);
     return () => window.removeEventListener("keydown", handleDelete);
-  }, [deletePiece, deleteSelectedPieces, removePoint]);
+  }, [deletePiece, deleteSelectedPieces, persistenceReady, removePoint]);
 
   useEffect(() => {
     if (activeTool === "draft" && draftContour === null) setActiveTool("select");
   }, [activeTool, draftContour]);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" aria-busy={!persistenceReady}>
       <Toolbar
         garmentName={garment.name}
-        onOpenLibrary={() => setLibraryOpen(true)}
-        onPrepareLibrary={() => {
-          void loadPatternLibrary();
-        }}
-        onOpenSleeveWizard={() => setSleeveWizardOpen(true)}
-        onPrepareSleeveWizard={() => {
-          if (canAddSleeve) void loadSleeveWizard();
-        }}
-        canAddSleeve={canAddSleeve}
         onOpenFitting={() => setFittingOpen(true)}
         onPrepareFitting={() => {
           void loadFittingRoom();
         }}
-        onSimulate={handleSimulate}
+        onSimulate={handleDressBody}
         canAssemble3D={eligibility.canPreviewGarment}
         workspaceMode={workspaceMode}
         canDressBody={eligibility.canDressBody}
@@ -499,10 +515,10 @@ export function App() {
             panelId="preview-panel"
             active={mobileView === "preview"}
             onPrepare={() => {
-              if (eligibility.canPreviewGarment) void loadGarmentViewport();
+              if (eligibility.canOpenViewport) void loadGarmentViewport();
             }}
             onSelect={() => {
-              if (eligibility.canPreviewGarment) setPreviewRequested(true);
+              if (eligibility.canOpenViewport) setPreviewRequested(true);
               openRightPanel("preview");
             }}
           >
@@ -526,7 +542,7 @@ export function App() {
           <div className="panel-titlebar">
             <div>
               <span className="section-eyebrow">Molde 2D</span>
-              <strong>{snapshot.piece.name} · milímetros</strong>
+              <strong>{hasPieces ? `${snapshot.piece.name} · milímetros` : "Bancada vazia · milímetros"}</strong>
             </div>
             <div className="panel-title-actions">
               <span className="hint desktop-hint">Fundo: pan · Shift + arrastar: selecionar · roda/trackpad: navegar</span>
@@ -567,14 +583,14 @@ export function App() {
                 <button
                   type="button"
                   className={activeTool === "point" ? "active" : ""}
-                  disabled={draftContour !== null}
+                  disabled={!hasPieces || draftContour !== null}
                   onClick={() => setActiveTool(activeTool === "point" ? "select" : "point")}
                 >
                   + Ponto
                 </button>
                 <button
                   type="button"
-                  disabled={snapshot.piece.points.length <= 3 || selectedPoint === null}
+                  disabled={!hasPieces || snapshot.piece.points.length <= 3 || selectedPoint === null}
                   onClick={() => selectedPoint && removePoint(selectedPoint.id)}
                 >
                   − Ponto
@@ -598,6 +614,15 @@ export function App() {
                 onInsertPoint={handleInsertPoint}
                 onToolChange={setActiveTool}
               />
+              {!hasPieces && draftContour === null ? (
+                <div className="empty-workspace" role="status">
+                  <strong>A bancada está vazia</strong>
+                  <span>Desenhe a primeira peça diretamente nesta bancada.</span>
+                  <div>
+                    <button type="button" onClick={handleCreateBlankPiece}>Desenhar primeira peça</button>
+                  </div>
+                </div>
+              ) : null}
               <ContextBar tool={activeTool} onDone={() => setActiveTool("select")} />
             </div>
           </div>
@@ -623,8 +648,7 @@ export function App() {
           {showViewport ? (
             <Suspense fallback={<ViewportPlaceholder loading />}>
               <LazyGarmentViewport
-                garment={garment}
-                snapshots={garmentSnapshots}
+                assemblyInput={assemblyInput}
                 simulateVersion={simulateVersion}
                 active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
                 onBackendChange={setRenderBackend}
@@ -640,7 +664,16 @@ export function App() {
           mobileActive={mobileView === "inspector"}
           onRequestPreview={handleSimulate}
           onDressBody={handleDressBody}
-        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel /> : <Inspector
+        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel
+          onChangeRegion={() => {
+            setGarmentDressing({ region: undefined });
+            setDressingPreflightOpen(true);
+          }}
+          onBackToAssembly={() => {
+            setWorkspaceMode("assembly");
+            if (isCompactWorkspace) setMobileView("editor");
+          }}
+        /> : hasPieces ? <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}
@@ -653,7 +686,7 @@ export function App() {
           curveActive={selectedCurveActive}
           onToggleCurve={handleToggleCurve}
           onSeamAllowanceChange={setSeamAllowance}
-        />}
+        /> : <EmptyInspector mobileActive={mobileView === "inspector"} />}
         </div>
       </main>
 
@@ -662,15 +695,6 @@ export function App() {
         renderBackend={renderBackend}
         autosaveStatus={autosaveStatus}
       />
-
-      {libraryOpen ? (
-        <Suspense fallback={<DialogPlaceholder />}>
-          <LazyPatternLibraryDialog
-            onClose={() => setLibraryOpen(false)}
-            onChoose={handleChooseTemplate}
-          />
-        </Suspense>
-      ) : null}
 
       {sleeveWizardOpen ? (
         <Suspense fallback={<DialogPlaceholder label="Preparando assistente de manga" />}>
@@ -693,6 +717,25 @@ export function App() {
           />
         </Suspense>
       ) : null}
+
+      {dressingPreflightOpen ? (
+        <DressingPreflightDialog
+          garment={garment}
+          preflight={dressingPreflight}
+          onChooseRegion={(region) => setGarmentDressing({ region })}
+          onChooseFront={(frontReferencePieceId) => setGarmentDressing({ frontReferencePieceId })}
+          onFixSeams={() => {
+            setDressingPreflightOpen(false);
+            setWorkspaceMode("assembly");
+            setIsRightPanelOpen(true);
+            if ((garment.seams?.length ?? 0) === 0) setActiveTool("seam");
+            if (isCompactWorkspace) setMobileView("editor");
+          }}
+          onClose={() => setDressingPreflightOpen(false)}
+        />
+      ) : null}
+
+      {!persistenceReady ? <DialogPlaceholder label="Preparando sua bancada" /> : null}
     </div>
   );
 }
@@ -742,6 +785,20 @@ function WorkspaceTab({
   );
 }
 
+function EmptyInspector({ mobileActive }: { mobileActive: boolean }) {
+  return (
+    <aside
+      className={`inspector empty-inspector workspace-view${mobileActive ? " is-mobile-active" : ""}`}
+      id="inspector-panel"
+      aria-labelledby="inspector-tab"
+    >
+      <span className="section-eyebrow">Propriedades</span>
+      <strong>Nenhuma peça selecionada</strong>
+      <p>Desenhe a primeira peça para começar.</p>
+    </aside>
+  );
+}
+
 function ViewportPlaceholder({ loading = false }: { loading?: boolean }) {
   return (
     <div className="viewport-placeholder" role="status">
@@ -753,7 +810,7 @@ function ViewportPlaceholder({ loading = false }: { loading?: boolean }) {
 }
 
 function DialogPlaceholder({
-  label = "Carregando moldes essenciais",
+  label = "Carregando",
 }: {
   label?: string;
 }) {

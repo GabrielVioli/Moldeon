@@ -34,6 +34,11 @@ function createState(): GarmentAssemblyState {
       {
         id: "top",
         seamId: "side",
+        seamGroupId: "side",
+        treatment: "standard",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: { particleIndices: [0], weights: [1] },
         b: { particleIndices: [2], weights: [1] },
         restDistance: 0.001,
@@ -42,6 +47,11 @@ function createState(): GarmentAssemblyState {
       {
         id: "bottom",
         seamId: "side",
+        seamGroupId: "side",
+        treatment: "standard",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: { particleIndices: [1], weights: [1] },
         b: { particleIndices: [3], weights: [1] },
         restDistance: 0.001,
@@ -86,6 +96,11 @@ describe("GarmentSolver", () => {
       {
         id: "interpolated",
         seamId: "interpolated",
+        seamGroupId: "interpolated",
+        treatment: "standard",
+        distribution: "uniform",
+        targetRatio: 1,
+        slackMm: 0,
         a: {
           particleIndices: [0, 1],
           weights: [0.5, 0.5],

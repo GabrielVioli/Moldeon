@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeSeamCompatibility,
   buildAssemblyGraph,
+  deriveDressingPanelInstances,
+  evaluateDressingPreflight,
   evaluateGarment3DEligibility,
   shouldLoadThreeViewport,
+  suggestBodyPlacement,
 } from "./assembly";
+import { garmentDraftToPatternDocumentV3 } from "./patternDocumentV3";
 import { createDefaultFabricSource } from "./fabric";
 import {
   getPatternEdges,
@@ -63,7 +67,28 @@ function garment(widthA = 100, widthB = 100): GarmentDraft {
       inseamMm: 780,
     },
     fabrics: [fabric],
-    pieces: pieces.map((piece) => ({ ...piece, fabricId: fabric.id })),
+    pieces: pieces.map((piece, index) => ({
+      ...piece,
+      fabricId: fabric.id,
+      bodyPlacement: {
+        version: 1,
+        status: "confirmed",
+        includeIn3D: true,
+        role: index ? "back" : "front",
+        region: "torso",
+        surface: index ? "back" : "front",
+        bodySide: "center",
+        anchorId: index ? "torso-back" : "torso-front",
+        outwardFace: "normal",
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 25,
+        rotationXDeg: 0,
+        rotationYDeg: 0,
+        rotationZDeg: 0,
+        source: "manual",
+      },
+    })),
     assemblyPlacements: pieces.map((piece, index) => ({
       pieceId: piece.id,
       role: index ? "back" : "front",
@@ -139,10 +164,37 @@ describe("seam compatibility", () => {
 });
 
 describe("assembly graph and eligibility", () => {
+  it("blocks dressing for unclassified named pieces without mutating a suggestion into the document", () => {
+    const draft = garment();
+    draft.pieces = draft.pieces.map((piece, index) => ({
+      ...piece,
+      name: index === 0 ? "Costas" : "Calça",
+      bodyPlacement: undefined,
+      previewPlacements: undefined,
+    }));
+    draft.assemblyPlacements = [];
+
+    draft.seams = [seamFor(draft)];
+    const before = structuredClone(draft);
+    expect(evaluateGarment3DEligibility(draft)).toMatchObject({
+      canOpenViewport: true,
+      canPreviewGarment: true,
+      canDressBody: false,
+      missingClassificationPieceIds: [],
+    });
+    expect(evaluateDressingPreflight(draft)).toMatchObject({
+      requiresRegion: true,
+      requiresFrontReference: true,
+    });
+    expect(suggestBodyPlacement(draft.pieces[0])).toBeNull();
+    expect(draft).toEqual(before);
+  });
+
   it("round-trips assembly metadata through the document parser", () => {
     const draft = garment();
     draft.seams = [{ ...seamFor(draft), treatment: "ease", name: "Ombro" }];
     draft.ease = { bustMm: 90, waistMm: 70, hipMm: 85, sleeveMm: 45 };
+    draft.dressing = { region: "upper", frontReferencePieceId: "front" };
     draft.pieces[0].edgeFinishes = {
       [getPatternEdges(draft.pieces[0])[1].id]: "hem",
     };
@@ -152,6 +204,7 @@ describe("assembly graph and eligibility", () => {
       treatment: "ease",
     });
     expect(restored.ease).toEqual(draft.ease);
+    expect(restored.dressing).toEqual(draft.dressing);
     expect(restored.assemblyPlacements).toEqual(draft.assemblyPlacements);
     expect(restored.pieces[0].edgeFinishes).toEqual(
       draft.pieces[0].edgeFinishes,
@@ -204,19 +257,104 @@ describe("assembly graph and eligibility", () => {
     expect(graph.intentionalOpenEdges).toHaveLength(6);
   });
 
-  it("authorizes the always-dressed viewport for valid anchored pieces before and after sewing", () => {
+  it("authorizes dressing only after seams and the two minimal assembly answers", () => {
     const draft = garment();
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canPreviewGarment: true,
-      canDressBody: true,
+      canDressBody: false,
       connectedPieceIds: ["front", "back"],
     });
     draft.seams = [seamFor(draft)];
+    draft.dressing = { region: "upper", frontReferencePieceId: "front" };
     expect(evaluateGarment3DEligibility(draft)).toMatchObject({
       canPreviewGarment: true,
       canDressBody: true,
       connectedPieceIds: ["front", "back"],
     });
+  });
+
+  it("treats a mirrored pair as one front reference and orients the other pair through SeamGroups", () => {
+    const draft = garment();
+    draft.pieces = draft.pieces.map((piece, index) => ({
+      ...piece,
+      name: index === 0 ? "Painel A" : "Painel B",
+      cutQuantity: 2,
+      cutOnFold: false,
+      bodyPlacement: undefined,
+      previewPlacements: undefined,
+    }));
+    draft.assemblyPlacements = [];
+    draft.seams = [seamFor(draft)];
+    draft.dressing = { region: "lower" };
+
+    const preflight = evaluateDressingPreflight(draft);
+    expect(preflight.requiresFrontReference).toBe(true);
+    expect(preflight.frontCandidateGroups).toEqual([
+      {
+        referencePieceId: "front",
+        panelInstanceIds: ["front:panel:1", "front:panel:2"],
+        mirroredPanelInstanceIds: ["front:panel:2"],
+      },
+      {
+        referencePieceId: "back",
+        panelInstanceIds: ["back:panel:1", "back:panel:2"],
+        mirroredPanelInstanceIds: ["back:panel:2"],
+      },
+    ]);
+
+    draft.dressing.frontReferencePieceId = "front";
+    const resolvedPreflight = evaluateDressingPreflight(draft);
+    expect(resolvedPreflight.resolvedFrontReferencePanelInstanceIds).toEqual([
+      "front:panel:1",
+      "front:panel:2",
+    ]);
+
+    const document = garmentDraftToPatternDocumentV3(draft);
+    expect(document.seamGroups).toHaveLength(1);
+    const instances = deriveDressingPanelInstances(document, draft);
+    expect(instances.filter((instance) => instance.sourcePatternId === "front").map((instance) => ({
+      id: instance.id,
+      surface: instance.surface,
+      bodySide: instance.bodySide,
+    }))).toEqual([
+      { id: "front:panel:1", surface: "front", bodySide: "left" },
+      { id: "front:panel:2", surface: "front", bodySide: "right" },
+    ]);
+    expect(instances.filter((instance) => instance.sourcePatternId === "back").map((instance) => ({
+      id: instance.id,
+      surface: instance.surface,
+      bodySide: instance.bodySide,
+    }))).toEqual([
+      { id: "back:panel:1", surface: "back", bodySide: "left" },
+      { id: "back:panel:2", surface: "back", bodySide: "right" },
+    ]);
+  });
+
+  it("keeps an unmirrored definition available as a normal front anchor", () => {
+    const draft = garment();
+    draft.pieces = draft.pieces.map((piece) => ({
+      ...piece,
+      cutQuantity: 1,
+      cutOnFold: false,
+      bodyPlacement: undefined,
+      previewPlacements: undefined,
+    }));
+    draft.assemblyPlacements = [];
+    draft.seams = [seamFor(draft)];
+    draft.dressing = { region: "upper" };
+
+    expect(evaluateDressingPreflight(draft).frontCandidateGroups).toEqual([
+      {
+        referencePieceId: "front",
+        panelInstanceIds: ["front:panel:1"],
+        mirroredPanelInstanceIds: [],
+      },
+      {
+        referencePieceId: "back",
+        panelInstanceIds: ["back:panel:1"],
+        mirroredPanelInstanceIds: [],
+      },
+    ]);
   });
 
   it("keeps disconnected but valid pieces in the preview", () => {

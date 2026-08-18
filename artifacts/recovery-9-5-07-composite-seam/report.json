@@ -1,0 +1,22 @@
+{
+  "firstRangeCount": 1,
+  "secondRangeCount": 2,
+  "lengths": {
+    "first": 569.4,
+    "second": 569.4
+  },
+  "differenceMm": 0,
+  "canonicalCounts": [
+    1,
+    2
+  ],
+  "canonicalOrder": [
+    "split-side:edge:split:0->split:1",
+    "split-side:edge:split:1->split:2"
+  ],
+  "afterUndoCount": 0,
+  "redoExact": true,
+  "seamIssues": [],
+  "reviewText": "Revisar costura · 56.9 cm × 56.9 cm · diferença 0.0 mm\nInverter lado\nConfirmar costura\nFechar",
+  "consoleErrors": []
+}

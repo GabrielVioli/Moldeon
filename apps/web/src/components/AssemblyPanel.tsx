@@ -6,14 +6,16 @@ import {
 } from "../domain/assembly";
 import {
   getPatternEdges,
+  type SeamDistribution,
   type SeamDirection,
   type SeamTreatment,
 } from "../domain/pattern";
 import {
-  resolveTemplateAssemblyGarment,
-  templateAssemblyNeedsRepair,
+  groupSeamsByRelation,
+  seamRelationLabel,
 } from "../domain/templateAssemblySeams";
 import { useEditorStore } from "../state/editorStore";
+import { BodyPositionPanel } from "./BodyPositionPanel";
 
 interface AssemblyPanelProps {
   previewRequested: boolean;
@@ -46,53 +48,21 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const selectSeam = useEditorStore((state) => state.selectSeam);
   const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
   const toggleSeamActive = useEditorStore((state) => state.toggleSeamActive);
-  const setAssemblyPlacement = useEditorStore(
-    (state) => state.setAssemblyPlacement,
-  );
   const setGarmentEase = useEditorStore((state) => state.setGarmentEase);
   const setEdgeFinish = useEditorStore((state) => state.setEdgeFinish);
-  const resolvedGarment = useMemo(
-    () => resolveTemplateAssemblyGarment(garment),
-    [garment],
-  );
-  const needsTemplateRepair = useMemo(
-    () => templateAssemblyNeedsRepair(garment),
-    [garment],
-  );
   const graph = useMemo(
-    () => buildAssemblyGraph(resolvedGarment),
-    [resolvedGarment],
+    () => buildAssemblyGraph(garment),
+    [garment],
   );
   const eligibility = useMemo(
-    () => evaluateGarment3DEligibility(resolvedGarment),
-    [resolvedGarment],
+    () => evaluateGarment3DEligibility(garment),
+    [garment],
   );
   const activePieceId = useEditorStore((state) => state.activePieceId);
   const activePiece =
     garment.pieces.find((piece) => piece.id === activePieceId) ??
     garment.pieces[0];
-  const placement = garment.assemblyPlacements?.find(
-    (candidate) => candidate.pieceId === activePiece.id,
-  );
-
-  const repairTemplateAssembly = () => {
-    useEditorStore.setState((state) => {
-      const resolved = resolveTemplateAssemblyGarment(state.garment);
-
-      if (!templateAssemblyNeedsRepair(state.garment)) {
-        return state;
-      }
-
-      return {
-        garment: resolved,
-        seamIssues: [],
-        seamProposal: null,
-        seamFirstEdge: null,
-        nearbySeamSuggestion: null,
-        simulateVersion: state.simulateVersion + 1,
-      };
-    });
-  };
+  const seamGroups = groupSeamsByRelation(garment.seams);
 
   return (
     <aside
@@ -108,19 +78,6 @@ export const AssemblyPanel = memo(function AssemblyPanel({
           borda(s) ainda sem costura
         </strong>
       </header>
-
-      {needsTemplateRepair ? (
-        <section className="assembly-section">
-          <strong>O molde-base possui costuras incompatíveis.</strong>
-          <p>
-            Corrija automaticamente ombros, laterais, mangas e cavas usando a
-            função de cada borda.
-          </p>
-          <button type="button" onClick={repairTemplateAssembly}>
-            Corrigir costuras do molde-base
-          </button>
-        </section>
-      ) : null}
 
       {proposal ? (
         <SeamProposalForm
@@ -139,39 +96,46 @@ export const AssemblyPanel = memo(function AssemblyPanel({
 
       <section className="assembly-section">
         <h3>Costuras</h3>
-        {(garment.seams ?? []).length === 0 ? (
+        {seamGroups.length === 0 ? (
           <p>Nenhuma costura confirmada.</p>
         ) : (
-          (garment.seams ?? []).map((seam) => (
-            <div className={`assembly-row seam-editor-row${selectedSeamId === seam.id ? " is-selected" : ""}${seam.active === false ? " is-inactive" : ""}`} key={seam.id} onClick={() => selectSeam(seam.id)}>
+          seamGroups.map((group) => {
+            const representative = group[0];
+            const selected = group.some((seam) => seam.id === selectedSeamId);
+            const inactive = group.every((seam) => seam.active === false);
+            return (
+            <div className={`assembly-row seam-editor-row${selected ? " is-selected" : ""}${inactive ? " is-inactive" : ""}`} key={representative.groupId ?? representative.id} onClick={() => selectSeam(representative.id)}>
               <button
                 type="button"
                 className="seam-select-button"
-                aria-label={"Selecionar costura " + (seam.name ?? seam.id)}
-                aria-pressed={selectedSeamId === seam.id}
+                aria-label={"Selecionar costura " + seamRelationLabel(group)}
+                aria-pressed={selected}
                 onClick={(event) => {
                   event.stopPropagation();
-                  selectSeam(seam.id);
+                  selectSeam(representative.id);
                 }}
               >
-                {selectedSeamId === seam.id ? "✓" : "○"}
+                {selected ? "✓" : "○"}
               </button>
               <input
                 aria-label="Nome da costura"
-                value={seam.name ?? seam.id}
+                value={seamRelationLabel(group)}
                 onClick={(event) => event.stopPropagation()}
-                onChange={(event) =>
-                  updateSeam(seam.id, { name: event.currentTarget.value })
-                }
+                onChange={(event) => {
+                  const label = event.currentTarget.value;
+                  group.forEach((seam, index) => updateSeam(seam.id, {
+                    name: group.length > 1 ? `${label} · trecho ${index + 1}` : label,
+                  }));
+                }}
               />
               <select
                 aria-label="Tratamento"
-                value={seam.treatment ?? "standard"}
-                onChange={(event) =>
-                  updateSeam(seam.id, {
+                value={representative.treatment ?? "standard"}
+                onChange={(event) => {
+                  for (const seam of group) updateSeam(seam.id, {
                     treatment: event.currentTarget.value as SeamTreatment,
-                  })
-                }
+                  });
+                }}
               >
                 {TREATMENTS.map((treatment) => (
                   <option key={treatment.value} value={treatment.value}>
@@ -179,53 +143,71 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamActive(seam.id); }}>
-                {seam.active === false ? "Reativar" : "Desativar"}
+              <select
+                aria-label="Distribuição da costura"
+                value={representative.distribution ?? "uniform"}
+                onChange={(event) => {
+                  const distribution = event.currentTarget.value as SeamDistribution;
+                  for (const seam of group) updateSeam(seam.id, { distribution });
+                }}
+              >
+                <option value="uniform">Uniforme</option>
+                <option value="proportional">Proporcional</option>
+                <option value="center-biased">Concentrada no centro</option>
+                <option value="custom">Personalizada</option>
+              </select>
+              <label className="seam-number-field">
+                Proporção
+                <input
+                  aria-label="Proporção alvo da costura"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={representative.targetRatio ?? Math.max(0.01, 1 + representative.easeRatio)}
+                  onChange={(event) => {
+                    const targetRatio = Math.max(0.01, event.currentTarget.valueAsNumber || 1);
+                    for (const seam of group) updateSeam(seam.id, { targetRatio });
+                  }}
+                />
+              </label>
+              <label className="seam-number-field">
+                Folga (mm)
+                <input
+                  aria-label="Folga da costura em milímetros"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={representative.slackMm ?? 0}
+                  onChange={(event) => {
+                    const slackMm = Math.max(0, event.currentTarget.valueAsNumber || 0);
+                    for (const seam of group) updateSeam(seam.id, { slackMm });
+                  }}
+                />
+              </label>
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) if ((seam.active === false) === inactive) toggleSeamActive(seam.id); }}>
+                {inactive ? "Reativar" : "Desativar"}
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); toggleSeamDirection(seam.id); }}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) toggleSeamDirection(seam.id); }}>
                 Inverter
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); removeSeam(seam.id); }}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) removeSeam(seam.id); }}>
                 Excluir
               </button>
             </div>
-          ))
+            );
+          })
         )}
       </section>
 
       <details className="assembly-advanced">
         <summary>Ajustes avançados</summary>
 
-        <section className="assembly-section">
-          <h3>Posição inicial · {activePiece.name}</h3>
-          <div className="assembly-row">
-            <select
-              aria-label="Papel da peça"
-              value={placement?.role ?? "custom"}
-              onChange={(event) =>
-                setAssemblyPlacement(activePiece.id, {
-                  role: event.currentTarget.value as NonNullable<
-                    typeof placement
-                  >["role"],
-                })
-              }
-            >
-              <option value="front">Frente</option>
-              <option value="back">Costas</option>
-              <option value="sleeve">Manga</option>
-              <option value="waist">Cintura</option>
-              <option value="leg">Perna</option>
-              <option value="collar">Gola</option>
-              <option value="custom">Personalizada</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => setAssemblyPlacement(activePiece.id, {})}
-            >
-              {placement ? "Atualizar" : "Inferir posição"}
-            </button>
-          </div>
-        </section>
+        {activePiece ? (
+          <details className="assembly-panel-classification">
+            <summary>Classificação técnica do painel ativo</summary>
+            <BodyPositionPanel key={activePiece.id} piece={activePiece} />
+          </details>
+        ) : null}
 
         <section className="assembly-section">
           <h3>Folga da roupa</h3>

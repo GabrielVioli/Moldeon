@@ -3,11 +3,17 @@ import type { MeasurementProfile, PatternGenerationRecord } from "./parametricMe
 import type {
   AssemblyOutwardSide,
   AssemblyPieceRole,
+  BodyAnchorId,
+  BodyPlacementRegion,
+  BodyPlacementRole,
+  BodyPlacementSide,
+  BodyPlacementSurface,
   BodyMeasurements,
   BodyType,
   EdgeFinish,
   EdgeRange,
   GarmentEase,
+  GarmentDressingSetup,
   Guide,
   PatternContour,
   PatternDart,
@@ -89,6 +95,7 @@ export type PatternSemanticRoleV3 =
   | "leg-front"
   | "leg-back"
   | "collar"
+  | "panel"
   | "custom";
 
 export type PatternMirrorRuleV3 = "none" | "paired" | "cut-on-fold";
@@ -135,6 +142,7 @@ export interface PatternDefinitionV3 {
   sourceTemplateId?: string;
   sourceTemplateVersion?: string;
   semanticRole: PatternSemanticRoleV3;
+  bodyPlacement: PatternBodyPlacementV3;
   geometry: PatternGeometryV3;
   internalLines: PatternInternalLine[];
   darts: PatternDart[];
@@ -156,8 +164,28 @@ export interface PatternDefinitionV3 {
   generation?: PatternGenerationRecord;
 }
 
+export interface PatternBodyPlacementV3 {
+  version: 1;
+  status: "unclassified" | "confirmed";
+  includeIn3D: boolean;
+  role?: BodyPlacementRole;
+  region?: BodyPlacementRegion;
+  surface?: BodyPlacementSurface;
+  bodySide?: BodyPlacementSide;
+  anchorId?: BodyAnchorId;
+  outwardFace: "normal" | "flipped";
+  offsetXMm: number;
+  offsetYMm: number;
+  offsetZMm: number;
+  rotationXDeg: number;
+  rotationYDeg: number;
+  rotationZDeg: number;
+  source: "manual" | "migration";
+}
+
 export interface PanelArrangementAnchorV3 {
   id: string;
+  bodyAnchorId?: BodyAnchorId;
   region: PreviewRegion;
   surface: PreviewSurface;
   bodySide: PreviewBodySide;
@@ -178,11 +206,13 @@ export interface PanelInstanceV3 {
   id: string;
   sourcePatternId: string;
   copyIndex: number;
-  bodySide: PreviewBodySide;
-  surface: PreviewSurface;
+  placementStatus: "unclassified" | "confirmed";
+  bodySide?: PreviewBodySide;
+  surface?: PreviewSurface;
   mirrored: boolean;
   fabricId: string;
-  arrangementAnchor: PanelArrangementAnchorV3;
+  arrangementAnchor?: PanelArrangementAnchorV3;
+  includedIn3D: boolean;
   simulationEnabled: boolean;
   metadata: Record<string, string | number | boolean>;
 }
@@ -207,6 +237,17 @@ export interface SeamGroupCompatibilityV3 {
   legacyTreatment?: string;
 }
 
+export interface SeamPhysicalInstanceReferenceV3 {
+  patternId: string;
+  panelInstanceId: string;
+}
+
+export interface SeamPhysicalBindingV3 {
+  id: string;
+  first: SeamPhysicalInstanceReferenceV3[];
+  second: SeamPhysicalInstanceReferenceV3[];
+}
+
 export interface SeamGroupV3 {
   id: string;
   name: string;
@@ -217,6 +258,10 @@ export interface SeamGroupV3 {
   distribution: SeamDistributionV3;
   targetRatio: number;
   slackMm: number;
+  /** Physical realization only. Geometry remains owned by first/second EdgeRanges. */
+  physicalBindings?: SeamPhysicalBindingV3[];
+  /** @deprecated Accepted only for V3 migration and normalized to physicalBindings. */
+  physicalPairing?: "paired-copies";
   active: boolean;
   compatibility?: SeamGroupCompatibilityV3;
 }
@@ -250,6 +295,7 @@ export interface SimulationSettingsV3 {
 
 export interface GarmentSettingsV3 {
   ease?: GarmentEase;
+  dressing?: GarmentDressingSetup;
 }
 
 /**
@@ -312,6 +358,8 @@ export interface PatternDocumentValidationIssue {
     | "duplicate-seam-group"
     | "degenerate-self-seam"
     | "invalid-panel-instance"
+    | "invalid-physical-binding"
+    | "ambiguous-physical-binding"
     | "invalid-connector"
     | "invalid-workspace-reference";
   severity: PatternDocumentIssueSeverity;

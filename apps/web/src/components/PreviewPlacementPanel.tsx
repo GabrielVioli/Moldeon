@@ -1,33 +1,48 @@
-import { createPreviewPlacement, type PatternPreviewPlacement, type PreviewBodySide, type PreviewRegion, type PreviewSurface } from "../domain/pattern";
+import { memo, useMemo } from "react";
+import { buildAssemblyGraph } from "../domain/assembly";
+import type { GarmentDressingRegion } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 
-export function PreviewPlacementPanel() {
+const REGION_LABELS: Record<GarmentDressingRegion, string> = {
+  upper: "Parte superior",
+  lower: "Parte inferior",
+  full: "Corpo inteiro",
+  arm: "Braço",
+  neck: "Pescoço",
+  custom: "Personalizado",
+};
+
+export const PreviewPlacementPanel = memo(function PreviewPlacementPanel({
+  onChangeRegion,
+  onBackToAssembly,
+}: {
+  onChangeRegion(): void;
+  onBackToAssembly(): void;
+}) {
   const garment = useEditorStore((state) => state.garment);
-  const activePieceId = useEditorStore((state) => state.activePieceId);
-  const setPlacements = useEditorStore((state) => state.setActivePiecePlacements);
-  const piece = garment.pieces.find((item) => item.id === activePieceId) ?? garment.pieces[0];
-  const placement = piece.previewPlacements?.[0] ?? createPreviewPlacement(piece.id);
-  const update = (values: Partial<PatternPreviewPlacement>) => setPlacements([{ ...placement, ...values }]);
+  const graph = useMemo(() => buildAssemblyGraph(garment), [garment]);
+  const region = garment.dressing?.region;
+  const seamCount = graph.validSeamIds.length;
 
   return (
-    <aside className="placement-panel">
-      <span className="section-eyebrow">Anchor semântico</span>
-      <h2>{piece.name}</h2>
-      <p className="muted">Defina região, superfície e lado corporal. Sem anchor válido, a peça gera diagnóstico e não aparece suspensa.</p>
-      <PlacementSelect label="Região" value={placement.region} options={["torso", "waist", "hip", "arm", "leg"]} onChange={(region) => update({ region: region as PreviewRegion })} />
-      <PlacementSelect label="Superfície" value={placement.surface} options={["front", "back", "side"]} onChange={(surface) => update({ surface: surface as PreviewSurface })} />
-      <PlacementSelect label="Lado" value={placement.bodySide} options={["center", "left", "right"]} onChange={(bodySide) => update({ bodySide: bodySide as PreviewBodySide })} />
-      {(["rotationDeg", "offsetXMm", "offsetYMm", "offsetZMm"] as const).map((field) => (
-        <label className="placement-field" key={field}>
-          <span>{{ rotationDeg: "Rotação local (°)", offsetXMm: "Ajuste X (mm)", offsetYMm: "Ajuste Y (mm)", offsetZMm: "Margem adicional Z (mm)" }[field]}</span>
-          <input type="number" step={1} value={placement[field]} onChange={(event) => Number.isFinite(event.currentTarget.valueAsNumber) && update({ [field]: event.currentTarget.valueAsNumber })} />
-        </label>
-      ))}
-      <button type="button" onClick={() => setPlacements([])}>Remover anchor</button>
+    <aside className="placement-panel fitting-summary-panel" aria-label="Resumo da prova">
+      <span className="section-eyebrow">Prova</span>
+      <h2>Roupa montada</h2>
+      <p className="muted">
+        O Moldeon organizou as peças a partir das costuras criadas na bancada.
+      </p>
+
+      <dl className="fitting-summary-list">
+        <div><dt>Onde vestir</dt><dd>{region ? REGION_LABELS[region] : "Não definido"}</dd></div>
+        <div><dt>Peças</dt><dd>{garment.pieces.length}</dd></div>
+        <div><dt>Costuras válidas</dt><dd>{seamCount}</dd></div>
+        <div><dt>Conjuntos</dt><dd>{graph.connectedComponents.length}</dd></div>
+      </dl>
+
+      <div className="fitting-summary-actions">
+        <button type="button" onClick={onBackToAssembly}>Voltar às costuras</button>
+        <button type="button" onClick={onChangeRegion}>Alterar onde vestir</button>
+      </div>
     </aside>
   );
-}
-
-function PlacementSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange(value: string): void }) {
-  return <label className="placement-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.currentTarget.value)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
-}
+});

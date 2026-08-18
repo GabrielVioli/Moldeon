@@ -60,13 +60,92 @@ export interface BodyMeasurements {
   insideLegLengthMm?: number;
   seatDepthMm?: number;
   waistDropMm?: number;
+  waistFrontArcMm?: number;
+  waistBackArcMm?: number;
+  hipFrontArcMm?: number;
+  hipBackArcMm?: number;
   headCircumferenceMm?: number;
 }
 
 export type BodyType = "feminine" | "masculine";
-export type PreviewRegion = "torso" | "waist" | "hip" | "arm" | "leg";
-export type PreviewSurface = "front" | "back" | "side";
+export type PreviewRegion = "torso" | "waist" | "hip" | "arm" | "leg" | "neck" | "custom";
+export type PreviewSurface = "front" | "back" | "side" | "custom";
 export type PreviewBodySide = "center" | "left" | "right";
+
+export type BodyPlacementStatus = "unclassified" | "confirmed";
+export type BodyPlacementRole =
+  | "front"
+  | "back"
+  | "sleeve"
+  | "waistband"
+  | "leg-front"
+  | "leg-back"
+  | "collar"
+  | "panel"
+  | "custom";
+export type BodyPlacementRegion = PreviewRegion | "neck" | "custom";
+export type BodyPlacementSurface = PreviewSurface | "custom";
+export type BodyPlacementSide = PreviewBodySide | "paired" | "not-applicable";
+export type BodyAnchorId =
+  | "torso-front"
+  | "torso-back"
+  | "shoulder-left"
+  | "shoulder-right"
+  | "arm-left"
+  | "arm-right"
+  | "waist-front"
+  | "waist-back"
+  | "hip-front"
+  | "hip-back"
+  | "hip-left"
+  | "hip-right"
+  | "leg-left"
+  | "leg-right"
+  | "neck";
+
+/**
+ * Classificação corporal explicitamente confirmada pelo usuário.
+ *
+ * Sugestões são calculadas em memória e nunca são persistidas aqui antes da
+ * confirmação. A ausência do objeto equivale ao estado unclassified.
+ */
+export interface PatternBodyPlacement {
+  version: 1;
+  status: BodyPlacementStatus;
+  includeIn3D: boolean;
+  role?: BodyPlacementRole;
+  region?: BodyPlacementRegion;
+  surface?: BodyPlacementSurface;
+  bodySide?: BodyPlacementSide;
+  anchorId?: BodyAnchorId;
+  outwardFace: "normal" | "flipped";
+  offsetXMm: number;
+  offsetYMm: number;
+  offsetZMm: number;
+  rotationXDeg: number;
+  rotationYDeg: number;
+  rotationZDeg: number;
+  source: "manual" | "migration";
+}
+
+export function createUnclassifiedBodyPlacement(
+  includeIn3D = true,
+  source: PatternBodyPlacement["source"] = "manual",
+): PatternBodyPlacement {
+  return {
+    version: 1,
+    status: "unclassified",
+    includeIn3D,
+    outwardFace: "normal",
+    offsetXMm: 0,
+    offsetYMm: 0,
+    offsetZMm: 25,
+    rotationXDeg: 0,
+    rotationYDeg: 0,
+    rotationZDeg: 0,
+    source,
+  };
+}
 
 export interface PatternPreviewPlacement {
   id: string;
@@ -74,6 +153,7 @@ export interface PatternPreviewPlacement {
   region: PreviewRegion;
   surface: PreviewSurface;
   bodySide: PreviewBodySide;
+  bodyAnchorId?: BodyAnchorId;
   rotationDeg: number;
   offsetXMm: number;
   offsetYMm: number;
@@ -92,11 +172,27 @@ export interface EdgeRange {
 
 export type SeamDirection = "same" | "opposite";
 export type SeamTreatment = "standard" | "ease" | "gather" | "stretch" | "intentional-mismatch";
+export type SeamDistribution = "uniform" | "proportional" | "center-biased" | "custom";
+export type CanonicalSeamTreatment = SeamTreatment | "elastic" | "zipper";
+
+export interface SeamPhysicalInstanceReference {
+  patternId: string;
+  panelInstanceId: string;
+}
+
+export interface SeamPhysicalBinding {
+  id: string;
+  first: SeamPhysicalInstanceReference[];
+  second: SeamPhysicalInstanceReference[];
+}
 
 export interface Seam {
   id: string;
   /** Identificador estável do SeamGroup V3 quando a costura usa vários intervalos. */
   groupId?: string;
+  /** Sequências ordenadas; first/second preservam compatibilidade legada. */
+  firstRanges?: EdgeRange[];
+  secondRanges?: EdgeRange[];
   first: EdgeRange;
   second: EdgeRange;
   // direction: whether second is stitched in parametric same/opposite direction
@@ -105,6 +201,20 @@ export interface Seam {
   type: string; // e.g. 'standard'
   name?: string;
   treatment?: SeamTreatment;
+  /** Campos canônicos V3 preservados também na projeção temporária do runtime. */
+  canonicalTreatment?: CanonicalSeamTreatment;
+  distribution?: SeamDistribution;
+  targetRatio?: number;
+  slackMm?: number;
+  /** Exact canonical physical realization carried by the derived runtime projection. */
+  physicalBindings?: SeamPhysicalBinding[];
+  /**
+   * @deprecated Migration-only hint. PatternDocumentV3 normalizes this to physicalBindings.
+   * Costura a mesma faixa material entre cópias físicas distintas da mesma
+   * PatternDefinition. Necessário para gancho frontal/traseiro de calças e
+   * outros fechamentos de peças cortadas em pares.
+   */
+  physicalPairing?: "paired-copies";
   active?: boolean;
 }
 
@@ -231,6 +341,20 @@ export interface GarmentEase {
   sleeveMm: number;
 }
 
+export type GarmentDressingRegion =
+  | "upper"
+  | "lower"
+  | "full"
+  | "arm"
+  | "neck"
+  | "custom";
+
+/** DecisÃµes mÃ­nimas do conjunto para a prova; nunca descreve painÃ©is isolados. */
+export interface GarmentDressingSetup {
+  region?: GarmentDressingRegion;
+  frontReferencePieceId?: string;
+}
+
 export type EdgeFinish = "raw" | "hem" | "binding" | "facing" | "elastic";
 
 export interface Guide {
@@ -255,6 +379,7 @@ export interface PatternPiece {
   cutOnFold?: boolean;
   fabricId?: string;
   previewPlacements?: PatternPreviewPlacement[];
+  bodyPlacement?: PatternBodyPlacement;
   edgeFinishes?: Record<string, EdgeFinish>;
   points: PatternPoint[];
   formatVersion?: 2;
@@ -326,6 +451,7 @@ export interface GarmentDraft {
   workspaceStates?: PieceWorkspaceState[];
   assemblyPlacements?: AssemblyPlacement[];
   ease?: GarmentEase;
+  dressing?: GarmentDressingSetup;
   measurementProfile?: MeasurementProfile;
   parametric?: ParametricProjectMetadata;
 }
@@ -373,12 +499,22 @@ export function duplicatePatternPiece(
   const newId = options.newId ?? createDocumentId("piece");
   const newName = options.name ?? `${piece.name} – cópia`;
   const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
-  const { previewPlacements: _placements, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
+  const { previewPlacements: _placements, bodyPlacement: sourceBodyPlacement, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
+  const bodyPlacement = sourceBodyPlacement
+    ? {
+        ...sourceBodyPlacement,
+        status: "unclassified" as const,
+        bodySide: undefined,
+        anchorId: undefined,
+        source: "manual" as const,
+      }
+    : undefined;
 
   return migrateLegacyPieceToSegments({
     ...copyable,
     id: newId,
     name: newName,
+    ...(bodyPlacement === undefined ? {} : { bodyPlacement }),
     points: points.map((point, index) => ({
       ...point,
       id: createDocumentId(`${newId}:point-${index + 1}`),
@@ -461,6 +597,9 @@ export function parsePatternPiece(value: unknown): PatternPiece {
           ...placement,
           pieceId: placement.pieceId === "legacy-piece" ? id : placement.pieceId,
         }));
+  const bodyPlacement = value.bodyPlacement === undefined
+    ? undefined
+    : parsePatternBodyPlacement(value.bodyPlacement);
   let edgeFinishes: Record<string, EdgeFinish> | undefined;
   if (value.edgeFinishes !== undefined) {
     if (!isRecord(value.edgeFinishes)) throw new TypeError("Os acabamentos de borda são inválidos.");
@@ -497,6 +636,7 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(cutOnFold === undefined ? {} : { cutOnFold }),
     ...(fabricId === undefined ? {} : { fabricId }),
     ...(previewPlacements === undefined ? {} : { previewPlacements }),
+    ...(bodyPlacement === undefined ? {} : { bodyPlacement }),
     ...(edgeFinishes === undefined ? {} : { edgeFinishes }),
     points,
     ...(internalLines === undefined ? {} : { internalLines }),
@@ -506,6 +646,43 @@ export function parsePatternPiece(value: unknown): PatternPiece {
     ...(guides === undefined ? {} : { guides }),
     ...segmentModel,
   }));
+}
+
+function parsePatternBodyPlacement(value: unknown): PatternBodyPlacement {
+  if (!isRecord(value)) throw new TypeError("A posição corporal da peça é inválida.");
+  const status = readEnum(
+    value.status ?? "unclassified",
+    ["unclassified", "confirmed"] as const,
+    "O estado da posição corporal",
+  );
+  const optionalEnum = <T extends string>(
+    raw: unknown,
+    values: readonly T[],
+    label: string,
+  ): T | undefined => raw === undefined ? undefined : readEnum(raw, values, label);
+  const role = optionalEnum(value.role, ["front", "back", "sleeve", "waistband", "leg-front", "leg-back", "collar", "panel", "custom"] as const, "A função corporal");
+  const region = optionalEnum(value.region, ["torso", "waist", "hip", "arm", "leg", "neck", "custom"] as const, "A região corporal");
+  const surface = optionalEnum(value.surface, ["front", "back", "side", "custom"] as const, "A superfície corporal");
+  const bodySide = optionalEnum(value.bodySide, ["center", "left", "right", "paired", "not-applicable"] as const, "O lado corporal");
+  const anchorId = optionalEnum(value.anchorId, ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const, "O anchor corporal");
+  return {
+    version: 1,
+    status,
+    includeIn3D: value.includeIn3D === undefined ? true : readBoolean(value.includeIn3D, "A inclusão da peça no 3D"),
+    ...(role === undefined ? {} : { role }),
+    ...(region === undefined ? {} : { region }),
+    ...(surface === undefined ? {} : { surface }),
+    ...(bodySide === undefined ? {} : { bodySide }),
+    ...(anchorId === undefined ? {} : { anchorId }),
+    outwardFace: readEnum(value.outwardFace ?? "normal", ["normal", "flipped"] as const, "A face externa"),
+    offsetXMm: readFiniteNumber(value.offsetXMm ?? 0, "O deslocamento lateral"),
+    offsetYMm: readFiniteNumber(value.offsetYMm ?? 0, "O deslocamento vertical"),
+    offsetZMm: readFiniteNumber(value.offsetZMm ?? 25, "O afastamento da superfície"),
+    rotationXDeg: readFiniteNumber(value.rotationXDeg ?? 0, "A rotação X"),
+    rotationYDeg: readFiniteNumber(value.rotationYDeg ?? 0, "A rotação Y"),
+    rotationZDeg: readFiniteNumber(value.rotationZDeg ?? 0, "A rotação Z"),
+    source: readEnum(value.source ?? "manual", ["manual", "migration"] as const, "A origem da posição corporal"),
+  };
 }
 
 function parseSegmentModel(value: Record<string, unknown>, pieceId: string, points: PatternPoint[]): Partial<PatternPiece> {
@@ -610,8 +787,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
   if (!isRecord(value)) {
     throw new TypeError("O projeto de roupa precisa ser um objeto.");
   }
-  if (!Array.isArray(value.pieces) || value.pieces.length === 0) {
-    throw new TypeError("O projeto precisa ter pelo menos uma peça.");
+  if (!Array.isArray(value.pieces)) {
+    throw new TypeError("A lista de peças do projeto é inválida.");
   }
 
   // keep raw pieces for legacy migration (some older documents may include seams per-piece)
@@ -644,6 +821,8 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
       const id = readString(s.id ?? `seam-${i + 1}`, `O identificador da costura ${i + 1}`);
       const first = parseEdgeRangeNew(s.first, `A primeira faixa da costura ${i + 1}`);
       const second = parseEdgeRangeNew(s.second, `A segunda faixa da costura ${i + 1}`);
+      const firstRanges = parseOptionalEdgeRangeSequence(s.firstRanges, `O primeiro lado da costura ${i + 1}`);
+      const secondRanges = parseOptionalEdgeRangeSequence(s.secondRanges, `O segundo lado da costura ${i + 1}`);
       const direction = s.direction === undefined ? "same" : readEnum(s.direction, ["same", "opposite"] as const, `A direção da costura ${i + 1}`);
       const easeRatio = s.easeRatio === undefined ? 0 : readFiniteNumber(s.easeRatio, `O easeRatio da costura ${i + 1}`);
       const type = s.type === undefined ? "standard" : readString(s.type, `O tipo da costura ${i + 1}`);
@@ -655,8 +834,47 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
         ? true
         : readBoolean(s.active, `O estado da costura ${i + 1}`);
       const groupId = s.groupId === undefined ? undefined : readString(s.groupId, `O grupo da costura ${i + 1}`);
+      const canonicalTreatment = s.canonicalTreatment === undefined ? undefined : readEnum(
+        s.canonicalTreatment,
+        ["standard", "ease", "gather", "stretch", "intentional-mismatch", "elastic", "zipper"] as const,
+        `O tratamento canônico da costura ${i + 1}`,
+      );
+      const distribution = s.distribution === undefined ? undefined : readEnum(
+        s.distribution,
+        ["uniform", "proportional", "center-biased", "custom"] as const,
+        `A distribuição da costura ${i + 1}`,
+      );
+      const targetRatio = s.targetRatio === undefined ? undefined : readFiniteNumber(s.targetRatio, `A proporção da costura ${i + 1}`);
+      const slackMm = s.slackMm === undefined ? undefined : readFiniteNumber(s.slackMm, `A folga da costura ${i + 1}`);
+      const physicalBindings = s.physicalBindings === undefined
+        ? undefined
+        : parseSeamPhysicalBindings(s.physicalBindings, `A vinculação física da costura ${i + 1}`);
+      const physicalPairing = s.physicalPairing === undefined ? undefined : readEnum(
+        s.physicalPairing,
+        ["paired-copies"] as const,
+        `O pareamento físico da costura ${i + 1}`,
+      );
       if (!seamIds.has(id)) {
-        seams.push({ id, ...(groupId === undefined ? {} : { groupId }), first, second, direction, easeRatio, type, name, treatment, active });
+        seams.push({
+          id,
+          ...(groupId === undefined ? {} : { groupId }),
+          ...(firstRanges === undefined ? {} : { firstRanges }),
+          ...(secondRanges === undefined ? {} : { secondRanges }),
+          first,
+          second,
+          direction,
+          easeRatio,
+          type,
+          name,
+          treatment,
+          ...(canonicalTreatment === undefined ? {} : { canonicalTreatment }),
+          ...(distribution === undefined ? {} : { distribution }),
+          ...(targetRatio === undefined ? {} : { targetRatio }),
+          ...(slackMm === undefined ? {} : { slackMm }),
+          ...(physicalBindings === undefined ? {} : { physicalBindings }),
+          ...(physicalPairing === undefined ? {} : { physicalPairing }),
+          active,
+        });
         seamIds.add(id);
       }
     }
@@ -754,6 +972,7 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
 
   const assemblyPlacements = parseAssemblyPlacements(value.assemblyPlacements, pieceIds);
   const ease = parseGarmentEase(value.ease);
+  const dressing = parseGarmentDressing(value.dressing, pieceIds);
   const measurementProfile = value.measurementProfile === undefined
     ? undefined
     : parseMeasurementProfile(value.measurementProfile);
@@ -782,9 +1001,32 @@ export function parseGarmentDraft(value: unknown): GarmentDraft {
     ...(workspaceStates === undefined ? {} : { workspaceStates }),
     ...(assemblyPlacements === undefined ? {} : { assemblyPlacements }),
     ...(ease === undefined ? {} : { ease }),
+    ...(dressing === undefined ? {} : { dressing }),
     ...(measurementProfile === undefined ? {} : { measurementProfile }),
     ...(parametric === undefined ? {} : { parametric }),
   };
+}
+
+function parseSeamPhysicalBindings(value: unknown, label: string): SeamPhysicalBinding[] {
+  if (!Array.isArray(value)) throw new TypeError(`${label} é inválida.`);
+  return value.map((binding, index) => {
+    if (!isRecord(binding) || !Array.isArray(binding.first) || !Array.isArray(binding.second)) {
+      throw new TypeError(`${label} ${index + 1} é inválida.`);
+    }
+    const parseSide = (entries: unknown[], sideLabel: string): SeamPhysicalInstanceReference[] =>
+      entries.map((entry, entryIndex) => {
+        if (!isRecord(entry)) throw new TypeError(`${sideLabel} ${entryIndex + 1} é inválido.`);
+        return {
+          patternId: readString(entry.patternId, `${sideLabel}: molde`),
+          panelInstanceId: readString(entry.panelInstanceId, `${sideLabel}: instância`),
+        };
+      });
+    return {
+      id: readString(binding.id ?? `binding-${index + 1}`, `${label}: id`),
+      first: parseSide(binding.first, `${label}: primeiro lado`),
+      second: parseSide(binding.second, `${label}: segundo lado`),
+    };
+  });
 }
 
 function parseVector(value: unknown, label: string): PatternVector {
@@ -902,6 +1144,31 @@ function parseGarmentEase(value: unknown): GarmentEase | undefined {
   };
 }
 
+function parseOptionalEdgeRangeSequence(value: unknown, label: string): EdgeRange[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${label} precisa conter pelo menos uma faixa.`);
+  }
+  return value.map((range, index) => parseEdgeRangeNew(range, `${label}, faixa ${index + 1}`));
+}
+
+function parseGarmentDressing(value: unknown, pieceIds: Set<string>): GarmentDressingSetup | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError("A configuraÃ§Ã£o de prova da roupa Ã© invÃ¡lida.");
+  const region = value.region === undefined
+    ? undefined
+    : readEnum(value.region, ["upper", "lower", "full", "arm", "neck", "custom"] as const, "A regiÃ£o de prova da roupa");
+  const frontReferencePieceId = value.frontReferencePieceId === undefined
+    ? undefined
+    : readString(value.frontReferencePieceId, "A peÃ§a de referÃªncia frontal");
+  return {
+    ...(region === undefined ? {} : { region }),
+    ...(frontReferencePieceId === undefined || !pieceIds.has(frontReferencePieceId)
+      ? {}
+      : { frontReferencePieceId }),
+  };
+}
+
 // helpers for legacy -> new migration use edge ids
 export function makeEdgeId(pieceId: string, startPointId: string, endPointId: string) {
   return `${pieceId}:edge:${startPointId}->${endPointId}`;
@@ -990,11 +1257,29 @@ export function sampleEdgeRange(piece: PatternPiece, edgeRange: EdgeRange): Patt
   const samples = samplePatternSegment(p0, p1);
   const n = samples.length;
   if (edgeRange.startT === 0 && edgeRange.endT === 1) return samples;
-  const si = Math.floor(edgeRange.startT * (n - 1));
-  const ei = Math.ceil(edgeRange.endT * (n - 1));
-  const seg = samples.slice(si, ei + 1);
-  // For better endpoints, interpolate at fractional positions
-  return seg;
+  const startT = Math.max(0, Math.min(1, edgeRange.startT));
+  const endT = Math.max(startT, Math.min(1, edgeRange.endT));
+  const pointAt = (t: number): PatternPoint => {
+    const scaled = t * (n - 1);
+    const leftIndex = Math.floor(scaled);
+    const rightIndex = Math.min(n - 1, leftIndex + 1);
+    const ratio = scaled - leftIndex;
+    const left = samples[leftIndex];
+    const right = samples[rightIndex];
+    return {
+      id: `${edge.id}:sample:${t.toFixed(9)}`,
+      xMm: left.xMm + (right.xMm - left.xMm) * ratio,
+      yMm: left.yMm + (right.yMm - left.yMm) * ratio,
+    };
+  };
+  const result = [pointAt(startT)];
+  const firstInterior = Math.floor(startT * (n - 1)) + 1;
+  const lastInterior = Math.ceil(endT * (n - 1)) - 1;
+  for (let index = firstInterior; index <= lastInterior; index += 1) {
+    result.push(samples[index]);
+  }
+  if (endT > startT) result.push(pointAt(endT));
+  return result;
 }
 
 export function edgeRangeLength(piece: PatternPiece, edgeRange: EdgeRange): number {
@@ -1008,6 +1293,73 @@ export function edgeRangeLength(piece: PatternPiece, edgeRange: EdgeRange): numb
     len += Math.sqrt(dx * dx + dy * dy);
   }
   return len;
+}
+
+export function seamSideRanges(seam: Seam, side: "first" | "second"): readonly EdgeRange[] {
+  const composite = side === "first" ? seam.firstRanges : seam.secondRanges;
+  if (composite && composite.length > 0) return composite;
+  return [side === "first" ? seam.first : seam.second];
+}
+
+export function edgeRangeSequenceLength(
+  pieces: readonly PatternPiece[],
+  ranges: readonly EdgeRange[],
+): number {
+  return ranges.reduce((total, range) => {
+    const piece = pieces.find((candidate) => candidate.id === range.pieceId);
+    return total + (piece ? edgeRangeLength(piece, range) : 0);
+  }, 0);
+}
+
+export interface ResolvedEdgeRangeSequencePoint {
+  range: EdgeRange;
+  rangeIndex: number;
+  rangeLengthMm: number;
+  sideLengthMm: number;
+  localProgress: number;
+  t: number;
+}
+
+/** Resolve s global [0,1] no range correto pelo comprimento de arco acumulado. */
+export function resolveEdgeRangeSequenceProgress(
+  pieces: readonly PatternPiece[],
+  ranges: readonly EdgeRange[],
+  progress: number,
+): ResolvedEdgeRangeSequencePoint | null {
+  if (ranges.length === 0) return null;
+  const lengths = ranges.map((range) => {
+    const piece = pieces.find((candidate) => candidate.id === range.pieceId);
+    return piece ? edgeRangeLength(piece, range) : 0;
+  });
+  const sideLengthMm = lengths.reduce((total, length) => total + length, 0);
+  if (sideLengthMm <= 1e-9) return null;
+
+  const clamped = Math.max(0, Math.min(1, progress));
+  const targetLength = clamped * sideLengthMm;
+  let accumulated = 0;
+  let rangeIndex = ranges.length - 1;
+  for (let index = 0; index < ranges.length; index += 1) {
+    const next = accumulated + lengths[index];
+    if (targetLength <= next + 1e-9 || index === ranges.length - 1) {
+      rangeIndex = index;
+      break;
+    }
+    accumulated = next;
+  }
+
+  const range = ranges[rangeIndex];
+  const rangeLengthMm = lengths[rangeIndex];
+  const localProgress = rangeLengthMm <= 1e-9
+    ? 0
+    : Math.max(0, Math.min(1, (targetLength - accumulated) / rangeLengthMm));
+  return {
+    range,
+    rangeIndex,
+    rangeLengthMm,
+    sideLengthMm,
+    localProgress,
+    t: range.startT + (range.endT - range.startT) * localProgress,
+  };
 }
 
 export function parsePatternSnapshot(value: unknown): PatternSnapshot {
@@ -1145,7 +1497,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
     }
     const legacyRegion = readEnum(
       placement.region,
-      ["torso", "waist", "hip", "arm", "leg", "lower", "sleeve"] as const,
+      ["torso", "waist", "hip", "arm", "leg", "neck", "custom", "lower", "sleeve"] as const,
       `A região da posição ${index + 1}`,
     );
     const region: PreviewRegion =
@@ -1156,7 +1508,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
           : legacyRegion;
     const surface = readEnum(
       placement.surface,
-      ["front", "back", "side"] as const,
+      ["front", "back", "side", "custom"] as const,
       `A face da posição ${index + 1}`,
     );
     const bodySide = readEnum(
@@ -1168,6 +1520,13 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
       placement.mirrorX === undefined
         ? undefined
         : readBoolean(placement.mirrorX, `O espelhamento da posição ${index + 1}`);
+    const bodyAnchorId = placement.bodyAnchorId === undefined
+      ? undefined
+      : readEnum(
+        placement.bodyAnchorId,
+        ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const,
+        `O anchor corporal da posição ${index + 1}`,
+      );
     return {
       id:
         placement.id === undefined
@@ -1180,6 +1539,7 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
       region,
       surface,
       bodySide,
+      ...(bodyAnchorId === undefined ? {} : { bodyAnchorId }),
       rotationDeg:
         placement.rotationDeg === undefined
           ? 0
@@ -1210,19 +1570,19 @@ export function validateSeam(
   garment: Pick<GarmentDraft, "pieces" | "seams">,
 ): SeamValidationIssue[] {
   const issues: SeamValidationIssue[] = [];
-  const ranges = [seam.first, seam.second] as const;
-  const resolved: Array<{ piece: PatternPiece; range: EdgeRange } | null> = [];
+  const firstRanges = seamSideRanges(seam, "first");
+  const secondRanges = seamSideRanges(seam, "second");
+  const ranges = [...firstRanges, ...secondRanges];
+  const resolved = new Map<EdgeRange, PatternPiece>();
 
   for (const range of ranges) {
     const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId);
     if (!piece) {
       issues.push(issue("piece-not-found", seam.id, `A peça ${range.pieceId} não existe.`));
-      resolved.push(null);
       continue;
     }
     if (!getEdgeById(piece, range.edgeId)) {
       issues.push(issue("edge-not-found", seam.id, `A borda ${range.edgeId} não existe.`));
-      resolved.push(null);
       continue;
     }
     if (
@@ -1236,29 +1596,31 @@ export function validateSeam(
     } else if (range.endT - range.startT <= 1e-6) {
       issues.push(issue("empty-range", seam.id, "O intervalo da costura está vazio."));
     }
-    resolved.push({ piece, range });
+    resolved.set(range, piece);
   }
 
-  if (
-    seam.first.pieceId === seam.second.pieceId &&
-    seam.first.edgeId === seam.second.edgeId
-  ) {
+  if (seamSidesMateriallyOverlap(firstRanges, secondRanges)) {
     issues.push(issue("invalid-self-seam", seam.id, "Uma borda não pode ser costurada nela mesma."));
   }
 
   const duplicate = (garment.seams ?? []).some(
-    (candidate) =>
-      candidate.id !== seam.id &&
-      ((rangesEqual(candidate.first, seam.first) && rangesEqual(candidate.second, seam.second)) ||
-        (rangesEqual(candidate.first, seam.second) && rangesEqual(candidate.second, seam.first))),
+    (candidate) => {
+      if (candidate.id === seam.id) return false;
+      const candidateFirst = seamSideRanges(candidate, "first");
+      const candidateSecond = seamSideRanges(candidate, "second");
+      return (
+        (rangeListsEqualInOrder(candidateFirst, firstRanges) && rangeListsEqualInOrder(candidateSecond, secondRanges)) ||
+        (rangeListsEqualInOrder(candidateFirst, secondRanges) && rangeListsEqualInOrder(candidateSecond, firstRanges))
+      );
+    },
   );
   if (duplicate) {
     issues.push(issue("duplicate-seam", seam.id, "Esta costura já existe."));
   }
 
-  if (resolved[0] && resolved[1] && !issues.some((candidate) => candidate.code === "invalid-range")) {
-    const firstLength = edgeRangeLength(resolved[0].piece, resolved[0].range);
-    const secondLength = edgeRangeLength(resolved[1].piece, resolved[1].range);
+  if (resolved.size === ranges.length && !issues.some((candidate) => candidate.code === "invalid-range")) {
+    const firstLength = edgeRangeSequenceLength(garment.pieces, firstRanges);
+    const secondLength = edgeRangeSequenceLength(garment.pieces, secondRanges);
     const difference = Math.abs(firstLength - secondLength);
     const tolerance = Math.max(10, Math.max(firstLength, secondLength) * 0.15);
     if (difference > tolerance) {
@@ -1286,6 +1648,37 @@ function rangesEqual(left: EdgeRange, right: EdgeRange): boolean {
     left.startT === right.startT &&
     left.endT === right.endT
   );
+}
+
+/**
+ * Compara identidade material, não apenas ownership. Duas faixas só entram
+ * em conflito quando usam a mesma borda canônica e compartilham um intervalo
+ * de comprimento positivo. Um endpoint comum não é sobreposição material.
+ */
+export function edgeRangesMateriallyOverlap(
+  left: EdgeRange,
+  right: EdgeRange,
+  epsilon = 1e-7,
+): boolean {
+  if (left.pieceId !== right.pieceId || left.edgeId !== right.edgeId) return false;
+  const leftStart = Math.min(left.startT, left.endT);
+  const leftEnd = Math.max(left.startT, left.endT);
+  const rightStart = Math.min(right.startT, right.endT);
+  const rightEnd = Math.max(right.startT, right.endT);
+  return Math.min(leftEnd, rightEnd) - Math.max(leftStart, rightStart) > epsilon;
+}
+
+export function seamSidesMateriallyOverlap(
+  first: readonly EdgeRange[],
+  second: readonly EdgeRange[],
+): boolean {
+  return first.some((left) =>
+    second.some((right) => edgeRangesMateriallyOverlap(left, right)),
+  );
+}
+
+function rangeListsEqualInOrder(left: readonly EdgeRange[], right: readonly EdgeRange[]): boolean {
+  return left.length === right.length && left.every((range, index) => rangesEqual(range, right[index]));
 }
 
 export function createPreviewPlacement(

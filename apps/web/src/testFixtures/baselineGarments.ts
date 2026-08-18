@@ -34,6 +34,13 @@ export const BASELINE_FIXTURE_IDS = [
   "equal-length-seam",
   "length-mismatch-seam",
   "self-seam-tube",
+  "xpbd-tube-with-flap",
+  "xpbd-four-panel-composite",
+  "spatial-two-panel-tube",
+  "spatial-four-panel-tube",
+  "spatial-open-chain",
+  "spatial-notched-tube",
+  "spatial-notched-tube-waistband",
   "sleeve-with-body",
   "multiple-fabrics",
   "legacy-valid",
@@ -72,6 +79,20 @@ export function createBaselineFixture(id: BaselineFixtureId): GarmentDraft {
       return pairedSeamFixture(id, 240, 310);
     case "self-seam-tube":
       return selfSeamFixture(id);
+    case "xpbd-tube-with-flap":
+      return tubeWithFlapFixture(id);
+    case "xpbd-four-panel-composite":
+      return fourPanelCompositeFixture(id);
+    case "spatial-two-panel-tube":
+      return spatialPanelFixture(id, 2, true);
+    case "spatial-four-panel-tube":
+      return spatialPanelFixture(id, 4, true);
+    case "spatial-open-chain":
+      return spatialPanelFixture(id, 3, false);
+    case "spatial-notched-tube":
+      return spatialNotchedTubeFixture(id);
+    case "spatial-notched-tube-waistband":
+      return spatialNotchedTubeWaistbandFixture(id);
     case "sleeve-with-body":
       return templateFixture("tshirt", id);
     case "multiple-fabrics":
@@ -312,7 +333,238 @@ function selfSeamFixture(fixtureId: string): GarmentDraft {
     type: "standard",
     treatment: "standard",
   };
-  return garmentFixture(fixtureId, [piece], [seam]);
+  return {
+    ...garmentFixture(fixtureId, [piece], [seam]),
+    dressing: { region: "upper", frontReferencePieceId: piece.id },
+  };
+}
+
+function tubeWithFlapFixture(fixtureId: string): GarmentDraft {
+  const tube = selfSeamFixture(fixtureId);
+  const flap = {
+    ...rectanglePiece("xpbd-flap-piece", 140, 120),
+    fabricId: tube.fabrics[0].id,
+  };
+  const tubeTop = getPatternEdges(tube.pieces[0]).find((edge) => edge.role === "waist")!;
+  const flapTop = getPatternEdges(flap).find((edge) => edge.role === "waist")!;
+  const parentSpan = 140 / 360;
+  const parentStart = (1 - parentSpan) / 2;
+  const flapSeam: Seam = {
+    id: `${fixtureId}:flap-seam`,
+    name: "Retalho costurado ao tubo",
+    first: { pieceId: tube.pieces[0].id, edgeId: tubeTop.id, startT: parentStart, endT: 1 - parentStart },
+    second: { pieceId: flap.id, edgeId: flapTop.id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  return {
+    ...tube,
+    dressing: { region: "upper", frontReferencePieceId: tube.pieces[0].id },
+    pieces: [...tube.pieces, flap],
+    seams: [...(tube.seams ?? []), flapSeam],
+    assemblyPlacements: [
+      ...(tube.assemblyPlacements ?? []),
+      {
+        pieceId: flap.id,
+        role: "front",
+        outwardSide: "front",
+        positionMm: [250, 0, 0],
+        rotationDeg: [0, 0, 0],
+        flipped: false,
+        source: "manual",
+      },
+    ],
+  };
+}
+
+function fourPanelCompositeFixture(fixtureId: string): GarmentDraft {
+  const pieces = Array.from({ length: 4 }, (_, index) =>
+    rectanglePiece(`xpbd-panel-${index + 1}`, 160, 220));
+  const topEdges = pieces.map((piece) => getPatternEdges(piece).find((edge) => edge.role === "waist")!);
+  const firstRanges = [
+    { pieceId: pieces[0].id, edgeId: topEdges[0].id, startT: 0, endT: 1 },
+    { pieceId: pieces[1].id, edgeId: topEdges[1].id, startT: 0, endT: 1 },
+  ];
+  const secondRanges = [
+    { pieceId: pieces[2].id, edgeId: topEdges[2].id, startT: 0, endT: 0.5 },
+    { pieceId: pieces[2].id, edgeId: topEdges[2].id, startT: 0.5, endT: 1 },
+    { pieceId: pieces[3].id, edgeId: topEdges[3].id, startT: 0, endT: 1 },
+  ];
+  const composite: Seam = {
+    id: `${fixtureId}:composite-2-to-3`,
+    groupId: `${fixtureId}:composite-2-to-3`,
+    name: "Costura composta 2 para 3",
+    first: firstRanges[0],
+    second: secondRanges[0],
+    firstRanges,
+    secondRanges,
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  const firstSide = getPatternEdges(pieces[0]).find((edge) => edge.role === "sideSeam")!;
+  const thirdSide = getPatternEdges(pieces[2]).find((edge) => edge.role === "sideSeam")!;
+  const simple: Seam = {
+    id: `${fixtureId}:secondary-side-seam`,
+    groupId: `${fixtureId}:secondary-side-seam`,
+    name: "Costura lateral secundária",
+    first: { pieceId: pieces[0].id, edgeId: firstSide.id, startT: 0, endT: 1 },
+    second: { pieceId: pieces[2].id, edgeId: thirdSide.id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+  };
+  return {
+    ...garmentFixture(fixtureId, pieces, [composite, simple]),
+    dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
+  };
+}
+
+function spatialPanelFixture(
+  fixtureId: string,
+  panelCount: 2 | 3 | 4,
+  closed: boolean,
+): GarmentDraft {
+  const pieces = Array.from({ length: panelCount }, (_, index) =>
+    rectanglePiece(`spatial-panel-${index + 1}`, 120, 240));
+  const connectionCount = closed ? panelCount : panelCount - 1;
+  const seams: Seam[] = Array.from({ length: connectionCount }, (_, index) => {
+    const first = pieces[index];
+    const second = pieces[(index + 1) % panelCount];
+    return {
+      id: `${fixtureId}:join-${index + 1}`,
+      groupId: `${fixtureId}:join-${index + 1}`,
+      name: `União espacial ${index + 1}`,
+      first: { pieceId: first.id, edgeId: getPatternEdges(first)[1].id, startT: 0, endT: 1 },
+      second: { pieceId: second.id, edgeId: getPatternEdges(second)[3].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    };
+  });
+  const garment = garmentFixture(fixtureId, pieces, seams);
+  return {
+    ...garment,
+    dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
+  };
+}
+
+function spatialNotchedTubeFixture(fixtureId: string): GarmentDraft {
+  const pieces = Array.from({ length: 4 }, (_, index) => withSegmentRoles(
+    migrateLegacyPieceToSegments({
+      id: `spatial-notch-${index + 1}`,
+      name: `Painel recortado ${index + 1}`,
+      seamAllowanceMm: 10,
+      cutQuantity: 1,
+      points: [
+        point(`spatial-notch-${index + 1}:a`, 0, 35),
+        point(`spatial-notch-${index + 1}:b`, 40, 0),
+        point(`spatial-notch-${index + 1}:c`, 80, 0),
+        point(`spatial-notch-${index + 1}:d`, 120, 35),
+        point(`spatial-notch-${index + 1}:e`, 120, 240),
+        point(`spatial-notch-${index + 1}:f`, 0, 240),
+      ],
+    }),
+    ["dartLeg", "waist", "dartLeg", "sideSeam", "hem", "sideSeam"],
+  ));
+  const seams: Seam[] = pieces.map((piece, index) => {
+    const next = pieces[(index + 1) % pieces.length];
+    return {
+      id: `${fixtureId}:side-${index + 1}`,
+      groupId: `${fixtureId}:side-${index + 1}`,
+      name: `Lateral ${index + 1}`,
+      first: { pieceId: piece.id, edgeId: getPatternEdges(piece)[3].id, startT: 0, endT: 1 },
+      second: { pieceId: next.id, edgeId: getPatternEdges(next)[5].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    };
+  });
+  const garment = garmentFixture(fixtureId, pieces, seams);
+  return {
+    ...garment,
+    dressing: { region: "upper", frontReferencePieceId: pieces[0].id },
+  };
+}
+
+function spatialNotchedTubeWaistbandFixture(fixtureId: string): GarmentDraft {
+  const body = spatialNotchedTubeFixture(fixtureId);
+  const bodyPieces = body.pieces;
+  const localClosure: Seam = {
+    id: `${fixtureId}:local-closure`,
+    groupId: `${fixtureId}:local-closure`,
+    name: "Fechamento diagonal local",
+    first: { pieceId: bodyPieces[0].id, edgeId: getPatternEdges(bodyPieces[0])[2].id, startT: 0, endT: 1 },
+    second: { pieceId: bodyPieces[1].id, edgeId: getPatternEdges(bodyPieces[1])[0].id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+    active: true,
+  };
+  const topRanges = bodyPieces.flatMap((piece) => getPatternEdges(piece).slice(0, 3).map((edge) => ({
+    pieceId: piece.id,
+    edgeId: edge.id,
+    startT: 0,
+    endT: 1,
+  })));
+  const topLengthMm = bodyPieces.reduce((total, piece) => total
+    + getPatternEdges(piece).slice(0, 3).reduce((pieceTotal, edge) => pieceTotal
+      + Math.hypot(
+        piece.points.find((point) => point.id === edge.endPointId)!.xMm
+          - piece.points.find((point) => point.id === edge.startPointId)!.xMm,
+        piece.points.find((point) => point.id === edge.endPointId)!.yMm
+          - piece.points.find((point) => point.id === edge.startPointId)!.yMm,
+      ), 0), 0);
+  const waistband = rectanglePiece(
+    "spatial-upper-band",
+    topLengthMm,
+    35,
+    ["waist", "sideSeam", "hem", "sideSeam"],
+  );
+  const waistbandEdges = getPatternEdges(waistband);
+  const waistbandSelfSeam: Seam = {
+    id: `${fixtureId}:upper-band-loop`,
+    groupId: `${fixtureId}:upper-band-loop`,
+    name: "Fechamento da faixa superior",
+    first: { pieceId: waistband.id, edgeId: waistbandEdges[1].id, startT: 0, endT: 1 },
+    second: { pieceId: waistband.id, edgeId: waistbandEdges[3].id, startT: 0, endT: 1 },
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+    active: true,
+  };
+  const compositeTopSeam: Seam = {
+    id: `${fixtureId}:composite-top`,
+    groupId: `${fixtureId}:composite-top`,
+    name: "União superior composta",
+    first: { pieceId: waistband.id, edgeId: waistbandEdges[2].id, startT: 0, endT: 1 },
+    second: topRanges[0],
+    secondRanges: topRanges,
+    direction: "opposite",
+    easeRatio: 0,
+    type: "standard",
+    treatment: "standard",
+    active: true,
+  };
+  const garment = garmentFixture(
+    fixtureId,
+    [...bodyPieces, waistband],
+    [...(body.seams ?? []), localClosure, waistbandSelfSeam, compositeTopSeam],
+  );
+  return {
+    ...garment,
+    dressing: { region: "upper", frontReferencePieceId: bodyPieces[0].id },
+  };
 }
 
 function multipleFabricsFixture(fixtureId: string): GarmentDraft {

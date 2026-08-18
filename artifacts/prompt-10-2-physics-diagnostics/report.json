@@ -1,0 +1,159 @@
+{
+  "passed": true,
+  "testA": {
+    "uiState": "paused",
+    "workerState": "paused:1:5",
+    "positionSignature": "4419:d5aab2d3",
+    "instanceCount": 5,
+    "diagnostics": {
+      "stepCount": 60,
+      "substeps": 1,
+      "particleCount": 1473,
+      "triangleCount": 2296,
+      "stretchConstraintCount": 3764,
+      "shearConstraintCount": 2296,
+      "bendConstraintCount": 3124,
+      "seamConstraintCount": 116,
+      "seamErrorAverage": 0.004883320846156829,
+      "seamErrorMaximum": 0.03677988797920453,
+      "maximumPositionMagnitude": 1.368187437864952,
+      "maximumVelocityMagnitude": 0.6371287278278398,
+      "maximumCorrectionApplied": 0.001750004244968295,
+      "invalid": false,
+      "droppedTimeSeconds": 0,
+      "physicsStepMs": 113.68000000715256
+    },
+    "telemetryFps": 4.17,
+    "devSettings": {
+      "gravityScale": 0,
+      "cadence": 1,
+      "autoPauseSteps": 60
+    }
+  },
+  "testB": {
+    "uiState": "paused",
+    "workerState": "paused:1:8",
+    "positionSignature": "4419:83a3cd39",
+    "instanceCount": 5,
+    "diagnostics": {
+      "stepCount": 33,
+      "substeps": 0,
+      "particleCount": 1473,
+      "triangleCount": 2296,
+      "stretchConstraintCount": 3764,
+      "shearConstraintCount": 2296,
+      "bendConstraintCount": 3124,
+      "seamConstraintCount": 116,
+      "seamErrorAverage": 0.016117324495155863,
+      "seamErrorMaximum": 0.07350117119224818,
+      "maximumPositionMagnitude": 1.3057744196826202,
+      "maximumVelocityMagnitude": 1.4861271707866288,
+      "maximumCorrectionApplied": 0.001750004244968295,
+      "invalid": false,
+      "droppedTimeSeconds": 0,
+      "physicsStepMs": 12.509999990463257
+    },
+    "telemetryFps": 3.88,
+    "devSettings": {
+      "gravityScale": 0.25,
+      "cadence": 0.25,
+      "autoPauseSteps": 0
+    },
+    "slowElapsedMs": 1078.0928000000004
+  },
+  "testC": {
+    "beforeStep": {
+      "uiState": "paused",
+      "workerState": "paused:1:8",
+      "positionSignature": "4419:83a3cd39",
+      "instanceCount": 5,
+      "diagnostics": {
+        "stepCount": 33,
+        "substeps": 0,
+        "particleCount": 1473,
+        "triangleCount": 2296,
+        "stretchConstraintCount": 3764,
+        "shearConstraintCount": 2296,
+        "bendConstraintCount": 3124,
+        "seamConstraintCount": 116,
+        "seamErrorAverage": 0.016117324495155863,
+        "seamErrorMaximum": 0.07350117119224818,
+        "maximumPositionMagnitude": 1.3057744196826202,
+        "maximumVelocityMagnitude": 1.4861271707866288,
+        "maximumCorrectionApplied": 0.001750004244968295,
+        "invalid": false,
+        "droppedTimeSeconds": 0,
+        "physicsStepMs": 12.509999990463257
+      },
+      "telemetryFps": 3.88,
+      "devSettings": {
+        "gravityScale": 0.25,
+        "cadence": 0.25,
+        "autoPauseSteps": 0
+      }
+    },
+    "afterStep": {
+      "uiState": "paused",
+      "workerState": "paused:1:9",
+      "positionSignature": "4419:ec6e541c",
+      "instanceCount": 5,
+      "diagnostics": {
+        "stepCount": 34,
+        "substeps": 1,
+        "particleCount": 1473,
+        "triangleCount": 2296,
+        "stretchConstraintCount": 3764,
+        "shearConstraintCount": 2296,
+        "bendConstraintCount": 3124,
+        "seamConstraintCount": 116,
+        "seamErrorAverage": 0.015700848749330216,
+        "seamErrorMaximum": 0.07415835713855412,
+        "maximumPositionMagnitude": 1.2983096068572577,
+        "maximumVelocityMagnitude": 1.5404601861862446,
+        "maximumCorrectionApplied": 0.001750004244968295,
+        "invalid": false,
+        "droppedTimeSeconds": 0,
+        "physicsStepMs": 12.840000003576279
+      },
+      "telemetryFps": 3.55,
+      "devSettings": {
+        "gravityScale": 0.25,
+        "cadence": 0.25,
+        "autoPauseSteps": 0
+      }
+    },
+    "frozen": {
+      "uiState": "paused",
+      "workerState": "paused:1:9",
+      "positionSignature": "4419:ec6e541c",
+      "instanceCount": 5,
+      "diagnostics": {
+        "stepCount": 34,
+        "substeps": 1,
+        "particleCount": 1473,
+        "triangleCount": 2296,
+        "stretchConstraintCount": 3764,
+        "shearConstraintCount": 2296,
+        "bendConstraintCount": 3124,
+        "seamConstraintCount": 116,
+        "seamErrorAverage": 0.015700848749330216,
+        "seamErrorMaximum": 0.07415835713855412,
+        "maximumPositionMagnitude": 1.2983096068572577,
+        "maximumVelocityMagnitude": 1.5404601861862446,
+        "maximumCorrectionApplied": 0.001750004244968295,
+        "invalid": false,
+        "droppedTimeSeconds": 0,
+        "physicsStepMs": 12.840000003576279
+      },
+      "telemetryFps": 3.55,
+      "devSettings": {
+        "gravityScale": 0.25,
+        "cadence": 0.25,
+        "autoPauseSteps": 0
+      }
+    }
+  },
+  "wireframe": true,
+  "consoleErrors": [],
+  "failure": null
+}

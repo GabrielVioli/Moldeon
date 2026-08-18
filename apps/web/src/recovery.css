@@ -46,7 +46,7 @@
   scrollbar-gutter: stable;
 }
 
-.pattern-library-scroll { padding: 4px 20px 20px; }
+.pattern-library-scroll { align-content: start; padding: 4px 20px 20px; }
 .pattern-library-dialog .dialog-header { position: relative; z-index: 2; }
 .pattern-library-dialog .dialog-note { position: sticky; bottom: 0; z-index: 2; margin: 0; background: #f3f1ec; }
 
@@ -56,6 +56,19 @@
 .template-grid.recovery-template-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 18px; }
 .template-card.is-selected { outline: 3px solid #6a5275; outline-offset: 2px; background: #fff; }
 .empty-project-card { border-style: dashed !important; }
+.empty-project-card .template-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-top: 9px;
+  color: #6a5275;
+  border: 1px solid #aaa29a;
+  border-radius: 50%;
+  font-size: 30px;
+  line-height: 1;
+}
+.empty-project-card .template-icon::before { display: none; }
 .library-measurements { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid #d5d0c7; }
 .library-actions { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid #d5d0c7; background: #f3f1ec; }
 .library-actions button { min-height: 44px; padding: 0 18px; border-radius: 8px; cursor: pointer; }
@@ -73,4 +86,106 @@
 
 @media (max-width: 430px) {
   .template-grid.recovery-template-grid { grid-template-columns: 1fr; }
+}
+
+.empty-workspace {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px;
+  color: #555650;
+  text-align: center;
+  pointer-events: none;
+}
+.empty-workspace::before {
+  content: "";
+  position: absolute;
+  inset: 42px;
+  z-index: -1;
+  border: 1px dashed #aaa69d;
+  border-radius: 18px;
+  background: rgb(243 241 236 / 82%);
+  backdrop-filter: blur(2px);
+}
+.empty-workspace strong { color: #202124; font: 700 clamp(25px, 4vw, 36px)/1.1 Georgia, serif; }
+.empty-workspace span { max-width: 520px; }
+.empty-workspace > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; pointer-events: auto; }
+.empty-workspace button { min-height: 44px; padding: 0 16px; border-radius: 8px; background: #282a2d; color: #fff; cursor: pointer; }
+.empty-workspace button:first-child { color: #202124; background: #d9b866; }
+.empty-inspector { display: grid; align-content: start; gap: 9px; padding: 22px 18px; }
+.empty-inspector p { margin: 0; color: #686963; font-size: 12px; line-height: 1.5; }
+
+/*
+ * 9.5-05: a selected piece can expose a fairly wide modeling context bar.
+ * Navigation must remain a separate, higher screen-space control so the
+ * operation bar can never steal wheel/zoom/pan buttons from the Canvas.
+ * recovery.css is intentionally loaded after styles.css, making this the
+ * authoritative stacking/layout correction for the recovery gates.
+ */
+.context-bar {
+  bottom: 64px;
+  max-height: min(46%, 270px);
+  overflow: auto;
+}
+
+.canvas-navigation {
+  z-index: 11;
+}
+
+@media (max-width: 900px) {
+  .context-bar {
+    bottom: 60px;
+    max-height: min(42%, 220px);
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .context-bar {
+    left: 6px;
+    right: 6px;
+    bottom: 54px;
+    max-width: none;
+    max-height: min(40%, 190px);
+    transform: none;
+  }
+}
+
+@media (max-height: 620px) {
+  .context-bar { max-height: 180px; }
+}
+
+@media (max-width: 760px) {
+  .empty-workspace { padding: 20px; }
+  .empty-workspace::before { inset: 18px; }
+  .empty-workspace > div { display: grid; width: min(100%, 280px); }
+
+  /* The right-panel wrapper uses display: contents. Its descendants therefore
+     become grid items without matching the direct-child mobile rule in styles.css.
+     Keep every modeling panel on the single mobile track so the editor cannot
+     collapse to a zero-width first column while the hidden right panel owns a
+     second implicit column. */
+  .workspace.mode-modeling {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .workspace.mode-modeling > .editor-panel.workspace-view,
+  .workspace.mode-modeling > .workspace-right-panel > .workspace-view {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace.mode-modeling .editor-body,
+  .workspace.mode-modeling .canvas-stack,
+  .workspace.mode-modeling canvas.pattern-canvas {
+    width: 100%;
+    min-width: 0;
+  }
 }

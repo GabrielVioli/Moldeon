@@ -1,0 +1,4090 @@
+{
+  "generatedAt": "2026-08-10T18:36:23.926Z",
+  "trackedFileCount": 191,
+  "totalBytes": 1800372,
+  "totalTextLines": 47405,
+  "testFileCount": 62,
+  "temporaryCompatibilityFileCount": 5,
+  "todoCount": 6,
+  "largestByLines": [
+    {
+      "path": "apps/web/src/editor/PatternCanvasLegacy.tsx",
+      "name": "PatternCanvasLegacy.tsx",
+      "extension": ".tsx",
+      "bytes": 103069,
+      "lines": 2507,
+      "imports": [
+        "../domain/patternOperations",
+        "../domain/patternEditing",
+        "./canvasHitTesting",
+        "./canvasWheelNavigation",
+        "../domain/internalPaths",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./editorCoreSelection",
+        "./workspaceInteractions"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "name": "styles.css",
+      "extension": ".css",
+      "bytes": 60137,
+      "lines": 2305,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.ts",
+      "name": "patternDocumentV3.ts",
+      "extension": ".ts",
+      "bytes": 65492,
+      "lines": 1739,
+      "imports": [
+        "./fabric"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/editorStore.ts",
+      "name": "editorStore.ts",
+      "extension": ".ts",
+      "bytes": 58616,
+      "lines": 1446,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "../domain/patternOperations",
+        "../domain/assembly",
+        "../domain/polygonGeometry",
+        "../domain/segmentEditing",
+        "../domain/patternOperations"
+      ],
+      "importCount": 7,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/pattern.ts",
+      "name": "pattern.ts",
+      "extension": ".ts",
+      "bytes": 54054,
+      "lines": 1324,
+      "imports": [
+        "./polygonGeometry"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/sleeveSystem.ts",
+      "name": "sleeveSystem.ts",
+      "extension": ".ts",
+      "bytes": 44934,
+      "lines": 1314,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/internalPaths.ts",
+      "name": "internalPaths.ts",
+      "extension": ".ts",
+      "bytes": 47126,
+      "lines": 1132,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/basePatternDrafting.ts",
+      "name": "basePatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 31913,
+      "lines": 872,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/App.tsx",
+      "name": "App.tsx",
+      "extension": ".tsx",
+      "bytes": 32426,
+      "lines": 800,
+      "imports": [
+        "./core/engineRuntime",
+        "./core/fallbackPatternEngine",
+        "./editor/PatternCanvas",
+        "./editor/PatternCanvas",
+        "./editor/editorCoreSelection",
+        "./components/Inspector",
+        "./components/StatusBar",
+        "./components/Toolbar",
+        "./components/PiecesPanel",
+        "./components/PreviewPlacementPanel",
+        "./components/AssemblyPanel",
+        "./components/ContextBar",
+        "./export/svg",
+        "./storage/opfs",
+        "./state/editorStore",
+        "./state/internalPathEditorStore",
+        "./domain/pattern",
+        "./domain/assembly",
+        "./domain/sleeveSystem"
+      ],
+      "importCount": 19,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingOperations.ts",
+      "name": "modelingOperations.ts",
+      "extension": ".ts",
+      "bytes": 34242,
+      "lines": 783,
+      "imports": [
+        "./internalPaths",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/PatternCanvas.tsx",
+      "name": "PatternCanvas.tsx",
+      "extension": ".tsx",
+      "bytes": 26055,
+      "lines": 770,
+      "imports": [
+        "../domain/polygonGeometry",
+        "../domain/pattern",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./camera",
+        "./coordinates",
+        "./PatternCanvasLegacy",
+        "./workspaceInteractions",
+        "./PatternCanvasLegacy"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentAssembly.ts",
+      "name": "GarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 23916,
+      "lines": 746,
+      "imports": [
+        "./types"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/formulaEngine.ts",
+      "name": "formulaEngine.ts",
+      "extension": ".ts",
+      "bytes": 27613,
+      "lines": 720,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/templateCatalog.ts",
+      "name": "templateCatalog.ts",
+      "extension": ".ts",
+      "bytes": 23541,
+      "lines": 704,
+      "imports": [
+        "../domain/pattern",
+        "../domain/fabric",
+        "../domain/assembly",
+        "../domain/patternOperations",
+        "../domain/constructionGraph"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelTopology.ts",
+      "name": "PanelTopology.ts",
+      "extension": ".ts",
+      "bytes": 16659,
+      "lines": 696,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/parametricMeasurements.ts",
+      "name": "parametricMeasurements.ts",
+      "extension": ".ts",
+      "bytes": 27798,
+      "lines": 652,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PhysicalGarmentAssembly.ts",
+      "name": "PhysicalGarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 18896,
+      "lines": 644,
+      "imports": [
+        "../domain/pattern",
+        "./types"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "crates/pattern-core/src/lib.rs",
+      "name": "lib.rs",
+      "extension": ".rs",
+      "bytes": 19943,
+      "lines": 644,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/SemanticAvatarArrangement.ts",
+      "name": "SemanticAvatarArrangement.ts",
+      "extension": ".ts",
+      "bytes": 24177,
+      "lines": 601,
+      "imports": [
+        "../domain/assembly",
+        "../domain/templateAssemblySeams",
+        "../avatar/AvatarCollisionModel",
+        "./GarmentAssembly",
+        "./PhysicalGarmentAssembly"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/StitchConstraintBuilder.ts",
+      "name": "StitchConstraintBuilder.ts",
+      "extension": ".ts",
+      "bytes": 12303,
+      "lines": 594,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/FittingRoomDialog.tsx",
+      "name": "FittingRoomDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 20401,
+      "lines": 577,
+      "imports": [
+        "react",
+        "../state/editorStore",
+        "./BodyMeasurementsForm"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/trouserLogicalAssembly.ts",
+      "name": "trouserLogicalAssembly.ts",
+      "extension": ".ts",
+      "bytes": 19062,
+      "lines": 570,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserPatternDrafting.ts",
+      "name": "trouserPatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 20824,
+      "lines": 506,
+      "imports": [
+        "../domain/patternOperations",
+        "./basePatternDrafting"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-interaction-audit.mjs",
+      "name": "phase0-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16638,
+      "lines": 489,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/polygonGeometry.ts",
+      "name": "polygonGeometry.ts",
+      "extension": ".ts",
+      "bytes": 13288,
+      "lines": 465,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternEditing.ts",
+      "name": "patternEditing.ts",
+      "extension": ".ts",
+      "bytes": 13271,
+      "lines": 459,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/SleeveWizardDialog.tsx",
+      "name": "SleeveWizardDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 21013,
+      "lines": 452,
+      "imports": [
+        "react",
+        "../domain/pattern"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/avatar/AvatarParametricModel.ts",
+      "name": "AvatarParametricModel.ts",
+      "extension": ".ts",
+      "bytes": 16537,
+      "lines": 428,
+      "imports": [
+        "../domain/pattern",
+        "../domain/parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentSolver.ts",
+      "name": "GarmentSolver.ts",
+      "extension": ".ts",
+      "bytes": 12672,
+      "lines": 418,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-browser-audit.mjs",
+      "name": "phase0-browser-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 14246,
+      "lines": 414,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/AssemblyPanel.tsx",
+      "name": "AssemblyPanel.tsx",
+      "extension": ".tsx",
+      "bytes": 14030,
+      "lines": 411,
+      "imports": [
+        "react",
+        "../state/editorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingCut.ts",
+      "name": "modelingCut.ts",
+      "extension": ".ts",
+      "bytes": 15151,
+      "lines": 398,
+      "imports": [
+        "./patternEditing",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/testFixtures/baselineGarments.ts",
+      "name": "baselineGarments.ts",
+      "extension": ".ts",
+      "bytes": 11231,
+      "lines": 393,
+      "imports": [
+        "../domain/templateAssemblySeams"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/assembly.ts",
+      "name": "assembly.ts",
+      "extension": ".ts",
+      "bytes": 10979,
+      "lines": 379,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/types.ts",
+      "name": "types.ts",
+      "extension": ".ts",
+      "bytes": 7831,
+      "lines": 368,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.test.ts",
+      "name": "patternDocumentV3.test.ts",
+      "extension": ".ts",
+      "bytes": 11873,
+      "lines": 360,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../testFixtures/baselineGarments",
+        "./fabric"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/internalPathEditorStore.ts",
+      "name": "internalPathEditorStore.ts",
+      "extension": ".ts",
+      "bytes": 12906,
+      "lines": 358,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "./editorStore"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/templateAssemblySeams.ts",
+      "name": "templateAssemblySeams.ts",
+      "extension": ".ts",
+      "bytes": 10019,
+      "lines": 354,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/prompt03-interaction-audit.mjs",
+      "name": "prompt03-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16750,
+      "lines": 348,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.types.ts",
+      "name": "patternDocumentV3.types.ts",
+      "extension": ".ts",
+      "bytes": 8017,
+      "lines": 325,
+      "imports": [
+        "./fabric",
+        "./parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    }
+  ],
+  "largestByBytes": [
+    {
+      "path": "apps/web/src/editor/PatternCanvasLegacy.tsx",
+      "name": "PatternCanvasLegacy.tsx",
+      "extension": ".tsx",
+      "bytes": 103069,
+      "lines": 2507,
+      "imports": [
+        "../domain/patternOperations",
+        "../domain/patternEditing",
+        "./canvasHitTesting",
+        "./canvasWheelNavigation",
+        "../domain/internalPaths",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./editorCoreSelection",
+        "./workspaceInteractions"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.ts",
+      "name": "patternDocumentV3.ts",
+      "extension": ".ts",
+      "bytes": 65492,
+      "lines": 1739,
+      "imports": [
+        "./fabric"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "name": "styles.css",
+      "extension": ".css",
+      "bytes": 60137,
+      "lines": 2305,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/editorStore.ts",
+      "name": "editorStore.ts",
+      "extension": ".ts",
+      "bytes": 58616,
+      "lines": 1446,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "../domain/patternOperations",
+        "../domain/assembly",
+        "../domain/polygonGeometry",
+        "../domain/segmentEditing",
+        "../domain/patternOperations"
+      ],
+      "importCount": 7,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/pattern.ts",
+      "name": "pattern.ts",
+      "extension": ".ts",
+      "bytes": 54054,
+      "lines": 1324,
+      "imports": [
+        "./polygonGeometry"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/internalPaths.ts",
+      "name": "internalPaths.ts",
+      "extension": ".ts",
+      "bytes": 47126,
+      "lines": 1132,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/sleeveSystem.ts",
+      "name": "sleeveSystem.ts",
+      "extension": ".ts",
+      "bytes": 44934,
+      "lines": 1314,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/apply-recovery-ghost-geometry.py",
+      "name": "apply-recovery-ghost-geometry.py",
+      "extension": ".py",
+      "bytes": 37485,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingOperations.ts",
+      "name": "modelingOperations.ts",
+      "extension": ".ts",
+      "bytes": 34242,
+      "lines": 783,
+      "imports": [
+        "./internalPaths",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/App.tsx",
+      "name": "App.tsx",
+      "extension": ".tsx",
+      "bytes": 32426,
+      "lines": 800,
+      "imports": [
+        "./core/engineRuntime",
+        "./core/fallbackPatternEngine",
+        "./editor/PatternCanvas",
+        "./editor/PatternCanvas",
+        "./editor/editorCoreSelection",
+        "./components/Inspector",
+        "./components/StatusBar",
+        "./components/Toolbar",
+        "./components/PiecesPanel",
+        "./components/PreviewPlacementPanel",
+        "./components/AssemblyPanel",
+        "./components/ContextBar",
+        "./export/svg",
+        "./storage/opfs",
+        "./state/editorStore",
+        "./state/internalPathEditorStore",
+        "./domain/pattern",
+        "./domain/assembly",
+        "./domain/sleeveSystem"
+      ],
+      "importCount": 19,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/basePatternDrafting.ts",
+      "name": "basePatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 31913,
+      "lines": 872,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/parametricMeasurements.ts",
+      "name": "parametricMeasurements.ts",
+      "extension": ".ts",
+      "bytes": 27798,
+      "lines": 652,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/formulaEngine.ts",
+      "name": "formulaEngine.ts",
+      "extension": ".ts",
+      "bytes": 27613,
+      "lines": 720,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/PatternCanvas.tsx",
+      "name": "PatternCanvas.tsx",
+      "extension": ".tsx",
+      "bytes": 26055,
+      "lines": 770,
+      "imports": [
+        "../domain/polygonGeometry",
+        "../domain/pattern",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./camera",
+        "./coordinates",
+        "./PatternCanvasLegacy",
+        "./workspaceInteractions",
+        "./PatternCanvasLegacy"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/SemanticAvatarArrangement.ts",
+      "name": "SemanticAvatarArrangement.ts",
+      "extension": ".ts",
+      "bytes": 24177,
+      "lines": 601,
+      "imports": [
+        "../domain/assembly",
+        "../domain/templateAssemblySeams",
+        "../avatar/AvatarCollisionModel",
+        "./GarmentAssembly",
+        "./PhysicalGarmentAssembly"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentAssembly.ts",
+      "name": "GarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 23916,
+      "lines": 746,
+      "imports": [
+        "./types"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/templateCatalog.ts",
+      "name": "templateCatalog.ts",
+      "extension": ".ts",
+      "bytes": 23541,
+      "lines": 704,
+      "imports": [
+        "../domain/pattern",
+        "../domain/fabric",
+        "../domain/assembly",
+        "../domain/patternOperations",
+        "../domain/constructionGraph"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/__snapshots__/basePatternDrafting.test.ts.snap",
+      "name": "basePatternDrafting.test.ts.snap",
+      "extension": ".snap",
+      "bytes": 21478,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/SleeveWizardDialog.tsx",
+      "name": "SleeveWizardDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 21013,
+      "lines": 452,
+      "imports": [
+        "react",
+        "../domain/pattern"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserPatternDrafting.ts",
+      "name": "trouserPatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 20824,
+      "lines": 506,
+      "imports": [
+        "../domain/patternOperations",
+        "./basePatternDrafting"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/FittingRoomDialog.tsx",
+      "name": "FittingRoomDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 20401,
+      "lines": 577,
+      "imports": [
+        "react",
+        "../state/editorStore",
+        "./BodyMeasurementsForm"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "crates/pattern-core/src/lib.rs",
+      "name": "lib.rs",
+      "extension": ".rs",
+      "bytes": 19943,
+      "lines": 644,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/trouserLogicalAssembly.ts",
+      "name": "trouserLogicalAssembly.ts",
+      "extension": ".ts",
+      "bytes": 19062,
+      "lines": 570,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PhysicalGarmentAssembly.ts",
+      "name": "PhysicalGarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 18896,
+      "lines": 644,
+      "imports": [
+        "../domain/pattern",
+        "./types"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/prompt03-interaction-audit.mjs",
+      "name": "prompt03-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16750,
+      "lines": 348,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelTopology.ts",
+      "name": "PanelTopology.ts",
+      "extension": ".ts",
+      "bytes": 16659,
+      "lines": 696,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-interaction-audit.mjs",
+      "name": "phase0-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16638,
+      "lines": 489,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/avatar/AvatarParametricModel.ts",
+      "name": "AvatarParametricModel.ts",
+      "extension": ".ts",
+      "bytes": 16537,
+      "lines": 428,
+      "imports": [
+        "../domain/pattern",
+        "../domain/parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-curve-canvas-final-regression.mjs",
+      "name": "recovery-curve-canvas-final-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 15930,
+      "lines": 192,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingCut.ts",
+      "name": "modelingCut.ts",
+      "extension": ".ts",
+      "bytes": 15151,
+      "lines": 398,
+      "imports": [
+        "./patternEditing",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-modeling-operations-live-regression.mjs",
+      "name": "recovery-modeling-operations-live-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 14522,
+      "lines": 296,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/sleeveSystem.test.ts",
+      "name": "sleeveSystem.test.ts",
+      "extension": ".ts",
+      "bytes": 14320,
+      "lines": 317,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "./patternDocumentV3",
+        "./pattern",
+        "../testFixtures/parametricBodyFixtures",
+        "../patterns/templateCatalog"
+      ],
+      "importCount": 6,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-editor-core-live-regression.mjs",
+      "name": "recovery-editor-core-live-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 14252,
+      "lines": 211,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-browser-audit.mjs",
+      "name": "phase0-browser-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 14246,
+      "lines": 414,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/AssemblyPanel.tsx",
+      "name": "AssemblyPanel.tsx",
+      "extension": ".tsx",
+      "bytes": 14030,
+      "lines": 411,
+      "imports": [
+        "react",
+        "../state/editorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/polygonGeometry.ts",
+      "name": "polygonGeometry.ts",
+      "extension": ".ts",
+      "bytes": 13288,
+      "lines": 465,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternEditing.ts",
+      "name": "patternEditing.ts",
+      "extension": ".ts",
+      "bytes": 13271,
+      "lines": 459,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/internalPathEditorStore.ts",
+      "name": "internalPathEditorStore.ts",
+      "extension": ".ts",
+      "bytes": 12906,
+      "lines": 358,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "./editorStore"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentSolver.ts",
+      "name": "GarmentSolver.ts",
+      "extension": ".ts",
+      "bytes": 12672,
+      "lines": 418,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternOperations.ts",
+      "name": "patternOperations.ts",
+      "extension": ".ts",
+      "bytes": 12303,
+      "lines": 175,
+      "imports": [
+        "./polygonGeometry"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    }
+  ],
+  "duplicateNames": [],
+  "files": [
+    {
+      "path": ".github/workflows/apply-recovery-ghost-geometry.yml",
+      "name": "apply-recovery-ghost-geometry.yml",
+      "extension": ".yml",
+      "bytes": 2070,
+      "lines": 73,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "name": "ci.yml",
+      "extension": ".yml",
+      "bytes": 1366,
+      "lines": 69,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/phase0-baseline.yml",
+      "name": "phase0-baseline.yml",
+      "extension": ".yml",
+      "bytes": 6062,
+      "lines": 185,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/prompt02-domain.yml",
+      "name": "prompt02-domain.yml",
+      "extension": ".yml",
+      "bytes": 3834,
+      "lines": 133,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/prompt03-audit.yml",
+      "name": "prompt03-audit.yml",
+      "extension": ".yml",
+      "bytes": 1573,
+      "lines": 53,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/prompt09-avatar-regression.yml",
+      "name": "prompt09-avatar-regression.yml",
+      "extension": ".yml",
+      "bytes": 3464,
+      "lines": 110,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-editor-core-validation.yml",
+      "name": "recovery-editor-core-validation.yml",
+      "extension": ".yml",
+      "bytes": 2743,
+      "lines": 88,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-modeling-operations-validation.yml",
+      "name": "recovery-modeling-operations-validation.yml",
+      "extension": ".yml",
+      "bytes": 5463,
+      "lines": 143,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-modeling-pages-preview.yml",
+      "name": "recovery-modeling-pages-preview.yml",
+      "extension": ".yml",
+      "bytes": 1376,
+      "lines": 54,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-modeling-preview-artifact.yml",
+      "name": "recovery-modeling-preview-artifact.yml",
+      "extension": ".yml",
+      "bytes": 1060,
+      "lines": 43,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-modeling-vercel-preview.yml",
+      "name": "recovery-modeling-vercel-preview.yml",
+      "extension": ".yml",
+      "bytes": 1607,
+      "lines": 56,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/recovery-zero-workspace.yml",
+      "name": "recovery-zero-workspace.yml",
+      "extension": ".yml",
+      "bytes": 8844,
+      "lines": 272,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": ".github/workflows/web-ci.yml",
+      "name": "web-ci.yml",
+      "extension": ".yml",
+      "bytes": 600,
+      "lines": 37,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/App.tsx",
+      "name": "App.tsx",
+      "extension": ".tsx",
+      "bytes": 32426,
+      "lines": 800,
+      "imports": [
+        "./core/engineRuntime",
+        "./core/fallbackPatternEngine",
+        "./editor/PatternCanvas",
+        "./editor/PatternCanvas",
+        "./editor/editorCoreSelection",
+        "./components/Inspector",
+        "./components/StatusBar",
+        "./components/Toolbar",
+        "./components/PiecesPanel",
+        "./components/PreviewPlacementPanel",
+        "./components/AssemblyPanel",
+        "./components/ContextBar",
+        "./export/svg",
+        "./storage/opfs",
+        "./state/editorStore",
+        "./state/internalPathEditorStore",
+        "./domain/pattern",
+        "./domain/assembly",
+        "./domain/sleeveSystem"
+      ],
+      "importCount": 19,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/avatar/AvatarCollisionModel.ts",
+      "name": "AvatarCollisionModel.ts",
+      "extension": ".ts",
+      "bytes": 3765,
+      "lines": 89,
+      "imports": [
+        "./AvatarParametricModel",
+        "./AvatarParametricModel"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/avatar/AvatarParametricModel.test.ts",
+      "name": "AvatarParametricModel.test.ts",
+      "extension": ".ts",
+      "bytes": 2475,
+      "lines": 51,
+      "imports": [
+        "vitest",
+        "../patterns/templateCatalog",
+        "./AvatarCollisionModel",
+        "./AvatarParametricModel"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/avatar/AvatarParametricModel.ts",
+      "name": "AvatarParametricModel.ts",
+      "extension": ".ts",
+      "bytes": 16537,
+      "lines": 428,
+      "imports": [
+        "../domain/pattern",
+        "../domain/parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/AssemblyPanel.tsx",
+      "name": "AssemblyPanel.tsx",
+      "extension": ".tsx",
+      "bytes": 14030,
+      "lines": 411,
+      "imports": [
+        "react",
+        "../state/editorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/BodyMeasurementsForm.tsx",
+      "name": "BodyMeasurementsForm.tsx",
+      "extension": ".tsx",
+      "bytes": 11201,
+      "lines": 255,
+      "imports": [
+        "react",
+        "../domain/pattern"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/ContextBar.tsx",
+      "name": "ContextBar.tsx",
+      "extension": ".tsx",
+      "bytes": 11992,
+      "lines": 175,
+      "imports": [
+        "../editor/PatternCanvas",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./CutRegionPreview",
+        "./ModelingOperationsControls"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/CutRegionPreview.tsx",
+      "name": "CutRegionPreview.tsx",
+      "extension": ".tsx",
+      "bytes": 1972,
+      "lines": 50,
+      "imports": [
+        "../domain/modelingCut",
+        "../domain/internalPaths",
+        "../domain/pattern"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/FittingRoomDialog.tsx",
+      "name": "FittingRoomDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 20401,
+      "lines": 577,
+      "imports": [
+        "react",
+        "../state/editorStore",
+        "./BodyMeasurementsForm"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/Inspector.tsx",
+      "name": "Inspector.tsx",
+      "extension": ".tsx",
+      "bytes": 12014,
+      "lines": 246,
+      "imports": [
+        "react",
+        "../domain/pattern",
+        "./BodyMeasurementsForm",
+        "../state/editorStore"
+      ],
+      "importCount": 4,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/ModalPortal.tsx",
+      "name": "ModalPortal.tsx",
+      "extension": ".tsx",
+      "bytes": 275,
+      "lines": 8,
+      "imports": [
+        "react",
+        "react-dom"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/ModelingOperationsControls.tsx",
+      "name": "ModelingOperationsControls.tsx",
+      "extension": ".tsx",
+      "bytes": 4111,
+      "lines": 100,
+      "imports": [
+        "react",
+        "../state/editorStore",
+        "../state/modelingOperationsStore",
+        "../domain/modelingOperations"
+      ],
+      "importCount": 4,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/PatternLibraryDialog.tsx",
+      "name": "PatternLibraryDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 8622,
+      "lines": 199,
+      "imports": [
+        "react",
+        "../domain/pattern",
+        "../domain/templateAssemblySeams",
+        "./BodyMeasurementsForm",
+        "./ModalPortal"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/PiecesPanel.tsx",
+      "name": "PiecesPanel.tsx",
+      "extension": ".tsx",
+      "bytes": 8814,
+      "lines": 248,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/PreviewPlacementPanel.tsx",
+      "name": "PreviewPlacementPanel.tsx",
+      "extension": ".tsx",
+      "bytes": 2670,
+      "lines": 34,
+      "imports": [
+        "../domain/pattern",
+        "../state/editorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/SleeveWizardDialog.tsx",
+      "name": "SleeveWizardDialog.tsx",
+      "extension": ".tsx",
+      "bytes": 21013,
+      "lines": 452,
+      "imports": [
+        "react",
+        "../domain/pattern"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/StatusBar.tsx",
+      "name": "StatusBar.tsx",
+      "extension": ".tsx",
+      "bytes": 857,
+      "lines": 31,
+      "imports": [
+        "react"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/components/Toolbar.tsx",
+      "name": "Toolbar.tsx",
+      "extension": ".tsx",
+      "bytes": 7083,
+      "lines": 200,
+      "imports": [
+        "react",
+        "../editor/PatternCanvas",
+        "../domain/assembly",
+        "../state/editorStore"
+      ],
+      "importCount": 4,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/core/engineRuntime.ts",
+      "name": "engineRuntime.ts",
+      "extension": ".ts",
+      "bytes": 455,
+      "lines": 15,
+      "imports": [
+        "./fallbackPatternEngine",
+        "../domain/pattern",
+        "../wasm/loadPatternEngine"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/core/fallbackPatternEngine.test.ts",
+      "name": "fallbackPatternEngine.test.ts",
+      "extension": ".ts",
+      "bytes": 2994,
+      "lines": 84,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "./fallbackPatternEngine"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/core/fallbackPatternEngine.ts",
+      "name": "fallbackPatternEngine.ts",
+      "extension": ".ts",
+      "bytes": 5838,
+      "lines": 176,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/dev/phase0AuditBridge.ts",
+      "name": "phase0AuditBridge.ts",
+      "extension": ".ts",
+      "bytes": 5681,
+      "lines": 177,
+      "imports": [
+        "../testFixtures/baselineGarments"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/__snapshots__/sleeveSystem.test.ts.snap",
+      "name": "sleeveSystem.test.ts.snap",
+      "extension": ".snap",
+      "bytes": 3379,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/anatomicalBody.test.ts",
+      "name": "anatomicalBody.test.ts",
+      "extension": ".ts",
+      "bytes": 1373,
+      "lines": 25,
+      "imports": [
+        "vitest",
+        "./anatomicalBody"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/anatomicalBody.ts",
+      "name": "anatomicalBody.ts",
+      "extension": ".ts",
+      "bytes": 5751,
+      "lines": 145,
+      "imports": [
+        "./pattern",
+        "./parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/assembly.test.ts",
+      "name": "assembly.test.ts",
+      "extension": ".ts",
+      "bytes": 7579,
+      "lines": 253,
+      "imports": [
+        "vitest",
+        "./fabric"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/assembly.ts",
+      "name": "assembly.ts",
+      "extension": ".ts",
+      "bytes": 10979,
+      "lines": 379,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/constructionGraph.test.ts",
+      "name": "constructionGraph.test.ts",
+      "extension": ".ts",
+      "bytes": 3637,
+      "lines": 66,
+      "imports": [
+        "vitest",
+        "./parametricMeasurements",
+        "./constructionGraph"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/constructionGraph.ts",
+      "name": "constructionGraph.ts",
+      "extension": ".ts",
+      "bytes": 11002,
+      "lines": 259,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/edgeClassification.ts",
+      "name": "edgeClassification.ts",
+      "extension": ".ts",
+      "bytes": 4791,
+      "lines": 188,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/fabric.test.ts",
+      "name": "fabric.test.ts",
+      "extension": ".ts",
+      "bytes": 1998,
+      "lines": 66,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/fabric.ts",
+      "name": "fabric.ts",
+      "extension": ".ts",
+      "bytes": 8117,
+      "lines": 288,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/formulaEngine.test.ts",
+      "name": "formulaEngine.test.ts",
+      "extension": ".ts",
+      "bytes": 4340,
+      "lines": 101,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/formulaEngine.ts",
+      "name": "formulaEngine.ts",
+      "extension": ".ts",
+      "bytes": 27613,
+      "lines": 720,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/internalPaths.test.ts",
+      "name": "internalPaths.test.ts",
+      "extension": ".ts",
+      "bytes": 10637,
+      "lines": 255,
+      "imports": [
+        "vitest",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/internalPaths.ts",
+      "name": "internalPaths.ts",
+      "extension": ".ts",
+      "bytes": 47126,
+      "lines": 1132,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingCut.test.ts",
+      "name": "modelingCut.test.ts",
+      "extension": ".ts",
+      "bytes": 7870,
+      "lines": 212,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingCut.ts",
+      "name": "modelingCut.ts",
+      "extension": ".ts",
+      "bytes": 15151,
+      "lines": 398,
+      "imports": [
+        "./patternEditing",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingOperations.test.ts",
+      "name": "modelingOperations.test.ts",
+      "extension": ".ts",
+      "bytes": 8149,
+      "lines": 179,
+      "imports": [
+        "vitest",
+        "./internalPaths",
+        "./modelingCut"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/modelingOperations.ts",
+      "name": "modelingOperations.ts",
+      "extension": ".ts",
+      "bytes": 34242,
+      "lines": 783,
+      "imports": [
+        "./internalPaths",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/parametricMeasurements.test.ts",
+      "name": "parametricMeasurements.test.ts",
+      "extension": ".ts",
+      "bytes": 4526,
+      "lines": 101,
+      "imports": [
+        "vitest",
+        "../testFixtures/parametricBodyFixtures"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/parametricMeasurements.ts",
+      "name": "parametricMeasurements.ts",
+      "extension": ".ts",
+      "bytes": 27798,
+      "lines": 652,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/parametricPatternDocumentV3.test.ts",
+      "name": "parametricPatternDocumentV3.test.ts",
+      "extension": ".ts",
+      "bytes": 2413,
+      "lines": 45,
+      "imports": [
+        "vitest",
+        "../testFixtures/baselineGarments",
+        "../patterns/templateCatalog"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/pattern.test.ts",
+      "name": "pattern.test.ts",
+      "extension": ".ts",
+      "bytes": 4751,
+      "lines": 140,
+      "imports": [
+        "vitest",
+        "./fabric"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/pattern.ts",
+      "name": "pattern.ts",
+      "extension": ".ts",
+      "bytes": 54054,
+      "lines": 1324,
+      "imports": [
+        "./polygonGeometry"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.test.ts",
+      "name": "patternDocumentV3.test.ts",
+      "extension": ".ts",
+      "bytes": 11873,
+      "lines": 360,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../testFixtures/baselineGarments",
+        "./fabric"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.ts",
+      "name": "patternDocumentV3.ts",
+      "extension": ".ts",
+      "bytes": 65492,
+      "lines": 1739,
+      "imports": [
+        "./fabric"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternDocumentV3.types.ts",
+      "name": "patternDocumentV3.types.ts",
+      "extension": ".ts",
+      "bytes": 8017,
+      "lines": 325,
+      "imports": [
+        "./fabric",
+        "./parametricMeasurements"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternEditing.test.ts",
+      "name": "patternEditing.test.ts",
+      "extension": ".ts",
+      "bytes": 4739,
+      "lines": 155,
+      "imports": [
+        "vitest",
+        "./polygonGeometry"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternEditing.ts",
+      "name": "patternEditing.ts",
+      "extension": ".ts",
+      "bytes": 13271,
+      "lines": 459,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternOperations.test.ts",
+      "name": "patternOperations.test.ts",
+      "extension": ".ts",
+      "bytes": 5449,
+      "lines": 65,
+      "imports": [
+        "vitest",
+        "./pattern",
+        "./patternOperations"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/patternOperations.ts",
+      "name": "patternOperations.ts",
+      "extension": ".ts",
+      "bytes": 12303,
+      "lines": 175,
+      "imports": [
+        "./polygonGeometry"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/polygonGeometry.test.ts",
+      "name": "polygonGeometry.test.ts",
+      "extension": ".ts",
+      "bytes": 5214,
+      "lines": 187,
+      "imports": [
+        "vitest",
+        "./pattern"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/polygonGeometry.ts",
+      "name": "polygonGeometry.ts",
+      "extension": ".ts",
+      "bytes": 13288,
+      "lines": 465,
+      "imports": [
+        "./pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/segmentEditing.test.ts",
+      "name": "segmentEditing.test.ts",
+      "extension": ".ts",
+      "bytes": 2357,
+      "lines": 51,
+      "imports": [
+        "vitest",
+        "./pattern",
+        "./segmentEditing"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/segmentEditing.ts",
+      "name": "segmentEditing.ts",
+      "extension": ".ts",
+      "bytes": 4249,
+      "lines": 139,
+      "imports": [
+        "./patternEditing"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/sleeveSystem.test.ts",
+      "name": "sleeveSystem.test.ts",
+      "extension": ".ts",
+      "bytes": 14320,
+      "lines": 317,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "./patternDocumentV3",
+        "./pattern",
+        "../testFixtures/parametricBodyFixtures",
+        "../patterns/templateCatalog"
+      ],
+      "importCount": 6,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/sleeveSystem.ts",
+      "name": "sleeveSystem.ts",
+      "extension": ".ts",
+      "bytes": 44934,
+      "lines": 1314,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/templateAssemblySeams.test.ts",
+      "name": "templateAssemblySeams.test.ts",
+      "extension": ".ts",
+      "bytes": 4920,
+      "lines": 133,
+      "imports": [
+        "vitest",
+        "./pattern"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/templateAssemblySeams.ts",
+      "name": "templateAssemblySeams.ts",
+      "extension": ".ts",
+      "bytes": 10019,
+      "lines": 354,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/trouserLogicalAssembly.test.ts",
+      "name": "trouserLogicalAssembly.test.ts",
+      "extension": ".ts",
+      "bytes": 7774,
+      "lines": 179,
+      "imports": [
+        "vitest",
+        "./pattern",
+        "../testFixtures/parametricBodyFixtures",
+        "../patterns/templateCatalog"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/domain/trouserLogicalAssembly.ts",
+      "name": "trouserLogicalAssembly.ts",
+      "extension": ".ts",
+      "bytes": 19062,
+      "lines": 570,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/camera.test.ts",
+      "name": "camera.test.ts",
+      "extension": ".ts",
+      "bytes": 1927,
+      "lines": 57,
+      "imports": [
+        "vitest",
+        "./camera"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/camera.ts",
+      "name": "camera.ts",
+      "extension": ".ts",
+      "bytes": 2194,
+      "lines": 79,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasGestures.test.ts",
+      "name": "canvasGestures.test.ts",
+      "extension": ".ts",
+      "bytes": 2423,
+      "lines": 57,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasGestures.ts",
+      "name": "canvasGestures.ts",
+      "extension": ".ts",
+      "bytes": 4478,
+      "lines": 167,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasHitTesting.test.ts",
+      "name": "canvasHitTesting.test.ts",
+      "extension": ".ts",
+      "bytes": 2172,
+      "lines": 73,
+      "imports": [
+        "vitest",
+        "../state/editorStore",
+        "./canvasHitTesting"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasHitTesting.ts",
+      "name": "canvasHitTesting.ts",
+      "extension": ".ts",
+      "bytes": 6064,
+      "lines": 199,
+      "imports": [
+        "../domain/patternEditing",
+        "./coordinates"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasWheelNavigation.test.ts",
+      "name": "canvasWheelNavigation.test.ts",
+      "extension": ".ts",
+      "bytes": 3310,
+      "lines": 60,
+      "imports": [
+        "vitest",
+        "./camera"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/canvasWheelNavigation.ts",
+      "name": "canvasWheelNavigation.ts",
+      "extension": ".ts",
+      "bytes": 2595,
+      "lines": 85,
+      "imports": [
+        "./camera",
+        "./camera"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/coordinates.test.ts",
+      "name": "coordinates.test.ts",
+      "extension": ".ts",
+      "bytes": 1362,
+      "lines": 38,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/coordinates.ts",
+      "name": "coordinates.ts",
+      "extension": ".ts",
+      "bytes": 2122,
+      "lines": 73,
+      "imports": [
+        "../domain/pattern",
+        "./camera"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/curveHandleInteraction.test.ts",
+      "name": "curveHandleInteraction.test.ts",
+      "extension": ".ts",
+      "bytes": 3603,
+      "lines": 91,
+      "imports": [
+        "vitest",
+        "../domain/pattern"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/curveHandleInteraction.ts",
+      "name": "curveHandleInteraction.ts",
+      "extension": ".ts",
+      "bytes": 4962,
+      "lines": 160,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/curveHandleOrigins.test.ts",
+      "name": "curveHandleOrigins.test.ts",
+      "extension": ".ts",
+      "bytes": 6720,
+      "lines": 179,
+      "imports": [
+        "vitest",
+        "../domain/internalPaths",
+        "../domain/modelingCut",
+        "../domain/modelingOperations",
+        "../domain/segmentEditing",
+        "./curveHandleInteraction"
+      ],
+      "importCount": 6,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/editorCoreMath.test.ts",
+      "name": "editorCoreMath.test.ts",
+      "extension": ".ts",
+      "bytes": 4840,
+      "lines": 136,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "./coordinates"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/editorCoreMath.ts",
+      "name": "editorCoreMath.ts",
+      "extension": ".ts",
+      "bytes": 5588,
+      "lines": 187,
+      "imports": [
+        "./camera",
+        "./coordinates"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/editorCoreSelection.test.ts",
+      "name": "editorCoreSelection.test.ts",
+      "extension": ".ts",
+      "bytes": 4126,
+      "lines": 133,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "../state/editorStore",
+        "../state/internalPathEditorStore"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/editorCoreSelection.ts",
+      "name": "editorCoreSelection.ts",
+      "extension": ".ts",
+      "bytes": 1787,
+      "lines": 44,
+      "imports": [
+        "../state/editorStore",
+        "../state/internalPathEditorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/PatternCanvas.tsx",
+      "name": "PatternCanvas.tsx",
+      "extension": ".tsx",
+      "bytes": 26055,
+      "lines": 770,
+      "imports": [
+        "../domain/polygonGeometry",
+        "../domain/pattern",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./camera",
+        "./coordinates",
+        "./PatternCanvasLegacy",
+        "./workspaceInteractions",
+        "./PatternCanvasLegacy"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/PatternCanvasGuard.test.ts",
+      "name": "PatternCanvasGuard.test.ts",
+      "extension": ".ts",
+      "bytes": 2870,
+      "lines": 71,
+      "imports": [
+        "vitest",
+        "./PatternCanvas",
+        "./editorCoreSelection"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/PatternCanvasLegacy.tsx",
+      "name": "PatternCanvasLegacy.tsx",
+      "extension": ".tsx",
+      "bytes": 103069,
+      "lines": 2507,
+      "imports": [
+        "../domain/patternOperations",
+        "../domain/patternEditing",
+        "./canvasHitTesting",
+        "./canvasWheelNavigation",
+        "../domain/internalPaths",
+        "../state/editorStore",
+        "../state/internalPathEditorStore",
+        "./editorCoreSelection",
+        "./workspaceInteractions"
+      ],
+      "importCount": 9,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/workspaceInteractions.test.ts",
+      "name": "workspaceInteractions.test.ts",
+      "extension": ".ts",
+      "bytes": 2387,
+      "lines": 46,
+      "imports": [
+        "vitest",
+        "./workspaceInteractions"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/editor/workspaceInteractions.ts",
+      "name": "workspaceInteractions.ts",
+      "extension": ".ts",
+      "bytes": 2728,
+      "lines": 70,
+      "imports": [
+        "../domain/pattern",
+        "./coordinates"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/export/svg.test.ts",
+      "name": "svg.test.ts",
+      "extension": ".ts",
+      "bytes": 2480,
+      "lines": 79,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "./svg"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/export/svg.ts",
+      "name": "svg.ts",
+      "extension": ".ts",
+      "bytes": 8544,
+      "lines": 218,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentAssembly.ts",
+      "name": "GarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 23916,
+      "lines": 746,
+      "imports": [
+        "./types"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentSolver.test.ts",
+      "name": "GarmentSolver.test.ts",
+      "extension": ".ts",
+      "bytes": 2853,
+      "lines": 110,
+      "imports": [
+        "vitest",
+        "./GarmentAssembly",
+        "./GarmentSolver"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentSolver.ts",
+      "name": "GarmentSolver.ts",
+      "extension": ".ts",
+      "bytes": 12672,
+      "lines": 418,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/GarmentThreeBridge.ts",
+      "name": "GarmentThreeBridge.ts",
+      "extension": ".ts",
+      "bytes": 4103,
+      "lines": 136,
+      "imports": [
+        "three",
+        "../domain/pattern",
+        "../domain/fabric"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/index.ts",
+      "name": "index.ts",
+      "extension": ".ts",
+      "bytes": 435,
+      "lines": 13,
+      "imports": [
+        "./PanelTopology",
+        "./PanelRefinement",
+        "./StitchConstraintBuilder",
+        "./PanelSimulation",
+        "./ThreeGeometryBridge",
+        "./GarmentAssembly",
+        "./PhysicalGarmentAssembly",
+        "./ResolvedGarmentAssembly",
+        "./GarmentSolver",
+        "./GarmentThreeBridge",
+        "./SemanticAvatarArrangement"
+      ],
+      "importCount": 11,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/InternalPathTopology.test.ts",
+      "name": "InternalPathTopology.test.ts",
+      "extension": ".ts",
+      "bytes": 2707,
+      "lines": 84,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "./PanelTopology"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelMeshFactory.ts",
+      "name": "PanelMeshFactory.ts",
+      "extension": ".ts",
+      "bytes": 2601,
+      "lines": 84,
+      "imports": [
+        "three",
+        "../domain/pattern",
+        "../domain/fabric",
+        "./StitchConstraintBuilder",
+        "./PanelSimulation",
+        "./ThreeGeometryBridge"
+      ],
+      "importCount": 6,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelRefinement.ts",
+      "name": "PanelRefinement.ts",
+      "extension": ".ts",
+      "bytes": 6297,
+      "lines": 230,
+      "imports": [
+        "./PanelTopology",
+        "./types"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelSimulation.ts",
+      "name": "PanelSimulation.ts",
+      "extension": ".ts",
+      "bytes": 4321,
+      "lines": 143,
+      "imports": [
+        "./PanelTopology",
+        "./StitchConstraintBuilder",
+        "../physics/xpbd"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelTopology.test.ts",
+      "name": "PanelTopology.test.ts",
+      "extension": ".ts",
+      "bytes": 3479,
+      "lines": 96,
+      "imports": [
+        "vitest",
+        "./PanelTopology",
+        "./StitchConstraintBuilder",
+        "./PanelSimulation",
+        "../domain/pattern"
+      ],
+      "importCount": 5,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PanelTopology.ts",
+      "name": "PanelTopology.ts",
+      "extension": ".ts",
+      "bytes": 16659,
+      "lines": 696,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PhysicalGarmentAssembly.test.ts",
+      "name": "PhysicalGarmentAssembly.test.ts",
+      "extension": ".ts",
+      "bytes": 5716,
+      "lines": 197,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "./GarmentSolver",
+        "./PhysicalGarmentAssembly"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/PhysicalGarmentAssembly.ts",
+      "name": "PhysicalGarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 18896,
+      "lines": 644,
+      "imports": [
+        "../domain/pattern",
+        "./types"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/ResolvedGarmentAssembly.test.ts",
+      "name": "ResolvedGarmentAssembly.test.ts",
+      "extension": ".ts",
+      "bytes": 2562,
+      "lines": 83,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "./ResolvedGarmentAssembly"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/ResolvedGarmentAssembly.ts",
+      "name": "ResolvedGarmentAssembly.ts",
+      "extension": ".ts",
+      "bytes": 2038,
+      "lines": 65,
+      "imports": [
+        "../domain/templateAssemblySeams",
+        "./PhysicalGarmentAssembly"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/SemanticAvatarArrangement.test.ts",
+      "name": "SemanticAvatarArrangement.test.ts",
+      "extension": ".ts",
+      "bytes": 8240,
+      "lines": 157,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../domain/pattern",
+        "../avatar/AvatarParametricModel",
+        "./SemanticAvatarArrangement"
+      ],
+      "importCount": 5,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/SemanticAvatarArrangement.ts",
+      "name": "SemanticAvatarArrangement.ts",
+      "extension": ".ts",
+      "bytes": 24177,
+      "lines": 601,
+      "imports": [
+        "../domain/assembly",
+        "../domain/templateAssemblySeams",
+        "../avatar/AvatarCollisionModel",
+        "./GarmentAssembly",
+        "./PhysicalGarmentAssembly"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/StitchConstraintBuilder.ts",
+      "name": "StitchConstraintBuilder.ts",
+      "extension": ".ts",
+      "bytes": 12303,
+      "lines": 594,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/ThreeGeometryBridge.ts",
+      "name": "ThreeGeometryBridge.ts",
+      "extension": ".ts",
+      "bytes": 677,
+      "lines": 23,
+      "imports": [
+        "three",
+        "./PanelSimulation"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/garment3d/types.ts",
+      "name": "types.ts",
+      "extension": ".ts",
+      "bytes": 7831,
+      "lines": 368,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/main.tsx",
+      "name": "main.tsx",
+      "extension": ".tsx",
+      "bytes": 520,
+      "lines": 24,
+      "imports": [
+        "react",
+        "react-dom/client",
+        "./App"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/modelingOperations.css",
+      "name": "modelingOperations.css",
+      "extension": ".css",
+      "bytes": 573,
+      "lines": 36,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/node-config-shims.d.ts",
+      "name": "node-config-shims.d.ts",
+      "extension": ".ts",
+      "bytes": 396,
+      "lines": 14,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/__snapshots__/basePatternDrafting.test.ts.snap",
+      "name": "basePatternDrafting.test.ts.snap",
+      "extension": ".snap",
+      "bytes": 21478,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/__snapshots__/trouserPatternDrafting.test.ts.snap",
+      "name": "trouserPatternDrafting.test.ts.snap",
+      "extension": ".snap",
+      "bytes": 3882,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/basePatternDrafting.test.ts",
+      "name": "basePatternDrafting.test.ts",
+      "extension": ".ts",
+      "bytes": 9806,
+      "lines": 228,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../domain/patternDocumentV3",
+        "./templateCatalog"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/basePatternDrafting.ts",
+      "name": "basePatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 31913,
+      "lines": 872,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/templateCatalog.test.ts",
+      "name": "templateCatalog.test.ts",
+      "extension": ".ts",
+      "bytes": 4655,
+      "lines": 108,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/templateCatalog.ts",
+      "name": "templateCatalog.ts",
+      "extension": ".ts",
+      "bytes": 23541,
+      "lines": 704,
+      "imports": [
+        "../domain/pattern",
+        "../domain/fabric",
+        "../domain/assembly",
+        "../domain/patternOperations",
+        "../domain/constructionGraph"
+      ],
+      "importCount": 5,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserPatternDrafting.test.ts",
+      "name": "trouserPatternDrafting.test.ts",
+      "extension": ".ts",
+      "bytes": 9624,
+      "lines": 227,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../domain/patternDocumentV3",
+        "./templateCatalog"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserPatternDrafting.ts",
+      "name": "trouserPatternDrafting.ts",
+      "extension": ".ts",
+      "bytes": 20824,
+      "lines": 506,
+      "imports": [
+        "../domain/patternOperations",
+        "./basePatternDrafting"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserVisualAudit.test.ts",
+      "name": "trouserVisualAudit.test.ts",
+      "extension": ".ts",
+      "bytes": 1098,
+      "lines": 38,
+      "imports": [
+        "vitest",
+        "./trouserVisualEvidence"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/patterns/trouserVisualEvidence.ts",
+      "name": "trouserVisualEvidence.ts",
+      "extension": ".ts",
+      "bytes": 12244,
+      "lines": 294,
+      "imports": [
+        "../domain/pattern",
+        "../domain/trouserLogicalAssembly",
+        "./templateCatalog"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/physics/xpbd.test.ts",
+      "name": "xpbd.test.ts",
+      "extension": ".ts",
+      "bytes": 1598,
+      "lines": 47,
+      "imports": [
+        "vitest",
+        "./xpbd"
+      ],
+      "importCount": 2,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/physics/xpbd.ts",
+      "name": "xpbd.ts",
+      "extension": ".ts",
+      "bytes": 2084,
+      "lines": 57,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/recovery.css",
+      "name": "recovery.css",
+      "extension": ".css",
+      "bytes": 6040,
+      "lines": 179,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/assemblyHistory.test.ts",
+      "name": "assemblyHistory.test.ts",
+      "extension": ".ts",
+      "bytes": 7350,
+      "lines": 154,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "../domain/pattern",
+        "./editorStore"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/documentCommandHistory.test.ts",
+      "name": "documentCommandHistory.test.ts",
+      "extension": ".ts",
+      "bytes": 2363,
+      "lines": 80,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "./documentCommandHistory",
+        "./documentCommandHistory"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/documentCommandHistory.ts",
+      "name": "documentCommandHistory.ts",
+      "extension": ".ts",
+      "bytes": 3595,
+      "lines": 139,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/editorCoreStore.test.ts",
+      "name": "editorCoreStore.test.ts",
+      "extension": ".ts",
+      "bytes": 8300,
+      "lines": 255,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "../editor/editorCoreSelection",
+        "./editorStore",
+        "./internalPathEditorStore"
+      ],
+      "importCount": 5,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/editorStore.ts",
+      "name": "editorStore.ts",
+      "extension": ".ts",
+      "bytes": 58616,
+      "lines": 1446,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "../domain/patternOperations",
+        "../domain/assembly",
+        "../domain/polygonGeometry",
+        "../domain/segmentEditing",
+        "../domain/patternOperations"
+      ],
+      "importCount": 7,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/emptyWorkspace.test.ts",
+      "name": "emptyWorkspace.test.ts",
+      "extension": ".ts",
+      "bytes": 4989,
+      "lines": 126,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "../domain/pattern",
+        "./editorStore"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/garmentConfiguration.test.ts",
+      "name": "garmentConfiguration.test.ts",
+      "extension": ".ts",
+      "bytes": 5019,
+      "lines": 109,
+      "imports": [
+        "vitest",
+        "./editorStore",
+        "../domain/pattern"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/internalPathEditorStore.test.ts",
+      "name": "internalPathEditorStore.test.ts",
+      "extension": ".ts",
+      "bytes": 6906,
+      "lines": 178,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "./editorStore",
+        "./internalPathEditorStore"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/internalPathEditorStore.ts",
+      "name": "internalPathEditorStore.ts",
+      "extension": ".ts",
+      "bytes": 12906,
+      "lines": 358,
+      "imports": [
+        "zustand",
+        "../core/engineRuntime",
+        "./editorStore"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/modelingAppliedCutAutosave.test.ts",
+      "name": "modelingAppliedCutAutosave.test.ts",
+      "extension": ".ts",
+      "bytes": 3432,
+      "lines": 89,
+      "imports": [
+        "vitest",
+        "../domain/internalPaths",
+        "../domain/patternDocumentV3",
+        "../storage/opfs",
+        "./editorStore"
+      ],
+      "importCount": 5,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/modelingOperationsStore.test.ts",
+      "name": "modelingOperationsStore.test.ts",
+      "extension": ".ts",
+      "bytes": 12035,
+      "lines": 267,
+      "imports": [
+        "vitest",
+        "../domain/internalPaths",
+        "../domain/modelingOperations",
+        "../domain/patternDocumentV3",
+        "../storage/opfs",
+        "./editorStore",
+        "./internalPathEditorStore",
+        "./modelingOperationsStore"
+      ],
+      "importCount": 8,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/modelingOperationsStore.ts",
+      "name": "modelingOperationsStore.ts",
+      "extension": ".ts",
+      "bytes": 3089,
+      "lines": 107,
+      "imports": [
+        "zustand",
+        "./editorStore"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/state/sleeveSystemStore.test.ts",
+      "name": "sleeveSystemStore.test.ts",
+      "extension": ".ts",
+      "bytes": 5367,
+      "lines": 107,
+      "imports": [
+        "vitest",
+        "../domain/pattern",
+        "../domain/sleeveSystem",
+        "../patterns/templateCatalog",
+        "../testFixtures/parametricBodyFixtures",
+        "./editorStore"
+      ],
+      "importCount": 6,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/storage/emptyAutosave.test.ts",
+      "name": "emptyAutosave.test.ts",
+      "extension": ".ts",
+      "bytes": 1888,
+      "lines": 57,
+      "imports": [
+        "vitest",
+        "../domain/fabric",
+        "../domain/pattern",
+        "./opfs"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/storage/opfs.test.ts",
+      "name": "opfs.test.ts",
+      "extension": ".ts",
+      "bytes": 5503,
+      "lines": 173,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../domain/pattern",
+        "../domain/fabric",
+        "../domain/patternDocumentV3",
+        "./opfs"
+      ],
+      "importCount": 6,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/storage/opfs.ts",
+      "name": "opfs.ts",
+      "extension": ".ts",
+      "bytes": 9490,
+      "lines": 310,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/storage/patternProjectIO.test.ts",
+      "name": "patternProjectIO.test.ts",
+      "extension": ".ts",
+      "bytes": 1509,
+      "lines": 45,
+      "imports": [
+        "vitest"
+      ],
+      "importCount": 1,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/storage/patternProjectIO.ts",
+      "name": "patternProjectIO.ts",
+      "extension": ".ts",
+      "bytes": 1592,
+      "lines": 56,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "name": "styles.css",
+      "extension": ".css",
+      "bytes": 60137,
+      "lines": 2305,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/testFixtures/baselineGarments.test.ts",
+      "name": "baselineGarments.test.ts",
+      "extension": ".ts",
+      "bytes": 2518,
+      "lines": 70,
+      "imports": [
+        "vitest",
+        "../core/fallbackPatternEngine",
+        "../domain/pattern"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/testFixtures/baselineGarments.ts",
+      "name": "baselineGarments.ts",
+      "extension": ".ts",
+      "bytes": 11231,
+      "lines": 393,
+      "imports": [
+        "../domain/templateAssemblySeams"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/testFixtures/parametricBodyFixtures.ts",
+      "name": "parametricBodyFixtures.ts",
+      "extension": ".ts",
+      "bytes": 1880,
+      "lines": 70,
+      "imports": [
+        "../domain/pattern"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/testFixtures/patternDocumentFixtures.ts",
+      "name": "patternDocumentFixtures.ts",
+      "extension": ".ts",
+      "bytes": 1108,
+      "lines": 36,
+      "imports": [
+        "../domain/pattern",
+        "../domain/patternDocumentV3",
+        "./baselineGarments"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/AvatarVisual.test.ts",
+      "name": "AvatarVisual.test.ts",
+      "extension": ".ts",
+      "bytes": 1136,
+      "lines": 25,
+      "imports": [
+        "vitest",
+        "../avatar/AvatarParametricModel",
+        "../patterns/templateCatalog",
+        "./AvatarVisual"
+      ],
+      "importCount": 4,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/AvatarVisual.ts",
+      "name": "AvatarVisual.ts",
+      "extension": ".ts",
+      "bytes": 7751,
+      "lines": 147,
+      "imports": [
+        "three",
+        "../avatar/AvatarParametricModel",
+        "../avatar/AvatarParametricModel"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/disposeObjectTree.test.ts",
+      "name": "disposeObjectTree.test.ts",
+      "extension": ".ts",
+      "bytes": 1505,
+      "lines": 43,
+      "imports": [
+        "three",
+        "vitest",
+        "./disposeObjectTree"
+      ],
+      "importCount": 3,
+      "isTest": true,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/disposeObjectTree.ts",
+      "name": "disposeObjectTree.ts",
+      "extension": ".ts",
+      "bytes": 1391,
+      "lines": 47,
+      "imports": [
+        "three"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/GarmentViewport.tsx",
+      "name": "GarmentViewport.tsx",
+      "extension": ".tsx",
+      "bytes": 4941,
+      "lines": 126,
+      "imports": [
+        "react",
+        "../domain/pattern",
+        "./GlobalThreeViewport"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/viewport/GlobalThreeViewport.ts",
+      "name": "GlobalThreeViewport.ts",
+      "extension": ".ts",
+      "bytes": 11546,
+      "lines": 295,
+      "imports": [
+        "three",
+        "three/webgpu",
+        "three/addons/controls/OrbitControls.js",
+        "../domain/pattern",
+        "../avatar/AvatarParametricModel",
+        "../garment3d/SemanticAvatarArrangement",
+        "./AvatarVisual"
+      ],
+      "importCount": 7,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/wasm/loadPatternEngine.ts",
+      "name": "loadPatternEngine.ts",
+      "extension": ".ts",
+      "bytes": 2507,
+      "lines": 84,
+      "imports": [
+        "../core/fallbackPatternEngine"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "apps/web/src/workers/simulation.worker.ts",
+      "name": "simulation.worker.ts",
+      "extension": ".ts",
+      "bytes": 1036,
+      "lines": 48,
+      "imports": [
+        "../physics/xpbd"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "crates/pattern-core/Cargo.toml",
+      "name": "Cargo.toml",
+      "extension": ".toml",
+      "bytes": 393,
+      "lines": 19,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "crates/pattern-core/src/lib.rs",
+      "name": "lib.rs",
+      "extension": ".rs",
+      "bytes": 19943,
+      "lines": 644,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "infrastructure/nginx.conf",
+      "name": "nginx.conf",
+      "extension": ".conf",
+      "bytes": 363,
+      "lines": 15,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/apply-recovery-ghost-geometry.py",
+      "name": "apply-recovery-ghost-geometry.py",
+      "extension": ".py",
+      "bytes": 37485,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/apply-recovery-zero-workspace-references.py",
+      "name": "apply-recovery-zero-workspace-references.py",
+      "extension": ".py",
+      "bytes": 1051,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/apply-recovery-zero-workspace.py",
+      "name": "apply-recovery-zero-workspace.py",
+      "extension": ".py",
+      "bytes": 1775,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/build-wasm.mjs",
+      "name": "build-wasm.mjs",
+      "extension": ".mjs",
+      "bytes": 1422,
+      "lines": 56,
+      "imports": [
+        "node:child_process",
+        "node:url",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/check-env.ps1",
+      "name": "check-env.ps1",
+      "extension": ".ps1",
+      "bytes": 790,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/create-api.ps1",
+      "name": "create-api.ps1",
+      "extension": ".ps1",
+      "bytes": 1317,
+      "lines": null,
+      "imports": [],
+      "importCount": 0,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-assert-results.mjs",
+      "name": "phase0-assert-results.mjs",
+      "extension": ".mjs",
+      "bytes": 1133,
+      "lines": 42,
+      "imports": [
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-browser-audit.mjs",
+      "name": "phase0-browser-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 14246,
+      "lines": 414,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-bundle-report.mjs",
+      "name": "phase0-bundle-report.mjs",
+      "extension": ".mjs",
+      "bytes": 5213,
+      "lines": 142,
+      "imports": [
+        "node:zlib",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-interaction-audit.mjs",
+      "name": "phase0-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16638,
+      "lines": 489,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-run-browser-server.mjs",
+      "name": "phase0-run-browser-server.mjs",
+      "extension": ".mjs",
+      "bytes": 5202,
+      "lines": 189,
+      "imports": [
+        "node:child_process",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-run-command.mjs",
+      "name": "phase0-run-command.mjs",
+      "extension": ".mjs",
+      "bytes": 2861,
+      "lines": 110,
+      "imports": [
+        "node:child_process",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/phase0-source-inventory.mjs",
+      "name": "phase0-source-inventory.mjs",
+      "extension": ".mjs",
+      "bytes": 4619,
+      "lines": 151,
+      "imports": [
+        "node:child_process",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": true,
+      "todoCount": 6
+    },
+    {
+      "path": "scripts/prompt03-interaction-audit.mjs",
+      "name": "prompt03-interaction-audit.mjs",
+      "extension": ".mjs",
+      "bytes": 16750,
+      "lines": 348,
+      "imports": [
+        "playwright",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "importCount": 3,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/prompt09-browser-regression.mjs",
+      "name": "prompt09-browser-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 8723,
+      "lines": 204,
+      "imports": [
+        "playwright-core"
+      ],
+      "importCount": 1,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-curve-canvas-final-regression.mjs",
+      "name": "recovery-curve-canvas-final-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 15930,
+      "lines": 192,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-editor-core-blockers-visual.mjs",
+      "name": "recovery-editor-core-blockers-visual.mjs",
+      "extension": ".mjs",
+      "bytes": 11619,
+      "lines": 237,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-editor-core-live-regression.mjs",
+      "name": "recovery-editor-core-live-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 14252,
+      "lines": 211,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-editor-core-visual.mjs",
+      "name": "recovery-editor-core-visual.mjs",
+      "extension": ".mjs",
+      "bytes": 11644,
+      "lines": 274,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-empty-workspace-visual.mjs",
+      "name": "recovery-empty-workspace-visual.mjs",
+      "extension": ".mjs",
+      "bytes": 8542,
+      "lines": 174,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-modeling-operations-live-regression.mjs",
+      "name": "recovery-modeling-operations-live-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 14522,
+      "lines": 296,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    },
+    {
+      "path": "scripts/recovery-modeling-operations-mobile-regression.mjs",
+      "name": "recovery-modeling-operations-mobile-regression.mjs",
+      "extension": ".mjs",
+      "bytes": 10293,
+      "lines": 232,
+      "imports": [
+        "node:fs/promises",
+        "playwright-core"
+      ],
+      "importCount": 2,
+      "isTest": false,
+      "hasTemporaryCompatibility": false,
+      "todoCount": 0
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "afterSeams": {
+    "garmentId": "garment-empty-msrrdmbk",
+    "templateId": "blank",
+    "activePieceId": "piece-f75e4cb1-3ffc-4588-ae3f-b5f263643bcc",
+    "pieceSelectionActive": false,
+    "selectedPieceIds": [],
+    "selectedPointId": null,
+    "selectedEdgeId": null,
+    "selectedSeamId": null,
+    "seamFirstEdge": null,
+    "seamProposal": null,
+    "seamCount": 2,
+    "seams": [
+      {
+        "id": "seam-98edce39-da6b-447c-ba3f-e07d62222964",
+        "name": "Costura",
+        "direction": "opposite",
+        "active": true
+      },
+      {
+        "id": "seam-5dcd9931-7451-4043-916c-9060fd7c966f",
+        "name": "Costura",
+        "direction": "opposite",
+        "active": true
+      }
+    ],
+    "simulateVersion": 0,
+    "pieces": [
+      {
+        "id": "piece-96f3e2d4-853e-4edf-a171-31af1006050e",
+        "name": "RetÃ¢ngulo A",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": -70,
+        "yMm": 30,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      },
+      {
+        "id": "piece-f75e4cb1-3ffc-4588-ae3f-b5f263643bcc",
+        "name": "RetÃ¢ngulo B",
+        "pointCount": 4,
+        "dartCount": 0,
+        "cutQuantity": 1,
+        "cutOnFold": false,
+        "visible": true,
+        "locked": false,
+        "xMm": 0,
+        "yMm": 20,
+        "rotationDeg": 0,
+        "roles": [
+          "other",
+          "other",
+          "other",
+          "other"
+        ]
+      }
+    ]
+  },
+  "geometry": {
+    "spansM": {
+      "x": 0.09837016835808754,
+      "y": 0.019962310791015625,
+      "z": 0.020040225237607956
+    },
+    "expectedAxisM": 0.09855216012941502,
+    "expectedDiameterM": 0.020040224821371917,
+    "mappings": [
+      "seam-derived-tube",
+      "seam-derived-tube"
+    ],
+    "axes": [
+      [
+        1,
+        -7.349178971892655e-17,
+        0
+      ],
+      [
+        1,
+        -7.349178971892655e-17,
+        0
+      ]
+    ],
+    "pieceBounds": [
+      {
+        "widthMm": 98.55216012941501,
+        "heightMm": 33.246024859278876
+      },
+      {
+        "widthMm": 93.47185047339507,
+        "heightMm": 29.712198215830966
+      }
+    ]
+  },
+  "consoleErrors": []
+}

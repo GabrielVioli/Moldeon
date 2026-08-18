@@ -18,6 +18,7 @@ import {
   measurementProfileSnapshot,
   measurementProfileToBodyMeasurements,
   type MeasurementProfile,
+  type PatternMethodologyRecord,
 } from "../domain/parametricMeasurements";
 import {
   BASE_PATTERN_METADATA,
@@ -29,6 +30,7 @@ import {
   draftTrouserPattern,
   TROUSER_PATTERN_METADATA,
 } from "./trouserPatternDrafting";
+import { JACKET_PENDING_METHODOLOGY } from "./templateMethodology";
 
 export type PatternTemplateId =
   | "bodice-block"
@@ -46,11 +48,14 @@ export interface PatternTemplateSummary {
   description: string;
   pieces: string;
   status: "available" | "development";
+  visibility: "public" | "internal";
+  releaseStatus: "deferred" | "released";
   validationStatus: PatternValidationStatus;
   reviewNotes: string[];
   requiredMeasurements: string[];
   estimatedMeasurements: string[];
   formulaVersion: string;
+  methodology: PatternMethodologyRecord;
   instanceExpansion?: string[];
 }
 
@@ -94,9 +99,12 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Bloco de referência com frente e costas distintas.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["bodice-block"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["bodice-block"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["bodice-block"],
+    methodology: BASE_PATTERN_METADATA["bodice-block"].methodology,
     requiredMeasurements: ["busto", "cintura", "quadril", "ombro", "cava", "frente e costas"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "altura do quadril"],
   },
@@ -104,12 +112,15 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     id: "tshirt",
     name: "Camiseta básica",
     category: "Parte de cima",
-    description: "Corpo com folga confortável e manga curta.",
+    description: "Frente, costas e manga curta calculada pelas cavas reais.",
     pieces: "Frente, costas e manga",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["tshirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["tshirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["tshirt"],
+    methodology: BASE_PATTERN_METADATA.tshirt.methodology,
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps"],
   },
@@ -117,12 +128,15 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     id: "blouse",
     name: "Blusa básica",
     category: "Parte de cima",
-    description: "Base solta, decote mais aberto e manga longa.",
+    description: "Base solta e manga longa calculada pelas cavas reais.",
     pieces: "Frente, costas e manga",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["blouse"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["blouse"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["blouse"],
+    methodology: BASE_PATTERN_METADATA.blouse.methodology,
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "comprimento do tronco", "braço"],
     estimatedMeasurements: ["pescoço", "inclinação do ombro", "profundidade da cava", "bíceps", "punho"],
   },
@@ -133,9 +147,12 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base simples da cintura ao joelho.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["straight-skirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["straight-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-skirt"],
+    methodology: BASE_PATTERN_METADATA["straight-skirt"].methodology,
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
@@ -146,9 +163,12 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base curta com leve abertura na barra.",
     pieces: "Frente e costas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: BASE_PATTERN_METADATA["mini-skirt"].validationStatus,
     reviewNotes: BASE_PATTERN_METADATA["mini-skirt"].notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["mini-skirt"],
+    methodology: BASE_PATTERN_METADATA["mini-skirt"].methodology,
     requiredMeasurements: ["cintura", "quadril", "altura"],
     estimatedMeasurements: ["altura do quadril", "comprimento da saia"],
   },
@@ -159,9 +179,12 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Base paramétrica com frente, costas e ganchos construídos separadamente.",
     pieces: "2 definições editáveis · 4 instâncias físicas",
     status: "available",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: TROUSER_PATTERN_METADATA.validationStatus,
     reviewNotes: TROUSER_PATTERN_METADATA.notes,
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["straight-pants"],
+    methodology: TROUSER_PATTERN_METADATA.methodology,
     requiredMeasurements: ["cintura", "quadril", "gancho sentado", "coxa", "joelho", "entrepernas"],
     estimatedMeasurements: ["profundidade do gancho", "assento", "queda de cintura", "tornozelo"],
     instanceExpansion: [
@@ -176,13 +199,21 @@ export const PATTERN_TEMPLATES: readonly PatternTemplateSummary[] = [
     description: "Modelagem própria de casaco ainda em validação.",
     pieces: "Em desenvolvimento",
     status: "development",
+    visibility: "internal",
+    releaseStatus: "deferred",
     validationStatus: "experimental",
     reviewNotes: ["Indisponível até possuir bloco próprio e revisão manual."],
     formulaVersion: TEMPLATE_FORMULA_VERSIONS["basic-jacket"],
+    methodology: JACKET_PENDING_METHODOLOGY,
     requiredMeasurements: ["busto", "cintura", "quadril", "ombros", "braço"],
     estimatedMeasurements: ["pescoço", "cava", "folga estrutural"],
   },
 ] as const;
+
+export const PUBLIC_PATTERN_TEMPLATES: readonly PatternTemplateSummary[] =
+  PATTERN_TEMPLATES.filter(
+    (template) => template.visibility === "public" && template.releaseStatus === "released",
+  );
 
 export function createGarmentFromTemplate(
   templateId: PatternTemplateId,
@@ -236,6 +267,7 @@ export function createGarmentFromTemplate(
         defaultValues: snapshot.defaults,
         ...(parametricDraft ? {
           constructionSystem: parametricDraft.metadata.constructionSystem,
+          methodology: parametricDraft.metadata.methodology,
           validationStatus: parametricDraft.metadata.validationStatus,
           componentValidation: parametricDraft.metadata.componentStatus,
           requiredMeasurements: parametricDraft.metadata.requiredMeasurements,

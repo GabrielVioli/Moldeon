@@ -1,0 +1,64 @@
+.context-bar {
+  bottom: 64px;
+  max-height: min(46%, 270px);
+  overflow: auto;
+}
+
+.canvas-navigation {
+  z-index: 11;
+}
+
+.modeling-operation-group {
+  position: relative;
+}
+
+.modeling-operation-group > summary {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  list-style-position: inside;
+  white-space: nowrap;
+}
+
+.modeling-operation-group[open] > summary {
+  border-color: var(--accent);
+}
+
+.modeling-operation-group-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .context-bar {
+    bottom: 60px;
+    max-height: min(42%, 220px);
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .context-bar {
+    left: 6px;
+    right: 6px;
+    bottom: 54px;
+    max-width: none;
+    max-height: min(40%, 190px);
+    transform: none;
+  }
+}
+
+@media (max-height: 620px) {
+  .context-bar {
+    max-height: 180px;
+  }
+}
