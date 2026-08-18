@@ -25,7 +25,6 @@ import { loadAutosave, saveAutosave } from "./storage/opfs";
 import { useEditorStore } from "./state/editorStore";
 import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import { evaluateDressingPreflight, evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
-import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
 import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
 
@@ -116,7 +115,6 @@ export function App() {
   const isCompactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY);
   const eligibility = useMemo(() => evaluateGarment3DEligibility(garment), [garment]);
   const dressingPreflight = useMemo(() => evaluateDressingPreflight(garment), [garment]);
-  const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
   const openDressedViewport = useCallback((mode: "assembly" | "fitting") => {
@@ -480,11 +478,6 @@ export function App() {
     <div className="app-shell" aria-busy={!persistenceReady}>
       <Toolbar
         garmentName={garment.name}
-        onOpenSleeveWizard={() => setSleeveWizardOpen(true)}
-        onPrepareSleeveWizard={() => {
-          if (canAddSleeve) void loadSleeveWizard();
-        }}
-        canAddSleeve={canAddSleeve}
         onOpenFitting={() => setFittingOpen(true)}
         onPrepareFitting={() => {
           void loadFittingRoom();
