@@ -13,6 +13,7 @@ import type {
   GarmentAssemblyState,
   GlobalPointReference,
 } from "./GarmentAssembly";
+import { orderCompositeEdgeRangesByContinuity } from "./CompositeEdgeRangeOrder";
 
 const METERS_TO_MM = 1_000;
 const EPSILON = 1e-8;
@@ -320,10 +321,10 @@ function buildAudit(
       (id) => state.instances.find((instance) => instance.id === id)?.sourcePatternId,
     ).filter(Boolean) as string[]);
     const rangesA = seams.length > 0
-      ? seams.flatMap((seam) => seamSideRanges(seam, "first")).map(cloneRange)
+      ? seams.flatMap((seam) => orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "first"))).map(cloneRange)
       : uniqueRanges(constraints.map((constraint) => constraint.rangeA).filter(isEdgeRange));
     const rangesB = seams.length > 0
-      ? seams.flatMap((seam) => seamSideRanges(seam, "second")).map(cloneRange)
+      ? seams.flatMap((seam) => orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "second"))).map(cloneRange)
       : uniqueRanges(constraints.map((constraint) => constraint.rangeB).filter(isEdgeRange));
     const materialLengthAMm = rangesA.length > 0 ? edgeRangeSequenceLength(pieces, rangesA) : 0;
     const materialLengthBMm = rangesB.length > 0 ? edgeRangeSequenceLength(pieces, rangesB) : 0;

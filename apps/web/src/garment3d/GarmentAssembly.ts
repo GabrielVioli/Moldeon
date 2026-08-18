@@ -23,6 +23,7 @@ import {
   refinePanelTopology,
 } from "./PanelRefinement";
 import type { PanelEdgePath, PanelVertexSourceMapping } from "./types";
+import { orderCompositeEdgeRangesByContinuity } from "./CompositeEdgeRangeOrder";
 
 export interface GlobalPointReference {
   particleIndices: number[];
@@ -432,8 +433,9 @@ function buildGlobalStitchConstraints(
 
   for (const seam of seams) {
     if (seam.active === false) continue;
-    const firstRanges = seamSideRanges(seam, "first");
-    const secondRanges = seamSideRanges(seam, "second");
+    const pieces = [...new Map(instances.map((instance) => [instance.pieceId, instance.topology.sourcePiece])).values()];
+    const firstRanges = orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "first"));
+    const secondRanges = orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "second"));
     const hasDistinctPhysicalCopyBinding = (seam.physicalBindings ?? []).some((binding) =>
       binding.first.some((first) => binding.second.some((second) =>
         first.patternId === second.patternId && first.panelInstanceId !== second.panelInstanceId,
@@ -443,7 +445,6 @@ function buildGlobalStitchConstraints(
       warnings.push(`${seam.name ?? seam.id}: a mesma faixa material exige cópias físicas distintas explícitas.`);
       continue;
     }
-    const pieces = [...new Map(instances.map((instance) => [instance.pieceId, instance.topology.sourcePiece])).values()];
     const firstLength = edgeRangeSequenceLength(pieces, firstRanges);
     const secondLength = edgeRangeSequenceLength(pieces, secondRanges);
     if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
