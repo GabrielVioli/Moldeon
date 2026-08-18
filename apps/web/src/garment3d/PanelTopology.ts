@@ -46,6 +46,12 @@ interface PendingEdgePath {
   edge: PatternEdge;
   startIndex: number;
   sampledPointCount: number;
+  reversed: boolean;
+}
+
+interface OrderedEdgeTraversal {
+  edge: PatternEdge;
+  reversed: boolean;
 }
 
 const EDGE_SAMPLE_SPACING_MM = 20;
@@ -76,7 +82,7 @@ export function buildPanelTopology(
     );
   }
 
-  const orderedEdges = getOrderedPatternEdges(piece);
+  const orderedEdges = getOrderedPatternEdgeTraversals(piece);
 
   if (orderedEdges.length < 3) {
     throw new Error(
@@ -88,7 +94,8 @@ export function buildPanelTopology(
   const vertexSources: PanelVertexSourceMapping[] = [];
   const pendingPaths: PendingEdgePath[] = [];
 
-  for (const edge of orderedEdges) {
+  for (const traversal of orderedEdges) {
+    const { edge, reversed } = traversal;
     const start = piece.points.find(
       (point) => point.id === edge.startPointId,
     );
@@ -102,7 +109,8 @@ export function buildPanelTopology(
       );
     }
 
-    const samples = sampleEdgeWithSpacing(start, end);
+    const canonicalSamples = sampleEdgeWithSpacing(start, end);
+    const samples = reversed ? [...canonicalSamples].reverse() : canonicalSamples;
 
     if (samples.length < 2) {
       throw new Error(
@@ -113,17 +121,23 @@ export function buildPanelTopology(
     const startIndex = contour.length;
 
     /*
-     * O último ponto não é adicionado aqui porque ele também é o primeiro
-     * ponto da próxima borda. Isso evita coordenadas duplicadas.
+     * Triangulation needs one continuous contour walk, but EdgeRange.t remains
+     * canonical in the authored segment direction. A contour is therefore
+     * allowed to traverse a segment backwards without changing edgeId/t.
      */
     samples.slice(0, -1).forEach((sample, sampleIndex) => {
       const vertexIndex = contour.length;
-      const t = sampleIndex / Math.max(1, samples.length - 1);
+      const traversalT = sampleIndex / Math.max(1, samples.length - 1);
+      const t = reversed ? 1 - traversalT : traversalT;
       contour.push(sample);
       vertexSources.push({
         vertexIndex,
         sourcePatternId: piece.id,
-        ...(sampleIndex === 0 ? { sourcePointId: start.id } : {}),
+        ...(t <= PARAMETER_EPSILON
+          ? { sourcePointId: start.id }
+          : t >= 1 - PARAMETER_EPSILON
+            ? { sourcePointId: end.id }
+            : {}),
         sourceSegmentId: edge.id,
         edgeId: edge.id,
         t,
@@ -136,6 +150,7 @@ export function buildPanelTopology(
       edge,
       startIndex,
       sampledPointCount: samples.length,
+      reversed,
     });
   }
 
@@ -194,10 +209,13 @@ export function buildPanelTopology(
       }
     }
 
+    const canonicalVertexIndices = pending.reversed
+      ? [...vertexIndices].reverse()
+      : vertexIndices;
     const path = createPanelEdgePath(
       piece.id,
       pending.edge.id,
-      vertexIndices,
+      canonicalVertexIndices,
       positions2DMm,
     );
 
@@ -369,9 +387,9 @@ export function resampleEdgeVertices(
   return result;
 }
 
-function getOrderedPatternEdges(
+function getOrderedPatternEdgeTraversals(
   piece: PatternPiece,
-): PatternEdge[] {
+): OrderedEdgeTraversal[] {
   const availableEdges = getPatternEdges(piece);
   const edgeById = new Map(
     availableEdges.map((edge) => [edge.id, edge]),
@@ -381,9 +399,8 @@ function getOrderedPatternEdges(
     piece.contours?.find((contour) => contour.closed) ??
     piece.contours?.[0];
 
-  if (!outerContour?.segmentIds.length) {
-    return availableEdges;
-  }
+  const fallback = () => availableEdges.map((edge) => ({ edge, reversed: false }));
+  if (!outerContour?.segmentIds.length) return fallback();
 
   const orderedEdges = outerContour.segmentIds
     .map((segmentId) => edgeById.get(segmentId))
@@ -393,11 +410,42 @@ function getOrderedPatternEdges(
    * Em projetos legados incompletos, é mais seguro usar getPatternEdges
    * do que retornar apenas parte do contorno.
    */
-  if (orderedEdges.length !== availableEdges.length) {
-    return availableEdges;
+  if (orderedEdges.length !== availableEdges.length) return fallback();
+
+  // `segmentIds` defines contour order, not necessarily the canonical material
+  // direction of each segment. Try both orientations for the first edge and
+  // derive every subsequent traversal from endpoint connectivity. Prefer the
+  // authored first-edge direction when both closed walks are equivalent.
+  return orientClosedContour(orderedEdges, false)
+    ?? orientClosedContour(orderedEdges, true)
+    ?? fallback();
+}
+
+function orientClosedContour(
+  edges: readonly PatternEdge[],
+  reverseFirst: boolean,
+): OrderedEdgeTraversal[] | null {
+  if (edges.length === 0) return [];
+  const result: OrderedEdgeTraversal[] = [{ edge: edges[0], reversed: reverseFirst }];
+  const firstStart = reverseFirst ? edges[0].endPointId : edges[0].startPointId;
+  let currentEnd = reverseFirst ? edges[0].startPointId : edges[0].endPointId;
+
+  for (let index = 1; index < edges.length; index += 1) {
+    const edge = edges[index];
+    if (edge.startPointId === currentEnd) {
+      result.push({ edge, reversed: false });
+      currentEnd = edge.endPointId;
+      continue;
+    }
+    if (edge.endPointId === currentEnd) {
+      result.push({ edge, reversed: true });
+      currentEnd = edge.startPointId;
+      continue;
+    }
+    return null;
   }
 
-  return orderedEdges;
+  return currentEnd === firstStart ? result : null;
 }
 
 function sampleEdgeWithSpacing(
