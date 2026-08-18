@@ -1,5 +1,5 @@
 import type { BodyAnchorId, BodyMeasurements, BodyType, PatternPreviewPlacement, PreviewBodySide, PreviewRegion, PreviewSurface } from "../domain/pattern";
-import { createMeasurementProfile, measurementProfileToBodyMeasurements } from "../domain/parametricMeasurements";
+import { createMeasurementProfile, measurementProfileToBodyMeasurements, type MeasurementOrigin } from "../domain/parametricMeasurements";
 
 export type AvatarVector3 = [number, number, number];
 
@@ -72,6 +72,7 @@ export interface AvatarParametricModel {
   version: "avatar-parametric@1";
   bodyType: BodyType;
   measurements: AvatarResolvedMeasurements;
+  measurementOrigins?: Record<string, MeasurementOrigin>;
   landmarks: AvatarLandmarks;
   joints: AvatarJoints;
   torsoStations: AvatarTorsoStation[];
@@ -84,7 +85,9 @@ export function buildAvatarParametricModel(
   input: BodyMeasurements,
   bodyType: BodyType,
 ): AvatarParametricModel {
-  const resolved = measurementProfileToBodyMeasurements(createMeasurementProfile(input, bodyType));
+  const measurementProfile = createMeasurementProfile(input, bodyType);
+  const resolved = measurementProfileToBodyMeasurements(measurementProfile);
+  const measurementOrigins = Object.fromEntries(Object.entries(measurementProfile.entries).map(([key, entry]) => [key, entry.origin])) as Record<string, MeasurementOrigin>;
   const measurements: AvatarResolvedMeasurements = {
     heightMm: positive(resolved.heightMm, 1700),
     bustMm: positive(resolved.bustMm, 900),
@@ -203,6 +206,7 @@ export function buildAvatarParametricModel(
   const anchors = createAnchors({
     bodyType,
     measurements,
+    measurementOrigins,
     landmarks,
     joints,
     torsoStations,

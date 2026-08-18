@@ -39,6 +39,9 @@ export const GarmentViewport = memo(function GarmentViewport({
     gravityScale: 1,
     cadence: 1,
     autoPauseSteps: 0,
+    bodyCollisionEnabled: true,
+    showBodyColliders: false,
+    showProceduralAvatar: true,
   });
   const [wireframe, setWireframe] = useState(false);
   const [telemetry, setTelemetry] = useState<SimulationDevTelemetry | null>(null);
@@ -151,11 +154,13 @@ export const GarmentViewport = memo(function GarmentViewport({
         </div>
       ) : null}
       <div className="viewport-label">
-        {approvedAvatar
-          ? `Manequim aprovado · ${approvedAvatar.assetId}`
-          : AVATAR_NOT_CONFIGURED_MESSAGE}
+        {import.meta.env.DEV
+          ? `Manequim procedural DEV · ${assemblyInput.document.body.type}`
+          : approvedAvatar
+            ? `Manequim aprovado · ${approvedAvatar.assetId}`
+            : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
-      <div className="viewport-simulation-controls" aria-label="Controles da simula\u00e7\u00e3o">
+      <div className="viewport-simulation-controls" aria-label="Controles da simulação">
         {simulationState === "running" ? (
           <button type="button" onClick={() => {
             viewportRef.current?.pauseSimulation();
@@ -221,6 +226,30 @@ export const GarmentViewport = memo(function GarmentViewport({
           <label className="viewport-physics-toggle">
             <input
               type="checkbox"
+              checked={devSettings.bodyCollisionEnabled}
+              onChange={(event) => setDevSettings((current) => ({ ...current, bodyCollisionEnabled: event.target.checked }))}
+            />
+            Body collision
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
+              checked={devSettings.showBodyColliders}
+              onChange={(event) => setDevSettings((current) => ({ ...current, showBodyColliders: event.target.checked }))}
+            />
+            Show body colliders
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
+              checked={devSettings.showProceduralAvatar}
+              onChange={(event) => setDevSettings((current) => ({ ...current, showProceduralAvatar: event.target.checked }))}
+            />
+            Show procedural avatar
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
               checked={wireframe}
               onChange={(event) => setWireframe(event.target.checked)}
             />
@@ -239,6 +268,14 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>shear</dt><dd>{telemetry?.shearConstraintCount ?? 0}</dd>
             <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
             <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
+            <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
+            <dt>Body colliders</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
+            <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
+            <dt>Max penetration mm</dt><dd>{formatMetric((telemetry?.maximumBodyPenetrationM ?? 0) * 1000)}</dd>
+            <dt>Max body correction mm</dt><dd>{formatMetric((telemetry?.maximumBodyCorrectionM ?? 0) * 1000)}</dd>
+            <dt>Body collision ms</dt><dd>{formatMetric(telemetry?.bodyCollisionMs)}</dd>
+            <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
+            <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
             <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
             <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
           </dl>

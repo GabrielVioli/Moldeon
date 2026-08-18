@@ -10,6 +10,7 @@ import {
   auditAdapterSeamResiduals,
   type AdapterSeamResidualAudit,
 } from "../garment3d/InitialSeamResidual";
+import type { PackedBodyColliders } from "./bodyCollision";
 import {
   DEFAULT_XPBD_CONFIG,
   XPBD_MISSING_PARTICLE,
@@ -43,6 +44,13 @@ export interface XpbdInitializationData {
   seamGroupIds: string[];
   pinIndices: Uint32Array;
   pinTargets: Float32Array;
+  bodyColliderKinds?: Uint8Array;
+  bodyColliderData?: Float32Array;
+  bodyColliderRegions?: string[];
+  particleHalfThicknessM?: Float32Array;
+  particleFriction?: Float32Array;
+  bodyCollisionEnabled?: boolean;
+  bodyContactSkinM?: number;
   config: XpbdSolverConfig;
 }
 
@@ -75,6 +83,9 @@ export interface XpbdTopologyDiagnostics {
 export interface GarmentXpbdAdapterOptions {
   pinAssemblyAnchors?: boolean;
   config?: Partial<XpbdSolverConfig>;
+  bodyColliders?: PackedBodyColliders;
+  bodyCollisionEnabled?: boolean;
+  bodyContactSkinM?: number;
 }
 
 interface EdgeRecord {
@@ -112,6 +123,8 @@ export function buildXpbdInitialization(
   const shearRestCosines: number[] = [];
   const shearCompliances: number[] = [];
   const inverseMasses = new Float32Array(particleCount);
+  const particleHalfThicknessM = new Float32Array(particleCount);
+  const particleFriction = new Float32Array(particleCount);
   const particleMasses = new Float64Array(particleCount);
   const fabricById = new Map(garment.fabrics.map((fabric) => [fabric.id, fabric]));
   const pieceById = new Map(garment.pieces.map((piece) => [piece.id, piece]));
@@ -129,6 +142,8 @@ export function buildXpbdInitialization(
       const global = instance.particleStart + local;
       materialCoordinates[global * 2] = topology.positions2DMm[local * 2] * METERS_PER_MM;
       materialCoordinates[global * 2 + 1] = topology.positions2DMm[local * 2 + 1] * METERS_PER_MM;
+      particleHalfThicknessM[global] = Math.max(0, physics.thicknessMm) * METERS_PER_MM * 0.5;
+      particleFriction[global] = Math.max(0, physics.friction);
     }
 
     for (let offset = 0; offset < topology.triangles.length; offset += 3) {
@@ -251,6 +266,8 @@ export function buildXpbdInitialization(
       `Seam mapping inválido na revisão ${revision}: ${seamResidualAudit.invariantErrors.join(" | ")}`,
     );
   }
+  const bodyColliders = options.bodyColliders ?? { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] };
+  const bodyContactSkinM = options.bodyContactSkinM ?? 0.0004;
   return {
     revision,
     topologyDiagnostics,
@@ -278,6 +295,13 @@ export function buildXpbdInitialization(
     seamGroupIds,
     pinIndices: Uint32Array.from(pinIndices),
     pinTargets: Float32Array.from(pinTargets),
+    bodyColliderKinds: new Uint8Array(bodyColliders.kinds),
+    bodyColliderData: new Float32Array(bodyColliders.data),
+    bodyColliderRegions: [...bodyColliders.regions],
+    particleHalfThicknessM,
+    particleFriction,
+    bodyCollisionEnabled: options.bodyCollisionEnabled ?? bodyColliders.kinds.length > 0,
+    bodyContactSkinM,
     config,
   };
 }
@@ -365,6 +389,10 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
     data.seamRelaxations.buffer,
     data.pinIndices.buffer,
     data.pinTargets.buffer,
+    ...(data.bodyColliderKinds ? [data.bodyColliderKinds.buffer] : []),
+    ...(data.bodyColliderData ? [data.bodyColliderData.buffer] : []),
+    ...(data.particleHalfThicknessM ? [data.particleHalfThicknessM.buffer] : []),
+    ...(data.particleFriction ? [data.particleFriction.buffer] : []),
   ];
 }
 

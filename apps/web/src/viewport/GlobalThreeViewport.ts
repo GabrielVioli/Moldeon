@@ -6,6 +6,12 @@ import {
   AVATAR_NOT_CONFIGURED_MESSAGE,
 } from "../avatar/ApprovedAvatarAsset";
 import { loadApprovedAvatar } from "../avatar/ApprovedAvatarLoader";
+import { buildAvatarParametricModel, type AvatarParametricModel } from "../avatar/AvatarParametricModel";
+import { buildAvatarCollisionModel } from "../avatar/AvatarCollisionModel";
+import { createAvatarVisual } from "./AvatarVisual";
+import { createAvatarCollisionDebugVisual } from "./AvatarCollisionDebugVisual";
+import { packAvatarCollisionModel, type SimulationBodyTransform } from "../physics/bodyCollision";
+import { resolveSimulationBodyRegistration, type BodyRegistrationStatus } from "../physics/BodyCollisionRegistration";
 import type { BodyType } from "../domain/pattern";
 import {
   buildGarmentAssemblyMeshes,
@@ -33,9 +39,13 @@ export interface SimulationDevSettings {
   gravityScale: 0 | 0.25 | 1;
   cadence: XpbdSimulationCadence;
   autoPauseSteps: XpbdAutoPauseSteps;
+  bodyCollisionEnabled: boolean;
+  showBodyColliders: boolean;
+  showProceduralAvatar: boolean;
 }
 export interface SimulationDevTelemetry extends XpbdWorkerDiagnostics {
   approximateFps: number;
+  bodyRegistrationStatus: BodyRegistrationStatus;
 }
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
@@ -51,6 +61,8 @@ export class ThreeViewport {
   private readonly controls: OrbitControls;
   private readonly garmentGroup = new THREE.Group();
   private readonly avatarGroup = new THREE.Group();
+  private readonly proceduralAvatarGroup = new THREE.Group();
+  private readonly bodyColliderDebugGroup = new THREE.Group();
   private readonly resizeObserver: ResizeObserver;
   private readonly profile: PerformanceProfile;
   private readonly renderer: ViewportRenderer;
@@ -74,7 +86,10 @@ export class ThreeViewport {
   private framesApplied = 0;
   private framesDiscarded = 0;
   private baseGravity: [number, number, number] = [0, -9.81, 0];
-  private devSettings: SimulationDevSettings = { gravityScale: 1, cadence: 1, autoPauseSteps: 0 };
+  private devSettings: SimulationDevSettings = { gravityScale: 1, cadence: 1, autoPauseSteps: 0, bodyCollisionEnabled: true, showBodyColliders: false, showProceduralAvatar: true };
+  private bodyRegistrationStatus: BodyRegistrationStatus = "body-placement-required";
+  private currentAvatarModel: AvatarParametricModel | null = null;
+  private currentBodyTransform: SimulationBodyTransform = { translation: [0, 0, 0], rotation: [0, 0, 0, 1] };
   private wireframeEnabled = false;
   private approximateFps = 0;
   private lastAppliedFrameAt = 0;
@@ -150,7 +165,11 @@ export class ThreeViewport {
     this.avatarGroup.name = "avatar-root";
     this.garmentGroup.name = "garment-root";
     this.scene.add(createLights());
+    this.proceduralAvatarGroup.name = "avatar-procedural-dev-root";
+    this.bodyColliderDebugGroup.name = "body-collider-debug-root";
     this.scene.add(this.avatarGroup);
+    this.scene.add(this.proceduralAvatarGroup);
+    this.scene.add(this.bodyColliderDebugGroup);
     this.scene.add(this.garmentGroup);
     this.scene.add(createFloor(profile.shadows));
 
@@ -194,6 +213,8 @@ export class ThreeViewport {
 
   updateGarment(input: ResolvedAssemblyInput): string[] {
     const garment = input.garmentProjection;
+    const avatarModel = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
+    this.currentAvatarModel = avatarModel;
     const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);
     const settings = input.document.simulationSettings;
     this.baseGravity = settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number];
@@ -231,7 +252,20 @@ export class ThreeViewport {
       this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
       this.host.dataset.assemblyWarnings = JSON.stringify(response.warnings);
 
+      const registration = resolveSimulationBodyRegistration(state, avatarModel);
+      this.bodyRegistrationStatus = registration.status;
+      this.currentBodyTransform = registration.transform;
+      const collisionModel = buildAvatarCollisionModel(avatarModel);
+      const packedColliders = registration.status === "registered"
+        ? packAvatarCollisionModel(collisionModel, registration.transform)
+        : { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] as string[] };
+      this.host.dataset.bodyRegistration = JSON.stringify(registration);
+      this.host.dataset.avatarMeasurementOrigins = JSON.stringify(avatarModel.measurementOrigins ?? {});
+      this.host.dataset.bodyColliderCount = String(collisionModel.proxies.length);
+      if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, collisionModel, registration.transform);
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
+        bodyColliders: packedColliders,
+        bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
         config: {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
@@ -310,7 +344,7 @@ export class ThreeViewport {
       console.error("Assembly Worker:", error);
     });
 
-    return avatarConfiguration.warning ? [avatarConfiguration.warning] : [];
+    return import.meta.env.DEV ? [] : avatarConfiguration.warning ? [avatarConfiguration.warning] : [];
   }
 
   dress(): void {
@@ -398,6 +432,7 @@ export class ThreeViewport {
     }
     this.clearGarment();
     this.clearAvatar();
+    this.clearDevBodyVisuals();
     disposeObject(this.scene);
     this.scene.clear();
     if (this.renderer instanceof THREE.WebGLRenderer) {
@@ -416,6 +451,9 @@ export class ThreeViewport {
     delete this.host.dataset.simulationDiagnostics;
     delete this.host.dataset.simulationDevSettings;
     delete this.host.dataset.initialSeamResidualAudit;
+    delete this.host.dataset.bodyRegistration;
+    delete this.host.dataset.avatarMeasurementOrigins;
+    delete this.host.dataset.bodyColliderCount;
   }
 
   private frameDressedScene(): void {
@@ -501,6 +539,38 @@ export class ThreeViewport {
   private clearAvatar(): void {
     disposeObject(this.avatarGroup);
     this.avatarGroup.clear();
+  }
+
+  private clearDevBodyVisuals(): void {
+    disposeObject(this.proceduralAvatarGroup);
+    disposeObject(this.bodyColliderDebugGroup);
+    this.proceduralAvatarGroup.clear();
+    this.bodyColliderDebugGroup.clear();
+  }
+
+  private configureDevBodyVisuals(
+    avatarModel: AvatarParametricModel,
+    collisionModel: ReturnType<typeof buildAvatarCollisionModel>,
+    transform: SimulationBodyTransform,
+  ): void {
+    this.clearDevBodyVisuals();
+    const visual = createAvatarVisual(avatarModel, { radialSegments: 18, castShadow: false, receiveShadow: false });
+    visual.position.set(...transform.translation);
+    visual.quaternion.set(...transform.rotation);
+    this.proceduralAvatarGroup.add(visual);
+    this.bodyColliderDebugGroup.add(createAvatarCollisionDebugVisual(collisionModel, transform));
+    this.proceduralAvatarGroup.visible = this.devSettings.showProceduralAvatar;
+    this.bodyColliderDebugGroup.visible = this.devSettings.showBodyColliders;
+    this.host.dataset.proceduralAvatarVisible = String(this.proceduralAvatarGroup.visible);
+    this.host.dataset.bodyCollidersVisible = String(this.bodyColliderDebugGroup.visible);
+  }
+
+  private applyDevBodyVisibility(): void {
+    this.proceduralAvatarGroup.visible = this.devSettings.showProceduralAvatar;
+    this.bodyColliderDebugGroup.visible = this.devSettings.showBodyColliders;
+    this.host.dataset.proceduralAvatarVisible = String(this.proceduralAvatarGroup.visible);
+    this.host.dataset.bodyCollidersVisible = String(this.bodyColliderDebugGroup.visible);
+    this.requestRender();
   }
 
   private configureApprovedAvatar(
@@ -642,7 +712,7 @@ export class ThreeViewport {
 
   private writeSimulationDiagnostics(diagnostics: XpbdWorkerDiagnostics): void {
     this.host.dataset.simulationDiagnostics = JSON.stringify(diagnostics);
-    this.onSimulationDiagnosticsChange?.({ ...diagnostics, approximateFps: this.approximateFps });
+    this.onSimulationDiagnosticsChange?.({ ...diagnostics, approximateFps: this.approximateFps, bodyRegistrationStatus: this.bodyRegistrationStatus });
   }
 
   private scaledGravity(): [number, number, number] {
@@ -654,7 +724,9 @@ export class ThreeViewport {
       gravity: this.scaledGravity(),
       cadence: this.devSettings.cadence,
       autoPauseSteps: this.devSettings.autoPauseSteps,
+      bodyCollisionEnabled: this.devSettings.bodyCollisionEnabled && this.bodyRegistrationStatus === "registered",
     });
+    this.applyDevBodyVisibility();
   }
 
   private applyWireframe(): void {

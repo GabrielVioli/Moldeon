@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 
-import { createXpbdState, measureXpbdDiagnostics, resetXpbdState, stepXpbd, type XpbdState } from "../physics/xpbd";
+import { measureXpbdDiagnostics, resetXpbdState, stepXpbd, type XpbdState } from "../physics/xpbd";
 import type { XpbdInitializationData } from "../physics/GarmentXpbdAdapter";
+import { createXpbdWorkerState } from "../physics/XpbdWorkerState";
 import type {
   XpbdAutoPauseSteps,
   XpbdSimulationCadence,
@@ -75,11 +76,20 @@ function handleRequest(request: XpbdWorkerRequest): void {
       if (request.shearCompliances.length === state.shears.compliances.length) {
         state.shears.compliances.set(request.shearCompliances);
       }
+      if (request.particleHalfThicknessM?.length === state.body.particleHalfThicknessM.length) {
+        state.body.particleHalfThicknessM.set(request.particleHalfThicknessM);
+      }
+      if (request.particleFriction?.length === state.body.particleFriction.length) {
+        state.body.particleFriction.set(request.particleFriction);
+      }
       state.config = { ...state.config, ...request.config };
       return;
     case "configureDev":
       if (!state || request.generation !== generation) return;
       state.config = { ...state.config, gravity: request.gravity };
+      if (request.bodyCollisionEnabled !== undefined) {
+        state.body.enabled = request.bodyCollisionEnabled;
+      }
       cadence = request.cadence;
       autoPauseSteps = request.autoPauseSteps;
       if (running) {
@@ -161,42 +171,10 @@ function initialize(payload: XpbdInitializationData, nextGeneration: number, nex
   epoch = nextEpoch;
   commandId = nextCommandId;
   sequence = 0;
-  state = createXpbdState({
-    positions: payload.positions,
-    previousPositions: payload.previousPositions,
-    predictedPositions: payload.predictedPositions,
-    velocities: payload.velocities,
-    inverseMasses: payload.inverseMasses,
-    restPositions: payload.restPositions,
-    materialCoordinates: payload.materialCoordinates,
-    triangles: payload.triangles,
-    distances: {
-      indices: payload.distanceIndices,
-      restLengths: payload.distanceRestLengths,
-      compliances: payload.distanceCompliances,
-      lambdas: new Float32Array(payload.distanceRestLengths.length),
-      kinds: payload.distanceKinds,
-    },
-    shears: {
-      indices: payload.shearIndices,
-      restCosines: payload.shearRestCosines,
-      compliances: payload.shearCompliances,
-      lambdas: new Float32Array(payload.shearRestCosines.length),
-    },
-    seams: {
-      indices: payload.seamIndices,
-      weights: payload.seamWeights,
-      restDistances: payload.seamRestDistances,
-      compliances: payload.seamCompliances,
-      relaxations: payload.seamRelaxations,
-      lambdas: new Float32Array(payload.seamRestDistances.length),
-      seamGroupIds: payload.seamGroupIds,
-    },
-    pins: { indices: payload.pinIndices, targets: payload.pinTargets },
-    config: payload.config,
-  });
+  state = createXpbdWorkerState(payload);
   allocateOutputBuffers();
   lastPhysicsStepMs = 0;
+  lastWorkerStepTotalMs = 0;
   post({ type: "ready", revision, generation, epoch, diagnostics: currentDiagnostics() });
   postState();
 }
@@ -223,7 +201,7 @@ function tick(scheduledEpoch: number): void {
 }
 
 function performOneStep(): XpbdWorkerDiagnostics {
-  if (!state) throw new Error("SimulaÃ§Ã£o XPBD nÃ£o inicializada.");
+  if (!state) throw new Error("Simulação XPBD não inicializada.");
   const startedAt = performance.now();
   stepXpbd(state);
   lastPhysicsStepMs = performance.now() - startedAt;
@@ -232,7 +210,7 @@ function performOneStep(): XpbdWorkerDiagnostics {
 }
 
 function currentDiagnostics(substeps = 0): XpbdWorkerDiagnostics {
-  if (!state) throw new Error("SimulaÃ§Ã£o XPBD nÃ£o inicializada.");
+  if (!state) throw new Error("Simulação XPBD não inicializada.");
   return { ...measureXpbdDiagnostics(state, substeps), physicsStepMs: lastPhysicsStepMs, workerStepTotalMs: lastWorkerStepTotalMs };
 }
 

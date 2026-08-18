@@ -1,3 +1,5 @@
+import { applyBodyContactVelocities, createBodyCollisionRuntimeState, finalizeBodyContactDiagnostics, resetBodyContactStep, solveBodyCollisions, type BodyCollisionRuntimeState } from "./bodyCollision";
+
 export const XPBD_MISSING_PARTICLE = 0xffffffff;
 
 export interface XpbdDistanceConstraints {
@@ -53,6 +55,7 @@ export interface XpbdProfileTimings {
   velocityUpdateMs: number;
   validationMs: number;
   solverStepTotalMs: number;
+  bodyCollisionMs: number;
 }
 
 export interface XpbdState {
@@ -68,6 +71,7 @@ export interface XpbdState {
   shears: XpbdShearConstraints;
   seams: XpbdSeamConstraints;
   pins: XpbdPinConstraints;
+  body: BodyCollisionRuntimeState;
   /** Trust region por partícula derivado da menor aresta estrutural local. */
   correctionLimits: Float32Array;
   stablePositions: Float32Array;
@@ -101,6 +105,14 @@ export interface XpbdStepDiagnostics {
   maximumPositionMagnitude: number;
   maximumVelocityMagnitude: number;
   maximumCorrectionApplied: number;
+  bodyColliderCount?: number;
+  bodyContactCount?: number;
+  bodyContactsByRegion?: Record<string, number>;
+  maximumBodyPenetrationM?: number;
+  maximumBodyCorrectionM?: number;
+  frictionContactCount?: number;
+  sweptContactCount?: number;
+  bodyCollisionEnabled?: boolean;
   invalid: boolean;
   droppedTimeSeconds: number;
   integrationMs?: number;
@@ -111,6 +123,7 @@ export interface XpbdStepDiagnostics {
   velocityUpdateMs?: number;
   validationMs?: number;
   solverStepTotalMs?: number;
+  bodyCollisionMs?: number;
   iterations?: number;
   maximumSubsteps?: number;
 }
@@ -130,11 +143,13 @@ export const DEFAULT_XPBD_CONFIG: XpbdSolverConfig = {
 const EPSILON = 1e-9;
 
 export function createXpbdState(
-  input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile">,
+  input: Omit<XpbdState, "body" | "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile"> & { body?: BodyCollisionRuntimeState },
 ): XpbdState {
-  validateStateShape(input);
+  const body = input.body ?? createBodyCollisionRuntimeState({ kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] }, new Float32Array(input.positions.length / 3), new Float32Array(input.positions.length / 3), false);
+  validateStateShape({ ...input, body });
   return {
     ...input,
+    body,
     correctionLimits: buildParticleCorrectionLimits(
       input.positions.length / 3,
       input.distances,
@@ -145,7 +160,7 @@ export function createXpbdState(
     accumulator: 0,
     stepCount: 0,
     invalid: false,
-    profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0 },
+    profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0 },
   };
 }
 
@@ -176,7 +191,8 @@ export function advanceXpbd(state: XpbdState, frameDeltaSeconds: number): XpbdSt
 export function stepXpbd(state: XpbdState): void {
   const stepStarted = performance.now();
   const profile = state.profile;
-  profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0;
+  profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0; profile.bodyCollisionMs = 0;
+  resetBodyContactStep(state.body);
   const dt = state.config.fixedTimeStep;
   if (!Number.isFinite(dt) || dt <= 0) throw new RangeError("O passo da simula\u00e7\u00e3o precisa ser positivo e finito.");
 
@@ -192,11 +208,16 @@ export function stepXpbd(state: XpbdState): void {
     phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
+    phaseStarted = performance.now();
+    solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: iteration === 0 });
+    profile.bodyCollisionMs += performance.now() - phaseStarted;
     enforcePins(state);
   }
 
+  finalizeBodyContactDiagnostics(state.body);
   phaseStarted = performance.now();
   updateVelocitiesAndPositions(state, dt);
+  applyBodyContactVelocities(state.velocities, state.body);
   profile.velocityUpdateMs = performance.now() - phaseStarted;
   state.stepCount += 1;
 
@@ -228,6 +249,7 @@ export function resetXpbdState(state: XpbdState): void {
   state.stepCount = 0;
   state.maximumCorrectionApplied = 0;
   state.invalid = false;
+  resetBodyContactStep(state.body);
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
   enforcePinsOn(state.previousPositions, state.pins);
@@ -299,6 +321,14 @@ export function measureXpbdDiagnostics(
     maximumPositionMagnitude,
     maximumVelocityMagnitude,
     maximumCorrectionApplied: state.maximumCorrectionApplied,
+    bodyColliderCount: state.body.colliders.kinds.length,
+    bodyContactCount: state.body.bodyContactCount,
+    bodyContactsByRegion: { ...state.body.bodyContactsByRegion },
+    maximumBodyPenetrationM: state.body.maximumBodyPenetrationM,
+    maximumBodyCorrectionM: state.body.maximumBodyCorrectionM,
+    frictionContactCount: state.body.frictionContactCount,
+    sweptContactCount: state.body.sweptContactCount,
+    bodyCollisionEnabled: state.body.enabled,
     invalid: state.invalid,
     droppedTimeSeconds,
     integrationMs: state.profile.integrationMs,
@@ -309,6 +339,7 @@ export function measureXpbdDiagnostics(
     velocityUpdateMs: state.profile.velocityUpdateMs,
     validationMs: state.profile.validationMs,
     solverStepTotalMs: state.profile.solverStepTotalMs,
+    bodyCollisionMs: state.profile.bodyCollisionMs,
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };
