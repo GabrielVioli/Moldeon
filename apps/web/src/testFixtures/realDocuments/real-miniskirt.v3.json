@@ -1,0 +1,2230 @@
+{
+  "formatVersion": 3,
+  "metadata": {
+    "projectId": "garment-empty-mst5zw2i",
+    "name": "Projeto vazio",
+    "description": "Bancada vazia pronta para desenhar.",
+    "sourceTemplateId": "blank",
+    "application": {
+      "name": "Moldeon"
+    }
+  },
+  "units": "mm",
+  "measurements": {
+    "id": "measurements-primary",
+    "values": {
+      "heightMm": 1680,
+      "bustMm": 920,
+      "waistMm": 760,
+      "hipMm": 1000,
+      "shoulderWidthMm": 399.84,
+      "torsoLengthMm": 440.16,
+      "armLengthMm": 588,
+      "inseamMm": 781.2,
+      "neckCircumferenceMm": 358.8,
+      "neckWidthMm": 71.76,
+      "shoulderSlopeDeg": 14,
+      "shoulderLengthMm": 164.04,
+      "bustHeightMm": 264.096,
+      "bustSpanMm": 184,
+      "highBustMm": 855.6,
+      "frontWaistLengthMm": 448.96320000000003,
+      "backWaistLengthMm": 431.3568,
+      "armholeDepthMm": 223.33333333333334,
+      "backWidthMm": 349.6,
+      "frontWidthMm": 331.2,
+      "bicepMm": 303.6,
+      "elbowCircumferenceMm": 258.06,
+      "wristMm": 165.6,
+      "elbowLengthMm": 311.64000000000004,
+      "hipHeightMm": 193.20000000000002,
+      "sittingCrotchHeightMm": 260.4,
+      "crotchDepthMm": 245,
+      "seatDepthMm": 240,
+      "waistDropMm": 15.456000000000001,
+      "waistFrontArcMm": 182.4,
+      "waistBackArcMm": 197.6,
+      "hipFrontArcMm": 240,
+      "hipBackArcMm": 260,
+      "thighMm": 580,
+      "kneeCircumferenceMm": 400,
+      "calfMm": 380,
+      "ankleCircumferenceMm": 240,
+      "kneeHeightMm": 406.22400000000005,
+      "outseamLengthMm": 1041.6,
+      "insideLegLengthMm": 781.2,
+      "headCircumferenceMm": 562.8000000000001
+    },
+    "estimatedKeys": [
+      "shoulderWidthMm",
+      "torsoLengthMm",
+      "armLengthMm",
+      "inseamMm",
+      "neckCircumferenceMm",
+      "shoulderSlopeDeg",
+      "bustHeightMm",
+      "bustSpanMm",
+      "highBustMm",
+      "frontWaistLengthMm",
+      "backWaistLengthMm",
+      "armholeDepthMm",
+      "backWidthMm",
+      "frontWidthMm",
+      "bicepMm",
+      "elbowCircumferenceMm",
+      "wristMm",
+      "hipHeightMm",
+      "sittingCrotchHeightMm",
+      "crotchDepthMm",
+      "seatDepthMm",
+      "waistDropMm",
+      "waistFrontArcMm",
+      "hipFrontArcMm",
+      "thighMm",
+      "kneeCircumferenceMm",
+      "calfMm",
+      "ankleCircumferenceMm",
+      "headCircumferenceMm"
+    ],
+    "suppliedKeys": [
+      "heightMm",
+      "bustMm",
+      "waistMm",
+      "hipMm"
+    ],
+    "derivedKeys": [
+      "neckWidthMm",
+      "shoulderLengthMm",
+      "elbowLengthMm",
+      "waistBackArcMm",
+      "hipBackArcMm",
+      "kneeHeightMm",
+      "outseamLengthMm",
+      "insideLegLengthMm"
+    ],
+    "formulaSetVersion": "2026.1",
+    "profile": {
+      "schemaVersion": 1,
+      "formulaSetId": "moldeon-body-defaults",
+      "formulaSetVersion": "2026.1",
+      "bodyType": "feminine",
+      "entries": {
+        "heightMm": {
+          "key": "heightMm",
+          "value": 1680,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "bustMm": {
+          "key": "bustMm",
+          "value": 920,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "waistMm": {
+          "key": "waistMm",
+          "value": 760,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "hipMm": {
+          "key": "hipMm",
+          "value": 1000,
+          "unit": "mm",
+          "origin": "supplied",
+          "dependencies": [],
+          "overridden": false
+        },
+        "shoulderWidthMm": {
+          "key": "shoulderWidthMm",
+          "value": 399.84,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.238",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "torsoLengthMm": {
+          "key": "torsoLengthMm",
+          "value": 440.16,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.262",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "armLengthMm": {
+          "key": "armLengthMm",
+          "value": 588,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.35",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "inseamMm": {
+          "key": "inseamMm",
+          "value": 781.2,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.465",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "neckCircumferenceMm": {
+          "key": "neckCircumferenceMm",
+          "value": 358.8,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.39",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "neckWidthMm": {
+          "key": "neckWidthMm",
+          "value": 71.76,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "neckCircumferenceMm / 5",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "neckCircumferenceMm"
+          ],
+          "overridden": false
+        },
+        "shoulderSlopeDeg": {
+          "key": "shoulderSlopeDeg",
+          "value": 14,
+          "unit": "degree",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "14deg",
+          "formulaVersion": "2026.1",
+          "dependencies": [],
+          "overridden": false
+        },
+        "shoulderLengthMm": {
+          "key": "shoulderLengthMm",
+          "value": 164.04,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "max(70mm, shoulderWidthMm / 2 - neckWidthMm / 2)",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "neckWidthMm",
+            "shoulderWidthMm"
+          ],
+          "overridden": false
+        },
+        "bustHeightMm": {
+          "key": "bustHeightMm",
+          "value": 264.096,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 0.60",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "bustSpanMm": {
+          "key": "bustSpanMm",
+          "value": 184,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.20",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "highBustMm": {
+          "key": "highBustMm",
+          "value": 855.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.93",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "frontWaistLengthMm": {
+          "key": "frontWaistLengthMm",
+          "value": 448.96320000000003,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 1.02",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "backWaistLengthMm": {
+          "key": "backWaistLengthMm",
+          "value": 431.3568,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "torsoLengthMm * 0.98",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "torsoLengthMm"
+          ],
+          "overridden": false
+        },
+        "armholeDepthMm": {
+          "key": "armholeDepthMm",
+          "value": 223.33333333333334,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm / 6 + 70mm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "backWidthMm": {
+          "key": "backWidthMm",
+          "value": 349.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.38",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "frontWidthMm": {
+          "key": "frontWidthMm",
+          "value": 331.2,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.36",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "bicepMm": {
+          "key": "bicepMm",
+          "value": 303.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.33",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "elbowCircumferenceMm": {
+          "key": "elbowCircumferenceMm",
+          "value": 258.06,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bicepMm * 0.85",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bicepMm"
+          ],
+          "overridden": false
+        },
+        "wristMm": {
+          "key": "wristMm",
+          "value": 165.6,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "bustMm * 0.18",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "bustMm"
+          ],
+          "overridden": false
+        },
+        "elbowLengthMm": {
+          "key": "elbowLengthMm",
+          "value": 311.64000000000004,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "armLengthMm * 0.53",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "armLengthMm"
+          ],
+          "overridden": false
+        },
+        "hipHeightMm": {
+          "key": "hipHeightMm",
+          "value": 193.20000000000002,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.115",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "sittingCrotchHeightMm": {
+          "key": "sittingCrotchHeightMm",
+          "value": 260.4,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.155",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        },
+        "crotchDepthMm": {
+          "key": "crotchDepthMm",
+          "value": 245,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.245",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "seatDepthMm": {
+          "key": "seatDepthMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "waistDropMm": {
+          "key": "waistDropMm",
+          "value": 15.456000000000001,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipHeightMm * 0.08",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipHeightMm"
+          ],
+          "overridden": false
+        },
+        "waistFrontArcMm": {
+          "key": "waistFrontArcMm",
+          "value": 182.4,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "waistMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "waistMm"
+          ],
+          "overridden": false
+        },
+        "waistBackArcMm": {
+          "key": "waistBackArcMm",
+          "value": 197.6,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "waistMm / 2 - waistFrontArcMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "waistFrontArcMm",
+            "waistMm"
+          ],
+          "overridden": false
+        },
+        "hipFrontArcMm": {
+          "key": "hipFrontArcMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "hipBackArcMm": {
+          "key": "hipBackArcMm",
+          "value": 260,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "hipMm / 2 - hipFrontArcMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipFrontArcMm",
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "thighMm": {
+          "key": "thighMm",
+          "value": 580,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.58",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "kneeCircumferenceMm": {
+          "key": "kneeCircumferenceMm",
+          "value": 400,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.40",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "calfMm": {
+          "key": "calfMm",
+          "value": 380,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.38",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "ankleCircumferenceMm": {
+          "key": "ankleCircumferenceMm",
+          "value": 240,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "hipMm * 0.24",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "hipMm"
+          ],
+          "overridden": false
+        },
+        "kneeHeightMm": {
+          "key": "kneeHeightMm",
+          "value": 406.22400000000005,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm * 0.52",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm"
+          ],
+          "overridden": false
+        },
+        "outseamLengthMm": {
+          "key": "outseamLengthMm",
+          "value": 1041.6,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm + sittingCrotchHeightMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm",
+            "sittingCrotchHeightMm"
+          ],
+          "overridden": false
+        },
+        "insideLegLengthMm": {
+          "key": "insideLegLengthMm",
+          "value": 781.2,
+          "unit": "mm",
+          "origin": "derived",
+          "defaultOrigin": "derived",
+          "formula": "inseamMm",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "inseamMm"
+          ],
+          "overridden": false
+        },
+        "headCircumferenceMm": {
+          "key": "headCircumferenceMm",
+          "value": 562.8000000000001,
+          "unit": "mm",
+          "origin": "estimated",
+          "defaultOrigin": "estimated",
+          "formula": "heightMm * 0.335",
+          "formulaVersion": "2026.1",
+          "dependencies": [
+            "heightMm"
+          ],
+          "overridden": false
+        }
+      }
+    }
+  },
+  "variables": [],
+  "constructionGraph": {
+    "version": 1,
+    "nodes": []
+  },
+  "patternDefinitions": [
+    {
+      "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+      "name": "Nova peça",
+      "sourceTemplateId": "blank",
+      "semanticRole": "custom",
+      "bodyPlacement": {
+        "version": 1,
+        "status": "unclassified",
+        "includeIn3D": true,
+        "outwardFace": "normal",
+        "offsetXMm": 0,
+        "offsetYMm": 0,
+        "offsetZMm": 25,
+        "rotationXDeg": 0,
+        "rotationYDeg": 0,
+        "rotationZDeg": 0,
+        "source": "migration"
+      },
+      "geometry": {
+        "geometryVersion": 2,
+        "points": [
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+            "xMm": 790,
+            "yMm": 130,
+            "handleOut": {
+              "xMm": -127.20000000000005,
+              "yMm": 0
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+            "xMm": 470,
+            "yMm": 100,
+            "handleIn": {
+              "xMm": 100,
+              "yMm": 10
+            },
+            "handleOut": {
+              "xMm": -100,
+              "yMm": -20
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+            "xMm": 140,
+            "yMm": 0,
+            "handleIn": {
+              "xMm": 140,
+              "yMm": 60
+            },
+            "handleOut": {
+              "xMm": -46.66666666666666,
+              "yMm": 100
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+            "xMm": 0,
+            "yMm": 300,
+            "handleIn": {
+              "xMm": 30,
+              "yMm": -100
+            },
+            "handleOut": {
+              "xMm": -30,
+              "yMm": 250
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+            "xMm": 0,
+            "yMm": 1039.9128013144752,
+            "handleIn": {
+              "xMm": 0,
+              "yMm": -246.63760043815842
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+            "xMm": 780.153004631323,
+            "yMm": 1039.9128013144752
+          }
+        ],
+        "nodes": [
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+            "xMm": 790,
+            "yMm": 130
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+            "xMm": 470,
+            "yMm": 100
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+            "xMm": 140,
+            "yMm": 0
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+            "xMm": 0,
+            "yMm": 300
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+            "xMm": 0,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+            "xMm": 780.153004631323,
+            "yMm": 1039.9128013144752
+          }
+        ],
+        "segments": [
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 662.8,
+              "yMm": 130
+            },
+            "control2": {
+              "xMm": 570,
+              "yMm": 110
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 370,
+              "yMm": 80
+            },
+            "control2": {
+              "xMm": 280,
+              "yMm": 60
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 93.33333333333334,
+              "yMm": 100
+            },
+            "control2": {
+              "xMm": 30,
+              "yMm": 200
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": -30,
+              "yMm": 550
+            },
+            "control2": {
+              "xMm": 0,
+              "yMm": 793.2752008763168
+            }
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+            "startNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+            "endNodeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+            "kind": "line",
+            "role": "other"
+          }
+        ],
+        "contours": [
+          {
+            "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:contour",
+            "segmentIds": [
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82",
+              "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d"
+            ],
+            "closed": true
+          }
+        ]
+      },
+      "internalLines": [],
+      "darts": [],
+      "annotations": [],
+      "guides": [],
+      "seamAllowanceMm": 10,
+      "edgeFinishes": {},
+      "cutQuantity": 1,
+      "cutOnFold": false,
+      "mirrorRule": "none",
+      "fabricId": "fabric-primary",
+      "connectors": []
+    },
+    {
+      "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+      "name": "Nova peça – espelhada",
+      "sourceTemplateId": "blank",
+      "semanticRole": "custom",
+      "bodyPlacement": {
+        "version": 1,
+        "status": "unclassified",
+        "includeIn3D": true,
+        "outwardFace": "normal",
+        "offsetXMm": 0,
+        "offsetYMm": 0,
+        "offsetZMm": 25,
+        "rotationXDeg": 0,
+        "rotationYDeg": 0,
+        "rotationZDeg": 0,
+        "source": "migration"
+      },
+      "geometry": {
+        "geometryVersion": 2,
+        "points": [
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+            "xMm": 9.846995368676971,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+            "xMm": 790,
+            "yMm": 1039.9128013144752,
+            "handleOut": {
+              "xMm": 0,
+              "yMm": -246.63760043815842
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+            "xMm": 790,
+            "yMm": 300,
+            "handleIn": {
+              "xMm": 30,
+              "yMm": 250
+            },
+            "handleOut": {
+              "xMm": -30,
+              "yMm": -100
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+            "xMm": 650,
+            "yMm": 0,
+            "handleIn": {
+              "xMm": 46.66666666666663,
+              "yMm": 100
+            },
+            "handleOut": {
+              "xMm": -140,
+              "yMm": 60
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+            "xMm": 320,
+            "yMm": 100,
+            "handleIn": {
+              "xMm": 100,
+              "yMm": -20
+            },
+            "handleOut": {
+              "xMm": -100,
+              "yMm": 10
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+            "xMm": 0,
+            "yMm": 130,
+            "handleIn": {
+              "xMm": 127.20000000000005,
+              "yMm": 0
+            }
+          }
+        ],
+        "nodes": [
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+            "xMm": 9.846995368676971,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+            "xMm": 790,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+            "xMm": 790,
+            "yMm": 300
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+            "xMm": 650,
+            "yMm": 0
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+            "xMm": 320,
+            "yMm": 100
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+            "xMm": 0,
+            "yMm": 130
+          }
+        ],
+        "segments": [
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 790,
+              "yMm": 793.2752008763168
+            },
+            "control2": {
+              "xMm": 820,
+              "yMm": 550
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 760,
+              "yMm": 200
+            },
+            "control2": {
+              "xMm": 696.6666666666666,
+              "yMm": 100
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 510,
+              "yMm": 60
+            },
+            "control2": {
+              "xMm": 420,
+              "yMm": 80
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 220,
+              "yMm": 110
+            },
+            "control2": {
+              "xMm": 127.20000000000005,
+              "yMm": 130
+            }
+          },
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+            "startNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+            "endNodeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+            "kind": "line",
+            "role": "other"
+          }
+        ],
+        "contours": [
+          {
+            "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:contour",
+            "segmentIds": [
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2",
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+              "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4"
+            ],
+            "closed": true
+          }
+        ]
+      },
+      "internalLines": [],
+      "darts": [],
+      "annotations": [],
+      "guides": [],
+      "seamAllowanceMm": 10,
+      "edgeFinishes": {},
+      "cutQuantity": 1,
+      "cutOnFold": false,
+      "mirrorRule": "none",
+      "fabricId": "fabric-primary",
+      "connectors": []
+    },
+    {
+      "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+      "name": "atras",
+      "sourceTemplateId": "blank",
+      "semanticRole": "custom",
+      "bodyPlacement": {
+        "version": 1,
+        "status": "unclassified",
+        "includeIn3D": true,
+        "outwardFace": "normal",
+        "offsetXMm": 0,
+        "offsetYMm": 0,
+        "offsetZMm": 25,
+        "rotationXDeg": 0,
+        "rotationYDeg": 0,
+        "rotationZDeg": 0,
+        "source": "migration"
+      },
+      "geometry": {
+        "geometryVersion": 2,
+        "points": [
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+            "xMm": 790,
+            "yMm": 130,
+            "handleOut": {
+              "xMm": -127.20000000000005,
+              "yMm": 0
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+            "xMm": 470,
+            "yMm": 100,
+            "handleIn": {
+              "xMm": 100,
+              "yMm": 10
+            },
+            "handleOut": {
+              "xMm": -100,
+              "yMm": -20
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+            "xMm": 140,
+            "yMm": 0,
+            "handleIn": {
+              "xMm": 140,
+              "yMm": 60
+            },
+            "handleOut": {
+              "xMm": -46.66666666666663,
+              "yMm": 100
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+            "xMm": 0,
+            "yMm": 300,
+            "handleIn": {
+              "xMm": 30,
+              "yMm": -100
+            },
+            "handleOut": {
+              "xMm": -30,
+              "yMm": 250
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+            "xMm": 0,
+            "yMm": 1039.9128013144752,
+            "handleIn": {
+              "xMm": 0,
+              "yMm": -246.63760043815842
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+            "xMm": 780.153004631323,
+            "yMm": 1039.9128013144752
+          }
+        ],
+        "nodes": [
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+            "xMm": 790,
+            "yMm": 130
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+            "xMm": 470,
+            "yMm": 100
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+            "xMm": 140,
+            "yMm": 0
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+            "xMm": 0,
+            "yMm": 300
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+            "xMm": 0,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+            "xMm": 780.153004631323,
+            "yMm": 1039.9128013144752
+          }
+        ],
+        "segments": [
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 662.8,
+              "yMm": 130
+            },
+            "control2": {
+              "xMm": 570,
+              "yMm": 110
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 370,
+              "yMm": 80
+            },
+            "control2": {
+              "xMm": 280,
+              "yMm": 60
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 93.33333333333337,
+              "yMm": 100
+            },
+            "control2": {
+              "xMm": 30,
+              "yMm": 200
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": -30,
+              "yMm": 550
+            },
+            "control2": {
+              "xMm": 0,
+              "yMm": 793.2752008763168
+            }
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+            "startNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+            "endNodeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+            "kind": "line",
+            "role": "other"
+          }
+        ],
+        "contours": [
+          {
+            "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:contour",
+            "segmentIds": [
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334",
+              "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b"
+            ],
+            "closed": true
+          }
+        ]
+      },
+      "internalLines": [],
+      "darts": [],
+      "annotations": [],
+      "guides": [],
+      "seamAllowanceMm": 10,
+      "edgeFinishes": {},
+      "cutQuantity": 1,
+      "cutOnFold": false,
+      "mirrorRule": "none",
+      "fabricId": "fabric-primary",
+      "connectors": []
+    },
+    {
+      "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+      "name": "atras – espelhada",
+      "sourceTemplateId": "blank",
+      "semanticRole": "custom",
+      "bodyPlacement": {
+        "version": 1,
+        "status": "unclassified",
+        "includeIn3D": true,
+        "outwardFace": "normal",
+        "offsetXMm": 0,
+        "offsetYMm": 0,
+        "offsetZMm": 25,
+        "rotationXDeg": 0,
+        "rotationYDeg": 0,
+        "rotationZDeg": 0,
+        "source": "migration"
+      },
+      "geometry": {
+        "geometryVersion": 2,
+        "points": [
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+            "xMm": 9.846995368676971,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+            "xMm": 790,
+            "yMm": 1039.9128013144752,
+            "handleOut": {
+              "xMm": 0,
+              "yMm": -246.63760043815842
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+            "xMm": 790,
+            "yMm": 300,
+            "handleIn": {
+              "xMm": 30,
+              "yMm": 250
+            },
+            "handleOut": {
+              "xMm": -30,
+              "yMm": -100
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+            "xMm": 650,
+            "yMm": 0,
+            "handleIn": {
+              "xMm": 46.66666666666663,
+              "yMm": 100
+            },
+            "handleOut": {
+              "xMm": -140,
+              "yMm": 60
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+            "xMm": 320,
+            "yMm": 100,
+            "handleIn": {
+              "xMm": 100,
+              "yMm": -20
+            },
+            "handleOut": {
+              "xMm": -100,
+              "yMm": 10
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+            "xMm": 0,
+            "yMm": 130,
+            "handleIn": {
+              "xMm": 127.20000000000005,
+              "yMm": 0
+            }
+          }
+        ],
+        "nodes": [
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+            "xMm": 9.846995368676971,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+            "xMm": 790,
+            "yMm": 1039.9128013144752
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+            "xMm": 790,
+            "yMm": 300
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+            "xMm": 650,
+            "yMm": 0
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+            "xMm": 320,
+            "yMm": 100
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+            "xMm": 0,
+            "yMm": 130
+          }
+        ],
+        "segments": [
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 790,
+              "yMm": 793.2752008763168
+            },
+            "control2": {
+              "xMm": 820,
+              "yMm": 550
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 760,
+              "yMm": 200
+            },
+            "control2": {
+              "xMm": 696.6666666666666,
+              "yMm": 100
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 510,
+              "yMm": 60
+            },
+            "control2": {
+              "xMm": 420,
+              "yMm": 80
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+            "kind": "cubic",
+            "role": "other",
+            "control1": {
+              "xMm": 220,
+              "yMm": 110
+            },
+            "control2": {
+              "xMm": 127.20000000000005,
+              "yMm": 130
+            }
+          },
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+            "startNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+            "endNodeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+            "kind": "line",
+            "role": "other"
+          }
+        ],
+        "contours": [
+          {
+            "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:contour",
+            "segmentIds": [
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364",
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+              "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330"
+            ],
+            "closed": true
+          }
+        ]
+      },
+      "internalLines": [],
+      "darts": [],
+      "annotations": [],
+      "guides": [],
+      "seamAllowanceMm": 10,
+      "edgeFinishes": {},
+      "cutQuantity": 1,
+      "cutOnFold": false,
+      "mirrorRule": "none",
+      "fabricId": "fabric-primary",
+      "connectors": []
+    },
+    {
+      "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+      "name": "cos",
+      "sourceTemplateId": "blank",
+      "semanticRole": "custom",
+      "bodyPlacement": {
+        "version": 1,
+        "status": "unclassified",
+        "includeIn3D": true,
+        "outwardFace": "normal",
+        "offsetXMm": 0,
+        "offsetYMm": 0,
+        "offsetZMm": 25,
+        "rotationXDeg": 0,
+        "rotationYDeg": 0,
+        "rotationZDeg": 0,
+        "source": "migration"
+      },
+      "geometry": {
+        "geometryVersion": 2,
+        "points": [
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+            "xMm": -0.5,
+            "yMm": 79.8
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+            "xMm": 3302.020565183529,
+            "yMm": 79.76364359222214
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+            "xMm": 3302.020565183529,
+            "yMm": 4.547473508864641e-13
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+            "xMm": 0,
+            "yMm": 0
+          }
+        ],
+        "nodes": [
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+            "xMm": -0.5,
+            "yMm": 79.8
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+            "xMm": 3302.020565183529,
+            "yMm": 79.76364359222214
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+            "xMm": 3302.020565183529,
+            "yMm": 4.547473508864641e-13
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+            "xMm": 0,
+            "yMm": 0
+          }
+        ],
+        "segments": [
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+            "startNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+            "endNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+            "startNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+            "endNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+            "startNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+            "endNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+            "kind": "line",
+            "role": "other"
+          },
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+            "startNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+            "endNodeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+            "kind": "line",
+            "role": "other"
+          }
+        ],
+        "contours": [
+          {
+            "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:contour",
+            "segmentIds": [
+              "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+              "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+              "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be",
+              "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4"
+            ],
+            "closed": true
+          }
+        ]
+      },
+      "internalLines": [],
+      "darts": [],
+      "annotations": [],
+      "guides": [],
+      "seamAllowanceMm": 10,
+      "edgeFinishes": {},
+      "cutQuantity": 1,
+      "cutOnFold": false,
+      "mirrorRule": "none",
+      "fabricId": "fabric-primary",
+      "connectors": []
+    }
+  ],
+  "panelInstances": [
+    {
+      "id": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:panel:1",
+      "sourcePatternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+      "copyIndex": 0,
+      "placementStatus": "unclassified",
+      "mirrored": false,
+      "fabricId": "fabric-primary",
+      "includedIn3D": true,
+      "simulationEnabled": true,
+      "metadata": {}
+    },
+    {
+      "id": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:panel:1",
+      "sourcePatternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+      "copyIndex": 0,
+      "placementStatus": "unclassified",
+      "mirrored": false,
+      "fabricId": "fabric-primary",
+      "includedIn3D": true,
+      "simulationEnabled": true,
+      "metadata": {}
+    },
+    {
+      "id": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:panel:1",
+      "sourcePatternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+      "copyIndex": 0,
+      "placementStatus": "unclassified",
+      "mirrored": false,
+      "fabricId": "fabric-primary",
+      "includedIn3D": true,
+      "simulationEnabled": true,
+      "metadata": {}
+    },
+    {
+      "id": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:panel:1",
+      "sourcePatternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+      "copyIndex": 0,
+      "placementStatus": "unclassified",
+      "mirrored": false,
+      "fabricId": "fabric-primary",
+      "includedIn3D": true,
+      "simulationEnabled": true,
+      "metadata": {}
+    },
+    {
+      "id": "piece-29c7364b-d8bf-413c-a453-279770de17d8:panel:1",
+      "sourcePatternId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+      "copyIndex": 0,
+      "placementStatus": "unclassified",
+      "mirrored": false,
+      "fabricId": "fabric-primary",
+      "includedIn3D": true,
+      "simulationEnabled": true,
+      "metadata": {}
+    }
+  ],
+  "seamGroups": [
+    {
+      "id": "seam-c3cfddf5-7cb4-4c5a-8a62-4de0a21f2bdf",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "edgeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-1-168714c7-2a11-41f6-906b-ac7b75ba27b4",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "edgeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4f18abd6-f3a1-40f8-bdd9-61f36344df82->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-c3cfddf5-7cb4-4c5a-8a62-4de0a21f2bdf:physical:1",
+          "first": [
+            {
+              "patternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+              "panelInstanceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+              "panelInstanceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-cdc219ee-557c-4345-bc12-6b395d18f6a6",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "edgeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "edgeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1.0000000000000002,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-cdc219ee-557c-4345-bc12-6b395d18f6a6:physical:1",
+          "first": [
+            {
+              "patternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+              "panelInstanceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+              "panelInstanceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 1.7148351947083786e-16,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-52110da4-73a1-44d2-b12e-e177e3b4f9b3",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "edgeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "edgeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1.0000000000000002,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-52110da4-73a1-44d2-b12e-e177e3b4f9b3:physical:1",
+          "first": [
+            {
+              "patternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+              "panelInstanceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+              "panelInstanceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 1.7148351947083786e-16,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-d0e2b663-d17f-4449-a5b2-d79125756e93",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "edgeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-4-d89e2827-70cf-46da-b940-99cf969eea02->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-5-32291f3c-20b2-4300-b1fd-7e7defaef48c",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "edgeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-2-d11f2625-7ff2-49b4-89f9-adeaf5aeb7e2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-3-594c2141-3b37-4137-a03b-b047fc70b8e2",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-d0e2b663-d17f-4449-a5b2-d79125756e93:physical:1",
+          "first": [
+            {
+              "patternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+              "panelInstanceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+              "panelInstanceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-157821cd-b2b6-4429-834f-935d22f2c4a7",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "edgeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-2-8fa5e715-7b5c-4298-9b2c-d9589202d364->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-3-544d2086-47dd-43e0-8cf1-0aa3b88d0230",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "edgeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-c467df4f-4e80-4ff4-8c61-a3dcf80d3d1b->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-4041a1d8-ae75-40eb-8605-2f5a5a5984cd",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-157821cd-b2b6-4429-834f-935d22f2c4a7:physical:1",
+          "first": [
+            {
+              "patternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+              "panelInstanceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+              "panelInstanceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-da326c5e-1655-4b7e-ac1a-f1579993807d",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "edgeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-1-737b744a-bc6b-47fb-930e-34fb87916330",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "edgeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-6-82df0c0d-c9fd-41b0-be8d-89f28a9ea334->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-da326c5e-1655-4b7e-ac1a-f1579993807d:physical:1",
+          "first": [
+            {
+              "patternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+              "panelInstanceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+              "panelInstanceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    },
+    {
+      "id": "seam-ebfe8170-2b11-4b7e-9922-4e83c47c5561",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+          "edgeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "edgeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-6-dcd82924-82a2-4c9d-8dbc-a21b5c108f1f",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "edgeId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:edge:piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-4-6c0076d7-a9c8-41e2-bd63-7f493b95ba43->piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:point-5-38d9cbb3-ee50-470f-9b24-b7d5974e7654",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "edgeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-455aa24d-c88d-4311-801f-e7fedfd5282d",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "edgeId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:edge:piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-99192178-c3db-4325-98ba-642b6f0c703d->piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:point-538a7828-8c73-42d9-88b3-101df7308cc9",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "edgeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-6-e67c98cf-81ca-44ed-88e0-43e8ba42c979",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "edgeId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:edge:piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-4-9987991f-61d3-47e5-87f3-d30900528c52->piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:point-5-56d1bc98-e92b-438f-94df-e786ac1a94c2",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "edgeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-3-bf2b2e9c-558d-452e-9d19-88f8beb973d4",
+          "startT": 0,
+          "endT": 1
+        },
+        {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "edgeId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:edge:piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-1-4535a371-ebe7-4e8f-9b14-4a3929f90d2b->piece-4f503625-97c4-48f6-a517-ef8277e2866b:point-2-c66da244-9c52-42a8-82ec-aef4532afb1a",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "gather",
+      "distribution": "proportional",
+      "targetRatio": 1.1918482366017906,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-ebfe8170-2b11-4b7e-9922-4e83c47c5561:physical:1",
+          "first": [
+            {
+              "patternId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+              "panelInstanceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+              "panelInstanceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b:panel:1"
+            },
+            {
+              "patternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+              "panelInstanceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f:panel:1"
+            },
+            {
+              "patternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+              "panelInstanceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5:panel:1"
+            },
+            {
+              "patternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+              "panelInstanceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0.19184823660179057,
+        "legacyType": "gather",
+        "legacyTreatment": "gather"
+      }
+    },
+    {
+      "id": "seam-e19083f6-a764-45c3-8fa2-237503ed66b2",
+      "name": "Costura",
+      "first": [
+        {
+          "pieceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+          "edgeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-e934395d-3960-4570-a962-2652b290c5be->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-aae0d167-4769-4734-bce4-326962817bf4",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "second": [
+        {
+          "pieceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+          "edgeId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:edge:piece-29c7364b-d8bf-413c-a453-279770de17d8:point-0767d2b1-7520-445d-b240-3352dbea4f32->piece-29c7364b-d8bf-413c-a453-279770de17d8:point-28617633-3a4d-40a2-9974-8dc60211b932",
+          "startT": 0,
+          "endT": 1
+        }
+      ],
+      "direction": "opposite",
+      "treatment": "standard",
+      "distribution": "uniform",
+      "targetRatio": 1.0004752138354593,
+      "slackMm": 0,
+      "physicalBindings": [
+        {
+          "id": "seam-e19083f6-a764-45c3-8fa2-237503ed66b2:physical:1",
+          "first": [
+            {
+              "patternId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+              "panelInstanceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:panel:1"
+            }
+          ],
+          "second": [
+            {
+              "patternId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+              "panelInstanceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8:panel:1"
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "compatibility": {
+        "legacyEaseRatio": 0.0004752138354592668,
+        "legacyType": "standard",
+        "legacyTreatment": "standard"
+      }
+    }
+  ],
+  "fabrics": [
+    {
+      "id": "fabric-primary",
+      "name": "Algodão plano",
+      "presetId": "cotton",
+      "color": "#c7ad79",
+      "widthMm": 1400,
+      "lengthMm": 1000,
+      "quantity": 1,
+      "physics": {
+        "weightGsm": 165,
+        "thicknessMm": 0.42,
+        "stretchWarpPercent": 2,
+        "stretchWeftPercent": 3,
+        "bending": 0.46,
+        "friction": 0.5
+      }
+    }
+  ],
+  "body": {
+    "type": "feminine",
+    "measurementSetId": "measurements-primary",
+    "metadata": {}
+  },
+  "workspace": {
+    "patterns": [
+      {
+        "patternId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+        "transform": {
+          "pieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5",
+          "xMm": 900,
+          "yMm": -830,
+          "rotationDeg": 0
+        },
+        "visible": true,
+        "locked": false
+      },
+      {
+        "patternId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+        "transform": {
+          "pieceId": "piece-9c264b12-1bba-4b74-8f6a-919d24f7906f",
+          "xMm": 1701.3578147350113,
+          "yMm": -825.7614568433256,
+          "rotationDeg": 0
+        },
+        "visible": true,
+        "locked": false
+      },
+      {
+        "patternId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+        "transform": {
+          "pieceId": "piece-4f503625-97c4-48f6-a517-ef8277e2866b",
+          "xMm": 2562.825695437783,
+          "yMm": -851.5779466705312,
+          "rotationDeg": 0
+        },
+        "visible": true,
+        "locked": false
+      },
+      {
+        "patternId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+        "transform": {
+          "pieceId": "piece-e0a6cc50-5aa6-40ed-9374-4f00a4f8755a",
+          "xMm": 48.29711995462253,
+          "yMm": -837.6283226297808,
+          "rotationDeg": 0
+        },
+        "visible": true,
+        "locked": false
+      },
+      {
+        "patternId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+        "transform": {
+          "pieceId": "piece-29c7364b-d8bf-413c-a453-279770de17d8",
+          "xMm": 44.27505600811946,
+          "yMm": -1019.7636435922221,
+          "rotationDeg": 0
+        },
+        "visible": true,
+        "locked": false
+      }
+    ]
+  },
+  "garmentSettings": {
+    "dressing": {
+      "region": "upper",
+      "frontReferencePieceId": "piece-c071b591-60f3-41d1-902d-8dd53e5efcd5"
+    }
+  },
+  "simulationSettings": {
+    "enabled": false,
+    "quality": "draft",
+    "gravityMmS2": [
+      0,
+      -9810,
+      0
+    ],
+    "substeps": 2,
+    "iterations": 5,
+    "selfCollision": false
+  }
+}
