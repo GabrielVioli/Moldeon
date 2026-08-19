@@ -1,0 +1,20 @@
+HEAD=b11b0a840125fde19f9cc5272dcfbbdecdf61e3e
+STATUS=0
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Moldeon/Moldeon[39m
+
+[90mstdout[2m | apps/web/src/physics/bodyCollisionStabilization.test.ts[2m > [22m[2mPrompt 11.0.1 lower-body collision stabilization[2m > [22m[2mrecords the current Prompt 11 straight-skirt baseline
+[22m[39mP1101_BASELINE_SETUP {"particles":3480,"triangles":5536,"pins":61,"iterations":24,"maximumVelocity":1,"registrationResidualMeanM":0.14468306459330532,"registrationResidualMaxM":0.18859461394723584,"initialPenetratingParticles":1792,"initialPenetrationMeanM":0.024923173699932577,"initialPenetrationMaxM":0.14123197480237107}
+P1101_BASELINE_RUN {"steps":480,"bodyCollisionMedianMs":24.596450999995795,"solverStepMedianMs":46.38677649999772,"bodyColliderCount":12,"bodyContactCount":340,"frictionContactCount":340,"maximumBodyPenetrationM":0.01044933891201753,"maximumBodyCorrectionM":0.000649847260096965,"seamMeanErrorM":0.0055051604744545376,"seamMaxErrorM":0.3314390387035684,"invalid":false}
+
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilization.test.ts[2m > [22mPrompt 11.0.1 lower-body collision stabilization[2m > [22mrecords the current Prompt 11 straight-skirt baseline[33m 25678[2mms[22m[39m
+[90mstdout[2m | apps/web/src/physics/bodyCollisionStabilization.test.ts[2m > [22m[2mPrompt 11.0.1 lower-body collision stabilization[2m > [22m[2mkeeps collision OFF as a finite control run
+[22m[39mP1101_BASELINE_OFF {"steps":480,"bodyCollisionMedianMs":0.0053844999929424375,"solverStepMedianMs":21.229694500001642,"bodyColliderCount":12,"bodyContactCount":0,"frictionContactCount":0,"maximumBodyPenetrationM":0,"maximumBodyCorrectionM":0,"seamMeanErrorM":0.004384298541906439,"seamMaxErrorM":0.3314390387035684,"invalid":false}
+
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilization.test.ts[2m > [22mPrompt 11.0.1 lower-body collision stabilization[2m > [22mkeeps collision OFF as a finite control run[33m 13103[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 15:55:56
+[2m   Duration [22m 39.47s[2m (transform 475ms, setup 0ms, import 559ms, tests 38.78s, environment 0ms)[22m
+
