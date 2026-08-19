@@ -1,0 +1,25 @@
+HEAD=33efce4e188538ee04bf5af435c90f1fdfdd04d3 FIX=0 PATCH=0 FRICTION=0 INELASTIC=0 PHASE=0 POSTSTRUCT=0 FOURPASS=0 CFL=0 TYPE=0 STATUS=0
+--- patch ---
+--- typecheck ---
+
+> moldeon@0.1.0 typecheck
+> npm run typecheck --workspace @moldeon/web
+
+
+> @moldeon/web@0.1.0 typecheck
+> tsc -b --pretty false
+
+--- audit ---
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Moldeon/Moldeon[39m
+
+[90mstdout[2m | apps/web/src/physics/bodyCollisionFrictionAudit.test.ts[2m > [22m[2mPrompt 11.0.1 settled contact friction audit[2m > [22m[2mmeasures normal support impulse versus tangential slip
+[22m[39mP1101_FRICTION_LOAD [{"step":1,"contacts":1055,"frictionContacts":1050,"regions":{"hip":411,"torso":6,"leg-left":292,"leg-right":346},"contactLoad":{"count":1055,"meanImpulseSpeed":0.031889835007148586,"maxImpulseSpeed":0.06051440164446831,"meanTangentSpeed":0.09591364293183288,"maxTangentSpeed":0.4575723578409733,"meanFriction":0.5,"meanGravityNormalSpeed":0.013498097954770001,"maxGravityNormalSpeed":0.07074832244217395}},{"step":8,"contacts":1058,"frictionContacts":1051,"regions":{"hip":412,"leg-left":277,"leg-right":369},"contactLoad":{"count":1058,"meanImpulseSpeed":0.03340967362943468,"maxImpulseSpeed":0.24082252383232117,"meanTangentSpeed":0.5270582139350024,"maxTangentSpeed":0.6560544930575849,"meanFriction":0.5,"meanGravityNormalSpeed":0.017288773525685596,"maxGravityNormalSpeed":0.06790606400370598}},{"step":16,"contacts":1033,"frictionContacts":1024,"regions":{"hip":532,"leg-left":238,"leg-right":263},"contactLoad":{"count":1033,"meanImpulseSpeed":0.03930091763260878,"maxImpulseSpeed":0.29026129841804504,"meanTangentSpeed":0.5398242313221536,"maxTangentSpeed":0.6564619468500403,"meanFriction":0.5,"meanGravityNormalSpeed":0.017217106274401994,"maxGravityNormalSpeed":0.053236213669180875}},{"step":32,"contacts":531,"frictionContacts":526,"regions":{"hip":287,"leg-left":154,"leg-right":90},"contactLoad":{"count":531,"meanImpulseSpeed":0.04068034233138112,"maxImpulseSpeed":0.2181762456893921,"meanTangentSpeed":0.5330143492370343,"maxTangentSpeed":0.6559590022859608,"meanFriction":0.5,"meanGravityNormalSpeed":0.003281793399957123,"maxGravityNormalSpeed":0.011611471496522427}},{"step":60,"contacts":187,"frictionContacts":184,"regions":{"leg-left":82,"leg-right":105},"contactLoad":{"count":187,"meanImpulseSpeed":0.04529985418495906,"maxImpulseSpeed":0.05968344584107399,"meanTangentSpeed":0.551188194553703,"maxTangentSpeed":0.6567493653601651,"meanFriction":0.5,"meanGravityNormalSpeed":0.0035108580333185007,"maxGravityNormalSpeed":0.00567483364418149}},{"step":120,"contacts":151,"frictionContacts":146,"regions":{"leg-left":95,"leg-right":56},"contactLoad":{"count":151,"meanImpulseSpeed":0.03352336833289738,"maxImpulseSpeed":0.05978861823678017,"meanTangentSpeed":0.5145768530667904,"maxTangentSpeed":0.6191839890045711,"meanFriction":0.5,"meanGravityNormalSpeed":0.0034281643785024373,"maxGravityNormalSpeed":0.005702131005004048}},{"step":180,"contacts":13,"frictionContacts":13,"regions":{"leg-left":13},"contactLoad":{"count":13,"meanImpulseSpeed":0.03534605568991257,"maxImpulseSpeed":0.04807556793093681,"meanTangentSpeed":0.48309374211453904,"maxTangentSpeed":0.5497157688408204,"meanFriction":0.5,"meanGravityNormalSpeed":0.004469976791180671,"maxGravityNormalSpeed":0.005088406945578754}},{"step":240,"contacts":0,"frictionContacts":0,"regions":{},"contactLoad":{"count":0,"meanImpulseSpeed":0,"maxImpulseSpeed":0,"meanTangentSpeed":0,"maxTangentSpeed":0,"meanFriction":0,"meanGravityNormalSpeed":0,"maxGravityNormalSpeed":0}}]
+
+ [32m✓[39m apps/web/src/physics/bodyCollisionFrictionAudit.test.ts[2m > [22mPrompt 11.0.1 settled contact friction audit[2m > [22mmeasures normal support impulse versus tangential slip[33m 5523[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 18:21:13
+[2m   Duration [22m 6.23s[2m (transform 493ms, setup 0ms, import 580ms, tests 5.53s, environment 0ms)[22m
+
