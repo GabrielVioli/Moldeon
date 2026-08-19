@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Post Body Relaxation Audit
+name: Recovery 11.0.1 Friction Load Audit
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Measure four-pass post-body relaxation
+      - name: Measure settled contact friction load
         shell: bash
         run: |
           set +e
@@ -58,7 +58,7 @@ jobs:
           fi
           if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$POSTSTRUCT" -eq 0 ] && [ "$FOURPASS" -eq 0 ] && [ "$CFL" -eq 0 ]; then
             npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
-            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+            npx vitest run apps/web/src/physics/bodyCollisionFrictionAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             TYPE=99; STATUS=99
             : > /tmp/type.log; : > /tmp/audit.log
@@ -70,8 +70,8 @@ jobs:
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- typecheck ---"; cat /tmp/type.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-four-pass-audit.txt
-          cat artifacts/recovery-11-0-1-four-pass-audit.txt
+          } > artifacts/recovery-11-0-1-friction-load-audit.txt
+          cat artifacts/recovery-11-0-1-friction-load-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -81,7 +81,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-four-pass-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 four-pass audit" || true
+          git add artifacts/recovery-11-0-1-friction-load-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 friction load audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           if [ "$TYPE" -ne 0 ] || [ "$STATUS" -ne 0 ]; then exit 1; fi
