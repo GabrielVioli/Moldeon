@@ -1,87 +1,49 @@
-HEAD=0ab602c6f668a654b5d395423bb3b3d8c50f922d STATUS=1
+HEAD=335ef298db6caf79a0e613b0d8babec901b86c5c STATUS=0
 
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Moldeon/Moldeon[39m
 
- [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON ELLIPSOID contacts and remains outside[32m 35[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON CAPSULE contacts without gross tunneling[32m 17[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTORSO remains outside overlapping chest abdomen pelvis proxies[32m 26[2mms[22m[39m
- [31m×[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTWO LEGS keeps particles outside two separate thigh volumes[32m 25[2mms[22m[39m
-[31m   → expected 0.001338066862260165 to be less than or equal to 0.00051[39m
- [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mreset clears body contact state and restores rest pose[32m 1[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdoes nothing outside capsule[32m 2[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mprojects a point inside capsule[32m 1[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mreturns finite normal on capsule axis and zero-length capsule[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdoes nothing outside capsule[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mprojects a point inside capsule[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mreturns finite normal on capsule axis and zero-length capsule[32m 0[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mprojects inside ellipsoid and ignores outside[32m 0[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mhandles sphere as equal-radius ellipsoid[32m 0[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mchooses deepest overlapping collider deterministically[32m 0[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mremoves inward normal velocity[32m 0[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mpreserves tangential velocity with friction zero[32m 0[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mhigher friction produces less tangential slip[32m 1[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdetects a high-speed sweep through capsule[32m 1[2mms[22m[39m
- [31m×[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mclears gross penetration without NaN and respects regular correction limit[32m 6[2mms[22m[39m
-[31m   → expected 0.03500000014901161 to be less than or equal to 0.020001[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mhigher friction produces less tangential slip[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdetects a high-speed sweep through capsule[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mclears gross penetration without NaN and respects regular correction limit[32m 1[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mrejects invalid collider buffers instead of producing NaN[32m 0[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/XpbdWorkerState.test.ts[2m > [22mPrompt 11 Adapter → Worker body state boundary[2m > [22mmaterializes collider/material buffers and produces body contacts in the Worker state[32m 7[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON ELLIPSOID contacts and remains outside[32m 21[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON CAPSULE contacts without gross tunneling[32m 13[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTORSO remains outside overlapping chest abdomen pelvis proxies[32m 15[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTWO LEGS keeps particles outside two separate thigh volumes[32m 18[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mreset clears body contact state and restores rest pose[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/XpbdWorkerState.test.ts[2m > [22mPrompt 11 Adapter → Worker body state boundary[2m > [22mmaterializes collider/material buffers and produces body contacts in the Worker state[32m 4[2mms[22m[39m
  [32m✓[39m apps/web/src/physics/XpbdWorkerState.test.ts[2m > [22mPrompt 11 Adapter → Worker body state boundary[2m > [22mkeeps the same packed body available but inactive when collision is disabled[32m 1[2mms[22m[39m
 [90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22m[2mPrompt 11.0.1 body collision stabilization final gate[2m > [22m[2mruns the lower-body scene without heuristic pins and profiles collision phases
-[22m[39mP1101_FINAL_SKIRT_ON {"registration":{"status":"registered","transform":{"translation":[0.0015434479061037438,-0.8208442228794097,0.0035022527344519675],"rotation":[0,0,0,1]},"source":"lower-shell-top-plane","registeredInstanceIds":["straight-skirt-front:panel:1:fold-a","straight-skirt-front:panel:1:fold-b","straight-skirt-back:panel:1:fold-a","straight-skirt-back:panel:1:fold-b"],"residualMeanM":0.0039190128445625305,"residualMaxM":0.007867515087127686},"initialDressingSteps":8,"steps":480,"bodyCollisionMedianMs":1.305125500000031,"bodyBroadphaseMedianMs":1.2289190000001327,"bodyNarrowphaseMedianMs":0.06407400000034613,"bodyProjectionMedianMs":0.007103000000824977,"bodyFrictionMedianMs":0.006602000000384578,"solverStepMedianMs":6.708031000000119,"bodyColliderCount":12,"finalBodyContactCount":0,"finalFrictionContactCount":0,"maximumObservedContacts":1949,"maximumObservedPenetrationM":0.11121797561645508,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0,"finalMaximumBodyCorrectionM":0,"seamMeanErrorM":0.0016417706472108364,"seamMaxErrorM":0.051000837987505904,"maximumVelocityMagnitude":0.6280786915719268,"dressingStepsRemaining":0,"invalid":false}
+[22m[39mP1101_FINAL_SKIRT_ON {"registration":{"status":"registered","transform":{"translation":[0.0015434479061037438,-0.8208442228794097,0.0035022527344519675],"rotation":[0,0,0,1]},"source":"lower-shell-top-plane","registeredInstanceIds":["straight-skirt-front:panel:1:fold-a","straight-skirt-front:panel:1:fold-b","straight-skirt-back:panel:1:fold-a","straight-skirt-back:panel:1:fold-b"],"residualMeanM":0.0039190128445625305,"residualMaxM":0.007867515087127686},"initialDressingSteps":8,"steps":480,"bodyCollisionMedianMs":0.6895535000001018,"bodyBroadphaseMedianMs":0.6467844999997396,"bodyNarrowphaseMedianMs":0.037906999999904656,"bodyProjectionMedianMs":0.003319999999803258,"bodyFrictionMedianMs":0.004061000000092463,"solverStepMedianMs":3.2033020000001216,"bodyColliderCount":12,"finalBodyContactCount":0,"finalFrictionContactCount":0,"maximumObservedContacts":1949,"maximumObservedPenetrationM":0.11121797561645508,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0,"finalMaximumBodyCorrectionM":0,"seamMeanErrorM":0.002059222575351975,"seamMaxErrorM":0.06043400672398505,"maximumVelocityMagnitude":0.6280787104488861,"dressingStepsRemaining":0,"invalid":false}
 
- [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mruns the lower-body scene without heuristic pins and profiles collision phases[33m 6725[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mreports body-placement-required for the unclassified real pants instead of guessing[33m 9020[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mruns the lower-body scene without heuristic pins and profiles collision phases[33m 3625[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mreports body-placement-required for the unclassified real pants instead of guessing[33m 4996[2mms[22m[39m
 [90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22m[2mPrompt 11.0.1 body collision stabilization final gate[2m > [22m[2mkeeps collision OFF as the finite control and performs no body phases
-[22m[39mP1101_FINAL_SKIRT_OFF {"steps":480,"bodyCollisionMedianMs":0.0009264999998777057,"bodyBroadphaseMedianMs":0,"bodyNarrowphaseMedianMs":0,"bodyProjectionMedianMs":0,"bodyFrictionMedianMs":0.0066219999998793355,"solverStepMedianMs":5.405436000000009,"bodyColliderCount":12,"finalBodyContactCount":0,"finalFrictionContactCount":0,"maximumObservedContacts":0,"maximumObservedPenetrationM":0,"maximumObservedCorrectionM":0,"finalMaximumBodyPenetrationM":0,"finalMaximumBodyCorrectionM":0,"seamMeanErrorM":0.0005522360778998872,"seamMaxErrorM":0.03506523641410325,"maximumVelocityMagnitude":0.628078695975899,"dressingStepsRemaining":0,"invalid":false}
+[22m[39mP1101_FINAL_SKIRT_OFF {"steps":480,"bodyCollisionMedianMs":0.0003255000001445296,"bodyBroadphaseMedianMs":0,"bodyNarrowphaseMedianMs":0,"bodyProjectionMedianMs":0,"bodyFrictionMedianMs":0.004155999999966298,"solverStepMedianMs":2.5519805000003544,"bodyColliderCount":12,"finalBodyContactCount":0,"finalFrictionContactCount":0,"maximumObservedContacts":0,"maximumObservedPenetrationM":0,"maximumObservedCorrectionM":0,"finalMaximumBodyPenetrationM":0,"finalMaximumBodyCorrectionM":0,"seamMeanErrorM":0.0006631085742064522,"seamMaxErrorM":0.03526411149886352,"maximumVelocityMagnitude":0.6280786804442862,"dressingStepsRemaining":0,"invalid":false}
 
- [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mkeeps collision OFF as the finite control and performs no body phases[33m 5730[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mkeeps collision OFF as the finite control and performs no body phases[33m 3033[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mkeeps a lower garment near the hip under gravity with body collision[33m 2591[2mms[22m[39m
 [90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22m[2mPrompt 11.0.1 body collision stabilization final gate[2m > [22m[2mkeeps the same lower-body scene finite at gravity zero
-[22m[39mP1101_FINAL_SKIRT_GRAVITY_ZERO {"steps":120,"bodyCollisionMedianMs":1.8280420000010054,"bodyBroadphaseMedianMs":1.3187925000001997,"bodyNarrowphaseMedianMs":0.4689634999995178,"bodyProjectionMedianMs":0.025732500000231084,"bodyFrictionMedianMs":0.03481999999985419,"solverStepMedianMs":7.316487000000052,"bodyColliderCount":12,"finalBodyContactCount":163,"finalFrictionContactCount":163,"maximumObservedContacts":1949,"maximumObservedPenetrationM":0.11121797561645508,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0.053636111319065094,"finalMaximumBodyCorrectionM":0.0004925857065245509,"seamMeanErrorM":0.0004885499907780085,"seamMaxErrorM":0.03630771561988585,"maximumVelocityMagnitude":0.2748199538088816,"dressingStepsRemaining":0,"invalid":false}
+[22m[39mP1101_FINAL_SKIRT_GRAVITY_ZERO {"steps":120,"bodyCollisionMedianMs":1.0215859999989334,"bodyBroadphaseMedianMs":0.7256739999984347,"bodyNarrowphaseMedianMs":0.2711905000005572,"bodyProjectionMedianMs":0.01603900000009162,"bodyFrictionMedianMs":0.023369999999886204,"solverStepMedianMs":3.668833500000801,"bodyColliderCount":12,"finalBodyContactCount":154,"finalFrictionContactCount":154,"maximumObservedContacts":1949,"maximumObservedPenetrationM":0.11121797561645508,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0.049757666885852814,"finalMaximumBodyCorrectionM":0.0004925857065245509,"seamMeanErrorM":0.00047455257817156867,"seamMaxErrorM":0.03573914367994269,"maximumVelocityMagnitude":0.28165879470234634,"dressingStepsRemaining":0,"invalid":false}
 
- [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mkeeps the same lower-body scene finite at gravity zero[33m 3642[2mms[22m[39m
- [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mreset restores the body dressing state after an unstable-looking velocity field[33m 2711[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mkeeps the same lower-body scene finite at gravity zero[33m 2072[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mreset restores the body dressing state after an unstable-looking velocity field[33m 1528[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22muses existing placement metadata without garment-name logic[33m 4732[2mms[22m[39m
 [90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22m[2mPrompt 11.0.1 body collision stabilization final gate[2m > [22m[2mdoes not regress a simple torso garment
-[22m[39mP1101_FINAL_TORSO {"registration":{"status":"registered","transform":{"translation":[-1.9352638217645657e-8,-1.5198321150215461,-5.519820711619161e-13],"rotation":[0,0,0,1]},"source":"placement-anchors","registeredInstanceIds":["bodice-block-front:panel:1:fold-a","bodice-block-front:panel:1:fold-b","bodice-block-back:panel:1:fold-a","bodice-block-back:panel:1:fold-b"],"residualMeanM":0.16564924167798187,"residualMaxM":0.1662764046166781},"steps":120,"bodyCollisionMedianMs":2.5021339999984775,"bodyBroadphaseMedianMs":1.5001965000010387,"bodyNarrowphaseMedianMs":0.8086475000000064,"bodyProjectionMedianMs":0.16441150000173366,"bodyFrictionMedianMs":0.3039164999991044,"solverStepMedianMs":9.696697999999742,"bodyColliderCount":12,"finalBodyContactCount":1478,"finalFrictionContactCount":1466,"maximumObservedContacts":2556,"maximumObservedPenetrationM":0.17108610272407532,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0.10209058225154877,"finalMaximumBodyCorrectionM":0.001321069081313908,"seamMeanErrorM":0.013571290403135546,"seamMaxErrorM":0.2774093484158872,"maximumVelocityMagnitude":0.6569321872022499,"dressingStepsRemaining":0,"invalid":false}
+[22m[39mP1101_FINAL_TORSO {"registration":{"status":"registered","transform":{"translation":[-1.9352638217645657e-8,-1.5198321150215461,-5.519820711619161e-13],"rotation":[0,0,0,1]},"source":"placement-anchors","registeredInstanceIds":["bodice-block-front:panel:1:fold-a","bodice-block-front:panel:1:fold-b","bodice-block-back:panel:1:fold-a","bodice-block-back:panel:1:fold-b"],"residualMeanM":0.16564924167798187,"residualMaxM":0.1662764046166781},"steps":120,"bodyCollisionMedianMs":1.3212979999998424,"bodyBroadphaseMedianMs":0.7924065000006522,"bodyNarrowphaseMedianMs":0.42952799999966373,"bodyProjectionMedianMs":0.08578399999987596,"bodyFrictionMedianMs":0.16659950000030221,"solverStepMedianMs":4.7156815000007555,"bodyColliderCount":12,"finalBodyContactCount":1725,"finalFrictionContactCount":1716,"maximumObservedContacts":2551,"maximumObservedPenetrationM":0.17108610272407532,"maximumObservedCorrectionM":0.035,"finalMaximumBodyPenetrationM":0.0672229453921318,"finalMaximumBodyCorrectionM":0.001321069081313908,"seamMeanErrorM":0.013452453099261555,"seamMaxErrorM":0.2881548550257325,"maximumVelocityMagnitude":0.6464196003939701,"dressingStepsRemaining":0,"invalid":false}
 
- [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mdoes not regress a simple torso garment[33m 4770[2mms[22m[39m
- [31m×[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mkeeps a lower garment near the hip under gravity with body collision[33m 8785[2mms[22m[39m
-[31m   → expected -0.7657656073570251 to be greater than -0.3514042228794097[39m
- [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22muses existing placement metadata without garment-name logic[33m 8629[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts[2m > [22mPrompt 11.0.1 body collision stabilization final gate[2m > [22mdoes not regress a simple torso garment[33m 2673[2mms[22m[39m
 
-[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
-
-[41m[1m FAIL [22m[49m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mclears gross penetration without NaN and respects regular correction limit
-[31m[1mAssertionError[22m: expected 0.03500000014901161 to be less than or equal to 0.020001[39m
-[36m [2m❯[22m apps/web/src/physics/bodyCollision.test.ts:[2m109:38[22m[39m
-    [90m107|[39m     })[33m;[39m
-    [90m108|[39m     [34mexpect[39m(predicted[33m.[39m[34mevery[39m([33mNumber[39m[33m.[39misFinite))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
-    [90m109|[39m     [34mexpect[39m([33mMath[39m[33m.[39m[34mhypot[39m([33m...[39mpredicted))[33m.[39m[34mtoBeLessThanOrEqual[39m([34m0.020001[39m)[33m;[39m
-    [90m   |[39m                                      [31m^[39m
-    [90m110|[39m   })[33m;[39m
-    [90m111|[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
-
-[41m[1m FAIL [22m[49m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mkeeps a lower garment near the hip under gravity with body collision
-[31m[1mAssertionError[22m: expected -0.7657656073570251 to be greater than -0.3514042228794097[39m
-[36m [2m❯[22m apps/web/src/physics/bodyCollisionRegistration.test.ts:[2m67:32[22m[39m
-    [90m 65|[39m     const registeredAnkleY = avatar.landmarks.ankleY + registration.tr…
-    [90m 66|[39m     const registeredHipY = avatar.landmarks.hipY + registration.transf…
-    [90m 67|[39m     [34mexpect[39m(finalBounds[33m.[39mcenter)[33m.[39m[34mtoBeGreaterThan[39m(registeredKneeY)[33m;[39m
-    [90m   |[39m                                [31m^[39m
-    [90m 68|[39m     [34mexpect[39m(finalBounds[33m.[39mmin)[33m.[39m[34mtoBeGreaterThan[39m(registeredAnkleY [33m+[39m [34m0.12[39m)[33m;[39m
-    [90m 69|[39m     [34mexpect[39m(finalBounds[33m.[39mmax)[33m.[39m[34mtoBeGreaterThan[39m(registeredHipY [33m-[39m [34m0.08[39m)[33m;[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
-
-[41m[1m FAIL [22m[49m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTWO LEGS keeps particles outside two separate thigh volumes
-[31m[1mAssertionError[22m: expected 0.001338066862260165 to be less than or equal to 0.00051[39m
-[36m [2m❯[22m assertOutside apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts:[2m117:40[22m[39m
-
-[90m [2m❯[22m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts:[2m96:5[22m[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
-
-
-[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (5)[39m
-[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m24 passed[39m[22m[90m (27)[39m
-[2m   Start at [22m 18:44:01
-[2m   Duration [22m 27.29s[2m (transform 1.08s, setup 0ms, import 1.56s, tests 50.15s, environment 1ms)[22m
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m27 passed[39m[22m[90m (27)[39m
+[2m   Start at [22m 18:48:14
+[2m   Duration [22m 13.49s[2m (transform 618ms, setup 0ms, import 892ms, tests 25.34s, environment 0ms)[22m
 
