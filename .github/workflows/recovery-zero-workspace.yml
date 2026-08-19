@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Focused Final Gate
+name: Recovery 11.0.1 Full Validation
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,33 +24,151 @@ jobs:
         with:
           node-version: 22.12.0
           cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - run: npm ci
+
       - name: Apply final candidate
         run: |
           python3 scripts/apply-prompt11-0-1-final.py
           python3 scripts/apply-prompt11-0-1-final-tests.py
+
       - name: Typecheck
         run: npm run typecheck
-      - name: Focused physics tests
+
+      - name: Full web test suite
+        run: npm test
+
+      - name: Fallback production build
+        run: npm run build
+
+      - name: Rust fmt
+        run: cargo fmt --all --check
+
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --workspace
+
+      - name: Install browser smoke dependency
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Browser smoke and collider-visibility invariance
         shell: bash
         run: |
-          set +e
-          npx vitest run \
-            apps/web/src/physics/bodyCollision.test.ts \
-            apps/web/src/physics/bodyCollisionRegistration.test.ts \
-            apps/web/src/physics/XpbdWorkerState.test.ts \
-            apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts \
-            apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts \
-            --reporter=verbose > /tmp/tests.log 2>&1
-          STATUS=$?
-          set -e
+          cat > /tmp/browser-smoke.cjs <<'NODE'
+          const { chromium } = require('playwright');
+
+          const metricKeys = [
+            'physicsStep',
+            'Body contacts',
+            'Max penetration mm',
+            'Max body correction mm',
+            'Friction contacts',
+            'seamMeanErrorMm',
+            'seamMaxErrorMm',
+          ];
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const consoleErrors = [];
+            const pageErrors = [];
+            page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+            page.on('pageerror', error => pageErrors.push(String(error)));
+            await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle', timeout: 60000 });
+            await page.waitForTimeout(2500);
+
+            const physics = page.locator('aside[aria-label="Diagnóstico físico DEV"]');
+            await physics.waitFor({ state: 'visible', timeout: 30000 });
+
+            const pause = page.getByRole('button', { name: 'Pausar' });
+            if (await pause.count()) {
+              await pause.click();
+              await page.waitForTimeout(350);
+            }
+
+            async function readMetrics() {
+              return await physics.evaluate((root, keys) => {
+                const result = {};
+                const dts = [...root.querySelectorAll('dt')];
+                for (const dt of dts) {
+                  const name = (dt.textContent || '').trim();
+                  if (!keys.includes(name)) continue;
+                  const dd = dt.nextElementSibling;
+                  result[name] = (dd?.textContent || '').trim();
+                }
+                return result;
+              }, metricKeys);
+            }
+
+            const before = await readMetrics();
+            const colliderToggle = physics.getByLabel('Show body colliders');
+            if (await colliderToggle.count() !== 1) throw new Error('Show body colliders control missing');
+            const initialChecked = await colliderToggle.isChecked();
+            await colliderToggle.setChecked(!initialChecked);
+            await page.waitForTimeout(500);
+            const after = await readMetrics();
+
+            if (JSON.stringify(before) !== JSON.stringify(after)) {
+              throw new Error(`Show body colliders changed paused physics: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+            }
+            if (consoleErrors.length || pageErrors.length) {
+              throw new Error(`browser errors: ${JSON.stringify({ consoleErrors, pageErrors })}`);
+            }
+
+            console.log(JSON.stringify({
+              browserSmoke: 'ok',
+              colliderVisibilityPhysicsInvariant: true,
+              metrics: before,
+              bodyTextLength: (await page.locator('body').innerText()).length,
+            }));
+            await browser.close();
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          npm run dev:fallback -- --host 127.0.0.1 > /tmp/vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill $VITE_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then break; fi
+            sleep 1
+          done
+          node /tmp/browser-smoke.cjs
+          kill $VITE_PID 2>/dev/null || true
+          wait $VITE_PID 2>/dev/null || true
+          git restore package-lock.json package.json 2>/dev/null || true
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Record validation and persist tested runtime
+        if: success()
+        shell: bash
+        run: |
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) STATUS=$STATUS"
-            cat /tmp/tests.log
-          } > artifacts/recovery-11-0-1-focused-final.txt
-          cat artifacts/recovery-11-0-1-focused-final.txt
-          git restore \
+            echo "HEAD_BEFORE_COMMIT=$(git rev-parse HEAD)"
+            echo "TYPECHECK=pass"
+            echo "FULL_TESTS=pass"
+            echo "BUILD=pass"
+            echo "RUST_FMT=pass"
+            echo "RUST_CLIPPY=pass"
+            echo "RUST_TESTS=pass"
+            echo "BROWSER_SMOKE=pass"
+            echo "DIFF_CHECK=pass"
+            echo "--- DIFF STAT ---"
+            git diff --stat
+          } > artifacts/recovery-11-0-1-full-validation.txt
+          git config user.name "Moldeon Recovery Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
             apps/web/src/physics/bodyCollision.ts \
@@ -59,11 +177,6 @@ jobs:
             apps/web/src/physics/bodyCollisionRegistration.test.ts \
             apps/web/src/viewport/GlobalThreeViewport.ts \
             apps/web/src/viewport/GarmentViewport.tsx \
-            scripts/apply-prompt11-0-1-stabilization.py \
-            scripts/apply-prompt11-0-1-auto-dressing.py
-          git config user.name "Moldeon Recovery Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-focused-final.txt
-          git commit -m "chore: record Prompt 11.0.1 focused final gate" || true
+            artifacts/recovery-11-0-1-full-validation.txt
+          git commit -m "fix(physics): stabilize body collision lifecycle"
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
-          exit "$STATUS"
