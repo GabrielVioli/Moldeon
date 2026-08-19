@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Phase Switch Audit
+name: Recovery 11.0.1 Constraint Strain Audit
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Compare gross dressing to local free simulation
+      - name: Localize waistband expansion
         shell: bash
         run: |
           set +e
@@ -54,7 +54,7 @@ jobs:
             PATCH=99; FRICTION=99; INELASTIC=99; PHASE=99
           fi
           if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ]; then
-            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+            npx vitest run apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             STATUS=99
             : > /tmp/audit.log
@@ -65,8 +65,8 @@ jobs:
             echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE STATUS=$STATUS"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-phase-switch-audit.txt
-          cat artifacts/recovery-11-0-1-phase-switch-audit.txt
+          } > artifacts/recovery-11-0-1-constraint-strain-audit.txt
+          cat artifacts/recovery-11-0-1-constraint-strain-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -76,7 +76,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-phase-switch-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 phase switch audit" || true
+          git add artifacts/recovery-11-0-1-constraint-strain-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 constraint strain audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           exit "$STATUS"
