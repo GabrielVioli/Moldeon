@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Post Body Structural Audit
+name: Recovery 11.0.1 Seam Clamp Audit
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Measure post-body structural stabilization
+      - name: Measure seam clamp pressure
         shell: bash
         run: |
           set +e
@@ -56,7 +56,7 @@ jobs:
           fi
           if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$POSTSTRUCT" -eq 0 ]; then
             npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
-            npx vitest run apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+            npx vitest run apps/web/src/physics/bodyCollisionSeamClampAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             TYPE=99; STATUS=99
             : > /tmp/type.log; : > /tmp/audit.log
@@ -68,8 +68,8 @@ jobs:
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- typecheck ---"; cat /tmp/type.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-post-body-structural-audit.txt
-          cat artifacts/recovery-11-0-1-post-body-structural-audit.txt
+          } > artifacts/recovery-11-0-1-seam-clamp-audit.txt
+          cat artifacts/recovery-11-0-1-seam-clamp-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -79,7 +79,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-post-body-structural-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 post-body structural audit" || true
+          git add artifacts/recovery-11-0-1-seam-clamp-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 seam clamp audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           if [ "$TYPE" -ne 0 ] || [ "$STATUS" -ne 0 ]; then exit 1; fi
