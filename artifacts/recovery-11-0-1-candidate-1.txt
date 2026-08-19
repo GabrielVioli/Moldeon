@@ -1,0 +1,12 @@
+HEAD=10e26bbbb424fb174b79ecb9579dde5213b7e7ff
+FIX=0 PATCH=1 TYPECHECK=99 TESTS=99 DIFF=99
+--- patch ---
+Traceback (most recent call last):
+  File "/home/runner/work/Moldeon/Moldeon/scripts/apply-prompt11-0-1-stabilization.py", line 33, in <module>
+    replace_section(
+  File "/home/runner/work/Moldeon/Moldeon/scripts/apply-prompt11-0-1-stabilization.py", line 20, in replace_section
+    raise RuntimeError(f"end marker not found in {path}: {end[:60]}")
+RuntimeError: end marker not found in apps/web/src/physics/GarmentXpbdAdapter.ts: export function xpbdInitializationTransferables
+--- tests ---
+--- typecheck ---
+--- diff ---
