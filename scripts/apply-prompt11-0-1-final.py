@@ -30,7 +30,6 @@ for script in [
     "scripts/apply-prompt11-0-1-friction.py",
     "scripts/apply-prompt11-0-1-inelastic.py",
     "scripts/apply-prompt11-0-1-phase-switch.py",
-    "scripts/apply-prompt11-0-1-post-body-structural.py",
     "scripts/apply-prompt11-0-1-cfl-velocity.py",
     "scripts/apply-prompt11-0-1-auto-dressing.py",
     "scripts/apply-prompt11-0-1-body-profile.py",
