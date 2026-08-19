@@ -1,0 +1,82 @@
+HEAD=f91355245820a23b884b04bfc2bff33cd494407b
+FIX=0 PATCH=0 FRICTION=0 INELASTIC=0 TESTPATCH=0 TYPECHECK=0 TESTS=1 DIFF=0
+--- patch ---
+--- tests ---
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Moldeon/Moldeon[39m
+
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON ELLIPSOID contacts and remains outside[32m 22[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mPATCH ON CAPSULE contacts without gross tunneling[32m 17[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTORSO remains outside overlapping chest abdomen pelvis proxies[32m 12[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mTWO LEGS keeps particles outside two separate thigh volumes[32m 12[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts[2m > [22mPrompt 11 canonical body collision scenes[2m > [22mreset clears body contact state and restores rest pose[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdoes nothing outside capsule[32m 2[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mprojects a point inside capsule[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mreturns finite normal on capsule axis and zero-length capsule[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mprojects inside ellipsoid and ignores outside[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mhandles sphere as equal-radius ellipsoid[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mchooses deepest overlapping collider deterministically[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mremoves inward normal velocity[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mpreserves tangential velocity with friction zero[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mhigher friction produces less tangential slip[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mdetects a high-speed sweep through capsule[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mclears gross penetration without NaN and respects regular correction limit[32m 1[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/bodyCollision.test.ts[2m > [22mPrompt 11 analytical body collision[2m > [22mrejects invalid collider buffers instead of producing NaN[32m 0[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/XpbdWorkerState.test.ts[2m > [22mPrompt 11 Adapter → Worker body state boundary[2m > [22mmaterializes collider/material buffers and produces body contacts in the Worker state[32m 6[2mms[22m[39m
+ [32m✓[39m apps/web/src/physics/XpbdWorkerState.test.ts[2m > [22mPrompt 11 Adapter → Worker body state boundary[2m > [22mkeeps the same packed body available but inactive when collision is disabled[32m 1[2mms[22m[39m
+[90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts[2m > [22m[2mPrompt 11.0.1 stabilized body collision candidate[2m > [22m[2msettles the canonical straight skirt with document solver settings and no support pins
+[22m[39mP1101_CANDIDATE_ON {"registrationSource":"lower-shell-top-plane","registrationResidualMeanM":0.0039190128445625305,"registrationResidualMaxM":0.007867515087127686,"particles":3480,"pins":0,"iterations":5,"initial":{"count":1949,"mean":0.027947175383240704,"max":0.11121458775082983},"steps":480,"bodyCollisionMedianMs":1.0788649999999507,"solverStepMedianMs":4.88936749999948,"bodyColliderCount":12,"bodyContactCount":0,"frictionContactCount":0,"maximumBodyPenetrationM":0,"maximumBodyCorrectionM":0,"seamMeanErrorM":0.0004578533046236561,"seamMaxErrorM":0.034499725735624105,"maximumVelocityMagnitude":12.000000476778437,"invalid":false}
+
+ [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mreports body-placement-required for the unclassified real pants instead of guessing[33m 5893[2mms[22m[39m
+[90mstdout[2m | apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts[2m > [22m[2mPrompt 11.0.1 stabilized body collision candidate[2m > [22m[2mkeeps the same skirt finite with body collision off
+[22m[39mP1101_CANDIDATE_OFF {"steps":480,"bodyCollisionMedianMs":0.0007834999996703118,"solverStepMedianMs":4.334038999999393,"bodyColliderCount":12,"bodyContactCount":0,"frictionContactCount":0,"maximumBodyPenetrationM":0,"maximumBodyCorrectionM":0,"seamMeanErrorM":0.00045866754981047325,"seamMaxErrorM":0.03448859327559771,"maximumVelocityMagnitude":12.000000475079151,"invalid":false}
+
+ [31m×[39m apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts[2m > [22mPrompt 11.0.1 stabilized body collision candidate[2m > [22msettles the canonical straight skirt with document solver settings and no support pins[33m 4860[2mms[22m[39m
+[31m   → expected 0 to be greater than 0[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts[2m > [22mPrompt 11.0.1 stabilized body collision candidate[2m > [22mkeeps the same skirt finite with body collision off[33m 12386[2mms[22m[39m
+ [31m×[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mkeeps a lower garment near the hip under gravity with body collision[33m 3280[2mms[22m[39m
+[31m   → expected -14.483461380004883 to be greater than -0.3514042228794097[39m
+ [32m✓[39m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22muses existing placement metadata without garment-name logic[33m 28410[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/web/src/physics/bodyCollisionRegistration.test.ts[2m > [22mPrompt 11 body registration[2m > [22mkeeps a lower garment near the hip under gravity with body collision
+[31m[1mAssertionError[22m: expected -14.483461380004883 to be greater than -0.3514042228794097[39m
+[36m [2m❯[22m apps/web/src/physics/bodyCollisionRegistration.test.ts:[2m71:32[22m[39m
+    [90m 69|[39m     const registeredAnkleY = avatar.landmarks.ankleY + registration.tr…
+    [90m 70|[39m     const registeredHipY = avatar.landmarks.hipY + registration.transf…
+    [90m 71|[39m     [34mexpect[39m(finalBounds[33m.[39mcenter)[33m.[39m[34mtoBeGreaterThan[39m(registeredKneeY)[33m;[39m
+    [90m   |[39m                                [31m^[39m
+    [90m 72|[39m     [34mexpect[39m(finalBounds[33m.[39mmin)[33m.[39m[34mtoBeGreaterThan[39m(registeredAnkleY [33m+[39m [34m0.12[39m)[33m;[39m
+    [90m 73|[39m     [34mexpect[39m(finalBounds[33m.[39mmax)[33m.[39m[34mtoBeGreaterThan[39m(registeredHipY [33m-[39m [34m0.08[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts[2m > [22mPrompt 11.0.1 stabilized body collision candidate[2m > [22msettles the canonical straight skirt with document solver settings and no support pins
+[31m[1mAssertionError[22m: expected 0 to be greater than 0[39m
+[36m [2m❯[22m apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts:[2m32:38[22m[39m
+    [90m 30|[39m     expect(scene.initialization.config.iterations).toBe(scene.iteratio…
+    [90m 31|[39m     [34mexpect[39m(metrics[33m.[39minvalid)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m 32|[39m     [34mexpect[39m(metrics[33m.[39mbodyContactCount)[33m.[39m[34mtoBeGreaterThan[39m([34m0[39m)[33m;[39m
+    [90m   |[39m                                      [31m^[39m
+    [90m 33|[39m   }[33m,[39m [34m120_000[39m)[33m;[39m
+    [90m 34|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m22 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 17:23:49
+[2m   Duration [22m 38.26s[2m (transform 964ms, setup 0ms, import 1.33s, tests 54.91s, environment 1ms)[22m
+
+--- typecheck ---
+
+> moldeon@0.1.0 typecheck
+> npm run typecheck --workspace @moldeon/web
+
+
+> @moldeon/web@0.1.0 typecheck
+> tsc -b --pretty false
+
+--- diff ---
