@@ -12,15 +12,15 @@ import { deepestBodyContact, packAvatarCollisionModel, type PackedBodyColliders 
 import { measureXpbdDiagnostics, stepXpbd } from "./xpbd";
 
 describe("Prompt 11.0.1 staged body dressing audit", () => {
-  it("compares high-constraint dressing budgets before normal free release", () => {
+  it("switches from gross dressing correction to local free-simulation correction", () => {
     const scenarios = [
-      { dressingSteps: 4, dressingIterations: 12 },
+      { dressingSteps: 6, dressingIterations: 12 },
       { dressingSteps: 8, dressingIterations: 12 },
-      { dressingSteps: 4, dressingIterations: 24 },
+      { dressingSteps: 6, dressingIterations: 24 },
       { dressingSteps: 8, dressingIterations: 24 },
     ];
     const results = scenarios.map((scenario) => runScenario(scenario.dressingSteps, scenario.dressingIterations));
-    console.log("P1101_STAGED_DRESSING_BUDGETS", JSON.stringify(results));
+    console.log("P1101_STAGED_PHASE_SWITCH", JSON.stringify(results));
     expect(results.every((entry) => entry.invalid === false)).toBe(true);
   }, 180_000);
 });
@@ -52,6 +52,7 @@ function runScenario(dressingSteps: number, dressingIterations: number) {
   const initialBand = bandBounds(state.positions, upperBand);
 
   state.config.iterations = dressingIterations;
+  state.body.grossDepenetrationEnabled = true;
   for (let step = 0; step < dressingSteps; step += 1) {
     stepXpbd(state);
     state.velocities.fill(0);
@@ -61,14 +62,24 @@ function runScenario(dressingSteps: number, dressingIterations: number) {
   const dressedPenetration = auditPenetration(state.positions, initialization.particleHalfThicknessM!, colliders, initialization.bodyContactSkinM ?? 0);
   const dressedBand = bandBounds(state.positions, upperBand);
 
+  state.body.grossDepenetrationEnabled = false;
   state.config.iterations = normalIterations;
   state.config.gravity = [0, -9.81, 0];
   let latest = dressed;
   let maximumContacts = dressed.bodyContactCount ?? 0;
-  for (let step = 0; step < 480; step += 1) {
+  const checkpoints: Array<{ step: number; contacts: number; maxCorrectionM: number; band: ReturnType<typeof bandBounds> }> = [];
+  for (let step = 1; step <= 480; step += 1) {
     stepXpbd(state);
     latest = measureXpbdDiagnostics(state, 1);
     maximumContacts = Math.max(maximumContacts, latest.bodyContactCount ?? 0);
+    if ([1, 8, 16, 32, 60, 120, 240, 480].includes(step)) {
+      checkpoints.push({
+        step,
+        contacts: latest.bodyContactCount ?? 0,
+        maxCorrectionM: latest.maximumBodyCorrectionM ?? 0,
+        band: bandBounds(state.positions, upperBand),
+      });
+    }
   }
 
   return {
@@ -91,6 +102,7 @@ function runScenario(dressingSteps: number, dressingIterations: number) {
     finalSeamMaxErrorM: latest.seamErrorMaximum,
     finalBounds: yBounds(state.positions),
     finalBand: bandBounds(state.positions, upperBand),
+    checkpoints,
     invalid: latest.invalid,
   };
 }
