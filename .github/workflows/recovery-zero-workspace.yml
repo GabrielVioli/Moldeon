@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Constraint Strain Audit
+name: Recovery 11.0.1 Ordering Audit
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Localize waistband expansion
+      - name: Measure body-before-seam ordering
         shell: bash
         run: |
           set +e
@@ -50,10 +50,11 @@ jobs:
             python3 scripts/apply-prompt11-0-1-friction.py >> /tmp/patch.log 2>&1; FRICTION=$?
             python3 scripts/apply-prompt11-0-1-inelastic.py >> /tmp/patch.log 2>&1; INELASTIC=$?
             python3 scripts/apply-prompt11-0-1-phase-switch.py >> /tmp/patch.log 2>&1; PHASE=$?
+            python3 scripts/apply-prompt11-0-1-body-before-seam.py >> /tmp/patch.log 2>&1; ORDER=$?
           else
-            PATCH=99; FRICTION=99; INELASTIC=99; PHASE=99
+            PATCH=99; FRICTION=99; INELASTIC=99; PHASE=99; ORDER=99
           fi
-          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ]; then
+          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$ORDER" -eq 0 ]; then
             npx vitest run apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             STATUS=99
@@ -62,11 +63,11 @@ jobs:
           set -e
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE STATUS=$STATUS"
+            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE ORDER=$ORDER STATUS=$STATUS"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-constraint-strain-audit.txt
-          cat artifacts/recovery-11-0-1-constraint-strain-audit.txt
+          } > artifacts/recovery-11-0-1-ordering-audit.txt
+          cat artifacts/recovery-11-0-1-ordering-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -76,7 +77,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-constraint-strain-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 constraint strain audit" || true
+          git add artifacts/recovery-11-0-1-ordering-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 ordering audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           exit "$STATUS"
