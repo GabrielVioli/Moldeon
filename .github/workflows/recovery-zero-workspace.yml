@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Pelvis CFL Audit
+name: Recovery 11.0.1 Post Body Relaxation Audit
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Measure continuous pelvis plus CFL
+      - name: Measure four-pass post-body relaxation
         shell: bash
         run: |
           set +e
@@ -47,18 +47,18 @@ jobs:
           FIX=$?
           if [ "$FIX" -eq 0 ]; then
             python3 scripts/apply-prompt11-0-1-stabilization.py >> /tmp/patch.log 2>&1; PATCH=$?
-            python3 scripts/apply-prompt11-0-1-pelvis.py >> /tmp/patch.log 2>&1; PELVIS=$?
             python3 scripts/apply-prompt11-0-1-friction.py >> /tmp/patch.log 2>&1; FRICTION=$?
             python3 scripts/apply-prompt11-0-1-inelastic.py >> /tmp/patch.log 2>&1; INELASTIC=$?
             python3 scripts/apply-prompt11-0-1-phase-switch.py >> /tmp/patch.log 2>&1; PHASE=$?
             python3 scripts/apply-prompt11-0-1-post-body-structural.py >> /tmp/patch.log 2>&1; POSTSTRUCT=$?
+            python3 scripts/apply-prompt11-0-1-post-body-four-pass.py >> /tmp/patch.log 2>&1; FOURPASS=$?
             python3 scripts/apply-prompt11-0-1-cfl-velocity.py >> /tmp/patch.log 2>&1; CFL=$?
           else
-            PATCH=99; PELVIS=99; FRICTION=99; INELASTIC=99; PHASE=99; POSTSTRUCT=99; CFL=99
+            PATCH=99; FRICTION=99; INELASTIC=99; PHASE=99; POSTSTRUCT=99; FOURPASS=99; CFL=99
           fi
-          if [ "$PATCH" -eq 0 ] && [ "$PELVIS" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$POSTSTRUCT" -eq 0 ] && [ "$CFL" -eq 0 ]; then
+          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$POSTSTRUCT" -eq 0 ] && [ "$FOURPASS" -eq 0 ] && [ "$CFL" -eq 0 ]; then
             npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
-            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts apps/web/src/avatar/AvatarCollisionCoverage.test.ts apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             TYPE=99; STATUS=99
             : > /tmp/type.log; : > /tmp/audit.log
@@ -66,14 +66,13 @@ jobs:
           set -e
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH PELVIS=$PELVIS FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE POSTSTRUCT=$POSTSTRUCT CFL=$CFL TYPE=$TYPE STATUS=$STATUS"
+            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE POSTSTRUCT=$POSTSTRUCT FOURPASS=$FOURPASS CFL=$CFL TYPE=$TYPE STATUS=$STATUS"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- typecheck ---"; cat /tmp/type.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-pelvis-cfl-audit.txt
-          cat artifacts/recovery-11-0-1-pelvis-cfl-audit.txt
+          } > artifacts/recovery-11-0-1-four-pass-audit.txt
+          cat artifacts/recovery-11-0-1-four-pass-audit.txt
           git restore \
-            apps/web/src/avatar/AvatarCollisionModel.ts \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
             apps/web/src/physics/bodyCollision.ts \
@@ -82,7 +81,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-pelvis-cfl-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 pelvis CFL audit" || true
+          git add artifacts/recovery-11-0-1-four-pass-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 four-pass audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           if [ "$TYPE" -ne 0 ] || [ "$STATUS" -ne 0 ]; then exit 1; fi
