@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Final Browser Smoke
+name: Recovery 11.0.1 Browser Smoke Final Result
 
 on:
   push:
@@ -33,9 +33,10 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Corrected browser smoke
+      - name: Run browser smoke and diff check
         shell: bash
         run: |
+          set +e
           cat > /tmp/browser-smoke.cjs <<'NODE'
           const { chromium } = require('playwright');
           const metricKeys = ['physicsStep','Body contacts','Max penetration mm','Max body correction mm','Friction contacts','seamMeanErrorMm','seamMaxErrorMm'];
@@ -69,68 +70,95 @@ jobs:
             }
             const before = await readMetrics();
             const toggle = physics.getByLabel('Show body colliders');
-            if (await toggle.count() !== 1) throw new Error('Show body colliders control missing');
+            const toggleCount = await toggle.count();
+            if (toggleCount !== 1) throw new Error(`Show body colliders control count=${toggleCount}`);
             const checked = await toggle.isChecked();
             await toggle.setChecked(!checked);
             await page.waitForTimeout(500);
             const after = await readMetrics();
-            if (JSON.stringify(before) !== JSON.stringify(after)) {
-              throw new Error(`Show body colliders changed paused physics: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
-            }
-            if (consoleErrors.length || pageErrors.length) {
-              throw new Error(`browser errors: ${JSON.stringify({ consoleErrors, pageErrors })}`);
-            }
-            console.log('P1101_BROWSER_SMOKE ' + JSON.stringify({
-              browserSmoke: 'ok',
-              colliderVisibilityPhysicsInvariant: true,
-              metrics: before,
+            const invariant = JSON.stringify(before) === JSON.stringify(after);
+            const result = {
+              browserSmoke: invariant && consoleErrors.length === 0 && pageErrors.length === 0 ? 'ok' : 'failed',
+              colliderVisibilityPhysicsInvariant: invariant,
+              metricsBefore: before,
+              metricsAfter: after,
+              consoleErrors,
+              pageErrors,
               bodyTextLength: (await page.locator('body').innerText()).length,
-            }));
+            };
+            console.log('P1101_BROWSER_SMOKE ' + JSON.stringify(result));
             await browser.close();
-          })().catch(error => { console.error(error); process.exit(1); });
+            if (!invariant || consoleErrors.length || pageErrors.length) process.exit(4);
+          })().catch(error => { console.error('P1101_BROWSER_SMOKE_ERROR', error); process.exit(5); });
           NODE
+
           (cd apps/web && npx vite --mode fallback --host 127.0.0.1) > /tmp/vite.log 2>&1 &
           VITE_PID=$!
-          trap 'kill $VITE_PID 2>/dev/null || true' EXIT
           READY=0
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:5173 >/dev/null; then READY=1; break; fi
             sleep 1
           done
-          if [ "$READY" != "1" ]; then
-            cat /tmp/vite.log
-            exit 1
+          if [ "$READY" = "1" ]; then
+            node /tmp/browser-smoke.cjs > /tmp/browser-smoke.log 2>&1
+            BROWSER=$?
+          else
+            BROWSER=3
+            echo "vite-not-ready" > /tmp/browser-smoke.log
           fi
-          node /tmp/browser-smoke.cjs | tee /tmp/browser-smoke.log
+          kill $VITE_PID 2>/dev/null || true
+          wait $VITE_PID 2>/dev/null || true
           git restore package-lock.json package.json 2>/dev/null || true
-          git diff --check
-      - name: Persist final browser result and tested runtime
-        shell: bash
-        run: |
+          git diff --check > /tmp/diff.log 2>&1
+          DIFF=$?
+          set -e
+
           mkdir -p artifacts
           {
-            echo "HEAD_BEFORE_COMMIT=$(git rev-parse HEAD)"
+            echo "HEAD=$(git rev-parse HEAD) READY=$READY BROWSER_EXIT=$BROWSER DIFF_EXIT=$DIFF"
             echo "FOCUSED_GATE=pass@335ef298db6caf79a0e613b0d8babec901b86c5c"
             echo "FULL_TESTS=pass"
             echo "BUILD=pass"
             echo "RUST_FMT=pass"
             echo "RUST_CLIPPY=pass"
             echo "RUST_TESTS=pass"
-            echo "BROWSER_SMOKE=pass"
-            echo "DIFF_CHECK=pass"
-            cat /tmp/browser-smoke.log
-          } > artifacts/recovery-11-0-1-validation-complete.txt
+            echo "--- browser ---"; cat /tmp/browser-smoke.log
+            echo "--- vite ---"; tail -n 80 /tmp/vite.log
+            echo "--- diff ---"; cat /tmp/diff.log
+          } > artifacts/recovery-11-0-1-browser-final.txt
+          cat artifacts/recovery-11-0-1-browser-final.txt
+
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add \
-            apps/web/src/physics/BodyCollisionRegistration.ts \
-            apps/web/src/physics/GarmentXpbdAdapter.ts \
-            apps/web/src/physics/bodyCollision.ts \
-            apps/web/src/physics/xpbd.ts \
-            apps/web/src/physics/bodyCollision.test.ts \
-            apps/web/src/physics/bodyCollisionRegistration.test.ts \
-            apps/web/src/viewport/GlobalThreeViewport.ts \
-            apps/web/src/viewport/GarmentViewport.tsx \
-            artifacts/recovery-11-0-1-validation-complete.txt
-          git commit -m "fix(physics): stabilize body collision lifecycle"
+          git fetch origin recovery/11.0.1-body-collision-stabilization
+          REMOTE_SHA=$(git rev-parse origin/recovery/11.0.1-body-collision-stabilization)
+          LOCAL_SHA=$(git rev-parse HEAD)
+          if git cat-file -e origin/recovery/11.0.1-body-collision-stabilization:artifacts/recovery-11-0-1-validation-complete.txt 2>/dev/null; then
+            echo "Parallel browser gate already succeeded; leaving remote untouched."
+            exit 0
+          fi
+          if [ "$REMOTE_SHA" != "$LOCAL_SHA" ]; then
+            echo "Remote advanced during browser gate; leaving remote untouched for next inspection."
+            exit 0
+          fi
+
+          git add artifacts/recovery-11-0-1-browser-final.txt
+          if [ "$BROWSER" = "0" ] && [ "$DIFF" = "0" ]; then
+            cp artifacts/recovery-11-0-1-browser-final.txt artifacts/recovery-11-0-1-validation-complete.txt
+            git add \
+              apps/web/src/physics/BodyCollisionRegistration.ts \
+              apps/web/src/physics/GarmentXpbdAdapter.ts \
+              apps/web/src/physics/bodyCollision.ts \
+              apps/web/src/physics/xpbd.ts \
+              apps/web/src/physics/bodyCollision.test.ts \
+              apps/web/src/physics/bodyCollisionRegistration.test.ts \
+              apps/web/src/viewport/GlobalThreeViewport.ts \
+              apps/web/src/viewport/GarmentViewport.tsx \
+              artifacts/recovery-11-0-1-validation-complete.txt
+            git commit -m "fix(physics): stabilize body collision lifecycle"
+          else
+            git commit -m "chore: record Prompt 11.0.1 browser smoke failure"
+          fi
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
+          test "$BROWSER" = "0"
+          test "$DIFF" = "0"
