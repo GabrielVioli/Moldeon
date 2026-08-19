@@ -12,14 +12,20 @@ import { deepestBodyContact, packAvatarCollisionModel, type PackedBodyColliders 
 import { measureXpbdDiagnostics, stepXpbd } from "./xpbd";
 
 describe("Prompt 11.0.1 staged body dressing audit", () => {
-  it("compares local-trust-region dressing windows before free release", () => {
-    const results = [0, 32, 48, 64].map((dressingSteps) => runScenario(dressingSteps));
-    console.log("P1101_STAGED_DRESSING_LOCAL", JSON.stringify(results));
+  it("compares high-constraint dressing budgets before normal free release", () => {
+    const scenarios = [
+      { dressingSteps: 4, dressingIterations: 12 },
+      { dressingSteps: 8, dressingIterations: 12 },
+      { dressingSteps: 4, dressingIterations: 24 },
+      { dressingSteps: 8, dressingIterations: 24 },
+    ];
+    const results = scenarios.map((scenario) => runScenario(scenario.dressingSteps, scenario.dressingIterations));
+    console.log("P1101_STAGED_DRESSING_BUDGETS", JSON.stringify(results));
     expect(results.every((entry) => entry.invalid === false)).toBe(true);
   }, 180_000);
 });
 
-function runScenario(dressingSteps: number) {
+function runScenario(dressingSteps: number, dressingIterations: number) {
   const garment = {
     ...resolveTemplateAssemblyGarment(createGarmentFromTemplate("straight-skirt", DEFAULT_BODY_MEASUREMENTS, "feminine")),
     dressing: { region: "lower" as const },
@@ -30,18 +36,22 @@ function runScenario(dressingSteps: number) {
   const registration = resolveSimulationBodyRegistration(result.state, avatar);
   if (registration.status !== "registered") throw new Error("straight-skirt should have confirmed body placement");
   const colliders = packAvatarCollisionModel(buildAvatarCollisionModel(avatar), registration.transform);
+  const normalIterations = input.assemblyDocument.simulationSettings.iterations;
   const initialization = buildXpbdInitialization(result.state, input.garmentProjection, result.revision, {
     bodyColliders: colliders,
     bodyCollisionEnabled: true,
     config: {
       gravity: [0, 0, 0],
       maximumSubsteps: input.assemblyDocument.simulationSettings.substeps,
-      iterations: input.assemblyDocument.simulationSettings.iterations,
+      iterations: normalIterations,
     },
   });
   const state = createXpbdWorkerState(initialization);
+  const upperBand = selectUpperBand(state.positions);
   const initialPenetration = auditPenetration(state.positions, initialization.particleHalfThicknessM!, colliders, initialization.bodyContactSkinM ?? 0);
+  const initialBand = bandBounds(state.positions, upperBand);
 
+  state.config.iterations = dressingIterations;
   for (let step = 0; step < dressingSteps; step += 1) {
     stepXpbd(state);
     state.velocities.fill(0);
@@ -49,7 +59,9 @@ function runScenario(dressingSteps: number) {
   }
   const dressed = measureXpbdDiagnostics(state);
   const dressedPenetration = auditPenetration(state.positions, initialization.particleHalfThicknessM!, colliders, initialization.bodyContactSkinM ?? 0);
+  const dressedBand = bandBounds(state.positions, upperBand);
 
+  state.config.iterations = normalIterations;
   state.config.gravity = [0, -9.81, 0];
   let latest = dressed;
   let maximumContacts = dressed.bodyContactCount ?? 0;
@@ -61,10 +73,14 @@ function runScenario(dressingSteps: number) {
 
   return {
     dressingSteps,
+    dressingIterations,
+    normalIterations,
     registrationSource: registration.source,
     registrationResidualMeanM: registration.residualMeanM,
     initialPenetration,
     dressedPenetration,
+    initialBand,
+    dressedBand,
     dressedContacts: dressed.bodyContactCount ?? 0,
     maximumContacts,
     finalContacts: latest.bodyContactCount ?? 0,
@@ -74,7 +90,37 @@ function runScenario(dressingSteps: number) {
     finalSeamMeanErrorM: latest.seamErrorAverage,
     finalSeamMaxErrorM: latest.seamErrorMaximum,
     finalBounds: yBounds(state.positions),
+    finalBand: bandBounds(state.positions, upperBand),
     invalid: latest.invalid,
+  };
+}
+
+function selectUpperBand(positions: Float32Array): number[] {
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let offset = 1; offset < positions.length; offset += 3) maxY = Math.max(maxY, positions[offset]);
+  const threshold = maxY - 0.015;
+  const particles: number[] = [];
+  for (let particle = 0; particle < positions.length / 3; particle += 1) {
+    if (positions[particle * 3 + 1] >= threshold) particles.push(particle);
+  }
+  return particles;
+}
+
+function bandBounds(positions: Float32Array, particles: readonly number[]) {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (const particle of particles) {
+    const offset = particle * 3;
+    minX = Math.min(minX, positions[offset]); maxX = Math.max(maxX, positions[offset]);
+    minY = Math.min(minY, positions[offset + 1]); maxY = Math.max(maxY, positions[offset + 1]);
+    minZ = Math.min(minZ, positions[offset + 2]); maxZ = Math.max(maxZ, positions[offset + 2]);
+  }
+  return {
+    halfWidth: (maxX - minX) * 0.5,
+    halfDepth: (maxZ - minZ) * 0.5,
+    centerX: (minX + maxX) * 0.5,
+    centerY: (minY + maxY) * 0.5,
+    centerZ: (minZ + maxZ) * 0.5,
   };
 }
 
