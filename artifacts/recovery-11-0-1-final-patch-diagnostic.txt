@@ -1,4 +1,4 @@
-HEAD=85c635093eb0af95460d6c612df6f5324d5bffc5 FIX=0 TYPE=0
+HEAD=8d14a2bb2ef5ad649dc554e9ae4fcdad4683b4a3 FIX=0 TYPE=0
 stabilization=0
 friction=0
 inelastic=0
@@ -24,7 +24,7 @@ profile=0
  apps/web/src/physics/xpbd.ts                       |  81 ++++--
  apps/web/src/viewport/GarmentViewport.tsx          |   5 +
  apps/web/src/viewport/GlobalThreeViewport.ts       |   4 +-
- .../recovery-11-0-1-final-patch-diagnostic.txt     |  29 +--
+ .../recovery-11-0-1-final-patch-diagnostic.txt     |  12 +-
  scripts/apply-prompt11-0-1-auto-dressing.py        |   4 +-
  scripts/apply-prompt11-0-1-stabilization.py        |   6 +-
- 9 files changed, 417 insertions(+), 154 deletions(-)
+ 9 files changed, 415 insertions(+), 139 deletions(-)
