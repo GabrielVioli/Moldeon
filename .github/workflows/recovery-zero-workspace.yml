@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Staged Dressing Audit
+name: Recovery 11.0.1 Trajectory Audit
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Compare staged dressing windows
+      - name: Trace skirt trajectory
         shell: bash
         run: |
           set +e
@@ -53,7 +53,7 @@ jobs:
             PATCH=99; FRICTION=99; INELASTIC=99
           fi
           if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ]; then
-            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+            npx vitest run apps/web/src/physics/bodyCollisionTrajectoryAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             STATUS=99
             : > /tmp/audit.log
@@ -64,8 +64,8 @@ jobs:
             echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC STATUS=$STATUS"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-staged-dressing-audit.txt
-          cat artifacts/recovery-11-0-1-staged-dressing-audit.txt
+          } > artifacts/recovery-11-0-1-trajectory-audit.txt
+          cat artifacts/recovery-11-0-1-trajectory-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -75,7 +75,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-staged-dressing-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 staged dressing audit" || true
+          git add artifacts/recovery-11-0-1-trajectory-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 trajectory audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           exit "$STATUS"
