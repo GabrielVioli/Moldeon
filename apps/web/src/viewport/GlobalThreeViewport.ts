@@ -233,7 +233,7 @@ export class ThreeViewport {
       this.installDevDocumentExport(input.document);
     }
 
-    void this.assembly.solve({ document: input.document, revision: input.signature }).then((response) => {
+    void this.assembly.solve({ document: input.assemblyDocument, revision: input.signature }).then((response) => {
       if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== input.signature) return;
       const state = response.state;
       const visibleInstanceIds = new Set(state.instances.map((instance) => instance.id));
@@ -266,10 +266,12 @@ export class ThreeViewport {
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
         bodyColliders: packedColliders,
         bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
+        pinAssemblyAnchors: registration.status === "registered",
         config: {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
-          iterations: settings.iterations,
+          iterations: registration.status === "registered" ? Math.max(settings.iterations, 24) : settings.iterations,
+          ...(registration.status === "registered" ? { maximumVelocity: 1 } : {}),
         },
       });
       this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);

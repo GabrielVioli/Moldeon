@@ -609,6 +609,13 @@ function visibleIncludedPieces(garment: GarmentDraft): PatternPiece[] {
 
 function inferFrontReference(pieces: readonly PatternPiece[]): string | undefined {
   if (pieces.length === 1) return pieces[0]?.id;
+  const placementCandidates = pieces.filter((piece) => {
+    const placements = piece.previewPlacements ?? [];
+    return placements.some((placement) => placement.surface === "front")
+      && !placements.some((placement) => placement.surface === "back");
+  });
+  if (placementCandidates.length === 1) return placementCandidates[0].id;
+
   const candidates = pieces.filter((piece) => {
     const roles = new Set(piece.segments?.map((segment) => segment.role) ?? []);
     return roles.has("frontArmhole") && !roles.has("backArmhole");
