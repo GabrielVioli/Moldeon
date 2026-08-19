@@ -12,9 +12,9 @@ import { deepestBodyContact, packAvatarCollisionModel, type PackedBodyColliders 
 import { measureXpbdDiagnostics, stepXpbd } from "./xpbd";
 
 describe("Prompt 11.0.1 staged body dressing audit", () => {
-  it("compares zero-gravity dressing windows before free release", () => {
-    const results = [0, 8, 16, 32].map((dressingSteps) => runScenario(dressingSteps));
-    console.log("P1101_STAGED_DRESSING", JSON.stringify(results));
+  it("compares local-trust-region dressing windows before free release", () => {
+    const results = [0, 32, 48, 64].map((dressingSteps) => runScenario(dressingSteps));
+    console.log("P1101_STAGED_DRESSING_LOCAL", JSON.stringify(results));
     expect(results.every((entry) => entry.invalid === false)).toBe(true);
   }, 180_000);
 });
@@ -70,6 +70,7 @@ function runScenario(dressingSteps: number) {
     finalContacts: latest.bodyContactCount ?? 0,
     finalFrictionContacts: latest.frictionContactCount ?? 0,
     finalMaximumPenetrationM: latest.maximumBodyPenetrationM ?? 0,
+    finalMaximumCorrectionM: latest.maximumBodyCorrectionM ?? 0,
     finalSeamMeanErrorM: latest.seamErrorAverage,
     finalSeamMaxErrorM: latest.seamErrorMaximum,
     finalBounds: yBounds(state.positions),
