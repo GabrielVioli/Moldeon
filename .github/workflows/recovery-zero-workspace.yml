@@ -29,23 +29,55 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Registration and stabilization audit
+      - name: Apply stabilization candidate and validate
         shell: bash
         run: |
           set +e
-          npx vitest run apps/web/src/physics/bodyCollisionStabilization.test.ts apps/web/src/physics/bodyRegistrationReferenceAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1
-          STATUS=$?
+          python3 - <<'PY' > /tmp/patch.log 2>&1
+          from pathlib import Path
+          path = Path("scripts/apply-prompt11-0-1-stabilization.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''    "function selectInstanceSupportVertices(",\n    "export function xpbdInitializationTransferables",\n    "export function xpbdInitializationTransferables",\n)'''
+          new = '''    "function selectInstanceSupportVertices(",\n    "export function xpbdInitializationTransferables",\n    "",\n)'''
+          if text.count(old) != 1:
+              raise RuntimeError(f"script marker mismatch: {text.count(old)}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          FIX=$?
+          if [ "$FIX" -eq 0 ]; then
+            python3 scripts/apply-prompt11-0-1-stabilization.py >> /tmp/patch.log 2>&1; PATCH=$?
+          else
+            PATCH=99
+          fi
+          if [ "$PATCH" -eq 0 ]; then
+            npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
+            npx vitest run apps/web/src/physics/bodyCollision.test.ts apps/web/src/physics/bodyCollisionRegistration.test.ts apps/web/src/physics/XpbdWorkerState.test.ts apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts --reporter=verbose > /tmp/tests.log 2>&1; TESTS=$?
+            git diff --check > /tmp/diff.log 2>&1; DIFF=$?
+          else
+            TYPE=99; TESTS=99; DIFF=99
+            : > /tmp/type.log; : > /tmp/tests.log; : > /tmp/diff.log
+          fi
           set -e
           mkdir -p artifacts
           {
             echo "HEAD=$(git rev-parse HEAD)"
-            echo "STATUS=$STATUS"
-            cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-registration-audit.txt
-          cat artifacts/recovery-11-0-1-registration-audit.txt
+            echo "FIX=$FIX PATCH=$PATCH TYPECHECK=$TYPE TESTS=$TESTS DIFF=$DIFF"
+            echo "--- patch ---"; cat /tmp/patch.log
+            echo "--- tests ---"; cat /tmp/tests.log
+            echo "--- typecheck ---"; cat /tmp/type.log
+            echo "--- diff ---"; cat /tmp/diff.log
+          } > artifacts/recovery-11-0-1-candidate-1.txt
+          cat artifacts/recovery-11-0-1-candidate-1.txt
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-registration-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 registration audit" || true
-          git push origin HEAD:recovery/11.0.1-body-collision-stabilization
-          exit "$STATUS"
+          if [ "$PATCH" -eq 0 ] && [ "$TYPE" -eq 0 ] && [ "$TESTS" -eq 0 ] && [ "$DIFF" -eq 0 ]; then
+            git add apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts artifacts/recovery-11-0-1-candidate-1.txt
+            git commit -m "fix(physics): stabilize body collision release"
+            git push origin HEAD:recovery/11.0.1-body-collision-stabilization
+          else
+            git restore apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts scripts/apply-prompt11-0-1-stabilization.py
+            git add artifacts/recovery-11-0-1-candidate-1.txt
+            git commit -m "chore: record Prompt 11.0.1 candidate failure" || true
+            git push origin HEAD:recovery/11.0.1-body-collision-stabilization
+            exit 1
+          fi
