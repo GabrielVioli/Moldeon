@@ -1,0 +1,42 @@
+HEAD=87880999578e13f98cb838589d473c1c29a74eba FIX=0 TYPE=1
+stabilization=0
+friction=0
+inelastic=0
+phase=0
+poststruct=0
+cfl=0
+dressing=1
+--- patch log ---
+Traceback (most recent call last):
+  File "/home/runner/work/Moldeon/Moldeon/scripts/apply-prompt11-0-1-auto-dressing.py", line 51, in <module>
+    raise RuntimeError(f"velocity stage marker mismatch: {text.count(old)}")
+RuntimeError: velocity stage marker mismatch: 0
+--- typecheck ---
+
+> moldeon@0.1.0 typecheck
+> npm run typecheck --workspace @moldeon/web
+
+
+> @moldeon/web@0.1.0 typecheck
+> tsc -b --pretty false
+
+src/physics/bodyCollisionStabilizationFinal.test.ts(124,30): error TS2339: Property 'bodyBroadphaseMs' does not exist on type 'XpbdStepDiagnostics'.
+src/physics/bodyCollisionStabilizationFinal.test.ts(125,31): error TS2339: Property 'bodyNarrowphaseMs' does not exist on type 'XpbdStepDiagnostics'.
+src/physics/bodyCollisionStabilizationFinal.test.ts(126,30): error TS2339: Property 'bodyProjectionMs' does not exist on type 'XpbdStepDiagnostics'.
+src/physics/bodyCollisionStabilizationFinal.test.ts(127,28): error TS2339: Property 'bodyFrictionMs' does not exist on type 'XpbdStepDiagnostics'.
+src/physics/bodyCollisionStabilizationFinal.test.ts(150,36): error TS2339: Property 'bodyDressingStepsRemaining' does not exist on type 'XpbdStepDiagnostics'.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 1
+npm error path /home/runner/work/Moldeon/Moldeon/apps/web
+npm error workspace @moldeon/web@0.1.0
+npm error location /home/runner/work/Moldeon/Moldeon/apps/web
+npm error command failed
+npm error command sh -c tsc -b --pretty false
+--- stat ---
+ apps/web/src/physics/BodyCollisionRegistration.ts | 96 ++++++++++++++++++++---
+ apps/web/src/physics/GarmentXpbdAdapter.ts        | 62 ++-------------
+ apps/web/src/physics/bodyCollision.ts             | 93 ++++++++++++++++++++--
+ apps/web/src/physics/xpbd.ts                      | 29 +++++--
+ apps/web/src/viewport/GlobalThreeViewport.ts      |  4 +-
+ scripts/apply-prompt11-0-1-stabilization.py       |  6 +-
+ 6 files changed, 203 insertions(+), 87 deletions(-)
