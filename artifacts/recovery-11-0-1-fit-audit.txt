@@ -1,0 +1,14 @@
+HEAD=62901a22104ebbd3febf3a08bdcf1278610306d9 STATUS=0
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Moldeon/Moldeon[39m
+
+[90mstdout[2m | apps/web/src/physics/bodyLowerShellFitAudit.test.ts[2m > [22m[2mPrompt 11.0.1 lower-shell fit audit[2m > [22m[2mcompares the assembled upper opening against avatar waist/hip cross-sections
+[22m[39mP1101_LOWER_SHELL_FIT {"opening":{"count":377,"centerX":0.020782102352424787,"centerZ":-0.00545354625364177,"worldTop":0.3047557771205902,"bandTolerance":0.015159207582473756,"halfWidth":0.1468617245554924,"halfDepth":0.1752779334783554,"minRadial":0.03710068832496588,"meanRadial":0.11971520358436225,"maxRadial":0.1792150721239326},"waist":{"halfWidth":0.12973956029079212,"halfDepth":0.11184444852654495},"hip":{"halfWidth":0.177457072906942,"halfDepth":0.13972997866688344},"waistMm":760,"hipMm":1000}
+
+ [32m✓[39m apps/web/src/physics/bodyLowerShellFitAudit.test.ts[2m > [22mPrompt 11.0.1 lower-shell fit audit[2m > [22mcompares the assembled upper opening against avatar waist/hip cross-sections[33m 2837[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:36:58
+[2m   Duration [22m 3.47s[2m (transform 429ms, setup 0ms, import 505ms, tests 2.84s, environment 0ms)[22m
+
