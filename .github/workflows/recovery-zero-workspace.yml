@@ -38,7 +38,7 @@ jobs:
           path = Path("scripts/apply-prompt11-0-1-stabilization.py")
           text = path.read_text(encoding="utf-8")
           old = '''    "function selectInstanceSupportVertices(",\n    "export function xpbdInitializationTransferables",\n    "export function xpbdInitializationTransferables",\n)'''
-          new = '''    "function selectInstanceSupportVertices(",\n    "export function xpbdInitializationTransferables",\n    "",\n)'''
+          new = '''    "function selectInstanceSupportVertices(",\n    "function appendEdge(",\n    "",\n)'''
           if text.count(old) != 1:
               raise RuntimeError(f"script marker mismatch: {text.count(old)}")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
