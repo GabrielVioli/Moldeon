@@ -1,0 +1,18 @@
+HEAD=1d532528f53132f061c2d2d998568453fdd78263 READY=0 BROWSER_EXIT=3 DIFF_EXIT=0
+--- browser ---
+vite-not-ready
+--- vite ---
+
+> moldeon@0.1.0 dev:fallback
+> npm run dev:fallback --workspace @moldeon/web --host 127.0.0.1
+
+
+> @moldeon/web@0.1.0 dev:fallback
+> vite --mode fallback 127.0.0.1
+
+
+  [32m[1mVITE[22m v8.1.5[39m  [42m [1mfallback[22m [49m  [2mready in [0m[1m214[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+--- diff ---
