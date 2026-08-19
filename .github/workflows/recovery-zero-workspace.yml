@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Trajectory Audit
+name: Recovery 11.0.1 Local Dressing Audit
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Trace skirt trajectory
+      - name: Compare local correction dressing windows
         shell: bash
         run: |
           set +e
@@ -49,11 +49,12 @@ jobs:
             python3 scripts/apply-prompt11-0-1-stabilization.py >> /tmp/patch.log 2>&1; PATCH=$?
             python3 scripts/apply-prompt11-0-1-friction.py >> /tmp/patch.log 2>&1; FRICTION=$?
             python3 scripts/apply-prompt11-0-1-inelastic.py >> /tmp/patch.log 2>&1; INELASTIC=$?
+            python3 scripts/apply-prompt11-0-1-local-body-correction.py >> /tmp/patch.log 2>&1; LOCAL=$?
           else
-            PATCH=99; FRICTION=99; INELASTIC=99
+            PATCH=99; FRICTION=99; INELASTIC=99; LOCAL=99
           fi
-          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ]; then
-            npx vitest run apps/web/src/physics/bodyCollisionTrajectoryAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
+          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$LOCAL" -eq 0 ]; then
+            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
           else
             STATUS=99
             : > /tmp/audit.log
@@ -61,11 +62,11 @@ jobs:
           set -e
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC STATUS=$STATUS"
+            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC LOCAL=$LOCAL STATUS=$STATUS"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-trajectory-audit.txt
-          cat artifacts/recovery-11-0-1-trajectory-audit.txt
+          } > artifacts/recovery-11-0-1-local-dressing-audit.txt
+          cat artifacts/recovery-11-0-1-local-dressing-audit.txt
           git restore \
             apps/web/src/physics/BodyCollisionRegistration.ts \
             apps/web/src/physics/GarmentXpbdAdapter.ts \
@@ -75,7 +76,7 @@ jobs:
             scripts/apply-prompt11-0-1-stabilization.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-trajectory-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 trajectory audit" || true
+          git add artifacts/recovery-11-0-1-local-dressing-audit.txt
+          git commit -m "chore: record Prompt 11.0.1 local dressing audit" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           exit "$STATUS"
