@@ -1,1 +1,1 @@
-browser-diagnostic-1
+final-browser-smoke-1
