@@ -1,0 +1,7 @@
+HEAD=e729b4f5e7f788f7a099eee69a695e2a192023eb FIX=0 PATCH=0 FRICTION=0 INELASTIC=0 PHASE=0 ORDER=1 STATUS=99
+--- patch ---
+Traceback (most recent call last):
+  File "/home/runner/work/Moldeon/Moldeon/scripts/apply-prompt11-0-1-body-before-seam.py", line 8, in <module>
+    raise RuntimeError(f"XPBD phase ordering marker mismatch: {text.count(old)}")
+RuntimeError: XPBD phase ordering marker mismatch: 0
+--- audit ---
