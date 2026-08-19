@@ -1,1 +1,1 @@
-final-browser-smoke-1
+browser-final-result-1
