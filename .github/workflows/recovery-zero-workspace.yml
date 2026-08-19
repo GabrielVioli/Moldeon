@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Final Patch Diagnostic
+name: Recovery 11.0.1 Focused Final Gate
 
 on:
   push:
@@ -12,9 +12,9 @@ permissions:
   contents: write
 
 jobs:
-  diagnose:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,64 +25,41 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Apply scripts with status capture
+      - name: Apply final candidate
+        run: python3 scripts/apply-prompt11-0-1-final.py
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Focused physics tests
         shell: bash
         run: |
           set +e
-          : > /tmp/patch.log
-          : > /tmp/status.log
-          python3 - <<'PY' >> /tmp/patch.log 2>&1
-          from pathlib import Path
-          path = Path("scripts/apply-prompt11-0-1-stabilization.py")
-          text = path.read_text(encoding="utf-8")
-          old = '''    "function selectInstanceSupportVertices(",\n    "export function xpbdInitializationTransferables",\n    "export function xpbdInitializationTransferables",\n)'''
-          new = '''    "function selectInstanceSupportVertices(",\n    "function appendEdge(",\n    "",\n)'''
-          if text.count(old) != 1: raise RuntimeError(f"adapter helper boundary mismatch: {text.count(old)}")
-          text = text.replace(old, new, 1)
-          old_condition = '''    && correspondences.every((pair) => (pair.region === "hip" || pair.region === "waist") && pair.neutralPlacement)'''
-          new_condition = '''    && correspondences.every((pair) => pair.region === "hip" || pair.region === "waist")'''
-          if text.count(old_condition) != 1: raise RuntimeError(f"lower-shell condition mismatch: {text.count(old_condition)}")
-          path.write_text(text.replace(old_condition, new_condition, 1), encoding="utf-8")
-
-          dressing = Path("scripts/apply-prompt11-0-1-auto-dressing.py")
-          dressing_text = dressing.read_text(encoding="utf-8")
-          marker = "applyBodyContactVelocities(state.velocities, state.body);"
-          if dressing_text.count(marker) != 2:
-              raise RuntimeError(f"auto dressing velocity marker mismatch: {dressing_text.count(marker)}")
-          dressing.write_text(dressing_text.replace(marker, "applyBodyContactVelocities(state.velocities, state.body, dt);"), encoding="utf-8")
-          PY
-          FIX=$?
-          for entry in \
-            "stabilization:scripts/apply-prompt11-0-1-stabilization.py" \
-            "friction:scripts/apply-prompt11-0-1-friction.py" \
-            "inelastic:scripts/apply-prompt11-0-1-inelastic.py" \
-            "phase:scripts/apply-prompt11-0-1-phase-switch.py" \
-            "poststruct:scripts/apply-prompt11-0-1-post-body-structural.py" \
-            "cfl:scripts/apply-prompt11-0-1-cfl-velocity.py" \
-            "dressing:scripts/apply-prompt11-0-1-auto-dressing.py" \
-            "profile:scripts/apply-prompt11-0-1-body-profile.py"; do
-            NAME="${entry%%:*}"; SCRIPT="${entry#*:}"
-            python3 "$SCRIPT" >> /tmp/patch.log 2>&1
-            CODE=$?
-            echo "$NAME=$CODE" >> /tmp/status.log
-            if [ "$CODE" -ne 0 ]; then break; fi
-          done
-          npm run typecheck > /tmp/type.log 2>&1
-          TYPE=$?
+          npx vitest run \
+            apps/web/src/physics/bodyCollision.test.ts \
+            apps/web/src/physics/bodyCollisionRegistration.test.ts \
+            apps/web/src/physics/XpbdWorkerState.test.ts \
+            apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts \
+            apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts \
+            --reporter=verbose > /tmp/tests.log 2>&1
+          STATUS=$?
           set -e
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX TYPE=$TYPE"
-            cat /tmp/status.log 2>/dev/null || true
-            echo "--- patch log ---"; cat /tmp/patch.log
-            echo "--- typecheck ---"; cat /tmp/type.log
-            echo "--- stat ---"; git diff --stat
-          } > artifacts/recovery-11-0-1-final-patch-diagnostic.txt
-          cat artifacts/recovery-11-0-1-final-patch-diagnostic.txt
-          git restore apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx scripts/apply-prompt11-0-1-stabilization.py scripts/apply-prompt11-0-1-auto-dressing.py
+            echo "HEAD=$(git rev-parse HEAD) STATUS=$STATUS"
+            cat /tmp/tests.log
+          } > artifacts/recovery-11-0-1-focused-final.txt
+          cat artifacts/recovery-11-0-1-focused-final.txt
+          git restore \
+            apps/web/src/physics/BodyCollisionRegistration.ts \
+            apps/web/src/physics/GarmentXpbdAdapter.ts \
+            apps/web/src/physics/bodyCollision.ts \
+            apps/web/src/physics/xpbd.ts \
+            apps/web/src/viewport/GlobalThreeViewport.ts \
+            apps/web/src/viewport/GarmentViewport.tsx \
+            scripts/apply-prompt11-0-1-stabilization.py \
+            scripts/apply-prompt11-0-1-auto-dressing.py
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-final-patch-diagnostic.txt
-          git commit -m "chore: record Prompt 11.0.1 final patch diagnostic" || true
+          git add artifacts/recovery-11-0-1-focused-final.txt
+          git commit -m "chore: record Prompt 11.0.1 focused final gate" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
-          exit 0
+          exit "$STATUS"
