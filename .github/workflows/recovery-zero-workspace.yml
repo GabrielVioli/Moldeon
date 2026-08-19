@@ -41,15 +41,21 @@ jobs:
           new = '''    "function selectInstanceSupportVertices(",\n    "function appendEdge(",\n    "",\n)'''
           if text.count(old) != 1:
               raise RuntimeError(f"script marker mismatch: {text.count(old)}")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          text = text.replace(old, new, 1)
+          old_condition = '''    && correspondences.every((pair) => (pair.region === "hip" || pair.region === "waist") && pair.neutralPlacement)'''
+          new_condition = '''    && correspondences.every((pair) => pair.region === "hip" || pair.region === "waist")'''
+          if text.count(old_condition) != 1:
+              raise RuntimeError(f"lower-shell condition mismatch: {text.count(old_condition)}")
+          path.write_text(text.replace(old_condition, new_condition, 1), encoding="utf-8")
           PY
           FIX=$?
           if [ "$FIX" -eq 0 ]; then
             python3 scripts/apply-prompt11-0-1-stabilization.py >> /tmp/patch.log 2>&1; PATCH=$?
+            python3 scripts/apply-prompt11-0-1-tests.py >> /tmp/patch.log 2>&1; TESTPATCH=$?
           else
-            PATCH=99
+            PATCH=99; TESTPATCH=99
           fi
-          if [ "$PATCH" -eq 0 ]; then
+          if [ "$PATCH" -eq 0 ] && [ "$TESTPATCH" -eq 0 ]; then
             npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
             npx vitest run apps/web/src/physics/bodyCollision.test.ts apps/web/src/physics/bodyCollisionRegistration.test.ts apps/web/src/physics/XpbdWorkerState.test.ts apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts apps/web/src/physics/bodyCollisionStabilizationCandidate.test.ts --reporter=verbose > /tmp/tests.log 2>&1; TESTS=$?
             git diff --check > /tmp/diff.log 2>&1; DIFF=$?
@@ -61,23 +67,23 @@ jobs:
           mkdir -p artifacts
           {
             echo "HEAD=$(git rev-parse HEAD)"
-            echo "FIX=$FIX PATCH=$PATCH TYPECHECK=$TYPE TESTS=$TESTS DIFF=$DIFF"
+            echo "FIX=$FIX PATCH=$PATCH TESTPATCH=$TESTPATCH TYPECHECK=$TYPE TESTS=$TESTS DIFF=$DIFF"
             echo "--- patch ---"; cat /tmp/patch.log
             echo "--- tests ---"; cat /tmp/tests.log
             echo "--- typecheck ---"; cat /tmp/type.log
             echo "--- diff ---"; cat /tmp/diff.log
-          } > artifacts/recovery-11-0-1-candidate-1.txt
-          cat artifacts/recovery-11-0-1-candidate-1.txt
+          } > artifacts/recovery-11-0-1-candidate-2.txt
+          cat artifacts/recovery-11-0-1-candidate-2.txt
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          if [ "$PATCH" -eq 0 ] && [ "$TYPE" -eq 0 ] && [ "$TESTS" -eq 0 ] && [ "$DIFF" -eq 0 ]; then
-            git add apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts artifacts/recovery-11-0-1-candidate-1.txt
+          if [ "$PATCH" -eq 0 ] && [ "$TESTPATCH" -eq 0 ] && [ "$TYPE" -eq 0 ] && [ "$TESTS" -eq 0 ] && [ "$DIFF" -eq 0 ]; then
+            git add apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/physics/bodyCollision.test.ts apps/web/src/physics/bodyCollisionRegistration.test.ts artifacts/recovery-11-0-1-candidate-2.txt
             git commit -m "fix(physics): stabilize body collision release"
             git push origin HEAD:recovery/11.0.1-body-collision-stabilization
           else
-            git restore apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts scripts/apply-prompt11-0-1-stabilization.py
-            git add artifacts/recovery-11-0-1-candidate-1.txt
-            git commit -m "chore: record Prompt 11.0.1 candidate failure" || true
+            git restore apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/physics/bodyCollision.test.ts apps/web/src/physics/bodyCollisionRegistration.test.ts scripts/apply-prompt11-0-1-stabilization.py
+            git add artifacts/recovery-11-0-1-candidate-2.txt
+            git commit -m "chore: record Prompt 11.0.1 candidate 2 failure" || true
             git push origin HEAD:recovery/11.0.1-body-collision-stabilization
             exit 1
           fi
