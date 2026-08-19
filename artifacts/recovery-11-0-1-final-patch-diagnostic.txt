@@ -1,4 +1,4 @@
-HEAD=87880999578e13f98cb838589d473c1c29a74eba FIX=0 TYPE=1
+HEAD=39beb23dfd7ae33fc10bfb828fa33fa81276358f FIX=0 TYPE=1
 stabilization=0
 friction=0
 inelastic=0
@@ -33,10 +33,11 @@ npm error location /home/runner/work/Moldeon/Moldeon/apps/web
 npm error command failed
 npm error command sh -c tsc -b --pretty false
 --- stat ---
- apps/web/src/physics/BodyCollisionRegistration.ts | 96 ++++++++++++++++++++---
- apps/web/src/physics/GarmentXpbdAdapter.ts        | 62 ++-------------
- apps/web/src/physics/bodyCollision.ts             | 93 ++++++++++++++++++++--
- apps/web/src/physics/xpbd.ts                      | 29 +++++--
- apps/web/src/viewport/GlobalThreeViewport.ts      |  4 +-
- scripts/apply-prompt11-0-1-stabilization.py       |  6 +-
- 6 files changed, 203 insertions(+), 87 deletions(-)
+ apps/web/src/physics/BodyCollisionRegistration.ts  | 96 +++++++++++++++++++---
+ apps/web/src/physics/GarmentXpbdAdapter.ts         | 62 ++------------
+ apps/web/src/physics/bodyCollision.ts              | 93 +++++++++++++++++++--
+ apps/web/src/physics/xpbd.ts                       | 29 +++++--
+ apps/web/src/viewport/GlobalThreeViewport.ts       |  4 +-
+ .../recovery-11-0-1-final-patch-diagnostic.txt     |  9 +-
+ scripts/apply-prompt11-0-1-stabilization.py        |  6 +-
+ 7 files changed, 204 insertions(+), 95 deletions(-)
