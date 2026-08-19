@@ -1,0 +1,481 @@
+HEAD=d370328d14a02e8e691172a8a4201b23cacb1fe0
+--- runtime diff stat ---
+ apps/web/src/physics/BodyCollisionRegistration.ts | 96 ++++++++++++++++++++---
+ apps/web/src/physics/GarmentXpbdAdapter.ts        | 62 ++-------------
+ apps/web/src/physics/bodyCollision.ts             | 93 ++++++++++++++++++++--
+ apps/web/src/physics/xpbd.ts                      | 29 +++++--
+ apps/web/src/viewport/GlobalThreeViewport.ts      |  4 +-
+ scripts/apply-prompt11-0-1-stabilization.py       |  6 +-
+ 6 files changed, 203 insertions(+), 87 deletions(-)
+--- runtime diff ---
+diff --git a/apps/web/src/physics/BodyCollisionRegistration.ts b/apps/web/src/physics/BodyCollisionRegistration.ts
+index 18109ab..a2c9de7 100644
+--- a/apps/web/src/physics/BodyCollisionRegistration.ts
++++ b/apps/web/src/physics/BodyCollisionRegistration.ts
+@@ -7,30 +7,34 @@ export type BodyRegistrationStatus = "registered" | "body-placement-required";
+ export interface SimulationBodyRegistration {
+   status: BodyRegistrationStatus;
+   transform: SimulationBodyTransform;
+-  source: "placement-anchors" | "unavailable";
++  source: "placement-anchors" | "lower-shell-top-plane" | "unavailable";
+   registeredInstanceIds: string[];
+   residualMeanM: number;
+   residualMaxM: number;
+   warning?: string;
+ }
+ 
++interface RegistrationPair {
++  instanceId: string;
++  region: string;
++  surface: string;
++  neutralPlacement: boolean;
++  garment: [number, number, number];
++  body: [number, number, number];
++}
++
+ /**
+  * Registers the static parametric body into the coarse/fine garment world.
+  *
+- * The coarse assembly intentionally owns its own origin. Body registration is
+- * therefore explicit and separate from both assembly and collision. Only
+- * existing confirmed placement/anchor metadata can authorize this transform.
+- * No garment name/type or geometry classifier is consulted.
++ * Body placement stays separate from assembly and collision. Confirmed closed
++ * lower shells use their assembled upper plane as the waist reference; other
++ * placements retain the generic anchor fit. No garment/template name is read.
+  */
+ export function resolveSimulationBodyRegistration(
+   state: Pick<GarmentAssemblyState, "positions" | "instances">,
+   avatar: AvatarParametricModel,
+ ): SimulationBodyRegistration {
+-  const correspondences: Array<{
+-    instanceId: string;
+-    garment: [number, number, number];
+-    body: [number, number, number];
+-  }> = [];
++  const correspondences: RegistrationPair[] = [];
+ 
+   for (const instance of state.instances) {
+     if (instance.placement.region === "custom" || instance.placement.surface === "custom") continue;
+@@ -42,7 +46,17 @@ export function resolveSimulationBodyRegistration(
+       anchor.position[1] + instance.placement.offsetYMm * 0.001,
+       anchor.position[2] + instance.placement.offsetZMm * 0.001,
+     ];
+-    correspondences.push({ instanceId: instance.id, garment, body });
++    correspondences.push({
++      instanceId: instance.id,
++      region: instance.placement.region,
++      surface: instance.placement.surface,
++      neutralPlacement: instance.placement.offsetXMm === 0
++        && instance.placement.offsetYMm === 0
++        && instance.placement.offsetZMm === 0
++        && instance.placement.rotationDeg === 0,
++      garment,
++      body,
++    });
+   }
+ 
+   if (correspondences.length === 0) {
+@@ -57,8 +71,64 @@ export function resolveSimulationBodyRegistration(
+     };
+   }
+ 
+-  // Body -> garment. Rotation stays identity until explicit orientation metadata
+-  // supplies a non-ambiguous rigid frame. Arbitrary scale is never permitted.
++  const surfaces = new Set(correspondences.map((pair) => pair.surface));
++  const isClosedLowerShell = correspondences.length >= 2
++    && correspondences.every((pair) => pair.region === "hip" || pair.region === "waist")
++    && surfaces.has("front")
++    && surfaces.has("back");
++  if (isClosedLowerShell) return registerClosedLowerShell(state, avatar, correspondences);
++
++  return registerByPlacementAnchors(correspondences);
++}
++
++function registerClosedLowerShell(
++  state: Pick<GarmentAssemblyState, "positions" | "instances">,
++  avatar: AvatarParametricModel,
++  correspondences: readonly RegistrationPair[],
++): SimulationBodyRegistration {
++  const registered = new Set(correspondences.map((pair) => pair.instanceId));
++  let sumX = 0;
++  let sumZ = 0;
++  let particleCount = 0;
++  let garmentTopY = Number.NEGATIVE_INFINITY;
++  const instanceTopY: number[] = [];
++
++  for (const instance of state.instances) {
++    if (!registered.has(instance.id)) continue;
++    let topY = Number.NEGATIVE_INFINITY;
++    for (let local = 0; local < instance.vertexCount; local += 1) {
++      const offset = (instance.particleStart + local) * 3;
++      sumX += state.positions[offset];
++      sumZ += state.positions[offset + 2];
++      particleCount += 1;
++      topY = Math.max(topY, state.positions[offset + 1]);
++    }
++    if (Number.isFinite(topY)) {
++      instanceTopY.push(topY);
++      garmentTopY = Math.max(garmentTopY, topY);
++    }
++  }
++
++  const count = Math.max(1, particleCount);
++  const translation: [number, number, number] = [
++    sumX / count,
++    garmentTopY - avatar.landmarks.waistY,
++    sumZ / count,
++  ];
++  const registeredWaistY = avatar.landmarks.waistY + translation[1];
++  const residuals = instanceTopY.map((topY) => Math.abs(topY - registeredWaistY));
++
++  return {
++    status: "registered",
++    transform: { translation, rotation: [0, 0, 0, 1] },
++    source: "lower-shell-top-plane",
++    registeredInstanceIds: correspondences.map((pair) => pair.instanceId),
++    residualMeanM: residuals.length > 0 ? residuals.reduce((sum, value) => sum + value, 0) / residuals.length : 0,
++    residualMaxM: residuals.length > 0 ? Math.max(...residuals) : 0,
++  };
++}
++
++function registerByPlacementAnchors(correspondences: readonly RegistrationPair[]): SimulationBodyRegistration {
+   const translation: [number, number, number] = [0, 0, 0];
+   for (const pair of correspondences) {
+     translation[0] += pair.garment[0] - pair.body[0];
+diff --git a/apps/web/src/physics/GarmentXpbdAdapter.ts b/apps/web/src/physics/GarmentXpbdAdapter.ts
+index 812d8b8..8b98c14 100644
+--- a/apps/web/src/physics/GarmentXpbdAdapter.ts
++++ b/apps/web/src/physics/GarmentXpbdAdapter.ts
+@@ -198,28 +198,12 @@ export function buildXpbdInitialization(
+   const pinTargets: number[] = [];
+   if (options.pinAssemblyAnchors === true) {
+     const seenPins = new Set<number>();
+-    const appendPin = (particleIndex: number, x: number, y: number, z: number) => {
+-      if (seenPins.has(particleIndex)) return;
+-      seenPins.add(particleIndex);
+-      pinIndices.push(particleIndex);
+-      pinTargets.push(x, y, z);
+-      inverseMasses[particleIndex] = 0;
+-    };
+-
+     for (const anchor of state.anchorConstraints) {
+-      appendPin(anchor.particleIndex, anchor.targetX, anchor.targetY, anchor.targetZ);
+-    }
+-    for (const instance of state.instances) {
+-      if (instance.placement.region === "custom" || instance.placement.surface === "custom") continue;
+-      for (const localIndex of selectInstanceSupportVertices(instance)) {
+-        const particleIndex = instance.particleStart + localIndex;
+-        appendPin(
+-          particleIndex,
+-          positions[particleIndex * 3],
+-          positions[particleIndex * 3 + 1],
+-          positions[particleIndex * 3 + 2],
+-        );
+-      }
++      if (seenPins.has(anchor.particleIndex)) continue;
++      seenPins.add(anchor.particleIndex);
++      pinIndices.push(anchor.particleIndex);
++      pinTargets.push(anchor.targetX, anchor.targetY, anchor.targetZ);
++      inverseMasses[anchor.particleIndex] = 0;
+     }
+   }
+ 
+@@ -412,42 +396,6 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
+   ];
+ }
+ 
+-function selectInstanceSupportVertices(instance: AssemblyPanelInstance): number[] {
+-  const boundary = [...instance.topology.boundaryVertices];
+-  if (boundary.length <= 16) return boundary;
+-  const xOf = (localIndex: number) => instance.topology.positions2DMm[localIndex * 2];
+-  const yOf = (localIndex: number) => instance.topology.positions2DMm[localIndex * 2 + 1];
+-  const topY = Math.min(...boundary.map(yOf));
+-  const minX = Math.min(...boundary.map(xOf));
+-  const maxX = Math.max(...boundary.map(xOf));
+-  const sideTolerance = Math.max(8, (maxX - minX) * 0.04);
+-  const topBand = boundary
+-    .filter((localIndex) => yOf(localIndex) <= topY + 12)
+-    .sort((left, right) => xOf(left) - xOf(right));
+-  const sideRails = boundary
+-    .filter((localIndex) => xOf(localIndex) <= minX + sideTolerance || xOf(localIndex) >= maxX - sideTolerance)
+-    .sort((left, right) => yOf(left) - yOf(right));
+-  const anchors = [
+-    ...sampleEvenly(topBand.length >= 2 ? topBand : [...boundary].sort((left, right) => yOf(left) - yOf(right)).slice(0, 2), 8),
+-    ...sampleEvenly(sideRails, 8),
+-  ];
+-  return uniqueNumbers(anchors);
+-}
+-
+-function sampleEvenly(values: readonly number[], maximum: number): number[] {
+-  if (values.length <= maximum) return [...values];
+-  const result: number[] = [];
+-  for (let index = 0; index < maximum; index += 1) {
+-    const sourceIndex = Math.round(index * (values.length - 1) / Math.max(1, maximum - 1));
+-    const value = values[sourceIndex];
+-    if (!result.includes(value)) result.push(value);
+-  }
+-  return result;
+-}
+-
+-function uniqueNumbers(values: readonly number[]): number[] {
+-  return [...new Set(values)];
+-}
+ function appendEdge(
+   edges: Map<string, EdgeRecord>,
+   a: number,
+diff --git a/apps/web/src/physics/bodyCollision.ts b/apps/web/src/physics/bodyCollision.ts
+index 92e66ed..118775a 100644
+--- a/apps/web/src/physics/bodyCollision.ts
++++ b/apps/web/src/physics/bodyCollision.ts
+@@ -33,10 +33,14 @@ export interface BodyCollisionRuntimeState {
+   particleHalfThicknessM: Float32Array;
+   particleFriction: Float32Array;
+   contactNormals: Float32Array;
++  contactCorrections: Float32Array;
+   contactMask: Uint8Array;
+   contactRegionIndex: Int16Array;
+   normalImpulseSpeed: Float32Array;
+   contactSkinM: number;
++  grossDepenetrationEnabled: boolean;
++  dressingStepsRemaining: number;
++  initialDressingSteps: number;
+   bodyContactCount: number;
+   frictionContactCount: number;
+   sweptContactCount: number;
+@@ -52,6 +56,7 @@ export interface BodyCollisionSolveInput {
+   correctionLimits: Float32Array;
+   maximumCorrectionM: number;
+   fixedTimeStep: number;
++  velocities?: Float32Array;
+   body: BodyCollisionRuntimeState;
+   allowSwept: boolean;
+ }
+@@ -135,10 +140,14 @@ export function createBodyCollisionRuntimeState(
+     particleHalfThicknessM,
+     particleFriction,
+     contactNormals: new Float32Array(particleHalfThicknessM.length * 3),
++    contactCorrections: new Float32Array(particleHalfThicknessM.length * 3),
+     contactMask: new Uint8Array(particleHalfThicknessM.length),
+     contactRegionIndex: new Int16Array(particleHalfThicknessM.length).fill(-1),
+     normalImpulseSpeed: new Float32Array(particleHalfThicknessM.length),
+     contactSkinM,
++    grossDepenetrationEnabled: true,
++    dressingStepsRemaining: 0,
++    initialDressingSteps: 0,
+     bodyContactCount: 0,
+     frictionContactCount: 0,
+     sweptContactCount: 0,
+@@ -148,8 +157,41 @@ export function createBodyCollisionRuntimeState(
+   };
+ }
+ 
++export function initializeBodyDressing(
++  body: BodyCollisionRuntimeState,
++  positions: Float32Array,
++  maximumCorrectionM: number,
++): void {
++  body.dressingStepsRemaining = 0;
++  body.initialDressingSteps = 0;
++  body.grossDepenetrationEnabled = false;
++  if (!body.enabled || body.colliders.kinds.length === 0 || !Number.isFinite(maximumCorrectionM) || maximumCorrectionM <= 0) return;
++
++  let maximumPenetrationM = 0;
++  const particleCount = positions.length / 3;
++  for (let particle = 0; particle < particleCount; particle += 1) {
++    const offset = particle * 3;
++    const contact = deepestBodyContact(
++      [positions[offset], positions[offset + 1], positions[offset + 2]],
++      body.colliders,
++      body.particleHalfThicknessM[particle] + body.contactSkinM,
++    );
++    if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
++  }
++  if (maximumPenetrationM <= EPSILON) return;
++
++  // Each gross projection is capped by maximumCorrectionM. Two passes per
++  // theoretical minimum leave room for structural constraints to relax between
++  // depenetrations without a garment-specific staging duration.
++  const minimumGrossPasses = Math.ceil(maximumPenetrationM / maximumCorrectionM);
++  body.initialDressingSteps = Math.max(1, minimumGrossPasses * 2);
++  body.dressingStepsRemaining = body.initialDressingSteps;
++  body.grossDepenetrationEnabled = true;
++}
++
+ export function resetBodyContactStep(body: BodyCollisionRuntimeState): void {
+   body.contactNormals.fill(0);
++  body.contactCorrections.fill(0);
+   body.contactMask.fill(0);
+   body.contactRegionIndex.fill(-1);
+   body.normalImpulseSpeed.fill(0);
+@@ -168,6 +210,10 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
+   if (body.particleHalfThicknessM.length !== particleCount || body.particleFriction.length !== particleCount) {
+     throw new RangeError("Body collision particle buffers não correspondem ao garment state.");
+   }
++  if (input.velocities && input.velocities.length !== input.predictedPositions.length) {
++    throw new RangeError("Body collision velocity buffer não corresponde ao garment state.");
++  }
++
+   for (let particle = 0; particle < particleCount; particle += 1) {
+     if (input.inverseMasses[particle] <= 0) continue;
+     const offset = particle * 3;
+@@ -191,8 +237,12 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
+     let correctionY = contact.surfacePoint[1] - point[1];
+     let correctionZ = contact.surfacePoint[2] - point[2];
+     let correction = Math.hypot(correctionX, correctionY, correctionZ);
++    const localLimit = Math.max(1e-6, Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM));
++    const grossPenetration = body.grossDepenetrationEnabled
++      && !contact.swept
++      && contact.penetrationM > localLimit;
+     if (!contact.swept) {
+-      const limit = Math.max(1e-6, Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM));
++      const limit = grossPenetration ? input.maximumCorrectionM : localLimit;
+       if (correction > limit) {
+         const scale = limit / correction;
+         correctionX *= scale;
+@@ -201,7 +251,9 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
+         correction = limit;
+       }
+     } else {
+-      const maximumSweepCorrection = Math.max(input.maximumCorrectionM, 12 * input.fixedTimeStep);
++      const maximumSweepCorrection = body.grossDepenetrationEnabled
++        ? input.maximumCorrectionM
++        : localLimit;
+       if (correction > maximumSweepCorrection) {
+         const scale = maximumSweepCorrection / correction;
+         correctionX *= scale;
+@@ -212,6 +264,17 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
+       body.sweptContactCount += 1;
+     }
+ 
++    const vx = input.velocities
++      ? input.velocities[offset]
++      : (point[0] - previous[0]) / Math.max(input.fixedTimeStep, EPSILON);
++    const vy = input.velocities
++      ? input.velocities[offset + 1]
++      : (point[1] - previous[1]) / Math.max(input.fixedTimeStep, EPSILON);
++    const vz = input.velocities
++      ? input.velocities[offset + 2]
++      : (point[2] - previous[2]) / Math.max(input.fixedTimeStep, EPSILON);
++    const inwardSpeed = Math.max(0, -(vx * contact.normal[0] + vy * contact.normal[1] + vz * contact.normal[2]));
++
+     input.predictedPositions[offset] += correctionX;
+     input.predictedPositions[offset + 1] += correctionY;
+     input.predictedPositions[offset + 2] += correctionZ;
+@@ -221,7 +284,17 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
+     body.contactNormals[offset] = contact.normal[0];
+     body.contactNormals[offset + 1] = contact.normal[1];
+     body.contactNormals[offset + 2] = contact.normal[2];
+-    body.normalImpulseSpeed[particle] = Math.max(body.normalImpulseSpeed[particle], correction / Math.max(input.fixedTimeStep, EPSILON));
++    body.contactCorrections[offset] += correctionX;
++    body.contactCorrections[offset + 1] += correctionY;
++    body.contactCorrections[offset + 2] += correctionZ;
++    const settledContactImpulseSpeed = !contact.swept && !grossPenetration
++      ? correction / Math.max(input.fixedTimeStep, EPSILON)
++      : 0;
++    body.normalImpulseSpeed[particle] = Math.max(
++      body.normalImpulseSpeed[particle],
++      inwardSpeed,
++      settledContactImpulseSpeed,
++    );
+   }
+ }
+ 
+@@ -259,14 +332,24 @@ export function applyBodyContactVelocity(
+   ];
+ }
+ 
+-export function applyBodyContactVelocities(velocities: Float32Array, body: BodyCollisionRuntimeState): void {
++export function applyBodyContactVelocities(
++  velocities: Float32Array,
++  body: BodyCollisionRuntimeState,
++  fixedTimeStep = 1,
++): void {
+   body.frictionContactCount = 0;
++  const inverseDt = 1 / Math.max(fixedTimeStep, EPSILON);
+   for (let particle = 0; particle < body.contactMask.length; particle += 1) {
+     if (!body.contactMask[particle]) continue;
+     const offset = particle * 3;
+     const friction = body.particleFriction[particle];
++    const physicalVelocity: [number, number, number] = [
++      velocities[offset] - body.contactCorrections[offset] * inverseDt,
++      velocities[offset + 1] - body.contactCorrections[offset + 1] * inverseDt,
++      velocities[offset + 2] - body.contactCorrections[offset + 2] * inverseDt,
++    ];
+     const next = applyBodyContactVelocity(
+-      [velocities[offset], velocities[offset + 1], velocities[offset + 2]],
++      physicalVelocity,
+       [body.contactNormals[offset], body.contactNormals[offset + 1], body.contactNormals[offset + 2]],
+       friction,
+       body.normalImpulseSpeed[particle],
+diff --git a/apps/web/src/physics/xpbd.ts b/apps/web/src/physics/xpbd.ts
+index d49f138..a6264ea 100644
+--- a/apps/web/src/physics/xpbd.ts
++++ b/apps/web/src/physics/xpbd.ts
+@@ -208,16 +208,25 @@ export function stepXpbd(state: XpbdState): void {
+     phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
+     phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
+     phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
+-    phaseStarted = performance.now();
+-    solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: iteration === 0 });
+-    profile.bodyCollisionMs += performance.now() - phaseStarted;
+     enforcePins(state);
+   }
+ 
++  phaseStarted = performance.now();
++  solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true });
++  profile.bodyCollisionMs = performance.now() - phaseStarted;
++  enforcePins(state);
++  // Body collision is intentionally evaluated once per step. Re-project one
++  // structural XPBD pass afterwards so contact correction cannot be the final
++  // operator that leaves stretch/shear/seams outside their material manifold.
++  phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
++  phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
++  phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
++  phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
++  enforcePins(state);
+   finalizeBodyContactDiagnostics(state.body);
+   phaseStarted = performance.now();
+   updateVelocitiesAndPositions(state, dt);
+-  applyBodyContactVelocities(state.velocities, state.body);
++  applyBodyContactVelocities(state.velocities, state.body, dt);
+   profile.velocityUpdateMs = performance.now() - phaseStarted;
+   state.stepCount += 1;
+ 
+@@ -426,8 +435,16 @@ function updateVelocitiesAndPositions(state: XpbdState, dt: number): void {
+     let vy = (state.predictedPositions[offset + 1] - state.positions[offset + 1]) / dt * state.config.damping;
+     let vz = (state.predictedPositions[offset + 2] - state.positions[offset + 2]) / dt * state.config.damping;
+     const speed = Math.hypot(vx, vy, vz);
+-    if (speed > maximumVelocity) {
+-      const scale = maximumVelocity / speed;
++    // CFL-style mesh stability: a particle must not cross more than its local
++    // structural edge scale in one fixed step. correctionLimits are defined
++    // as 10% of the smallest incident structural edge, so x10 recovers that
++    // local edge length without a garment- or scene-specific speed constant.
++    const localEdgeLengthM = state.correctionLimits[particle] * 10;
++    const localMaximumVelocity = localEdgeLengthM > EPSILON
++      ? Math.min(maximumVelocity, localEdgeLengthM / dt)
++      : maximumVelocity;
++    if (speed > localMaximumVelocity) {
++      const scale = localMaximumVelocity / speed;
+       vx *= scale;
+       vy *= scale;
+       vz *= scale;
+diff --git a/apps/web/src/viewport/GlobalThreeViewport.ts b/apps/web/src/viewport/GlobalThreeViewport.ts
+index f816b49..6fb52a5 100644
+--- a/apps/web/src/viewport/GlobalThreeViewport.ts
++++ b/apps/web/src/viewport/GlobalThreeViewport.ts
+@@ -266,12 +266,10 @@ export class ThreeViewport {
+       const initialization = buildXpbdInitialization(state, garment, response.revision, {
+         bodyColliders: packedColliders,
+         bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
+-        pinAssemblyAnchors: registration.status === "registered",
+         config: {
+           gravity: this.scaledGravity(),
+           maximumSubsteps: settings.substeps,
+-          iterations: registration.status === "registered" ? Math.max(settings.iterations, 24) : settings.iterations,
+-          ...(registration.status === "registered" ? { maximumVelocity: 1 } : {}),
++          iterations: settings.iterations,
+         },
+       });
+       this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
