@@ -1,4 +1,4 @@
-name: Recovery 11.0.1 Hard Seam CFL Audit
+name: Recovery 11.0.1 Final Candidate
 
 on:
   push:
@@ -12,9 +12,9 @@ permissions:
   contents: write
 
 jobs:
-  audit:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,11 +25,11 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - name: Measure hard seam budget with CFL relaxation
+      - name: Apply final runtime candidate
         shell: bash
         run: |
-          set +e
-          python3 - <<'PY' > /tmp/patch.log 2>&1
+          set -e
+          python3 - <<'PY'
           from pathlib import Path
           path = Path("scripts/apply-prompt11-0-1-stabilization.py")
           text = path.read_text(encoding="utf-8")
@@ -44,45 +44,41 @@ jobs:
               raise RuntimeError(f"lower-shell condition mismatch: {text.count(old_condition)}")
           path.write_text(text.replace(old_condition, new_condition, 1), encoding="utf-8")
           PY
-          FIX=$?
-          if [ "$FIX" -eq 0 ]; then
-            python3 scripts/apply-prompt11-0-1-stabilization.py >> /tmp/patch.log 2>&1; PATCH=$?
-            python3 scripts/apply-prompt11-0-1-friction.py >> /tmp/patch.log 2>&1; FRICTION=$?
-            python3 scripts/apply-prompt11-0-1-inelastic.py >> /tmp/patch.log 2>&1; INELASTIC=$?
-            python3 scripts/apply-prompt11-0-1-phase-switch.py >> /tmp/patch.log 2>&1; PHASE=$?
-            python3 scripts/apply-prompt11-0-1-post-body-structural.py >> /tmp/patch.log 2>&1; POSTSTRUCT=$?
-            python3 scripts/apply-prompt11-0-1-post-body-four-pass.py >> /tmp/patch.log 2>&1; FOURPASS=$?
-            python3 scripts/apply-prompt11-0-1-cfl-velocity.py >> /tmp/patch.log 2>&1; CFL=$?
-            python3 scripts/apply-prompt11-0-1-hard-seam-edge-budget.py >> /tmp/patch.log 2>&1; SEAMBUDGET=$?
-          else
-            PATCH=99; FRICTION=99; INELASTIC=99; PHASE=99; POSTSTRUCT=99; FOURPASS=99; CFL=99; SEAMBUDGET=99
-          fi
-          if [ "$PATCH" -eq 0 ] && [ "$FRICTION" -eq 0 ] && [ "$INELASTIC" -eq 0 ] && [ "$PHASE" -eq 0 ] && [ "$POSTSTRUCT" -eq 0 ] && [ "$FOURPASS" -eq 0 ] && [ "$CFL" -eq 0 ] && [ "$SEAMBUDGET" -eq 0 ]; then
-            npm run typecheck > /tmp/type.log 2>&1; TYPE=$?
-            npx vitest run apps/web/src/physics/bodyCollisionStagedDressingAudit.test.ts apps/web/src/physics/bodyCollisionConstraintStrainAudit.test.ts --reporter=verbose > /tmp/audit.log 2>&1; STATUS=$?
-          else
-            TYPE=99; STATUS=99
-            : > /tmp/type.log; : > /tmp/audit.log
-          fi
-          set -e
+          python3 scripts/apply-prompt11-0-1-stabilization.py
+          python3 scripts/apply-prompt11-0-1-friction.py
+          python3 scripts/apply-prompt11-0-1-inelastic.py
+          python3 scripts/apply-prompt11-0-1-phase-switch.py
+          python3 scripts/apply-prompt11-0-1-post-body-structural.py
+          python3 scripts/apply-prompt11-0-1-cfl-velocity.py
+          python3 scripts/apply-prompt11-0-1-auto-dressing.py
+          python3 scripts/apply-prompt11-0-1-body-profile.py
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Focused physics validation
+        run: >-
+          npx vitest run
+          apps/web/src/physics/bodyCollision.test.ts
+          apps/web/src/physics/bodyCollisionRegistration.test.ts
+          apps/web/src/physics/XpbdWorkerState.test.ts
+          apps/web/src/physics/xpbdBodyCollisionCanonical.test.ts
+          apps/web/src/physics/bodyCollisionStabilizationFinal.test.ts
+          --reporter=verbose
+      - name: Diff check
+        run: git diff --check
+      - name: Record candidate
+        if: always()
+        shell: bash
+        run: |
           mkdir -p artifacts
           {
-            echo "HEAD=$(git rev-parse HEAD) FIX=$FIX PATCH=$PATCH FRICTION=$FRICTION INELASTIC=$INELASTIC PHASE=$PHASE POSTSTRUCT=$POSTSTRUCT FOURPASS=$FOURPASS CFL=$CFL SEAMBUDGET=$SEAMBUDGET TYPE=$TYPE STATUS=$STATUS"
-            echo "--- patch ---"; cat /tmp/patch.log
-            echo "--- typecheck ---"; cat /tmp/type.log
-            echo "--- audit ---"; cat /tmp/audit.log
-          } > artifacts/recovery-11-0-1-hard-seam-cfl-audit.txt
-          cat artifacts/recovery-11-0-1-hard-seam-cfl-audit.txt
-          git restore \
-            apps/web/src/physics/BodyCollisionRegistration.ts \
-            apps/web/src/physics/GarmentXpbdAdapter.ts \
-            apps/web/src/physics/bodyCollision.ts \
-            apps/web/src/physics/xpbd.ts \
-            apps/web/src/viewport/GlobalThreeViewport.ts \
-            scripts/apply-prompt11-0-1-stabilization.py
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo "--- runtime diff stat ---"
+            git diff --stat
+            echo "--- runtime diff ---"
+            git diff -- apps/web/src/physics/BodyCollisionRegistration.ts apps/web/src/physics/GarmentXpbdAdapter.ts apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx
+          } > artifacts/recovery-11-0-1-final-candidate.txt
           git config user.name "Moldeon Recovery Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-1-hard-seam-cfl-audit.txt
-          git commit -m "chore: record Prompt 11.0.1 hard seam CFL audit" || true
+          git add artifacts/recovery-11-0-1-final-candidate.txt
+          git commit -m "chore: record Prompt 11.0.1 final candidate" || true
           git push origin HEAD:recovery/11.0.1-body-collision-stabilization
-          if [ "$TYPE" -ne 0 ] || [ "$STATUS" -ne 0 ]; then exit 1; fi
