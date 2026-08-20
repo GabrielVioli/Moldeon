@@ -35,6 +35,12 @@ export function refinePanelTopology(
   let triangles = Array.from(topology.triangles);
   let boundaryVertices = [...topology.boundaryVertices];
   let edges = cloneEdgePaths(topology.edges);
+  let darts = topology.darts.map((dart) => ({
+    dart: structuredClone(dart.dart),
+    legAVertices: [...dart.legAVertices],
+    legBVertices: [...dart.legBVertices],
+    apexVertex: dart.apexVertex,
+  }));
   const vertexSources: PanelVertexSourceMapping[] = topology.vertexSources.map((source) => structuredClone(source));
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
@@ -120,6 +126,20 @@ export function refinePanelTopology(
         ];
       }),
     );
+
+    darts = darts.map((dart) => ({
+      ...dart,
+      legAVertices: insertKnownMidpoints(
+        dart.legAVertices,
+        midpointByEdge,
+        false,
+      ),
+      legBVertices: insertKnownMidpoints(
+        dart.legBVertices,
+        midpointByEdge,
+        false,
+      ),
+    }));
   }
 
   const positions2DMm = Float32Array.from(positions);
@@ -151,6 +171,7 @@ export function refinePanelTopology(
     boundaryVertices,
     edges,
     edgeVertices,
+    darts,
     sourcePointVertices,
     vertexSources,
     sourcePointToVertices: sourcePointVertices,

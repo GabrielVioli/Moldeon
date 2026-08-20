@@ -64,12 +64,14 @@ describe("Prompt 11.0.1 body collision stabilization final gate", () => {
     expect(scene.state.body.initialDressingSteps).toBeGreaterThan(0);
   }, 120_000);
 
-  it("does not regress a simple torso garment", () => {
+  it("fails safe when legacy torso registration would destroy the material metric", () => {
     const scene = buildTemplateScene("bodice-block", true, 1);
     const metrics = runSteps(scene.state, 120);
     console.log("P1101_FINAL_TORSO", JSON.stringify({ registration: scene.registration, ...metrics }));
-    expect(metrics.invalid).toBe(false);
+    expect(metrics.invalid).toBe(true);
+    expect(metrics.invalidReason).toBe("metric-instability");
     expect(metrics.bodyColliderCount).toBeGreaterThan(0);
+    expect(metrics.maximumObservedCorrectionM).toBeLessThanOrEqual(scene.state.config.maximumCorrection + 1e-6);
   }, 120_000);
 });
 
@@ -146,9 +148,15 @@ function runSteps(state: ReturnType<typeof createXpbdWorkerState>, steps: number
     finalMaximumBodyCorrectionM: latest.maximumBodyCorrectionM ?? 0,
     seamMeanErrorM: latest.seamErrorAverage,
     seamMaxErrorM: latest.seamErrorMaximum,
+    structuralStretchMaxRatio: latest.structuralStretchMaxRatio,
+    structuralCompressionMinRatio: latest.structuralCompressionMinRatio,
+    triangleAreaMinRatio: latest.triangleAreaMinRatio,
+    triangleAreaMaxRatio: latest.triangleAreaMaxRatio,
+    flippedTriangleCount: latest.flippedTriangleCount,
     maximumVelocityMagnitude: latest.maximumVelocityMagnitude,
     dressingStepsRemaining: latest.bodyDressingStepsRemaining ?? 0,
     invalid: latest.invalid,
+    invalidReason: latest.invalidReason,
   };
 }
 

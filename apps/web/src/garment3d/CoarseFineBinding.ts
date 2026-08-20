@@ -35,11 +35,22 @@ export function buildCoarseFineBindings(
     for (let local = 0; local < instance.vertexCount; local += 1) {
       const xMm = instance.topology.positions2DMm[local * 2];
       const yMm = instance.topology.positions2DMm[local * 2 + 1];
+      const direct = local < mesh.materialPositionsMm.length / 2
+        && Math.abs(mesh.materialPositionsMm[local * 2] - xMm) <= 1e-6
+        && Math.abs(mesh.materialPositionsMm[local * 2 + 1] - yMm) <= 1e-6;
       const binding: FineVertexCoarseBinding = {
         panelInstanceId: instance.id,
         fineParticleIndex: instance.particleStart + local,
         fineLocalVertex: local,
-        coarse: bindMaterialPoint(mesh, xMm, yMm),
+        coarse: direct
+          ? {
+              triangleIndex: 0,
+              vertices: [local, local, local],
+              weights: [1, 0, 0],
+              materialXMm: xMm,
+              materialYMm: yMm,
+            }
+          : bindMaterialPoint(mesh, xMm, yMm),
       };
       bindings.push(binding);
       localBindings.push(binding);

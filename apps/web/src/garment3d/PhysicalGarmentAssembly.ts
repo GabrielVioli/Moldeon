@@ -524,10 +524,18 @@ function pairPlans(
   }
 
   if (plansA.length === 1) {
+    const sideMatched = plansB.find((planB) =>
+      plansA[0].side !== "center" && planB.side === plansA[0].side,
+    );
+    if (sideMatched) return [[plansA[0], sideMatched]];
     return plansB.map((planB) => [plansA[0], planB] as const);
   }
 
   if (plansB.length === 1) {
+    const sideMatched = plansA.find((planA) =>
+      plansB[0].side !== "center" && planA.side === plansB[0].side,
+    );
+    if (sideMatched) return [[sideMatched, plansB[0]]];
     return plansA.map((planA) => [planA, plansB[0]] as const);
   }
 

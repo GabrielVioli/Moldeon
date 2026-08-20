@@ -135,13 +135,30 @@ describe("PanelTopology and self seam simulation", () => {
       );
     }
 
-    expect(state.instances[0].vertexCount).toBe(266);
+    // The nested coarse→fine hierarchy may add a few cells so every physics
+    // vertex remains a true subdivision of the assembly surface. Preserve the
+    // material resolution contract instead of an incidental exact count.
+    expect(state.instances[0].vertexCount).toBeGreaterThanOrEqual(266);
     expect(maximumTriangleSpanMm).toBeLessThanOrEqual(20.001);
     expect(topology.edges.size).toBe(4);
     expect(topology.vertexSources).toHaveLength(state.instances[0].vertexCount);
     expect(topology.vertexSources.every((source, index) =>
       source.vertexIndex === index && source.sourcePatternId === garment.pieces[0].id,
     )).toBe(true);
+  });
+
+  it("materializes the sloped-waist darts of the canonical skirt", () => {
+    const garment = createBaselineFixture("straight-skirt-standard");
+
+    for (const piece of garment.pieces) {
+      const topology = buildPanelTopology(piece);
+      expect(topology.darts).toHaveLength(1);
+      expect(topology.darts[0].apexVertex).not.toBeNull();
+      expect(topology.darts[0].legAVertices.length).toBeGreaterThanOrEqual(2);
+      expect(topology.darts[0].legBVertices.length).toBeGreaterThanOrEqual(2);
+      expect(topology.boundaryVertices).toContain(topology.darts[0].legAVertices[0]);
+      expect(topology.boundaryVertices).toContain(topology.darts[0].legBVertices[0]);
+    }
   });
 
   it("resamples edge vertices by arc length and preserves ordering", () => {

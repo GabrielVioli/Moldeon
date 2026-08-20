@@ -20,6 +20,10 @@ const OVERLAP_WEIGHT = 2.2;
 const GAUGE_WEIGHT = 0.025;
 const HINGE_SOFT_LIMIT_RAD = 72 * Math.PI / 180;
 const DEFAULT_ITERATIONS = 128;
+const DEFAULT_ZERO_ENERGY_ITERATIONS = 3_000;
+const ZERO_ENERGY_SEAM_RELAXATION = 0.04;
+const ZERO_ENERGY_METRIC_TOLERANCE = 2.5e-5;
+const ZERO_ENERGY_SEAM_TOLERANCE_M = 2.5e-5;
 
 export type AssemblyConstraintState = "well-constrained" | "partially-constrained" | "ambiguous";
 
@@ -69,6 +73,7 @@ export interface IsometricSurfaceAssemblyResult {
 export interface IsometricAssemblyOptions {
   iterations?: number;
   overlapBarrier?: boolean;
+  zeroEnergyIterations?: number;
 }
 
 interface Component {
@@ -92,6 +97,7 @@ interface Relation {
 interface Candidate {
   name: string;
   positions: Map<string, Float32Array>;
+  project?: boolean;
 }
 
 interface CandidateScore {
@@ -132,19 +138,36 @@ export function solveIsometricSurfaceAssembly(
     candidateCount += candidates.length;
     const solved = candidates.map((candidate) => {
       setComponentPositions(component, coarse, candidate.positions);
-      preAlignComponentRigidTranslations(component, coarse);
-      projectComponent(component, coarse, options);
+      if (candidate.project !== false) {
+        preAlignComponentRigidTranslations(component, coarse);
+        projectComponent(component, coarse, options);
+      }
       const metrics = measureComponentMetrics(component, coarse);
-      return { candidate: snapshotCandidate(candidate.name, component, coarse), metrics, score: objective(metrics, component) };
+      return {
+        candidate: snapshotCandidate(candidate.name, component, coarse),
+        metrics,
+        score: objective(metrics, component),
+      };
     });
     solved.sort((left, right) =>
-      left.score - right.score
+      candidateAdmissibilityRank(left.metrics) - candidateAdmissibilityRank(right.metrics)
+      || left.score - right.score
       || left.candidate.name.localeCompare(right.candidate.name),
     );
     const best = solved[0];
     if (!best) continue;
     setComponentPositions(component, coarse, best.candidate.positions);
-    const constraint = classifyConstraintState(component, best.metrics, solved);
+    const prePolish = snapshotCandidate("pre-zero-energy-polish", component, coarse);
+    polishZeroEnergyPose(component, coarse, options);
+    let finalMetrics = measureComponentMetrics(component, coarse);
+    if (!zeroEnergyPolishPreservesMaterial(best.metrics, finalMetrics)) {
+      // An incompatible/under-resolved constraint system must never purchase a
+      // smaller seam residual by damaging the material surface. Keep the
+      // readable isometric candidate and report its residual explicitly.
+      setComponentPositions(component, coarse, prePolish.positions);
+      finalMetrics = best.metrics;
+    }
+    const constraint = classifyConstraintState(component, finalMetrics, solved);
     diagnostics.push({
       componentId: component.id,
       panelInstanceIds: [...component.meshIds],
@@ -163,7 +186,7 @@ export function solveIsometricSurfaceAssembly(
       assemblyConfidence: constraint.confidence,
       ...(constraint.reason ? { ambiguityReason: constraint.reason } : {}),
       solveMs: nowMs() - componentStarted,
-      ...best.metrics,
+      ...finalMetrics,
     });
   }
 
@@ -179,6 +202,175 @@ export function solveIsometricSurfaceAssembly(
     invalid,
     warnings,
   };
+}
+
+function candidateAdmissibilityRank(metrics: IsometricAssemblyMetrics): number {
+  // A numerically cheaper candidate that self-overlaps heavily is not a dress
+  // pose.  Keep this as an admissibility gate instead of letting a weighted
+  // scalar objective trade a collapsed/hidden surface for a slightly smaller
+  // local metric residual.
+  if (metrics.overlapScore > 0.5 || metrics.triangleCrossingProxyCount > 8_000) return 2;
+  if (metrics.overlapScore > 0.2 || metrics.triangleCrossingProxyCount > 4_000) return 1;
+  return 0;
+}
+
+function zeroEnergyPolishPreservesMaterial(
+  before: IsometricAssemblyMetrics,
+  after: IsometricAssemblyMetrics,
+): boolean {
+  return after.metricDistortionMean <= Math.max(0.005, before.metricDistortionMean * 1.5)
+    && after.metricDistortionMax <= Math.max(0.01, before.metricDistortionMax * 1.5)
+    && after.areaDistortionMean <= Math.max(0.02, before.areaDistortionMean * 1.5)
+    && after.overlapScore <= before.overlapScore + 0.05;
+}
+
+/**
+ * Final STEP-0 geometric projection.
+ *
+ * This is intentionally not XPBD: it has no mass, velocity, timestep,
+ * compliance, gravity or collision. It solves the intersection between the
+ * immutable material bars and authored zero-distance closures. Every material
+ * edge is projected back to its 2D length after seam projection, so a seam is
+ * never closed by silently changing how much cloth exists.
+ *
+ * The coarse candidate solver above remains responsible for selecting a
+ * readable spatial branch. This pass only removes the residual energy that
+ * would otherwise make the dynamic solver act as an assembly solver.
+ */
+function polishZeroEnergyPose(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  options: IsometricAssemblyOptions,
+): void {
+  const closures = component.seams.filter((seam) =>
+    seam.classification === "structural-alignment"
+    || seam.classification === "local-shaping-closure",
+  );
+  if (closures.length === 0) return;
+
+  const iterations = Math.max(
+    0,
+    Math.min(4_000, Math.round(options.zeroEnergyIterations ?? DEFAULT_ZERO_ENERGY_ITERATIONS)),
+  );
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    // A symmetric order avoids giving either the material metric or seams the
+    // last word. Reversing alternate passes also removes insertion-order bias.
+    for (const id of component.meshIds) {
+      const mesh = coarse.byInstanceId.get(id)!;
+      projectMetricEdgesSequential(mesh, iteration % 2 === 1);
+    }
+    projectClosuresSequential(coarse, closures, iteration % 2 === 1);
+    for (const id of component.meshIds) {
+      const mesh = coarse.byInstanceId.get(id)!;
+      projectMetricEdgesSequential(mesh, iteration % 2 === 0);
+    }
+    projectClosuresSequential(coarse, closures, iteration % 2 === 0);
+
+    if (iteration >= 24 && iteration % 8 === 7) {
+      const residual = zeroEnergyResidual(component, coarse, closures);
+      if (
+        residual.maximumMetricRelative <= ZERO_ENERGY_METRIC_TOLERANCE
+        && residual.maximumSeamM <= ZERO_ENERGY_SEAM_TOLERANCE_M
+      ) break;
+    }
+  }
+}
+
+function projectMetricEdgesSequential(mesh: CoarseAssemblyMesh, reverse: boolean): void {
+  const edges = mesh.metricEdges;
+  for (let cursor = 0; cursor < edges.length; cursor += 1) {
+    const edge = edges[reverse ? edges.length - 1 - cursor : cursor];
+    const a = vertex(mesh.positions, edge.a);
+    const b = vertex(mesh.positions, edge.b);
+    const delta = sub(b, a);
+    const current = length3(delta);
+    if (current <= EPS || edge.restLengthM <= EPS) continue;
+    const correction = (current - edge.restLengthM) * 0.5 / current;
+    translateVertex(mesh.positions, edge.a, scale(delta, correction));
+    translateVertex(mesh.positions, edge.b, scale(delta, -correction));
+  }
+}
+
+function projectClosuresSequential(
+  coarse: CoarseAssemblySet,
+  closures: readonly CoarseSeamConstraint[],
+  reverse: boolean,
+): void {
+  for (let cursor = 0; cursor < closures.length; cursor += 1) {
+    const seam = closures[reverse ? closures.length - 1 - cursor : cursor];
+    const meshA = coarse.byInstanceId.get(seam.instanceA);
+    const meshB = coarse.byInstanceId.get(seam.instanceB);
+    if (!meshA || !meshB) continue;
+    const a = evaluateCoarseBinding(meshA, seam.a);
+    const b = evaluateCoarseBinding(meshB, seam.b);
+    const delta = sub(b, a);
+    const distance = length3(delta);
+    if (distance <= EPS) continue;
+    const rest = Math.max(0, seam.restDistanceM);
+    const excess = distance - rest;
+    if (Math.abs(excess) <= EPS) continue;
+    const correction = scale(
+      delta,
+      excess * 0.5 / distance * ZERO_ENERGY_SEAM_RELAXATION,
+    );
+    translateBinding(meshA, seam.a, correction);
+    translateBinding(meshB, seam.b, scale(correction, -1));
+  }
+}
+
+function translateBinding(
+  mesh: CoarseAssemblyMesh,
+  binding: CoarseMaterialBinding,
+  translation: readonly [number, number, number],
+): void {
+  const squaredWeight = binding.weights.reduce((sum, weight) => sum + weight * weight, 0);
+  if (squaredWeight <= EPS) return;
+  for (let index = 0; index < binding.vertices.length; index += 1) {
+    const factor = binding.weights[index] / squaredWeight;
+    translateVertex(mesh.positions, binding.vertices[index], scale(translation, factor));
+  }
+}
+
+function translateVertex(
+  positions: Float32Array,
+  index: number,
+  translation: readonly [number, number, number],
+): void {
+  const offset = index * 3;
+  positions[offset] += translation[0];
+  positions[offset + 1] += translation[1];
+  positions[offset + 2] += translation[2];
+}
+
+function zeroEnergyResidual(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  closures: readonly CoarseSeamConstraint[],
+): { maximumMetricRelative: number; maximumSeamM: number } {
+  let maximumMetricRelative = 0;
+  let maximumSeamM = 0;
+  for (const id of component.meshIds) {
+    const mesh = coarse.byInstanceId.get(id)!;
+    for (const edge of mesh.metricEdges) {
+      if (edge.restLengthM <= EPS) continue;
+      const current = length3(sub(vertex(mesh.positions, edge.b), vertex(mesh.positions, edge.a)));
+      maximumMetricRelative = Math.max(
+        maximumMetricRelative,
+        Math.abs(current - edge.restLengthM) / edge.restLengthM,
+      );
+    }
+  }
+  for (const seam of closures) {
+    const meshA = coarse.byInstanceId.get(seam.instanceA);
+    const meshB = coarse.byInstanceId.get(seam.instanceB);
+    if (!meshA || !meshB) continue;
+    const distance = length3(sub(
+      evaluateCoarseBinding(meshB, seam.b),
+      evaluateCoarseBinding(meshA, seam.a),
+    ));
+    maximumSeamM = Math.max(maximumSeamM, Math.abs(distance - Math.max(0, seam.restDistanceM)));
+  }
+  return { maximumMetricRelative, maximumSeamM };
 }
 
 function buildComponents(coarse: CoarseAssemblySet, seamResolution: CoarseSeamResolution): Component[] {
@@ -257,14 +449,20 @@ function buildComponents(coarse: CoarseAssemblySet, seamResolution: CoarseSeamRe
 }
 
 function buildCandidates(component: Component, coarse: CoarseAssemblySet): Candidate[] {
+  const authoredDevelopable = snapshotCandidate("authored-developable-seed", component, coarse);
   const flat = buildFlatCandidate(component, coarse);
   const developable = buildDevelopableCandidate(component, coarse);
+  const developableRaw: Candidate = {
+    name: "developable-cycle-raw",
+    positions: new Map([...developable.positions].map(([id, values]) => [id, new Float32Array(values)])),
+    project: false,
+  };
   const mirrored = mirrorCandidate(developable, "developable-cycle-mirror");
   const hinged = buildAmbiguousHingeCandidate(component, coarse, flat);
   const hingedMirror = mirrorCandidate(hinged, "ambiguous-hinge-mirror");
   const candidates = component.supportsShell
-    ? [flat, developable, mirrored]
-    : [snapshotCandidate("legacy-open-seed", component, coarse), flat, developable, hinged, hingedMirror];
+    ? [authoredDevelopable, flat, developableRaw, developable, mirrored]
+    : [authoredDevelopable, flat, developable, hinged, hingedMirror];
   return dedupeCandidates(candidates);
 }
 
@@ -365,20 +563,33 @@ function buildDevelopableCandidate(component: Component, coarse: CoarseAssemblyS
     coarse.byInstanceId.get(id)!,
     selfStructuralSeams(component, id),
   ));
-  const circumferenceM = spans.reduce((sum, span) => sum + span.acrossSpanMm * 0.001, 0);
-  const radius = Math.max(0.025, circumferenceM / (2 * Math.PI));
-  let angleCursor = 0;
   const seeded = new Set<string>();
 
-  for (let index = 0; index < shellIds.length; index += 1) {
-    const id = shellIds[index];
-    const mesh = coarse.byInstanceId.get(id)!;
-    const axis = spans[index];
-    const angularSpan = Math.max(0.12, axis.acrossSpanMm * 0.001 / radius);
-    const centerAngle = angleCursor + angularSpan * 0.5;
-    base.positions.set(id, mapMeshToCylinder(mesh, axis, radius, centerAngle));
-    seeded.add(id);
-    angleCursor += angularSpan;
+  const profiledShell = selectedCycle.length > 1
+    ? mapProfiledShellCycle(component, selectedCycle, spans, coarse)
+    : null;
+  if (profiledShell) {
+    for (const [id, positions] of profiledShell) {
+      base.positions.set(id, positions);
+      seeded.add(id);
+    }
+  } else {
+    const circumferenceM = spans.reduce((sum, span) => sum + span.acrossSpanMm * 0.001, 0);
+    const radius = Math.max(0.025, circumferenceM / (2 * Math.PI));
+    let angleCursor = 0;
+    for (let index = 0; index < shellIds.length; index += 1) {
+      const id = shellIds[index];
+      const mesh = coarse.byInstanceId.get(id)!;
+      const axis = spans[index];
+      const angularSpan = Math.max(0.12, axis.acrossSpanMm * 0.001 / radius);
+      const centerAngle = angleCursor + angularSpan * 0.5;
+      const acrossDirection = selectedCycle.length > 1
+        ? cycleAcrossDirection(component, id, selectedCycle, index, axis)
+        : 1;
+      base.positions.set(id, mapMeshToCylinder(mesh, axis, radius, centerAngle, acrossDirection));
+      seeded.add(id);
+      angleCursor += angularSpan;
+    }
   }
 
   // Small loops/branches are only seed attachments. They never freeze or own
@@ -390,8 +601,9 @@ function buildDevelopableCandidate(component: Component, coarse: CoarseAssemblyS
     const hasSelf = component.relations.some((relation) => relation.a === id && relation.b === id);
     if (hasSelf) {
       const axis = acrossAxis(mesh, selfStructuralSeams(component, id));
+      const closed = mapSelfClosedMeshToCylinder(component, mesh, axis);
       const localRadius = Math.max(0.01, axis.acrossSpanMm * 0.001 / (2 * Math.PI));
-      base.positions.set(id, mapMeshToCylinder(mesh, axis, localRadius, 0));
+      base.positions.set(id, closed ?? mapMeshToCylinder(mesh, axis, localRadius, 0));
       phaseAlignClosedSeed(id, seeded, component, coarse, base.positions);
     } else {
       translateSeedNearConnectedSeam(id, seeded, component, coarse, base.positions);
@@ -399,6 +611,211 @@ function buildDevelopableCandidate(component: Component, coarse: CoarseAssemblyS
     seeded.add(id);
   }
   return { name: "developable-cycle-seed", positions: base.positions };
+}
+
+/**
+ * Develops a self-sewn panel from the two authored seam generators instead
+ * of its bounding box.  A sleeve cap, crotch extension or any other free
+ * boundary is allowed to extend beyond those generators; it must not change
+ * the circumference of the closed portion of the material.
+ */
+function mapSelfClosedMeshToCylinder(
+  component: Component,
+  mesh: CoarseAssemblyMesh,
+  axis: ReturnType<typeof acrossAxis>,
+): Float32Array | null {
+  const self = component.seams.filter((seam) =>
+    seam.classification === "structural-alignment"
+    && seam.instanceA === mesh.panelInstanceId
+    && seam.instanceB === mesh.panelInstanceId,
+  );
+  if (self.length < 2) return null;
+  const first = self.map((seam) => materialAxisSample(seam.a, axis));
+  const second = self.map((seam) => materialAxisSample(seam.b, axis));
+  const profileA: ShellBoundaryProfile = {
+    samples: collapseBoundarySamples(first.sort((left, right) => left.along - right.along)),
+    meanAcross: first.reduce((sum, sample) => sum + sample.across, 0) / first.length,
+  };
+  const profileB: ShellBoundaryProfile = {
+    samples: collapseBoundarySamples(second.sort((left, right) => left.along - right.along)),
+    meanAcross: second.reduce((sum, sample) => sum + sample.across, 0) / second.length,
+  };
+  if (Math.abs(profileA.meanAcross - profileB.meanAcross) < 1) return null;
+  const low = profileA.meanAcross <= profileB.meanAcross ? profileA : profileB;
+  const high = low === profileA ? profileB : profileA;
+  const positions = new Float32Array(mesh.materialPositionsMm.length / 2 * 3);
+  for (let vertexIndex = 0; vertexIndex < mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
+    const materialX = mesh.materialPositionsMm[vertexIndex * 2];
+    const materialY = mesh.materialPositionsMm[vertexIndex * 2 + 1];
+    const across = axis.acrossIsX ? materialX : materialY;
+    const along = axis.acrossIsX ? materialY : materialX;
+    const lowAcross = sampleBoundaryAcross(low, along);
+    const highAcross = sampleBoundaryAcross(high, along);
+    const widthMm = Math.max(1, highAcross - lowAcross);
+    const progress = (across - lowAcross) / widthMm;
+    const angle = progress * Math.PI * 2;
+    const radiusM = Math.max(0.01, widthMm * 0.001 / (Math.PI * 2));
+    const offset = vertexIndex * 3;
+    positions[offset] = Math.cos(angle) * radiusM;
+    positions[offset + 1] = -along * 0.001;
+    positions[offset + 2] = Math.sin(angle) * radiusM;
+  }
+  return positions;
+}
+
+function materialAxisSample(
+  binding: CoarseMaterialBinding,
+  axis: ReturnType<typeof acrossAxis>,
+): { along: number; across: number } {
+  return axis.acrossIsX
+    ? { along: binding.materialYMm, across: binding.materialXMm }
+    : { along: binding.materialXMm, across: binding.materialYMm };
+}
+
+interface ShellBoundaryProfile {
+  samples: Array<{ along: number; across: number }>;
+  meanAcross: number;
+}
+
+interface ShellPanelProfile {
+  id: string;
+  mesh: CoarseAssemblyMesh;
+  axis: ReturnType<typeof acrossAxis>;
+  incoming: ShellBoundaryProfile;
+  outgoing: ShellBoundaryProfile;
+}
+
+/**
+ * Maps a material cycle from the actual longitudinal seam curves instead of
+ * from each panel's bounding box.  At every material height the accumulated
+ * widths determine one shared circumference, so adjacent authored boundary
+ * ranges land on the same spatial generator even when a torso/skirt tapers.
+ * The map remains a seed; exact material bars are restored by the static
+ * isometric projection below.
+ */
+function mapProfiledShellCycle(
+  component: Component,
+  cycle: readonly string[],
+  axes: readonly ReturnType<typeof acrossAxis>[],
+  coarse: CoarseAssemblySet,
+): Map<string, Float32Array> | null {
+  const panels: ShellPanelProfile[] = [];
+  for (let index = 0; index < cycle.length; index += 1) {
+    const id = cycle[index];
+    const previous = cycle[(index - 1 + cycle.length) % cycle.length];
+    const next = cycle[(index + 1) % cycle.length];
+    const mesh = coarse.byInstanceId.get(id);
+    const axis = axes[index];
+    if (!mesh || !axis) return null;
+    const incoming = selectLongitudinalBoundaryProfile(component, id, previous, axis);
+    const outgoing = selectLongitudinalBoundaryProfile(component, id, next, axis);
+    if (!incoming || !outgoing || Math.abs(incoming.meanAcross - outgoing.meanAcross) < 1) return null;
+    panels.push({ id, mesh, axis, incoming, outgoing });
+  }
+
+  const result = new Map<string, Float32Array>();
+  for (const panel of panels) {
+    const positions = new Float32Array(panel.mesh.materialPositionsMm.length / 2 * 3);
+    for (let vertexIndex = 0; vertexIndex < panel.mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
+      const materialX = panel.mesh.materialPositionsMm[vertexIndex * 2];
+      const materialY = panel.mesh.materialPositionsMm[vertexIndex * 2 + 1];
+      const across = panel.axis.acrossIsX ? materialX : materialY;
+      const along = panel.axis.acrossIsX ? materialY : materialX;
+      const widths = panels.map((candidate) => {
+        const incoming = sampleBoundaryAcross(candidate.incoming, along);
+        const outgoing = sampleBoundaryAcross(candidate.outgoing, along);
+        return Math.max(1e-3, Math.abs(outgoing - incoming));
+      });
+      const circumferenceMm = widths.reduce((sum, width) => sum + width, 0);
+      if (circumferenceMm <= 1e-3) return null;
+      const panelIndex = panels.indexOf(panel);
+      const accumulatedMm = widths.slice(0, panelIndex).reduce((sum, width) => sum + width, 0);
+      const incomingAcross = sampleBoundaryAcross(panel.incoming, along);
+      const outgoingAcross = sampleBoundaryAcross(panel.outgoing, along);
+      const signedWidth = outgoingAcross - incomingAcross;
+      const progress = Math.abs(signedWidth) > 1e-6
+        ? (across - incomingAcross) / signedWidth
+        : 0.5;
+      const arcMm = accumulatedMm + progress * widths[panelIndex];
+      const angle = arcMm / circumferenceMm * Math.PI * 2;
+      const radiusM = Math.max(0.01, circumferenceMm * 0.001 / (Math.PI * 2));
+      const offset = vertexIndex * 3;
+      positions[offset] = Math.cos(angle) * radiusM;
+      positions[offset + 1] = -along * 0.001;
+      positions[offset + 2] = Math.sin(angle) * radiusM;
+    }
+    result.set(panel.id, positions);
+  }
+  return result;
+}
+
+function selectLongitudinalBoundaryProfile(
+  component: Component,
+  id: string,
+  neighbor: string,
+  axis: ReturnType<typeof acrossAxis>,
+): ShellBoundaryProfile | null {
+  const byGroup = new Map<string, Array<{ along: number; across: number }>>();
+  for (const seam of component.seams) {
+    if (seam.classification !== "structural-alignment") continue;
+    const matches = (seam.instanceA === id && seam.instanceB === neighbor)
+      || (seam.instanceB === id && seam.instanceA === neighbor);
+    if (!matches) continue;
+    const binding = seam.instanceA === id ? seam.a : seam.b;
+    const across = axis.acrossIsX ? binding.materialXMm : binding.materialYMm;
+    const along = axis.acrossIsX ? binding.materialYMm : binding.materialXMm;
+    const samples = byGroup.get(seam.seamGroupId) ?? [];
+    samples.push({ along, across });
+    byGroup.set(seam.seamGroupId, samples);
+  }
+
+  let best: ShellBoundaryProfile | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const samples of byGroup.values()) {
+    if (samples.length < 2) continue;
+    samples.sort((left, right) => left.along - right.along || left.across - right.across);
+    const alongSpan = samples[samples.length - 1].along - samples[0].along;
+    const acrossValues = samples.map((sample) => sample.across);
+    const acrossSpan = Math.max(...acrossValues) - Math.min(...acrossValues);
+    const score = alongSpan - acrossSpan * 0.75 + Math.sqrt(samples.length);
+    if (score <= bestScore) continue;
+    bestScore = score;
+    best = {
+      samples: collapseBoundarySamples(samples),
+      meanAcross: acrossValues.reduce((sum, value) => sum + value, 0) / acrossValues.length,
+    };
+  }
+  return best;
+}
+
+function collapseBoundarySamples(
+  samples: readonly { along: number; across: number }[],
+): Array<{ along: number; across: number }> {
+  const result: Array<{ along: number; across: number }> = [];
+  for (const sample of samples) {
+    const previous = result[result.length - 1];
+    if (previous && Math.abs(previous.along - sample.along) <= 1e-5) {
+      previous.across = (previous.across + sample.across) * 0.5;
+    } else {
+      result.push({ ...sample });
+    }
+  }
+  return result;
+}
+
+function sampleBoundaryAcross(profile: ShellBoundaryProfile, along: number): number {
+  const samples = profile.samples;
+  if (samples.length === 0) return profile.meanAcross;
+  if (along <= samples[0].along) return samples[0].across;
+  if (along >= samples[samples.length - 1].along) return samples[samples.length - 1].across;
+  let upper = 1;
+  while (upper < samples.length && samples[upper].along < along) upper += 1;
+  const lower = samples[upper - 1];
+  const next = samples[Math.min(upper, samples.length - 1)];
+  const span = next.along - lower.along;
+  if (span <= 1e-9) return (lower.across + next.across) * 0.5;
+  const t = (along - lower.along) / span;
+  return lower.across + (next.across - lower.across) * t;
 }
 
 function preAlignComponentRigidTranslations(
@@ -474,6 +891,7 @@ function preAlignComponentRigidTranslations(
 
 function projectComponent(component: Component, coarse: CoarseAssemblySet, options: IsometricAssemblyOptions): void {
   const iterations = Math.max(8, Math.min(240, Math.round(options.iterations ?? DEFAULT_ITERATIONS)));
+  const shapingMeshIds = localShapingMeshIds(component);
   const initialGauge = new Map<string, readonly [number, number, number]>();
   for (const id of component.meshIds) {
     const mesh = coarse.byInstanceId.get(id)!;
@@ -494,7 +912,12 @@ function projectComponent(component: Component, coarse: CoarseAssemblySet, optio
       const mesh = coarse.byInstanceId.get(id)!;
       const buffer = buffers.get(id)!;
       for (const edge of mesh.metricEdges) projectMetricEdge(mesh, buffer, edge);
-      for (const hinge of mesh.hinges) projectHingeBarrier(mesh, buffer, hinge);
+      // A closed dart deliberately creates sharp folds and local layer
+      // overlap. Generic anti-fold/anti-overlap barriers would unfold that
+      // valid material configuration and reintroduce STEP-0 energy.
+      if (!shapingMeshIds.has(id)) {
+        for (const hinge of mesh.hinges) projectHingeBarrier(mesh, buffer, hinge);
+      }
     }
     const structuralGroupCounts = new Map<string, number>();
     for (const seam of component.seams) {
@@ -507,7 +930,7 @@ function projectComponent(component: Component, coarse: CoarseAssemblySet, optio
       projectStructuralSeam(coarse, buffers, seam, 1 / Math.sqrt(sampleCount));
     }
     if (options.overlapBarrier !== false && iteration % 3 === 0) {
-      projectOverlapBarrier(component, coarse, buffers);
+      projectOverlapBarrier(component, coarse, buffers, shapingMeshIds);
     }
     const gaugeId = component.meshIds[0];
     if (gaugeId) {
@@ -620,6 +1043,7 @@ function projectOverlapBarrier(
   component: Component,
   coarse: CoarseAssemblySet,
   buffers: Map<string, ProjectionBuffer>,
+  ignoredSelfOverlapIds: ReadonlySet<string>,
 ): void {
   const triangles: Array<{
     mesh: CoarseAssemblyMesh;
@@ -668,6 +1092,7 @@ function projectOverlapBarrier(
       const second = triangles[j];
       if (second.min[0] > first.max[0] + padding) break;
       if (first.mesh.panelInstanceId === second.mesh.panelInstanceId) {
+        if (ignoredSelfOverlapIds.has(first.mesh.panelInstanceId)) continue;
         if (trianglesShareVertex(first.vertices, second.vertices)) continue;
         if (materialNeighborhoodsTouch(first, second)) continue;
       }
@@ -806,6 +1231,16 @@ function objective(metrics: IsometricAssemblyMetrics, component: Component): num
   );
 }
 
+function localShapingMeshIds(component: Component): Set<string> {
+  const result = new Set<string>();
+  for (const seam of component.seams) {
+    if (seam.classification !== "local-shaping-closure") continue;
+    result.add(seam.instanceA);
+    result.add(seam.instanceB);
+  }
+  return result;
+}
+
 function classifyConstraintState(
   component: Component,
   metrics: IsometricAssemblyMetrics,
@@ -863,7 +1298,7 @@ function dedupeCandidates(candidates: Candidate[]): Candidate[] {
         hash = Math.imul(hash, 16777619);
       }
     }
-    const key = String(hash >>> 0);
+    const key = `${hash >>> 0}:${candidate.project === false ? "raw" : "projected"}`;
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(candidate);
@@ -963,47 +1398,124 @@ function phaseAlignClosedSeed(
   let bestCost = Number.POSITIVE_INFINITY;
 
   const variants = [source, reflectWindingAroundY(source, center)];
-  const PHASE_COUNT = 72;
   for (const windingSource of variants) {
-    for (let phaseIndex = 0; phaseIndex < PHASE_COUNT; phaseIndex += 1) {
-      const angle = phaseIndex * Math.PI * 2 / PHASE_COUNT;
-      const trial = rotatePositionsAroundY(windingSource, center, angle);
-      const original = mesh.positions;
-      mesh.positions = trial;
-      const localPoints: Array<readonly [number, number, number]> = [];
-      const fixedPoints: Array<readonly [number, number, number]> = [];
-      for (const seam of relevant) {
-        const localBinding = seam.instanceA === id ? seam.a : seam.b;
-        const fixedId = seam.instanceA === id ? seam.instanceB : seam.instanceA;
-        const fixedBinding = seam.instanceA === id ? seam.b : seam.a;
-        const fixedMesh = coarse.byInstanceId.get(fixedId)!;
-        const fixedOriginal = fixedMesh.positions;
-        const fixedSeed = positions.get(fixedId)!;
-        fixedMesh.positions = fixedSeed;
-        localPoints.push(evaluateCoarseBinding(mesh, localBinding));
-        fixedPoints.push(evaluateCoarseBinding(fixedMesh, fixedBinding));
-        fixedMesh.positions = fixedOriginal;
-      }
-      mesh.positions = original;
-      const translation = meanTranslation(localPoints, fixedPoints);
-      let cost = 0;
-      for (let index = 0; index < localPoints.length; index += 1) {
-        const shifted = add(localPoints[index], translation);
-        const delta = sub(shifted, fixedPoints[index]);
-        cost += dot(delta, delta);
-      }
-      if (cost < bestCost - 1e-12) {
-        bestCost = cost;
-        bestPositions = trial;
-        for (let offset = 0; offset < bestPositions.length; offset += 3) {
-          bestPositions[offset] += translation[0];
-          bestPositions[offset + 1] += translation[1];
-          bestPositions[offset + 2] += translation[2];
-        }
-      }
+    const original = mesh.positions;
+    mesh.positions = windingSource;
+    const localPoints: Array<readonly [number, number, number]> = [];
+    const fixedPoints: Array<readonly [number, number, number]> = [];
+    for (const seam of relevant) {
+      const localBinding = seam.instanceA === id ? seam.a : seam.b;
+      const fixedId = seam.instanceA === id ? seam.instanceB : seam.instanceA;
+      const fixedBinding = seam.instanceA === id ? seam.b : seam.a;
+      const fixedMesh = coarse.byInstanceId.get(fixedId)!;
+      const fixedOriginal = fixedMesh.positions;
+      const fixedSeed = positions.get(fixedId)!;
+      fixedMesh.positions = fixedSeed;
+      localPoints.push(evaluateCoarseBinding(mesh, localBinding));
+      fixedPoints.push(evaluateCoarseBinding(fixedMesh, fixedBinding));
+      fixedMesh.positions = fixedOriginal;
+    }
+    mesh.positions = original;
+    const fit = bestRigidPointFit(localPoints, fixedPoints);
+    const fitted = transformPositionsRigidly(windingSource, fit);
+    let cost = 0;
+    for (let index = 0; index < localPoints.length; index += 1) {
+      const shifted = transformPointRigidly(localPoints[index], fit);
+      const delta = sub(shifted, fixedPoints[index]);
+      cost += dot(delta, delta);
+    }
+    if (cost < bestCost - 1e-12) {
+      bestCost = cost;
+      bestPositions = fitted;
     }
   }
   positions.set(id, bestPositions);
+}
+
+interface RigidPointFit {
+  quaternion: readonly [number, number, number, number]; // w, x, y, z
+  sourceCenter: readonly [number, number, number];
+  targetCenter: readonly [number, number, number];
+}
+
+function bestRigidPointFit(
+  source: readonly (readonly [number, number, number])[],
+  target: readonly (readonly [number, number, number])[],
+): RigidPointFit {
+  const sourceCenter = centroidOfPointList(source);
+  const targetCenter = centroidOfPointList(target);
+  if (source.length < 2 || source.length !== target.length) {
+    return { quaternion: [1, 0, 0, 0], sourceCenter, targetCenter };
+  }
+
+  let sxx = 0; let sxy = 0; let sxz = 0;
+  let syx = 0; let syy = 0; let syz = 0;
+  let szx = 0; let szy = 0; let szz = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const a = sub(source[index], sourceCenter);
+    const b = sub(target[index], targetCenter);
+    sxx += a[0] * b[0]; sxy += a[0] * b[1]; sxz += a[0] * b[2];
+    syx += a[1] * b[0]; syy += a[1] * b[1]; syz += a[1] * b[2];
+    szx += a[2] * b[0]; szy += a[2] * b[1]; szz += a[2] * b[2];
+  }
+  const trace = sxx + syy + szz;
+  const matrix = [
+    [trace, syz - szy, szx - sxz, sxy - syx],
+    [syz - szy, sxx - syy - szz, sxy + syx, szx + sxz],
+    [szx - sxz, sxy + syx, -sxx + syy - szz, syz + szy],
+    [sxy - syx, szx + sxz, syz + szy, -sxx - syy + szz],
+  ];
+  const shift = Math.sqrt(matrix.flat().reduce((sum, value) => sum + value * value, 0)) + 1e-12;
+  let quaternion: [number, number, number, number] = [1, 0.173, 0.311, 0.419];
+  for (let iteration = 0; iteration < 48; iteration += 1) {
+    const next: [number, number, number, number] = [0, 0, 0, 0];
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 4; column += 1) {
+        next[row] += (matrix[row][column] + (row === column ? shift : 0)) * quaternion[column];
+      }
+    }
+    const magnitude = Math.hypot(...next);
+    if (magnitude <= EPS) break;
+    quaternion = next.map((value) => value / magnitude) as [number, number, number, number];
+  }
+  return { quaternion, sourceCenter, targetCenter };
+}
+
+function centroidOfPointList(
+  points: readonly (readonly [number, number, number])[],
+): readonly [number, number, number] {
+  if (points.length === 0) return [0, 0, 0];
+  const sum = points.reduce(
+    (total, point) => add(total, point) as [number, number, number],
+    [0, 0, 0] as [number, number, number],
+  );
+  return scale(sum, 1 / points.length);
+}
+
+function transformPositionsRigidly(source: Float32Array, fit: RigidPointFit): Float32Array {
+  const result = new Float32Array(source.length);
+  for (let offset = 0; offset < source.length; offset += 3) {
+    const transformed = transformPointRigidly(
+      [source[offset], source[offset + 1], source[offset + 2]],
+      fit,
+    );
+    result[offset] = transformed[0];
+    result[offset + 1] = transformed[1];
+    result[offset + 2] = transformed[2];
+  }
+  return result;
+}
+
+function transformPointRigidly(
+  point: readonly [number, number, number],
+  fit: RigidPointFit,
+): readonly [number, number, number] {
+  const local = sub(point, fit.sourceCenter);
+  const [w, x, y, z] = fit.quaternion;
+  const qVector: readonly [number, number, number] = [x, y, z];
+  const twiceCross = scale(cross(qVector, local), 2);
+  const rotated = add(local, add(scale(twiceCross, w), cross(qVector, twiceCross)));
+  return add(rotated, fit.targetCenter);
 }
 
 function centroidOfPositions(positions: Float32Array): readonly [number, number, number] {
@@ -1024,38 +1536,6 @@ function reflectWindingAroundY(
     result[offset + 2] = center[2] - (result[offset + 2] - center[2]);
   }
   return result;
-}
-
-function rotatePositionsAroundY(
-  source: Float32Array,
-  center: readonly [number, number, number],
-  angle: number,
-): Float32Array {
-  const result = new Float32Array(source.length);
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  for (let offset = 0; offset < source.length; offset += 3) {
-    const x = source[offset] - center[0];
-    const z = source[offset + 2] - center[2];
-    result[offset] = center[0] + x * c - z * s;
-    result[offset + 1] = source[offset + 1];
-    result[offset + 2] = center[2] + x * s + z * c;
-  }
-  return result;
-}
-
-function meanTranslation(
-  source: readonly (readonly [number, number, number])[],
-  target: readonly (readonly [number, number, number])[],
-): readonly [number, number, number] {
-  if (source.length === 0) return [0, 0, 0];
-  let x = 0; let y = 0; let z = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    x += target[index][0] - source[index][0];
-    y += target[index][1] - source[index][1];
-    z += target[index][2] - source[index][2];
-  }
-  return [x / source.length, y / source.length, z / source.length];
 }
 
 function translateSeedNearConnectedSeam(
@@ -1107,6 +1587,7 @@ function mapMeshToCylinder(
   axis: ReturnType<typeof acrossAxis>,
   radius: number,
   centerAngle: number,
+  acrossDirection = 1,
 ): Float32Array {
   const result = new Float32Array(mesh.materialPositionsMm.length / 2 * 3);
   const acrossCenter = (axis.acrossMin + axis.acrossMax) * 0.5;
@@ -1116,13 +1597,47 @@ function mapMeshToCylinder(
     const y = mesh.materialPositionsMm[vertexIndex * 2 + 1];
     const across = axis.acrossIsX ? x : y;
     const along = axis.acrossIsX ? y : x;
-    const angle = centerAngle + (across - acrossCenter) * 0.001 / radius;
+    const angle = centerAngle + acrossDirection * (across - acrossCenter) * 0.001 / radius;
     const offset = vertexIndex * 3;
     result[offset] = Math.cos(angle) * radius;
     result[offset + 1] = -(along - alongCenter) * 0.001;
     result[offset + 2] = Math.sin(angle) * radius;
   }
   return result;
+}
+
+function cycleAcrossDirection(
+  component: Component,
+  id: string,
+  cycle: readonly string[],
+  index: number,
+  axis: ReturnType<typeof acrossAxis>,
+): 1 | -1 {
+  const previous = cycle[(index - 1 + cycle.length) % cycle.length];
+  const next = cycle[(index + 1) % cycle.length];
+  const previousAcross = meanRelationAcross(component, id, previous, axis);
+  const nextAcross = meanRelationAcross(component, id, next, axis);
+  if (previousAcross === null || nextAcross === null) return 1;
+  return previousAcross <= nextAcross ? 1 : -1;
+}
+
+function meanRelationAcross(
+  component: Component,
+  id: string,
+  neighbor: string,
+  axis: ReturnType<typeof acrossAxis>,
+): number | null {
+  const samples: number[] = [];
+  for (const seam of component.seams) {
+    if (seam.classification !== "structural-alignment") continue;
+    const matches = (seam.instanceA === id && seam.instanceB === neighbor)
+      || (seam.instanceB === id && seam.instanceA === neighbor);
+    if (!matches) continue;
+    const binding = seam.instanceA === id ? seam.a : seam.b;
+    samples.push(axis.acrossIsX ? binding.materialXMm : binding.materialYMm);
+  }
+  if (samples.length === 0) return null;
+  return samples.reduce((sum, value) => sum + value, 0) / samples.length;
 }
 
 function acrossAxis(
@@ -1179,6 +1694,7 @@ function materialBounds(mesh: CoarseAssemblyMesh) {
 }
 
 function measureOverlap(component: Component, coarse: CoarseAssemblySet): { score: number; count: number } {
+  const ignoredSelfOverlapIds = localShapingMeshIds(component);
   const centroids: Array<{
     id: string;
     tri: number;
@@ -1229,6 +1745,7 @@ function measureOverlap(component: Component, coarse: CoarseAssemblySet): { scor
       // can be rejected as well.
       if (b.centroid[0] - a.centroid[0] >= 0.018) break;
       if (a.id === b.id) {
+        if (ignoredSelfOverlapIds.has(a.id)) continue;
         if (trianglesShareVertex(a.vertices, b.vertices)) continue;
         if (materialNeighborhoodsTouch(a, b)) continue;
       }

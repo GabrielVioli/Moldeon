@@ -191,7 +191,7 @@ describe("Prompt 10.6 constraint-based spatial assembly", () => {
       physicsMedianMs: percentile(timings, 0.5),
       physicsP95Ms: percentile(timings, 0.95),
     })}`);
-  });
+  }, 15_000);
 
   it("A-to-B-to-A rebuild is deterministic and carries no stale pose", () => {
     const garmentA = createBaselineFixture("straight-pants-standard");

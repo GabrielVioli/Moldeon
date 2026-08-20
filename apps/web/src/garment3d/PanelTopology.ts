@@ -1,5 +1,6 @@
 import type {
   EdgeRange,
+  PatternDart,
   PatternEdge,
   PatternPiece,
   PatternPoint,
@@ -9,6 +10,7 @@ import {
   samplePatternSegment,
   triangulatePatternContour,
 } from "../domain/polygonGeometry";
+import type { PatternContourResult } from "../domain/polygonGeometry";
 import type {
   DartTopology,
   PanelEdgePath,
@@ -52,6 +54,14 @@ interface PendingEdgePath {
 interface OrderedEdgeTraversal {
   edge: PatternEdge;
   reversed: boolean;
+}
+
+interface MaterializedDartTriangulation {
+  dart: PatternDart;
+  legAIndex: number;
+  legBIndex: number;
+  apexIndex: number;
+  triangulation: PatternContourResult;
 }
 
 const EDGE_SAMPLE_SPACING_MM = 20;
@@ -109,7 +119,12 @@ export function buildPanelTopology(
       );
     }
 
-    const canonicalSamples = sampleEdgeWithSpacing(start, end);
+    const canonicalSamples = injectDartMouthSamples(
+      sampleEdgeWithSpacing(start, end),
+      piece.darts ?? [],
+      start,
+      end,
+    );
     const samples = reversed ? [...canonicalSamples].reverse() : canonicalSamples;
 
     if (samples.length < 2) {
@@ -125,10 +140,13 @@ export function buildPanelTopology(
      * canonical in the authored segment direction. A contour is therefore
      * allowed to traverse a segment backwards without changing edgeId/t.
      */
+    const curved = start.handleOut !== undefined || end.handleIn !== undefined;
     samples.slice(0, -1).forEach((sample, sampleIndex) => {
       const vertexIndex = contour.length;
       const traversalT = sampleIndex / Math.max(1, samples.length - 1);
-      const t = reversed ? 1 - traversalT : traversalT;
+      const t = curved
+        ? (reversed ? 1 - traversalT : traversalT)
+        : lineParameter(start, end, sample);
       contour.push(sample);
       vertexSources.push({
         vertexIndex,
@@ -160,7 +178,18 @@ export function buildPanelTopology(
     );
   }
 
-  const triangulation = triangulatePatternContour(contour);
+  const boundaryVertexCount = contour.length;
+  const closedDarts = (piece.darts ?? []).filter((dart) => dart.closed);
+  const dartTriangulation = closedDarts.length === 1
+    ? appendDartApexAndTriangulate(
+        contour,
+        vertexSources,
+        piece.id,
+        closedDarts[0],
+      )
+    : null;
+  const triangulation = dartTriangulation?.triangulation
+    ?? triangulatePatternContour(contour);
 
   if (!triangulation.ok) {
     throw new Error(
@@ -178,6 +207,7 @@ export function buildPanelTopology(
   includeAllBoundaryVertices(
     contour,
     triangleIndices,
+    boundaryVertexCount,
   );
 
   const positions2DMm = createPositionArray(contour, 1);
@@ -199,7 +229,7 @@ export function buildPanelTopology(
       sampleIndex += 1
     ) {
       const vertexIndex =
-        (pending.startIndex + sampleIndex) % contour.length;
+        (pending.startIndex + sampleIndex) % boundaryVertexCount;
 
       if (
         vertexIndices.length === 0 ||
@@ -241,12 +271,21 @@ export function buildPanelTopology(
     ]),
   );
 
-  const darts: DartTopology[] = (piece.darts ?? []).map((dart) => ({
-    dart: structuredClone(dart),
-    legAVertices: [],
-    legBVertices: [],
-    apexVertex: null,
-  }));
+  const darts: DartTopology[] = (piece.darts ?? []).map((dart) => {
+    const materialized = dartTriangulation?.dart.id === dart.id
+      ? dartTriangulation
+      : null;
+    return {
+      dart: structuredClone(dart),
+      legAVertices: materialized
+        ? [materialized.legAIndex, materialized.apexIndex]
+        : [],
+      legBVertices: materialized
+        ? [materialized.legBIndex, materialized.apexIndex]
+        : [],
+      apexVertex: materialized?.apexIndex ?? null,
+    };
+  });
 
   const boundsMm = calculateBounds(contour);
 
@@ -260,7 +299,7 @@ export function buildPanelTopology(
     positions2DMm,
     triangles: new Uint32Array(triangleIndices),
     boundaryVertices: Array.from(
-      { length: contour.length },
+      { length: boundaryVertexCount },
       (_, index) => index,
     ),
     edges,
@@ -503,6 +542,196 @@ function sampleEdgeWithSpacing(
   return samples;
 }
 
+/**
+ * A dart mouth is part of the material boundary even when it was authored as
+ * an internal-path operation.  Making both legs explicit boundary vertices is
+ * what lets the constrained triangulation below create real fold edges.
+ */
+function injectDartMouthSamples(
+  samples: readonly PatternPoint[],
+  darts: readonly PatternDart[],
+  start: PatternPoint,
+  end: PatternPoint,
+): PatternPoint[] {
+  const result = samples.map((sample) => structuredClone(sample));
+  let inserted = false;
+
+  for (const dart of darts) {
+    for (const [legName, leg] of [
+      ["a", dart.legA],
+      ["center", dart.centerLine.start],
+      ["b", dart.legB],
+    ] as const) {
+      const point: PatternPoint = {
+        id: `${dart.id}:leg-${legName}`,
+        xMm: leg.xMm,
+        yMm: leg.yMm,
+      };
+      if (!pointOnSegment(point, start, end)) continue;
+      if (result.some((candidate) => pointsCoincide(candidate, point))) continue;
+      result.push(point);
+      inserted = true;
+    }
+  }
+
+  return inserted ? result.sort(
+    (first, second) => lineParameter(start, end, first) - lineParameter(start, end, second),
+  ) : result;
+}
+
+function appendDartApexAndTriangulate(
+  contour: PatternPoint[],
+  vertexSources: PanelVertexSourceMapping[],
+  pieceId: string,
+  dart: PatternDart,
+): MaterializedDartTriangulation | null {
+  const legAIndex = matchingVertexIndex(contour, dart.legA);
+  const legBIndex = matchingVertexIndex(contour, dart.legB);
+  if (legAIndex < 0 || legBIndex < 0 || legAIndex === legBIndex) return null;
+
+  const forwardAtoB = cyclicVertexPath(legAIndex, legBIndex, contour.length);
+  const forwardBtoA = cyclicVertexPath(legBIndex, legAIndex, contour.length);
+  const lengthAtoB = polylineLengthMm(forwardAtoB, contour);
+  const lengthBtoA = polylineLengthMm(forwardBtoA, contour);
+  const mouthBoundary = lengthAtoB <= lengthBtoA ? forwardAtoB : forwardBtoA;
+  const bodyBoundary = lengthAtoB <= lengthBtoA ? forwardBtoA : forwardAtoB;
+  const apexIndex = contour.length;
+  const apex: PatternPoint = {
+    id: `${dart.id}:apex`,
+    xMm: dart.apex.xMm,
+    yMm: dart.apex.yMm,
+  };
+
+  const centerIndex = matchingVertexIndex(contour, dart.centerLine.start);
+  const centerCursor = mouthBoundary.indexOf(centerIndex);
+  const mouthParts = centerCursor > 0 && centerCursor < mouthBoundary.length - 1
+    ? [
+        mouthBoundary.slice(0, centerCursor + 1),
+        mouthBoundary.slice(centerCursor),
+      ]
+    : [mouthBoundary];
+  const mouths = mouthParts.map((part) =>
+    triangulateIndexedSubpolygon(part, apexIndex, apex, contour));
+  const body = triangulateIndexedSubpolygon(bodyBoundary, apexIndex, apex, contour);
+  if (mouths.some((mouth) => !mouth.ok) || !body.ok) return null;
+
+  contour.push(apex);
+  vertexSources.push({
+    vertexIndex: apexIndex,
+    sourcePatternId: pieceId,
+    restPosition2DMm: { x: apex.xMm, y: apex.yMm },
+  });
+
+  return {
+    dart,
+    legAIndex,
+    legBIndex,
+    apexIndex,
+    triangulation: {
+      ok: true,
+      indices: [
+        ...mouths.flatMap((mouth) => mouth.ok ? mouth.indices : []),
+        ...body.indices,
+      ],
+      signedAreaMm2: mouths.reduce(
+        (total, mouth) => total + (mouth.ok ? mouth.signedAreaMm2 : 0),
+        body.signedAreaMm2,
+      ),
+    },
+  };
+}
+
+function triangulateIndexedSubpolygon(
+  boundary: readonly number[],
+  apexIndex: number,
+  apex: PatternPoint,
+  contour: readonly PatternPoint[],
+): PatternContourResult {
+  const points = [...boundary.map((index) => contour[index]), apex];
+  const validation = triangulatePatternContour(points);
+  if (!validation.ok) return validation;
+  const indices: number[] = [];
+  for (let cursor = 0; cursor < boundary.length - 1; cursor += 1) {
+    const firstIndex = boundary[cursor];
+    const secondIndex = boundary[cursor + 1];
+    const first = contour[firstIndex];
+    const second = contour[secondIndex];
+    const cross = (second.xMm - first.xMm) * (apex.yMm - first.yMm)
+      - (second.yMm - first.yMm) * (apex.xMm - first.xMm);
+    if (Math.abs(cross) <= GEOMETRY_EPSILON_MM) continue;
+    indices.push(...(cross > 0
+      ? [firstIndex, secondIndex, apexIndex]
+      : [secondIndex, firstIndex, apexIndex]));
+  }
+  return {
+    ok: true,
+    indices,
+    signedAreaMm2: validation.signedAreaMm2,
+  };
+}
+
+function cyclicVertexPath(from: number, to: number, count: number): number[] {
+  const result = [from];
+  let current = from;
+  while (current !== to && result.length <= count) {
+    current = (current + 1) % count;
+    result.push(current);
+  }
+  return result;
+}
+
+function polylineLengthMm(
+  indices: readonly number[],
+  contour: readonly PatternPoint[],
+): number {
+  let result = 0;
+  for (let index = 1; index < indices.length; index += 1) {
+    const previous = contour[indices[index - 1]];
+    const current = contour[indices[index]];
+    result += Math.hypot(current.xMm - previous.xMm, current.yMm - previous.yMm);
+  }
+  return result;
+}
+
+function matchingVertexIndex(
+  contour: readonly PatternPoint[],
+  point: { xMm: number; yMm: number },
+): number {
+  return contour.findIndex((candidate) => pointsCoincide(candidate, point));
+}
+
+function pointsCoincide(
+  first: { xMm: number; yMm: number },
+  second: { xMm: number; yMm: number },
+): boolean {
+  return Math.hypot(first.xMm - second.xMm, first.yMm - second.yMm)
+    <= GEOMETRY_EPSILON_MM;
+}
+
+function pointOnSegment(
+  point: { xMm: number; yMm: number },
+  start: { xMm: number; yMm: number },
+  end: { xMm: number; yMm: number },
+): boolean {
+  const t = lineParameter(start, end, point);
+  const projectedX = start.xMm + (end.xMm - start.xMm) * t;
+  const projectedY = start.yMm + (end.yMm - start.yMm) * t;
+  return Math.hypot(point.xMm - projectedX, point.yMm - projectedY)
+    <= GEOMETRY_EPSILON_MM;
+}
+
+function lineParameter(
+  start: { xMm: number; yMm: number },
+  end: { xMm: number; yMm: number },
+  point: { xMm: number; yMm: number },
+): number {
+  const dx = end.xMm - start.xMm;
+  const dy = end.yMm - start.yMm;
+  const denominator = dx * dx + dy * dy;
+  if (denominator <= GEOMETRY_EPSILON_MM * GEOMETRY_EPSILON_MM) return 0;
+  return clamp01(((point.xMm - start.xMm) * dx + (point.yMm - start.yMm) * dy) / denominator);
+}
+
 function createPositionArray(
   contour: readonly PatternPoint[],
   scale: number,
@@ -589,10 +818,11 @@ function addSourcePointMapping(
 function includeAllBoundaryVertices(
   contour: readonly PatternPoint[],
   triangles: number[],
+  boundaryVertexCount = contour.length,
 ): void {
   for (
     let boundaryIndex = 0;
-    boundaryIndex < contour.length;
+    boundaryIndex < boundaryVertexCount;
     boundaryIndex += 1
   ) {
     if (triangles.includes(boundaryIndex)) {

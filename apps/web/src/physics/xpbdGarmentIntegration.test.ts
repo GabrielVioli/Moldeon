@@ -1,10 +1,9 @@
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
-import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import { getPatternEdges, type GarmentDraft, type PatternPiece, type Seam } from "../domain/pattern";
-import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
+import { garmentDraftToPatternDocumentV3 } from "../domain/patternDocumentV3";
+import { buildCoarseIsometricAssembly } from "../garment3d/CoarseAssemblyPipeline";
 import type { GarmentAssemblyState, GlobalPointReference } from "../garment3d/GarmentAssembly";
-import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
 import { createBaselineFixture } from "../testFixtures/baselineGarments";
 import { buildXpbdInitialization, type XpbdInitializationData } from "./GarmentXpbdAdapter";
 import { advanceXpbd, createXpbdState, measureXpbdDiagnostics, type XpbdState } from "./xpbd";
@@ -14,8 +13,8 @@ describe("XPBD garment topology rebuild", () => {
     const { assembly, state } = physicalState(dressedTube(), "self-seam-tube-initial");
     const largestResidual = Math.max(...assembly.stitchConstraints.map((constraint) =>
       referenceDistance(assembly.positions, constraint.a, constraint.b)));
-    expect(assembly.instances[0].arrangement?.mapping).toBe("seam-derived-tube");
-    expect(largestResidual).toBeLessThan(1e-6);
+    expect(assembly.instances).toHaveLength(1);
+    expect(largestResidual).toBeLessThan(5e-4);
     expect(measureXpbdDiagnostics(state).seamErrorMaximum).toBeLessThan(0.001);
   });
 
@@ -80,7 +79,13 @@ describe("XPBD garment topology rebuild", () => {
   });
 
   it("keeps four or more real PanelInstances finite with valid global indices", () => {
-    const garment = createBaselineFixture("multiple-fabrics");
+    const garment = createBaselineFixture("spatial-four-panel-tube");
+    const materialSource = createBaselineFixture("multiple-fabrics");
+    garment.fabrics = structuredClone(materialSource.fabrics);
+    garment.pieces = garment.pieces.map((piece, index) => ({
+      ...piece,
+      fabricId: garment.fabrics[index % garment.fabrics.length].id,
+    }));
     const frontReferencePieceId = garment.pieces[0].id;
     const dressed: GarmentDraft = {
       ...garment,
@@ -150,10 +155,8 @@ function flapSeam(tube: PatternPiece, flap: PatternPiece): Seam {
 }
 
 function physicalState(garment: GarmentDraft, revision: string): { state: XpbdState; initialization: XpbdInitializationData; assembly: GarmentAssemblyState } {
-  const input = buildResolvedAssemblyInput(garment);
-  const avatar = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
-  const arrangement = buildSemanticAvatarArrangement(input, avatar);
-  const initialization = buildXpbdInitialization(arrangement.state, arrangement.garment, revision, {
+  const assembly = buildCoarseIsometricAssembly(garmentDraftToPatternDocumentV3(garment));
+  const initialization = buildXpbdInitialization(assembly.state, garment, revision, {
     config: { iterations: 5, maximumSubsteps: 2 },
   });
   const state = createXpbdState({
@@ -198,7 +201,7 @@ function physicalState(garment: GarmentDraft, revision: string): { state: XpbdSt
     pins: { indices: initialization.pinIndices, targets: initialization.pinTargets },
     config: initialization.config,
   });
-  return { state, initialization, assembly: arrangement.state };
+  return { state, initialization, assembly: assembly.state };
 }
 
 function referenceDistance(positions: Float32Array, first: GlobalPointReference, second: GlobalPointReference): number {

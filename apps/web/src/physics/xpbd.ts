@@ -101,6 +101,10 @@ export interface XpbdState {
   lastFlippedTriangleCount: number;
   meaningfulStructuralRestLength: number;
   maximumCorrectionApplied: number;
+  /** Active while an assembled equilibrium undergoes uniform free flight. */
+  zeroEnergyFreeFlightActive: boolean;
+  zeroEnergyFreeFlightOffset: [number, number, number];
+  zeroEnergyFreeFlightVelocity: [number, number, number];
   config: XpbdSolverConfig;
   accumulator: number;
   stepCount: number;
@@ -212,7 +216,7 @@ type XpbdStateInput = Omit<
   XpbdState,
   "body" | "triangleMaterial" | "bends" | "correctionLimits" | "stablePositions" |
   "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" |
-  "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile"
+  "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile"
 > & {
   body?: BodyCollisionRuntimeState;
   triangleMaterial?: XpbdTriangleMaterialReference;
@@ -248,6 +252,9 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
     lastFlippedTriangleCount: 0,
     meaningfulStructuralRestLength: meaningfulStructuralRestLength(input.distances),
     maximumCorrectionApplied: 0,
+    zeroEnergyFreeFlightActive: false,
+    zeroEnergyFreeFlightOffset: [0, 0, 0],
+    zeroEnergyFreeFlightVelocity: [0, 0, 0],
     accumulator: 0,
     stepCount: 0,
     invalid: false,
@@ -287,6 +294,14 @@ export function stepXpbd(state: XpbdState): void {
   const stepStarted = performance.now();
   const profile = state.profile;
   profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0; profile.bodyCollisionMs = 0;
+  // Metric rollback is an auto-pause, not a one-frame warning.  Advancing the
+  // restored snapshot on the next scheduler tick used to clear `invalid` and
+  // hide the catastrophe from both diagnostics and the UI.  Only an explicit
+  // reset/rebuild may resume a failed state.
+  if (state.invalid) {
+    profile.solverStepTotalMs = performance.now() - stepStarted;
+    return;
+  }
   resetBodyContactStep(state.body);
   const dt = state.config.fixedTimeStep;
   if (!Number.isFinite(dt) || dt <= 0) throw new RangeError("O passo da simula\u00e7\u00e3o precisa ser positivo e finito.");
@@ -299,6 +314,25 @@ export function stepXpbd(state: XpbdState): void {
     ? Math.max(state.config.iterations, state.config.iterations * 2)
     : state.config.iterations;
   let phaseStarted = performance.now();
+  const zeroEnergyFreeFlight = !dressingActive && canAdvanceAsZeroEnergyFreeFlight(state);
+
+  // A free garment in uniform gravity has no relative acceleration. When the
+  // current state is the assembled rest pose plus one rigid translation and
+  // all authored constraints are already satisfied, constraint projection can
+  // only add floating-point noise and artificial angular momentum. Advance the
+  // common translation analytically and keep the material shape bit-stable.
+  if (zeroEnergyFreeFlight) {
+    state.zeroEnergyFreeFlightActive = true;
+    advanceZeroEnergyFreeFlight(state, dt);
+    profile.integrationMs = performance.now() - phaseStarted;
+    state.stepCount += 1;
+    state.stablePositions.set(state.positions);
+    state.invalid = false;
+    state.invalidReason = null;
+    profile.solverStepTotalMs = performance.now() - stepStarted;
+    return;
+  }
+  state.zeroEnergyFreeFlightActive = false;
   integrate(state, dt, dressingActive ? [0, 0, 0] : state.config.gravity);
   profile.integrationMs = performance.now() - phaseStarted;
 
@@ -368,6 +402,9 @@ export function resetXpbdState(state: XpbdState): void {
   state.accumulator = 0;
   state.stepCount = 0;
   state.maximumCorrectionApplied = 0;
+  state.zeroEnergyFreeFlightActive = false;
+  state.zeroEnergyFreeFlightOffset = [0, 0, 0];
+  state.zeroEnergyFreeFlightVelocity = [0, 0, 0];
   state.invalid = false;
   state.invalidReason = null;
   resetBodyContactStep(state.body);
@@ -500,6 +537,128 @@ export function measureXpbdDiagnostics(
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };
+}
+
+function canAdvanceAsZeroEnergyFreeFlight(state: XpbdState): boolean {
+  if (state.body.enabled || state.pins.indices.length > 0 || state.positions.length === 0) return false;
+  const particleCount = state.positions.length / 3;
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    if (state.inverseMasses[particle] <= 0) return false;
+  }
+
+  if (state.zeroEnergyFreeFlightActive) {
+    const vx = state.velocities[0];
+    const vy = state.velocities[1];
+    const vz = state.velocities[2];
+    for (let offset = 3; offset < state.velocities.length; offset += 3) {
+      if (
+        Math.abs(state.velocities[offset] - vx) > 1e-4
+        || Math.abs(state.velocities[offset + 1] - vy) > 1e-4
+        || Math.abs(state.velocities[offset + 2] - vz) > 1e-4
+      ) return false;
+    }
+    return true;
+  }
+
+  const translation: readonly [number, number, number] = [
+    state.positions[0] - state.restPositions[0],
+    state.positions[1] - state.restPositions[1],
+    state.positions[2] - state.restPositions[2],
+  ];
+  const velocity: readonly [number, number, number] = [
+    state.velocities[0],
+    state.velocities[1],
+    state.velocities[2],
+  ];
+  for (let offset = 0; offset < state.positions.length; offset += 3) {
+    if (
+      Math.abs((state.positions[offset] - state.restPositions[offset]) - translation[0]) > 5e-5
+      || Math.abs((state.positions[offset + 1] - state.restPositions[offset + 1]) - translation[1]) > 5e-5
+      || Math.abs((state.positions[offset + 2] - state.restPositions[offset + 2]) - translation[2]) > 5e-5
+      || Math.abs(state.velocities[offset] - velocity[0]) > 1e-5
+      || Math.abs(state.velocities[offset + 1] - velocity[1]) > 1e-5
+      || Math.abs(state.velocities[offset + 2] - velocity[2]) > 1e-5
+    ) return false;
+  }
+
+  for (let index = 0; index < state.distances.restLengths.length; index += 1) {
+    if (state.distances.kinds[index] !== 0) continue;
+    const a = state.distances.indices[index * 2] * 3;
+    const b = state.distances.indices[index * 2 + 1] * 3;
+    const current = Math.hypot(
+      state.positions[b] - state.positions[a],
+      state.positions[b + 1] - state.positions[a + 1],
+      state.positions[b + 2] - state.positions[a + 2],
+    );
+    const rest = state.distances.restLengths[index];
+    if (Math.abs(current - rest) > Math.max(2e-6, rest * 5e-5)) return false;
+  }
+  for (let index = 0; index < state.shears.restCosines.length; index += 1) {
+    const base = index * 3;
+    const p0 = state.shears.indices[base] * 3;
+    const p1 = state.shears.indices[base + 1] * 3;
+    const p2 = state.shears.indices[base + 2] * 3;
+    const e1x = state.positions[p1] - state.positions[p0];
+    const e1y = state.positions[p1 + 1] - state.positions[p0 + 1];
+    const e1z = state.positions[p1 + 2] - state.positions[p0 + 2];
+    const e2x = state.positions[p2] - state.positions[p0];
+    const e2y = state.positions[p2 + 1] - state.positions[p0 + 1];
+    const e2z = state.positions[p2 + 2] - state.positions[p0 + 2];
+    const denominator = Math.hypot(e1x, e1y, e1z) * Math.hypot(e2x, e2y, e2z);
+    if (denominator <= EPSILON) return false;
+    const cosine = (e1x * e2x + e1y * e2y + e1z * e2z) / denominator;
+    // Float32 assembly of a folded developable dart can differ from its
+    // material cosine by roughly 1e-4 even when all edge lengths are within
+    // the STEP-0 metric gate. Treat 1.25e-4 as numeric zero; it is not ease.
+    if (Math.abs(cosine - state.shears.restCosines[index]) > 1.25e-4) return false;
+  }
+  const seamTolerance = Math.min(5e-5, Math.max(1e-6, state.config.seamTolerance));
+  for (let index = 0; index < state.seams.restDistances.length; index += 1) {
+    if (Math.abs(seamDistance(state.positions, state.seams, index) - state.seams.restDistances[index]) > seamTolerance) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function advanceZeroEnergyFreeFlight(state: XpbdState, dt: number): void {
+  if (state.stepCount === 0 || state.zeroEnergyFreeFlightOffset.every((value) => value === 0)) {
+    state.zeroEnergyFreeFlightOffset = [
+      state.positions[0] - state.restPositions[0],
+      state.positions[1] - state.restPositions[1],
+      state.positions[2] - state.restPositions[2],
+    ];
+    state.zeroEnergyFreeFlightVelocity = [
+      state.velocities[0],
+      state.velocities[1],
+      state.velocities[2],
+    ];
+  }
+  const displacement: [number, number, number] = [
+    state.zeroEnergyFreeFlightVelocity[0] * dt + state.config.gravity[0] * dt * dt,
+    state.zeroEnergyFreeFlightVelocity[1] * dt + state.config.gravity[1] * dt * dt,
+    state.zeroEnergyFreeFlightVelocity[2] * dt + state.config.gravity[2] * dt * dt,
+  ];
+  for (let axis = 0; axis < 3; axis += 1) {
+    state.zeroEnergyFreeFlightOffset[axis] += displacement[axis];
+    state.zeroEnergyFreeFlightVelocity[axis] = displacement[axis] / dt * state.config.damping;
+  }
+  const speed = Math.hypot(...state.zeroEnergyFreeFlightVelocity);
+  if (speed > state.config.maximumVelocity) {
+    const scale = state.config.maximumVelocity / speed;
+    for (let axis = 0; axis < 3; axis += 1) state.zeroEnergyFreeFlightVelocity[axis] *= scale;
+  }
+  for (let offset = 0; offset < state.positions.length; offset += 3) {
+    state.predictedPositions[offset] = state.restPositions[offset] + state.zeroEnergyFreeFlightOffset[0];
+    state.predictedPositions[offset + 1] = state.restPositions[offset + 1] + state.zeroEnergyFreeFlightOffset[1];
+    state.predictedPositions[offset + 2] = state.restPositions[offset + 2] + state.zeroEnergyFreeFlightOffset[2];
+    state.positions[offset] = state.predictedPositions[offset];
+    state.positions[offset + 1] = state.predictedPositions[offset + 1];
+    state.positions[offset + 2] = state.predictedPositions[offset + 2];
+    state.velocities[offset] = state.zeroEnergyFreeFlightVelocity[0];
+    state.velocities[offset + 1] = state.zeroEnergyFreeFlightVelocity[1];
+    state.velocities[offset + 2] = state.zeroEnergyFreeFlightVelocity[2];
+  }
 }
 
 interface MaterialMetricsSnapshot {
@@ -1001,7 +1160,7 @@ function interpolatedPoint(
   return result;
 }
 
-function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile">): void {
+function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" | "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile">): void {
   const particleCount = input.positions.length / 3;
   if (!Number.isInteger(particleCount)
     || input.previousPositions.length !== input.positions.length

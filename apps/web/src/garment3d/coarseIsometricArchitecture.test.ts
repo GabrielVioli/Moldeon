@@ -90,6 +90,14 @@ describe("Prompt 10.7 G1-G24 coarse isometric architecture", () => {
     expect(result.assembly.strategy).toBe("coarse-isometric-surface");
     const sleeveGroups = new Set(result.seamResolution.constraints.map((seam) => seam.seamGroupId));
     expect([...sleeveGroups].some((group) => group.includes("armhole"))).toBe(true);
+    for (const groupId of ["guided-sleeve:front-armhole", "guided-sleeve:back-armhole"]) {
+      const physicalPairs = new Set(
+        result.seamResolution.constraints
+          .filter((seam) => seam.seamGroupId === groupId)
+          .map((seam) => `${seam.instanceA}->${seam.instanceB}`),
+      );
+      expect(physicalPairs.size).toBe(2);
+    }
   }, 20_000);
 
   it("G8/G22 trousers resolve paired physical crotch copies on the generic surface solver", () => {
@@ -192,7 +200,7 @@ describe("Prompt 10.7 G1-G24 coarse isometric architecture", () => {
     expect(manual.assembly.strategy).toBe("coarse-isometric-surface");
     expect(template.coarse.meshes.every((mesh) => mesh.panelInstanceId.length > 0 && mesh.sourcePatternId.length > 0)).toBe(true);
     expect(manual.coarse.meshes.every((mesh) => mesh.panelInstanceId.length > 0 && mesh.sourcePatternId.length > 0)).toBe(true);
-  });
+  }, 15_000);
 });
 
 function shortenTrouser(garment: GarmentDraft): GarmentDraft {

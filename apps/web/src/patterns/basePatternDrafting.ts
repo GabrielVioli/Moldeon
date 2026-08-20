@@ -504,8 +504,31 @@ function createSkirtPiece(
   const dartX = values[`${surface}DartX`];
   const centerWaistY = values[isFront ? "centerFrontWaistY" : "centerBackWaistY"];
   const waistYAtDart = interpolateY(centerWaistY, values.sideWaistY, waistCutWidth === 0 ? 0 : dartX / waistCutWidth);
+  const waistRun = Math.hypot(waistCutWidth, values.sideWaistY - centerWaistY);
+  const waistTangent = waistRun > 1e-9
+    ? { xMm: waistCutWidth / waistRun, yMm: (values.sideWaistY - centerWaistY) / waistRun }
+    : { xMm: 1, yMm: 0 };
   const darts = dartWidth > 0.05
-    ? [closeDart(createDart(id, { xMm: dartX, yMm: waistYAtDart }, { xMm: dartX, yMm: waistYAtDart + dartLength }, dartWidth))]
+    ? [closeDart({
+        ...createDart(
+          id,
+          { xMm: dartX, yMm: waistYAtDart },
+          { xMm: dartX, yMm: waistYAtDart + dartLength },
+          dartWidth,
+        ),
+        // Dart intake is measured along the authored waist edge. The generic
+        // operation places legs perpendicular to the center line, which only
+        // lies on the boundary for a horizontal waist. Skirt waists are
+        // sloped, so keep both legs on that material edge explicitly.
+        legA: {
+          xMm: dartX - waistTangent.xMm * dartWidth * 0.5,
+          yMm: waistYAtDart - waistTangent.yMm * dartWidth * 0.5,
+        },
+        legB: {
+          xMm: dartX + waistTangent.xMm * dartWidth * 0.5,
+          yMm: waistYAtDart + waistTangent.yMm * dartWidth * 0.5,
+        },
+      })]
     : [];
   return piece(
     id,

@@ -94,7 +94,7 @@ export function buildCoarseSeamResolution(
         targetRatio: stitch.targetRatio,
         slackMm: stitch.slackMm,
         direction: stitch.direction ?? "same",
-        restDistanceM: stitch.restDistance,
+        restDistanceM: stitch.physicalRestDistance ?? stitch.restDistance,
         stiffness: stitch.stiffness,
         progress: stitch.progress ?? 0,
         ...(stitch.rangeLengthAMm === undefined ? {} : { rangeLengthAMm: stitch.rangeLengthAMm }),

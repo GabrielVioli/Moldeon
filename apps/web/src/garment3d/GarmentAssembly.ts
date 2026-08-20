@@ -49,7 +49,10 @@ export interface AssemblyStitchConstraint {
   direction?: "same" | "opposite";
   a: GlobalPointReference;
   b: GlobalPointReference;
+  /** Clearance used only by the legacy static placement heuristics. */
   restDistance: number;
+  /** Canonical physical target consumed by coarse STEP 0 and XPBD. */
+  physicalRestDistance?: number;
   stiffness: number;
   instanceA?: string;
   instanceB?: string;
@@ -239,15 +242,23 @@ export function buildGarmentAssembly(
 
     try {
       const baseTopology = buildPanelTopology(snapshot.piece, METERS_PER_MM, geometrySignatures.get(snapshot.piece.id));
-      topology = structuredSelfSeamPieces.has(snapshot.piece.id)
-        ? remeshStructuredQuadrilateral(baseTopology) ?? refinePanelTopology(
-            baseTopology,
-            recommendedPanelRefinement(baseTopology),
-          )
-        : refinePanelTopology(
-            baseTopology,
-            recommendedPanelRefinement(baseTopology),
-          );
+      if (structuredSelfSeamPieces.has(snapshot.piece.id)) {
+        const assemblyBase = remeshStructuredQuadrilateral(baseTopology, 80);
+        topology = assemblyBase
+          ? refinePanelTopology(assemblyBase, 2)
+          : refinePanelTopology(
+              baseTopology,
+              recommendedPanelRefinement(baseTopology),
+            );
+      } else {
+        const assemblyBase = remeshStructuredQuadrilateral(baseTopology, 40);
+        topology = assemblyBase
+          ? refinePanelTopology(assemblyBase, 2)
+          : refinePanelTopology(
+              baseTopology,
+              recommendedPanelRefinement(baseTopology),
+            );
+      }
     } catch (error) {
       warnings.push(
         `${snapshot.piece.name}: ${
@@ -498,7 +509,12 @@ function buildGlobalStitchConstraints(
           direction: seam.direction,
           a,
           b,
+          // The legacy placement solver retains its visual clearance so its
+          // branch selection stays backwards-compatible.
           restDistance: 0.0015 + (mismatchMm + slackMm) * METERS_PER_MM / sampleCount,
+          // Physical consumers close compatible material sides at distance
+          // zero. Only authored slack/length mismatch remains non-zero.
+          physicalRestDistance: (mismatchMm + slackMm) * METERS_PER_MM / sampleCount,
           stiffness,
           instanceA: firstInstance.id,
           instanceB: secondInstance.id,
@@ -522,18 +538,35 @@ function buildDartConstraints(
 
   for (const instance of instances) {
     for (const dart of instance.topology.darts) {
-      const sampleCount = Math.max(2, Math.ceil(dart.dart.lengthMm / 20));
+      const materialized = dart.legAVertices.length >= 2 && dart.legBVertices.length >= 2;
+      const sampleCount = materialized
+        ? Math.max(dart.legAVertices.length, dart.legBVertices.length) - 1
+        : Math.max(2, Math.ceil(dart.dart.lengthMm / 20));
       const seenPairs = new Set<string>();
       for (let sample = 0; sample < sampleCount; sample += 1) {
         // The apex is shared material and must remain continuous; constraints
         // pair the two physical legs from mouth towards (but not across) it.
         const progress = sample / sampleCount;
-        const legAX = dart.dart.legA.xMm + (dart.dart.apex.xMm - dart.dart.legA.xMm) * progress;
-        const legAY = dart.dart.legA.yMm + (dart.dart.apex.yMm - dart.dart.legA.yMm) * progress;
-        const legBX = dart.dart.legB.xMm + (dart.dart.apex.xMm - dart.dart.legB.xMm) * progress;
-        const legBY = dart.dart.legB.yMm + (dart.dart.apex.yMm - dart.dart.legB.yMm) * progress;
-        const legA = nearestLocalVertex(instance.topology, legAX, legAY);
-        const legB = nearestLocalVertex(instance.topology, legBX, legBY);
+        const legA = materialized
+          ? dart.legAVertices[Math.min(
+              dart.legAVertices.length - 2,
+              Math.round(progress * (dart.legAVertices.length - 1)),
+            )]
+          : nearestLocalVertex(
+              instance.topology,
+              dart.dart.legA.xMm + (dart.dart.apex.xMm - dart.dart.legA.xMm) * progress,
+              dart.dart.legA.yMm + (dart.dart.apex.yMm - dart.dart.legA.yMm) * progress,
+            );
+        const legB = materialized
+          ? dart.legBVertices[Math.min(
+              dart.legBVertices.length - 2,
+              Math.round(progress * (dart.legBVertices.length - 1)),
+            )]
+          : nearestLocalVertex(
+              instance.topology,
+              dart.dart.legB.xMm + (dart.dart.apex.xMm - dart.dart.legB.xMm) * progress,
+              dart.dart.legB.yMm + (dart.dart.apex.yMm - dart.dart.legB.yMm) * progress,
+            );
         if (legA < 0 || legB < 0 || legA === legB) continue;
         const pairKey = legA < legB ? `${legA}:${legB}` : `${legB}:${legA}`;
         if (seenPairs.has(pairKey)) continue;

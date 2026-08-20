@@ -203,6 +203,7 @@ export function buildXpbdInitialization(
     appendDihedralBendingConstraints(
       topology.triangles,
       instance,
+      positions,
       materialCoordinates,
       physics,
       bendIndices,
@@ -238,23 +239,27 @@ export function buildXpbdInitialization(
   for (const seam of state.stitchConstraints) {
     appendPointReference(seamIndices, seamWeights, seam.a);
     appendPointReference(seamIndices, seamWeights, seam.b);
+    // GarmentAssembly owns the canonical sampled seam target, including
+    // composite range mismatch and explicit slack. Re-deriving only from
+    // slack here used to disagree with STEP 0 by a constant 1.5 mm and gave
+    // the first physics step artificial closing energy.
     const restDistance = Math.max(
       0,
-      seam.slackMm * METERS_PER_MM / Math.max(1, seamGroupSampleCount(state, seam.seamGroupId)),
+      seam.physicalRestDistance ?? seam.restDistance,
     );
     seamRestDistances.push(restDistance);
     seamCompliances.push(seamCompliance(seam.treatment));
-    const initialResidual = Math.abs(pointReferenceDistance(state.positions, seam.a, seam.b) - restDistance);
     seamRelaxations.push(
       seam.treatment === "dart"
         // Paired legs begin separated by the dart intake. A modestly wider
         // trust region closes that local fold without changing seam compliance.
         ? 16
-        : seam.instanceA !== undefined && seam.instanceA === seam.instanceB
-        ? 1
-        : initialResidual <= (options.config?.seamTolerance ?? DEFAULT_XPBD_CONFIG.seamTolerance)
-          ? 0.35
-          : 1,
+        // An equilibrium STEP-0 bypasses constraint projection entirely. If
+        // this seam reaches XPBD, another material constraint has displaced
+        // it and it needs the full bounded trust region to recover; retaining
+        // the former 0.35 factor made compatible crotch seams diverge for ~240
+        // steps before slowly returning to the same solution.
+        : 1,
     );
     seamGroupIds.push(seam.seamGroupId);
   }
@@ -446,6 +451,7 @@ function appendEdge(
 function appendDihedralBendingConstraints(
   triangles: Uint32Array,
   instance: AssemblyPanelInstance,
+  dressPosePositions: Float32Array,
   materialCoordinates: Float32Array,
   physics: FabricPhysics,
   indices: number[],
@@ -469,7 +475,7 @@ function appendDihedralBendingConstraints(
       const p1 = instance.particleStart + opposite;
       const p2 = instance.particleStart + previous.edgeStart;
       const p3 = instance.particleStart + previous.edgeEnd;
-      const restAngle = materialDihedralRestAngle(materialCoordinates, p0, p1, p2, p3);
+      const restAngle = dressPoseDihedralRestAngle(dressPosePositions, p0, p1, p2, p3);
       if (!Number.isFinite(restAngle)) continue;
       indices.push(p0, p1, p2, p3);
       restAngles.push(restAngle);
@@ -557,32 +563,6 @@ function appendPointReference(indices: number[], weights: number[], reference: G
   }
 }
 
-function pointReferenceDistance(
-  positions: Float32Array,
-  first: GlobalPointReference,
-  second: GlobalPointReference,
-): number {
-  const evaluate = (reference: GlobalPointReference): [number, number, number] => {
-    const result: [number, number, number] = [0, 0, 0];
-    reference.particleIndices.forEach((particle, index) => {
-      const weight = reference.weights[index] ?? 0;
-      result[0] += positions[particle * 3] * weight;
-      result[1] += positions[particle * 3 + 1] * weight;
-      result[2] += positions[particle * 3 + 2] * weight;
-    });
-    return result;
-  };
-  const a = evaluate(first);
-  const b = evaluate(second);
-  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-}
-
-function seamGroupSampleCount(state: GarmentAssemblyState, seamGroupId: string): number {
-  let count = 0;
-  for (const seam of state.stitchConstraints) if (seam.seamGroupId === seamGroupId) count += 1;
-  return count;
-}
-
 function seamCompliance(treatment: string): number {
   switch (treatment) {
     case "gather": return 0.0000015;
@@ -622,26 +602,50 @@ function triangleSignedMaterialArea(materialCoordinates: Float32Array, a: number
   return (abx * acy - aby * acx) * 0.5;
 }
 
-function materialDihedralRestAngle(
-  materialCoordinates: Float32Array,
+function dressPoseDihedralRestAngle(
+  positions: Float32Array,
   oppositeA: number,
   oppositeB: number,
   edgeStart: number,
   edgeEnd: number,
 ): number {
-  const normalA = materialCrossZ(materialCoordinates, oppositeA, edgeStart, edgeEnd);
-  const normalB = materialCrossZ(materialCoordinates, oppositeB, edgeEnd, edgeStart);
-  const denominator = Math.abs(normalA) * Math.abs(normalB);
+  const normalA = spatialCross(positions, oppositeA, edgeStart, edgeEnd);
+  const normalB = spatialCross(positions, oppositeB, edgeEnd, edgeStart);
+  const denominator = Math.hypot(...normalA) * Math.hypot(...normalB);
   if (denominator <= 1e-16) return Number.NaN;
-  return Math.acos(Math.min(1, Math.max(-1, normalA * normalB / denominator)));
+  const cosine = (
+    normalA[0] * normalB[0]
+    + normalA[1] * normalB[1]
+    + normalA[2] * normalB[2]
+  ) / denominator;
+  const clamped = Math.min(1, Math.max(-1, cosine));
+  // Keep STEP 0 exactly on the same numerical manifold used by solveBendSet.
+  // The hot loop deliberately uses this cubic acos approximation; using
+  // Math.acos only for rest angles injected a systematic bend impulse into an
+  // otherwise identical pose.
+  return (-0.6981317 * clamped * clamped - 0.8726646) * clamped + 1.570796;
 }
 
-function materialCrossZ(materialCoordinates: Float32Array, origin: number, first: number, second: number): number {
-  const ax = materialCoordinates[first * 2] - materialCoordinates[origin * 2];
-  const ay = materialCoordinates[first * 2 + 1] - materialCoordinates[origin * 2 + 1];
-  const bx = materialCoordinates[second * 2] - materialCoordinates[origin * 2];
-  const by = materialCoordinates[second * 2 + 1] - materialCoordinates[origin * 2 + 1];
-  return ax * by - ay * bx;
+function spatialCross(
+  positions: Float32Array,
+  origin: number,
+  first: number,
+  second: number,
+): readonly [number, number, number] {
+  const originOffset = origin * 3;
+  const firstOffset = first * 3;
+  const secondOffset = second * 3;
+  const ax = positions[firstOffset] - positions[originOffset];
+  const ay = positions[firstOffset + 1] - positions[originOffset + 1];
+  const az = positions[firstOffset + 2] - positions[originOffset + 2];
+  const bx = positions[secondOffset] - positions[originOffset];
+  const by = positions[secondOffset + 1] - positions[originOffset + 1];
+  const bz = positions[secondOffset + 2] - positions[originOffset + 2];
+  return [
+    ay * bz - az * by,
+    az * bx - ax * bz,
+    ax * by - ay * bx,
+  ];
 }
 
 function dihedralBendCompliance(bending: number): number {

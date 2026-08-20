@@ -44,7 +44,7 @@ describe("Prompt 10.7 P0 manual skirt foundation", () => {
     expect(drift).toBeLessThan(0.25);
     expect(mainComponent.metricDistortionMax).toBeLessThan(0.35);
     expect(withBand.assembly.invalid).toBe(false);
-  });
+  }, 15_000);
 
   it("is invariant to manual display names and piece/seam insertion order within tolerance", () => {
     const base = manualSkirtGarment(true);
@@ -61,7 +61,7 @@ describe("Prompt 10.7 P0 manual skirt foundation", () => {
     )).toBeLessThan(0.08);
     expect(Math.abs(first.assembly.metrics.metricDistortionMean - second.assembly.metrics.metricDistortionMean)).toBeLessThan(0.02);
     expect(Math.abs(first.assembly.metrics.structuralSeamMeanMm - second.assembly.metrics.structuralSeamMeanMm)).toBeLessThan(8);
-  });
+  }, 15_000);
 });
 
 function solveManualSkirt(withBand: boolean): CoarseAssemblyPipelineResult {

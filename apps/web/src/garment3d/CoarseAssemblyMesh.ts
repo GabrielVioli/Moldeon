@@ -109,7 +109,11 @@ export function buildCoarseAssemblyMesh(
     METERS_PER_MM,
     instance.geometrySignature,
   );
-  const topology = buildLocalCoarseTopology(baseTopology);
+  const hasStructuredSelfSeam = state.stitchConstraints.some((stitch) =>
+    stitch.instanceA === instance.id
+    && stitch.instanceB === instance.id
+    && stitch.treatment.toLowerCase() !== "dart");
+  const topology = buildLocalCoarseTopology(baseTopology, hasStructuredSelfSeam);
   const positions = new Float32Array(topology.positions2DMm.length / 2 * 3);
   for (let vertex = 0; vertex < topology.positions2DMm.length / 2; vertex += 1) {
     const xMm = topology.positions2DMm[vertex * 2];
@@ -120,6 +124,7 @@ export function buildCoarseAssemblyMesh(
     positions[offset + 1] = sampled[1];
     positions[offset + 2] = sampled[2];
   }
+  applyClosedDartDevelopableSeed(topology, positions);
 
   return {
     panelInstanceId: instance.id,
@@ -143,22 +148,277 @@ export function buildCoarseAssemblyMesh(
   };
 }
 
-function buildLocalCoarseTopology(base: PanelTopology): PanelTopology {
-  const characteristicMm = Math.sqrt(Math.max(
-    1,
-    base.boundsMm.width * base.boundsMm.height,
-  ));
-  // Scale cell size with the material patch instead of hard-coding one garment
-  // resolution. Small pieces keep enough bending DOFs; large panels remain
-  // substantially coarser than the physics mesh.
-  const targetCellMm = Math.min(55, Math.max(24, characteristicMm / 5));
-  const structured = remeshStructuredQuadrilateral(base, targetCellMm);
+function buildLocalCoarseTopology(base: PanelTopology, hasStructuredSelfSeam: boolean): PanelTopology {
+  // This is the exact parent topology used by buildGarmentAssembly before two
+  // midpoint subdivisions. Fine vertices are therefore nested barycentric
+  // points of coarse triangles, not samples of an unrelated triangulation.
+  if (hasStructuredSelfSeam) {
+    const structured = remeshStructuredQuadrilateral(base, 80);
+    if (structured) return structured;
+  }
+  const structured = remeshStructuredQuadrilateral(base, 40);
   if (structured) return structured;
-
-  // General boundaries keep their exact authored sampling. A single midpoint
-  // subdivision turns potentially long ear-clipping diagonals into local hinge
-  // chains while remaining well below the normal two-pass physics refinement.
   return refinePanelTopology(base, 1);
+}
+
+/**
+ * Builds the exact discrete developable surface of one closed dart.  The body
+ * fan becomes a polyhedral cone, both dart legs share one generator, and the
+ * intake folds back through the centre line.  Every triangle is moved
+ * rigidly from the authored 2D material net; no edge length is rescaled.
+ */
+function applyClosedDartDevelopableSeed(
+  topology: PanelTopology,
+  positions: Float32Array,
+): boolean {
+  const materialized = topology.darts.filter((dart) =>
+    dart.dart.closed
+    && dart.apexVertex !== null
+    && dart.legAVertices.length >= 2
+    && dart.legBVertices.length >= 2);
+  if (materialized.length !== 1) return false;
+  const dart = materialized[0];
+  const apexIndex = dart.apexVertex!;
+  const legAIndex = dart.legAVertices[0];
+  const legBIndex = dart.legBVertices[0];
+  const boundary = topology.boundaryVertices;
+  const cursorA = boundary.indexOf(legAIndex);
+  const cursorB = boundary.indexOf(legBIndex);
+  if (cursorA < 0 || cursorB < 0) return false;
+
+  const forwardAtoB = cyclicTopologyPath(boundary, cursorA, cursorB);
+  const forwardBtoA = cyclicTopologyPath(boundary, cursorB, cursorA);
+  const lengthAtoB = topologyPathLengthMm(forwardAtoB, topology.positions2DMm);
+  const lengthBtoA = topologyPathLengthMm(forwardBtoA, topology.positions2DMm);
+  const mouthBoundary = lengthAtoB <= lengthBtoA ? forwardAtoB : forwardBtoA;
+  const bodyBoundary = lengthAtoB <= lengthBtoA ? forwardBtoA : forwardAtoB;
+  if (bodyBoundary.length < 3) return false;
+
+  const apex2 = topologyPoint(topology.positions2DMm, apexIndex);
+  const materialAngles: number[] = [];
+  for (let cursor = 0; cursor < bodyBoundary.length - 1; cursor += 1) {
+    const first = sub2(topologyPoint(topology.positions2DMm, bodyBoundary[cursor]), apex2);
+    const second = sub2(topologyPoint(topology.positions2DMm, bodyBoundary[cursor + 1]), apex2);
+    materialAngles.push(angleBetween2(first, second));
+  }
+  const totalMaterialAngle = materialAngles.reduce((sum, angle) => sum + angle, 0);
+  if (!(totalMaterialAngle > Math.PI && totalMaterialAngle < Math.PI * 2 - 1e-5)) return false;
+  const coneHalfAngle = solveConeHalfAngle(materialAngles);
+  if (coneHalfAngle === null) return false;
+
+  const previousCentroid = centroid3(positions);
+  const mapped = new Float64Array(positions.length);
+  const assigned = new Uint8Array(positions.length / 3);
+  const sinBeta = Math.sin(coneHalfAngle);
+  const cosBeta = Math.cos(coneHalfAngle);
+  let azimuth = 0;
+  const bodyDirections: Array<readonly [number, number, number]> = [];
+  for (let cursor = 0; cursor < bodyBoundary.length; cursor += 1) {
+    if (cursor === bodyBoundary.length - 1) azimuth = Math.PI * 2;
+    const direction: readonly [number, number, number] = [
+      sinBeta * Math.cos(azimuth),
+      cosBeta,
+      sinBeta * Math.sin(azimuth),
+    ];
+    bodyDirections.push(direction);
+    assignRadialVertex(mapped, assigned, topology.positions2DMm, bodyBoundary[cursor], apex2, direction);
+    if (cursor < materialAngles.length) {
+      azimuth += coneAzimuthIncrement(materialAngles[cursor], coneHalfAngle);
+    }
+  }
+
+  const seamDirection = bodyDirections[0];
+  for (const vertex of [...dart.legAVertices, ...dart.legBVertices]) {
+    if (vertex === apexIndex) continue;
+    assignRadialVertex(mapped, assigned, topology.positions2DMm, vertex, apex2, seamDirection);
+  }
+  mapped[apexIndex * 3] = 0;
+  mapped[apexIndex * 3 + 1] = 0;
+  mapped[apexIndex * 3 + 2] = 0;
+  assigned[apexIndex] = 1;
+
+  const legAVector = sub2(topologyPoint(topology.positions2DMm, legAIndex), apex2);
+  const legBVector = sub2(topologyPoint(topology.positions2DMm, legBIndex), apex2);
+  const dartAngle = angleBetween2(legAVector, legBVector);
+  const foldTangent = normalize3(cross3(seamDirection, [0, 1, 0]));
+  const stableFoldTangent = lengthSquared3(foldTangent) > 0.5
+    ? foldTangent
+    : normalize3(cross3(seamDirection, [1, 0, 0]));
+  for (const vertex of mouthBoundary) {
+    if (vertex === legAIndex || vertex === legBIndex) continue;
+    const radial = sub2(topologyPoint(topology.positions2DMm, vertex), apex2);
+    const fromA = angleBetween2(legAVector, radial);
+    const fromB = angleBetween2(legBVector, radial);
+    const foldedAngle = Math.min(fromA, fromB, dartAngle * 0.5);
+    const direction: readonly [number, number, number] = [
+      seamDirection[0] * Math.cos(foldedAngle) + stableFoldTangent[0] * Math.sin(foldedAngle),
+      seamDirection[1] * Math.cos(foldedAngle) + stableFoldTangent[1] * Math.sin(foldedAngle),
+      seamDirection[2] * Math.cos(foldedAngle) + stableFoldTangent[2] * Math.sin(foldedAngle),
+    ];
+    assignRadialVertex(mapped, assigned, topology.positions2DMm, vertex, apex2, direction);
+  }
+
+  // Refinement appends exact edge midpoints after all of their parents.
+  for (let vertex = 0; vertex < assigned.length; vertex += 1) {
+    if (assigned[vertex]) continue;
+    const parents = topology.vertexSources[vertex]?.derivedFromVertexIndices;
+    if (!parents?.length || parents.some((parent) => !assigned[parent])) return false;
+    for (const parent of parents) {
+      mapped[vertex * 3] += mapped[parent * 3] / parents.length;
+      mapped[vertex * 3 + 1] += mapped[parent * 3 + 1] / parents.length;
+      mapped[vertex * 3 + 2] += mapped[parent * 3 + 2] / parents.length;
+    }
+    assigned[vertex] = 1;
+  }
+
+  const mappedCentroid = centroid3(mapped);
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    positions[offset] = mapped[offset] + previousCentroid[0] - mappedCentroid[0];
+    positions[offset + 1] = mapped[offset + 1] + previousCentroid[1] - mappedCentroid[1];
+    positions[offset + 2] = mapped[offset + 2] + previousCentroid[2] - mappedCentroid[2];
+  }
+  return true;
+}
+
+function cyclicTopologyPath(
+  boundary: readonly number[] | Uint32Array,
+  fromCursor: number,
+  toCursor: number,
+): number[] {
+  const result = [boundary[fromCursor]];
+  let cursor = fromCursor;
+  while (cursor !== toCursor && result.length <= boundary.length) {
+    cursor = (cursor + 1) % boundary.length;
+    result.push(boundary[cursor]);
+  }
+  return result;
+}
+
+function topologyPathLengthMm(
+  path: readonly number[],
+  positions: Float32Array,
+): number {
+  let total = 0;
+  for (let cursor = 1; cursor < path.length; cursor += 1) {
+    const first = topologyPoint(positions, path[cursor - 1]);
+    const second = topologyPoint(positions, path[cursor]);
+    total += Math.hypot(second[0] - first[0], second[1] - first[1]);
+  }
+  return total;
+}
+
+function topologyPoint(
+  positions: Float32Array,
+  vertex: number,
+): readonly [number, number] {
+  return [positions[vertex * 2], positions[vertex * 2 + 1]];
+}
+
+function sub2(
+  first: readonly [number, number],
+  second: readonly [number, number],
+): readonly [number, number] {
+  return [first[0] - second[0], first[1] - second[1]];
+}
+
+function angleBetween2(
+  first: readonly [number, number],
+  second: readonly [number, number],
+): number {
+  const denominator = Math.hypot(first[0], first[1]) * Math.hypot(second[0], second[1]);
+  if (denominator <= BARY_EPSILON) return 0;
+  return Math.acos(clampUnit((first[0] * second[0] + first[1] * second[1]) / denominator));
+}
+
+function solveConeHalfAngle(materialAngles: readonly number[]): number | null {
+  const maximum = Math.max(...materialAngles);
+  let low = maximum * 0.5 + 1e-7;
+  let high = Math.PI * 0.5;
+  const target = Math.PI * 2;
+  const lowSum = materialAngles.reduce(
+    (sum, angle) => sum + coneAzimuthIncrement(angle, low),
+    0,
+  );
+  const highSum = materialAngles.reduce(
+    (sum, angle) => sum + coneAzimuthIncrement(angle, high),
+    0,
+  );
+  if (!Number.isFinite(lowSum) || lowSum < target || highSum > target) return null;
+  for (let iteration = 0; iteration < 80; iteration += 1) {
+    const middle = (low + high) * 0.5;
+    const sum = materialAngles.reduce(
+      (total, angle) => total + coneAzimuthIncrement(angle, middle),
+      0,
+    );
+    if (sum > target) low = middle;
+    else high = middle;
+  }
+  return (low + high) * 0.5;
+}
+
+function coneAzimuthIncrement(materialAngle: number, coneHalfAngle: number): number {
+  const cosine = Math.cos(coneHalfAngle);
+  const sine = Math.sin(coneHalfAngle);
+  const denominator = sine * sine;
+  if (denominator <= BARY_EPSILON) return Number.POSITIVE_INFINITY;
+  return Math.acos(clampUnit((Math.cos(materialAngle) - cosine * cosine) / denominator));
+}
+
+function assignRadialVertex(
+  mapped: Float64Array,
+  assigned: Uint8Array,
+  material: Float32Array,
+  vertex: number,
+  apex: readonly [number, number],
+  direction: readonly [number, number, number],
+): void {
+  const point = topologyPoint(material, vertex);
+  const radiusM = Math.hypot(point[0] - apex[0], point[1] - apex[1]) * METERS_PER_MM;
+  mapped[vertex * 3] = direction[0] * radiusM;
+  mapped[vertex * 3 + 1] = direction[1] * radiusM;
+  mapped[vertex * 3 + 2] = direction[2] * radiusM;
+  assigned[vertex] = 1;
+}
+
+function centroid3(values: ArrayLike<number>): readonly [number, number, number] {
+  const count = Math.max(1, values.length / 3);
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (let offset = 0; offset < values.length; offset += 3) {
+    x += values[offset];
+    y += values[offset + 1];
+    z += values[offset + 2];
+  }
+  return [x / count, y / count, z / count];
+}
+
+function cross3(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+): readonly [number, number, number] {
+  return [
+    first[1] * second[2] - first[2] * second[1],
+    first[2] * second[0] - first[0] * second[2],
+    first[0] * second[1] - first[1] * second[0],
+  ];
+}
+
+function normalize3(
+  value: readonly [number, number, number],
+): readonly [number, number, number] {
+  const length = Math.hypot(...value);
+  return length <= BARY_EPSILON
+    ? [0, 0, 0]
+    : [value[0] / length, value[1] / length, value[2] / length];
+}
+
+function lengthSquared3(value: readonly [number, number, number]): number {
+  return value[0] * value[0] + value[1] * value[1] + value[2] * value[2];
+}
+
+function clampUnit(value: number): number {
+  return Math.max(-1, Math.min(1, value));
 }
 
 export function bindMaterialPoint(
