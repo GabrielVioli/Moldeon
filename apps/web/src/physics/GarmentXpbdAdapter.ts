@@ -29,13 +29,20 @@ export interface XpbdInitializationData {
   restPositions: Float32Array;
   materialCoordinates: Float32Array;
   triangles: Uint32Array;
+  triangleRestAreas: Float32Array;
+  triangleMaterialOrientations: Int8Array;
   distanceIndices: Uint32Array;
   distanceRestLengths: Float32Array;
   distanceCompliances: Float32Array;
   distanceKinds: Uint8Array;
+  distancePanelIds: string[];
+  distanceFabricIds: string[];
   shearIndices: Uint32Array;
   shearRestCosines: Float32Array;
   shearCompliances: Float32Array;
+  bendIndices: Uint32Array;
+  bendRestAngles: Float32Array;
+  bendCompliances: Float32Array;
   seamIndices: Uint32Array;
   seamWeights: Float32Array;
   seamRestDistances: Float32Array;
@@ -91,8 +98,12 @@ export interface GarmentXpbdAdapterOptions {
 interface EdgeRecord {
   a: number;
   b: number;
+}
+
+interface HingeRecord {
+  edgeStart: number;
+  edgeEnd: number;
   opposite: number;
-  instance: AssemblyPanelInstance;
 }
 
 const METERS_PER_MM = 0.001;
@@ -115,13 +126,20 @@ export function buildXpbdInitialization(
   const positions = new Float32Array(state.positions);
   const materialCoordinates = new Float32Array(particleCount * 2);
   const triangleValues: number[] = [];
+  const triangleRestAreas: number[] = [];
+  const triangleMaterialOrientations: number[] = [];
   const distanceIndices: number[] = [];
   const distanceRestLengths: number[] = [];
   const distanceCompliances: number[] = [];
   const distanceKinds: number[] = [];
+  const distancePanelIds: string[] = [];
+  const distanceFabricIds: string[] = [];
   const shearIndices: number[] = [];
   const shearRestCosines: number[] = [];
   const shearCompliances: number[] = [];
+  const bendIndices: number[] = [];
+  const bendRestAngles: number[] = [];
+  const bendCompliances: number[] = [];
   const inverseMasses = new Float32Array(particleCount);
   const particleHalfThicknessM = new Float32Array(particleCount);
   const particleFriction = new Float32Array(particleCount);
@@ -154,15 +172,18 @@ export function buildXpbdInitialization(
       const b = instance.particleStart + localB;
       const c = instance.particleStart + localC;
       triangleValues.push(a, b, c);
+      const signedMaterialArea = triangleSignedMaterialArea(materialCoordinates, a, b, c);
+      triangleRestAreas.push(Math.abs(signedMaterialArea));
+      triangleMaterialOrientations.push(signedMaterialArea < 0 ? -1 : 1);
       accumulateTriangleMass(particleMasses, materialCoordinates, a, b, c, physics.weightGsm);
-      appendShear(shearIndices, shearRestCosines, shearCompliances, positions, a, b, c, physics);
-      appendEdge(edgeMap, a, b, c, instance);
-      appendEdge(edgeMap, b, c, a, instance);
-      appendEdge(edgeMap, c, a, b, instance);
+      appendShear(shearIndices, shearRestCosines, shearCompliances, materialCoordinates, a, b, c, physics);
+      appendEdge(edgeMap, a, b);
+      appendEdge(edgeMap, b, c);
+      appendEdge(edgeMap, c, a);
     }
 
     for (const edge of edgeMap.values()) {
-      const rest = restDistance3D(positions, edge.a, edge.b);
+      const rest = restDistance2D(materialCoordinates, edge.a, edge.b);
       if (rest <= 1e-9) continue;
       const compliance = anisotropicStretchCompliance(
         materialCoordinates,
@@ -175,17 +196,18 @@ export function buildXpbdInitialization(
       distanceRestLengths.push(rest);
       distanceCompliances.push(compliance);
       distanceKinds.push(0);
+      distancePanelIds.push(instance.id);
+      distanceFabricIds.push(fabric?.id ?? "default-fabric");
     }
 
-    appendBendingConstraints(
+    appendDihedralBendingConstraints(
       topology.triangles,
       instance,
-      positions,
+      materialCoordinates,
       physics,
-      distanceIndices,
-      distanceRestLengths,
-      distanceCompliances,
-      distanceKinds,
+      bendIndices,
+      bendRestAngles,
+      bendCompliances,
     );
   }
 
@@ -224,7 +246,11 @@ export function buildXpbdInitialization(
     seamCompliances.push(seamCompliance(seam.treatment));
     const initialResidual = Math.abs(pointReferenceDistance(state.positions, seam.a, seam.b) - restDistance);
     seamRelaxations.push(
-      seam.instanceA !== undefined && seam.instanceA === seam.instanceB
+      seam.treatment === "dart"
+        // Paired legs begin separated by the dart intake. A modestly wider
+        // trust region closes that local fold without changing seam compliance.
+        ? 16
+        : seam.instanceA !== undefined && seam.instanceA === seam.instanceB
         ? 1
         : initialResidual <= (options.config?.seamTolerance ?? DEFAULT_XPBD_CONFIG.seamTolerance)
           ? 0.35
@@ -243,6 +269,7 @@ export function buildXpbdInitialization(
     triangles,
     distanceKindsArray,
     shearRestCosines.length,
+    bendRestAngles.length,
     seamGroupIds,
   );
   if (!topologyDiagnostics.valid) {
@@ -280,13 +307,20 @@ export function buildXpbdInitialization(
     restPositions: new Float32Array(positions),
     materialCoordinates,
     triangles,
+    triangleRestAreas: Float32Array.from(triangleRestAreas),
+    triangleMaterialOrientations: Int8Array.from(triangleMaterialOrientations),
     distanceIndices: Uint32Array.from(distanceIndices),
     distanceRestLengths: Float32Array.from(distanceRestLengths),
     distanceCompliances: Float32Array.from(distanceCompliances),
     distanceKinds: distanceKindsArray,
+    distancePanelIds,
+    distanceFabricIds,
     shearIndices: Uint32Array.from(shearIndices),
     shearRestCosines: Float32Array.from(shearRestCosines),
     shearCompliances: Float32Array.from(shearCompliances),
+    bendIndices: Uint32Array.from(bendIndices),
+    bendRestAngles: Float32Array.from(bendRestAngles),
+    bendCompliances: Float32Array.from(bendCompliances),
     seamIndices: seamIndicesArray,
     seamWeights: seamWeightsArray,
     seamRestDistances: seamRestDistancesArray,
@@ -313,6 +347,7 @@ function buildTopologyDiagnostics(
   triangles: Uint32Array,
   distanceKinds: Uint8Array,
   shearConstraintCount: number,
+  bendConstraintCount: number,
   seamGroupIds: readonly string[],
 ): XpbdTopologyDiagnostics {
   const particleCount = positions.length / 3;
@@ -331,8 +366,6 @@ function buildTopologyDiagnostics(
   }
   let finitePositionCount = 0;
   for (const value of positions) if (Number.isFinite(value)) finitePositionCount += 1;
-  let bendConstraintCount = 0;
-  for (const kind of distanceKinds) if (kind === 1) bendConstraintCount += 1;
   const maximumTriangleIndex = maximumIndex(triangles);
   const panelRangesValid = panels.every((panel, index) =>
     panel.particleStart === (index === 0 ? 0 : panels[index - 1].particleEndExclusive)
@@ -345,7 +378,7 @@ function buildTopologyDiagnostics(
     positionsLength: positions.length,
     triangleCount: triangles.length / 3,
     maximumTriangleIndex,
-    stretchConstraintCount: distanceKinds.length - bendConstraintCount,
+    stretchConstraintCount: distanceKinds.length,
     shearConstraintCount,
     bendConstraintCount,
     seamConstraintCount: seamGroupIds.length,
@@ -375,6 +408,8 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
     data.restPositions.buffer,
     data.materialCoordinates.buffer,
     data.triangles.buffer,
+    data.triangleRestAreas.buffer,
+    data.triangleMaterialOrientations.buffer,
     data.distanceIndices.buffer,
     data.distanceRestLengths.buffer,
     data.distanceCompliances.buffer,
@@ -382,6 +417,9 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
     data.shearIndices.buffer,
     data.shearRestCosines.buffer,
     data.shearCompliances.buffer,
+    data.bendIndices.buffer,
+    data.bendRestAngles.buffer,
+    data.bendCompliances.buffer,
     data.seamIndices.buffer,
     data.seamWeights.buffer,
     data.seamRestDistances.buffer,
@@ -400,24 +438,21 @@ function appendEdge(
   edges: Map<string, EdgeRecord>,
   a: number,
   b: number,
-  opposite: number,
-  instance: AssemblyPanelInstance,
 ): void {
   const key = a < b ? `${a}:${b}` : `${b}:${a}`;
-  if (!edges.has(key)) edges.set(key, { a: Math.min(a, b), b: Math.max(a, b), opposite, instance });
+  if (!edges.has(key)) edges.set(key, { a: Math.min(a, b), b: Math.max(a, b) });
 }
 
-function appendBendingConstraints(
+function appendDihedralBendingConstraints(
   triangles: Uint32Array,
   instance: AssemblyPanelInstance,
-  initialPositions: Float32Array,
+  materialCoordinates: Float32Array,
   physics: FabricPhysics,
   indices: number[],
-  restLengths: number[],
+  restAngles: number[],
   compliances: number[],
-  kinds: number[],
 ): void {
-  const shared = new Map<string, number>();
+  const shared = new Map<string, HingeRecord>();
   for (let offset = 0; offset < triangles.length; offset += 3) {
     const vertices = [triangles[offset], triangles[offset + 1], triangles[offset + 2]];
     for (let edge = 0; edge < 3; edge += 1) {
@@ -425,19 +460,20 @@ function appendBendingConstraints(
       const second = vertices[(edge + 1) % 3];
       const opposite = vertices[(edge + 2) % 3];
       const key = first < second ? `${first}:${second}` : `${second}:${first}`;
-      const previousOpposite = shared.get(key);
-      if (previousOpposite === undefined) {
-        shared.set(key, opposite);
+      const previous = shared.get(key);
+      if (previous === undefined) {
+        shared.set(key, { edgeStart: first, edgeEnd: second, opposite });
         continue;
       }
-      const a = instance.particleStart + previousOpposite;
-      const b = instance.particleStart + opposite;
-      const rest = restDistance3D(initialPositions, a, b);
-      if (rest <= 1e-9) continue;
-      indices.push(a, b);
-      restLengths.push(rest);
-      compliances.push(0.00008 + (1 - clamp01(physics.bending)) * 0.0025);
-      kinds.push(1);
+      const p0 = instance.particleStart + previous.opposite;
+      const p1 = instance.particleStart + opposite;
+      const p2 = instance.particleStart + previous.edgeStart;
+      const p3 = instance.particleStart + previous.edgeEnd;
+      const restAngle = materialDihedralRestAngle(materialCoordinates, p0, p1, p2, p3);
+      if (!Number.isFinite(restAngle)) continue;
+      indices.push(p0, p1, p2, p3);
+      restAngles.push(restAngle);
+      compliances.push(hingeBendCompliance(instance, materialCoordinates, p2, p3, physics));
     }
   }
 }
@@ -446,22 +482,20 @@ function appendShear(
   indices: number[],
   restCosines: number[],
   compliances: number[],
-  initialPositions: Float32Array,
+  materialCoordinates: Float32Array,
   a: number,
   b: number,
   c: number,
   physics: FabricPhysics,
 ): void {
-  const e1x = initialPositions[b * 3] - initialPositions[a * 3];
-  const e1y = initialPositions[b * 3 + 1] - initialPositions[a * 3 + 1];
-  const e1z = initialPositions[b * 3 + 2] - initialPositions[a * 3 + 2];
-  const e2x = initialPositions[c * 3] - initialPositions[a * 3];
-  const e2y = initialPositions[c * 3 + 1] - initialPositions[a * 3 + 1];
-  const e2z = initialPositions[c * 3 + 2] - initialPositions[a * 3 + 2];
-  const denominator = Math.hypot(e1x, e1y, e1z) * Math.hypot(e2x, e2y, e2z);
+  const e1x = materialCoordinates[b * 2] - materialCoordinates[a * 2];
+  const e1y = materialCoordinates[b * 2 + 1] - materialCoordinates[a * 2 + 1];
+  const e2x = materialCoordinates[c * 2] - materialCoordinates[a * 2];
+  const e2y = materialCoordinates[c * 2 + 1] - materialCoordinates[a * 2 + 1];
+  const denominator = Math.hypot(e1x, e1y) * Math.hypot(e2x, e2y);
   if (denominator <= 1e-12) return;
   indices.push(a, b, c);
-  restCosines.push((e1x * e2x + e1y * e2y + e1z * e2z) / denominator);
+  restCosines.push((e1x * e2x + e1y * e2y) / denominator);
   const stretch = (physics.stretchWarpPercent + physics.stretchWeftPercent) * 0.5;
   compliances.push(0.000002 + stretch * 0.00000035);
 }
@@ -573,12 +607,84 @@ function normalizeConfig(
   };
 }
 
-function restDistance3D(positions: Float32Array, a: number, b: number): number {
+function restDistance2D(materialCoordinates: Float32Array, a: number, b: number): number {
   return Math.hypot(
-    positions[b * 3] - positions[a * 3],
-    positions[b * 3 + 1] - positions[a * 3 + 1],
-    positions[b * 3 + 2] - positions[a * 3 + 2],
+    materialCoordinates[b * 2] - materialCoordinates[a * 2],
+    materialCoordinates[b * 2 + 1] - materialCoordinates[a * 2 + 1],
   );
+}
+
+function triangleSignedMaterialArea(materialCoordinates: Float32Array, a: number, b: number, c: number): number {
+  const abx = materialCoordinates[b * 2] - materialCoordinates[a * 2];
+  const aby = materialCoordinates[b * 2 + 1] - materialCoordinates[a * 2 + 1];
+  const acx = materialCoordinates[c * 2] - materialCoordinates[a * 2];
+  const acy = materialCoordinates[c * 2 + 1] - materialCoordinates[a * 2 + 1];
+  return (abx * acy - aby * acx) * 0.5;
+}
+
+function materialDihedralRestAngle(
+  materialCoordinates: Float32Array,
+  oppositeA: number,
+  oppositeB: number,
+  edgeStart: number,
+  edgeEnd: number,
+): number {
+  const normalA = materialCrossZ(materialCoordinates, oppositeA, edgeStart, edgeEnd);
+  const normalB = materialCrossZ(materialCoordinates, oppositeB, edgeEnd, edgeStart);
+  const denominator = Math.abs(normalA) * Math.abs(normalB);
+  if (denominator <= 1e-16) return Number.NaN;
+  return Math.acos(Math.min(1, Math.max(-1, normalA * normalB / denominator)));
+}
+
+function materialCrossZ(materialCoordinates: Float32Array, origin: number, first: number, second: number): number {
+  const ax = materialCoordinates[first * 2] - materialCoordinates[origin * 2];
+  const ay = materialCoordinates[first * 2 + 1] - materialCoordinates[origin * 2 + 1];
+  const bx = materialCoordinates[second * 2] - materialCoordinates[origin * 2];
+  const by = materialCoordinates[second * 2 + 1] - materialCoordinates[origin * 2 + 1];
+  return ax * by - ay * bx;
+}
+
+function dihedralBendCompliance(bending: number): number {
+  // Angle gradients scale inversely with edge length and particle masses are
+  // measured in kilograms. A logarithmic compliance range keeps the public
+  // 0..1 fabric control meaningful across millimetre-scale tessellations.
+  return 10 ** (6 - 3 * clamp01(bending));
+}
+
+function hingeBendCompliance(
+  instance: AssemblyPanelInstance,
+  materialCoordinates: Float32Array,
+  edgeStart: number,
+  edgeEnd: number,
+  physics: FabricPhysics,
+): number {
+  const base = dihedralBendCompliance(physics.bending);
+  if (instance.topology.darts.length === 0) return base;
+  const midpoint = {
+    xMm: (materialCoordinates[edgeStart * 2] + materialCoordinates[edgeEnd * 2]) * 500,
+    yMm: (materialCoordinates[edgeStart * 2 + 1] + materialCoordinates[edgeEnd * 2 + 1]) * 500,
+  };
+  for (const { dart } of instance.topology.darts) {
+    if (!dart.closed) continue;
+    const nearFold = pointSegmentDistanceMm(midpoint, dart.centerLine.start, dart.centerLine.end) <= 18;
+    const insideLegA = pointSegmentDistanceMm(midpoint, dart.legA, dart.apex) <= 18;
+    const insideLegB = pointSegmentDistanceMm(midpoint, dart.legB, dart.apex) <= 18;
+    if (nearFold || insideLegA || insideLegB) return Math.max(base, 1_000_000_000);
+  }
+  return base;
+}
+
+function pointSegmentDistanceMm(
+  point: { xMm: number; yMm: number },
+  start: { xMm: number; yMm: number },
+  end: { xMm: number; yMm: number },
+): number {
+  const dx = end.xMm - start.xMm;
+  const dy = end.yMm - start.yMm;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 1e-9) return Math.hypot(point.xMm - start.xMm, point.yMm - start.yMm);
+  const t = Math.min(1, Math.max(0, ((point.xMm - start.xMm) * dx + (point.yMm - start.yMm) * dy) / lengthSquared));
+  return Math.hypot(point.xMm - (start.xMm + dx * t), point.yMm - (start.yMm + dy * t));
 }
 
 function clamp01(value: number): number {

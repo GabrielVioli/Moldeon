@@ -150,11 +150,7 @@ function makeState(bodyEnabled: boolean, reference = false): XpbdState {
   shearTriples.length = TRIANGLE_COUNT;
   structuralPairs.length = STRETCH_COUNT;
 
-  const allPairs = structuralPairs.slice();
-  for (let index = 0; index < BEND_COUNT; index += 1) {
-    const a = (index * 17) % (PARTICLES - 2);
-    allPairs.push([a, Math.min(PARTICLES - 1, a + 2)]);
-  }
+  const allPairs = structuralPairs;
   const distanceIndices = new Uint32Array(allPairs.length * 2);
   const distanceRestLengths = new Float32Array(allPairs.length);
   const distanceCompliances = new Float32Array(allPairs.length).fill(1e-7);
@@ -163,9 +159,14 @@ function makeState(bodyEnabled: boolean, reference = false): XpbdState {
     const [a, b] = allPairs[index];
     distanceIndices[index * 2] = a;
     distanceIndices[index * 2 + 1] = b;
-    distanceKinds[index] = index < structuralPairs.length ? 0 : 1;
+    distanceKinds[index] = 0;
     distanceRestLengths[index] = distance3(positions, a, b);
   }
+
+  const bendValues = buildGridHinges(triangles).slice(0, BEND_COUNT * 4);
+  const bendIndices = Uint32Array.from(bendValues);
+  const bendRestAngles = new Float32Array(bendIndices.length / 4);
+  const bendCompliances = new Float32Array(bendRestAngles.length).fill(100_000);
 
   const shearIndices = new Uint32Array(shearTriples.length * 3);
   const shearRestCosines = new Float32Array(shearTriples.length);
@@ -227,6 +228,12 @@ function makeState(bodyEnabled: boolean, reference = false): XpbdState {
       compliances: new Float32Array(shearRestCosines.length).fill(1e-7),
       lambdas: new Float32Array(shearRestCosines.length),
     },
+    bends: {
+      indices: bendIndices,
+      restAngles: bendRestAngles,
+      compliances: bendCompliances,
+      lambdas: new Float32Array(bendRestAngles.length),
+    },
     seams: {
       indices: seamIndices,
       weights: seamWeights,
@@ -248,8 +255,30 @@ function makeState(bodyEnabled: boolean, reference = false): XpbdState {
       maximumCorrection: 0.035,
       maximumVelocity: 12,
       seamTolerance: 0.0025,
+      metricGuardEnabled: false,
     },
   });
+}
+
+function buildGridHinges(triangles: number[]): number[] {
+  const firstByEdge = new Map<string, { edgeStart: number; edgeEnd: number; opposite: number }>();
+  const result: number[] = [];
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    const vertices = [triangles[offset], triangles[offset + 1], triangles[offset + 2]];
+    for (let edge = 0; edge < 3; edge += 1) {
+      const edgeStart = vertices[edge];
+      const edgeEnd = vertices[(edge + 1) % 3];
+      const opposite = vertices[(edge + 2) % 3];
+      const key = edgeStart < edgeEnd ? `${edgeStart}:${edgeEnd}` : `${edgeEnd}:${edgeStart}`;
+      const first = firstByEdge.get(key);
+      if (first === undefined) {
+        firstByEdge.set(key, { edgeStart, edgeEnd, opposite });
+      } else {
+        result.push(first.opposite, opposite, first.edgeStart, first.edgeEnd);
+      }
+    }
+  }
+  return result;
 }
 
 function distance3(positions: Float32Array, a: number, b: number): number {

@@ -76,6 +76,9 @@ function handleRequest(request: XpbdWorkerRequest): void {
       if (request.shearCompliances.length === state.shears.compliances.length) {
         state.shears.compliances.set(request.shearCompliances);
       }
+      if (request.bendCompliances?.length === state.bends.compliances.length) {
+        state.bends.compliances.set(request.bendCompliances);
+      }
       if (request.particleHalfThicknessM?.length === state.body.particleHalfThicknessM.length) {
         state.body.particleHalfThicknessM.set(request.particleHalfThicknessM);
       }
@@ -189,7 +192,7 @@ function tick(scheduledEpoch: number): void {
   timer = null;
   if (!running || !state || disposed || scheduledEpoch !== epoch) return;
   const diagnostics = performOneStep();
-  const shouldAutoPause = reachedAutoPause();
+  const shouldAutoPause = diagnostics.invalid || reachedAutoPause();
   if (shouldAutoPause) ensureOutputBuffer();
   emitFrame(diagnostics);
   if (shouldAutoPause) {

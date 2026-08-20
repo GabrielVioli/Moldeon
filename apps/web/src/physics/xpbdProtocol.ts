@@ -36,7 +36,7 @@ export type XpbdWorkerRequest =
   | ({ type: "initialize"; payload: XpbdInitializationData } & XpbdCommandIdentity)
   | ({ type: "updateGeometry"; payload: XpbdInitializationData } & XpbdCommandIdentity)
   | { type: "updateSeams"; revision: string; seamIndices: Uint32Array; seamWeights: Float32Array; seamRestDistances: Float32Array; seamCompliances: Float32Array; seamRelaxations: Float32Array; seamGroupIds: string[] }
-  | { type: "updateFabric"; revision: string; distanceCompliances: Float32Array; shearCompliances: Float32Array; particleHalfThicknessM?: Float32Array; particleFriction?: Float32Array; config?: Partial<XpbdSolverConfig> }
+  | { type: "updateFabric"; revision: string; distanceCompliances: Float32Array; shearCompliances: Float32Array; bendCompliances?: Float32Array; particleHalfThicknessM?: Float32Array; particleFriction?: Float32Array; config?: Partial<XpbdSolverConfig> }
   | { type: "configureDev"; generation: number; gravity: [number, number, number]; cadence: XpbdSimulationCadence; autoPauseSteps: XpbdAutoPauseSteps; bodyCollisionEnabled?: boolean }
   | ({ type: "start" } & XpbdCommandIdentity)
   | ({ type: "pause" } & XpbdCommandIdentity)
@@ -62,6 +62,8 @@ export function initializationTransferables(payload: XpbdInitializationData): Tr
     payload.restPositions.buffer,
     payload.materialCoordinates.buffer,
     payload.triangles.buffer,
+    payload.triangleRestAreas.buffer,
+    payload.triangleMaterialOrientations.buffer,
     payload.distanceIndices.buffer,
     payload.distanceRestLengths.buffer,
     payload.distanceCompliances.buffer,
@@ -69,6 +71,9 @@ export function initializationTransferables(payload: XpbdInitializationData): Tr
     payload.shearIndices.buffer,
     payload.shearRestCosines.buffer,
     payload.shearCompliances.buffer,
+    payload.bendIndices.buffer,
+    payload.bendRestAngles.buffer,
+    payload.bendCompliances.buffer,
     payload.seamIndices.buffer,
     payload.seamWeights.buffer,
     payload.seamRestDistances.buffer,

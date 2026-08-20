@@ -522,25 +522,39 @@ function buildDartConstraints(
 
   for (const instance of instances) {
     for (const dart of instance.topology.darts) {
-      const legA = nearestLocalVertex(instance.topology, dart.dart.legA.xMm, dart.dart.legA.yMm);
-      const legB = nearestLocalVertex(instance.topology, dart.dart.legB.xMm, dart.dart.legB.yMm);
-      if (legA < 0 || legB < 0 || legA === legB) continue;
-
-      result.push({
-        id: `dart/${instance.id}/${dart.dart.id}`,
-        seamId: `dart:${dart.dart.id}`,
-        seamGroupId: `dart:${dart.dart.id}`,
-        treatment: "dart",
-        distribution: "uniform",
-        targetRatio: 1,
-        slackMm: 0,
-        a: directPoint(instance.particleStart + legA),
-        b: directPoint(instance.particleStart + legB),
-        restDistance: 0.001,
-        stiffness: dart.dart.closed ? 0.78 : 0.62,
-        instanceA: instance.id,
-        instanceB: instance.id,
-      });
+      const sampleCount = Math.max(2, Math.ceil(dart.dart.lengthMm / 20));
+      const seenPairs = new Set<string>();
+      for (let sample = 0; sample < sampleCount; sample += 1) {
+        // The apex is shared material and must remain continuous; constraints
+        // pair the two physical legs from mouth towards (but not across) it.
+        const progress = sample / sampleCount;
+        const legAX = dart.dart.legA.xMm + (dart.dart.apex.xMm - dart.dart.legA.xMm) * progress;
+        const legAY = dart.dart.legA.yMm + (dart.dart.apex.yMm - dart.dart.legA.yMm) * progress;
+        const legBX = dart.dart.legB.xMm + (dart.dart.apex.xMm - dart.dart.legB.xMm) * progress;
+        const legBY = dart.dart.legB.yMm + (dart.dart.apex.yMm - dart.dart.legB.yMm) * progress;
+        const legA = nearestLocalVertex(instance.topology, legAX, legAY);
+        const legB = nearestLocalVertex(instance.topology, legBX, legBY);
+        if (legA < 0 || legB < 0 || legA === legB) continue;
+        const pairKey = legA < legB ? `${legA}:${legB}` : `${legB}:${legA}`;
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+        result.push({
+          id: `dart/${instance.id}/${dart.dart.id}/${sample}`,
+          seamId: `dart:${dart.dart.id}`,
+          seamGroupId: `dart:${dart.dart.id}`,
+          treatment: "dart",
+          distribution: "uniform",
+          targetRatio: 1,
+          slackMm: 0,
+          a: directPoint(instance.particleStart + legA),
+          b: directPoint(instance.particleStart + legB),
+          restDistance: 0,
+          stiffness: dart.dart.closed ? 0.78 : 0.62,
+          instanceA: instance.id,
+          instanceB: instance.id,
+          progress,
+        });
+      }
     }
   }
 

@@ -3,7 +3,7 @@ import {
   DEFAULT_BODY_CONTACT_SKIN_M,
   createBodyCollisionRuntimeState,
 } from "./bodyCollision";
-import { createXpbdState, type XpbdState } from "./xpbd";
+import { buildTriangleMaterialReference, createXpbdState, type XpbdState } from "./xpbd";
 
 /**
  * Canonical typed-array boundary between GarmentXpbdAdapter and the Worker.
@@ -33,18 +33,31 @@ export function createXpbdWorkerState(payload: XpbdInitializationData): XpbdStat
     restPositions: payload.restPositions,
     materialCoordinates: payload.materialCoordinates,
     triangles: payload.triangles,
+    triangleMaterial: {
+      ...buildTriangleMaterialReference(payload.materialCoordinates, payload.triangles, payload.positions),
+      restAreas: payload.triangleRestAreas,
+      orientations: payload.triangleMaterialOrientations,
+    },
     distances: {
       indices: payload.distanceIndices,
       restLengths: payload.distanceRestLengths,
       compliances: payload.distanceCompliances,
       lambdas: new Float32Array(payload.distanceRestLengths.length),
       kinds: payload.distanceKinds,
+      panelIds: payload.distancePanelIds,
+      fabricIds: payload.distanceFabricIds,
     },
     shears: {
       indices: payload.shearIndices,
       restCosines: payload.shearRestCosines,
       compliances: payload.shearCompliances,
       lambdas: new Float32Array(payload.shearRestCosines.length),
+    },
+    bends: {
+      indices: payload.bendIndices,
+      restAngles: payload.bendRestAngles,
+      compliances: payload.bendCompliances,
+      lambdas: new Float32Array(payload.bendRestAngles.length),
     },
     seams: {
       indices: payload.seamIndices,

@@ -20,7 +20,7 @@ function makeState(spec: Spec): XpbdState {
   for (let r = 0; r < spec.rows; r++) for (let c = 0; c < spec.cols; c++) {
     const i = r * spec.cols + c; const o = i * 3;
     positions[o] = c * spacing; positions[o + 1] = -r * spacing; positions[o + 2] = (c % 4) * 0.0001;
-    material[i * 2] = c * 20; material[i * 2 + 1] = r * 20;
+    material[i * 2] = c * spacing; material[i * 2 + 1] = r * spacing;
   }
   const triangles: number[] = [];
   const stretchPairs: Array<[number, number]> = [];

@@ -7,8 +7,10 @@ export interface XpbdDistanceConstraints {
   restLengths: Float32Array;
   compliances: Float32Array;
   lambdas: Float32Array;
-  /** 0 = warp/weft stretch, 1 = bending spring. */
+  /** Kept for protocol compatibility. Material constraints use kind 0. */
   kinds: Uint8Array;
+  panelIds?: string[];
+  fabricIds?: string[];
 }
 
 export interface XpbdShearConstraints {
@@ -16,6 +18,22 @@ export interface XpbdShearConstraints {
   restCosines: Float32Array;
   compliances: Float32Array;
   lambdas: Float32Array;
+}
+
+export interface XpbdBendConstraints {
+  /** Per hinge: opposite A, opposite B, shared-edge start, shared-edge end. */
+  indices: Uint32Array;
+  restAngles: Float32Array;
+  compliances: Float32Array;
+  lambdas: Float32Array;
+}
+
+export interface XpbdTriangleMaterialReference {
+  restAreas: Float32Array;
+  orientations: Int8Array;
+  initialNormals: Float32Array;
+  initialAabbDiagonal: number;
+  meaningfulRestArea: number;
 }
 
 export interface XpbdSeamConstraints {
@@ -44,6 +62,7 @@ export interface XpbdSolverConfig {
   maximumCorrection: number;
   maximumVelocity: number;
   seamTolerance: number;
+  metricGuardEnabled?: boolean;
 }
 
 export interface XpbdProfileTimings {
@@ -67,20 +86,34 @@ export interface XpbdState {
   restPositions: Float32Array;
   materialCoordinates: Float32Array;
   triangles: Uint32Array;
+  triangleMaterial: XpbdTriangleMaterialReference;
   distances: XpbdDistanceConstraints;
   shears: XpbdShearConstraints;
+  bends: XpbdBendConstraints;
   seams: XpbdSeamConstraints;
   pins: XpbdPinConstraints;
   body: BodyCollisionRuntimeState;
   /** Trust region por partícula derivado da menor aresta estrutural local. */
   correctionLimits: Float32Array;
   stablePositions: Float32Array;
+  /** Normals from the last metric-safe step, used for rigid-motion-invariant flip detection. */
+  triangleReferenceNormals: Float32Array;
+  lastFlippedTriangleCount: number;
+  meaningfulStructuralRestLength: number;
   maximumCorrectionApplied: number;
   config: XpbdSolverConfig;
   accumulator: number;
   stepCount: number;
   invalid: boolean;
+  invalidReason: "non-finite" | "metric-instability" | null;
   profile: XpbdProfileTimings;
+}
+
+export interface XpbdMaterialGroupDiagnostic {
+  constraintCount: number;
+  structuralStretchMeanRatio: number;
+  structuralStretchMaxRatio: number;
+  structuralCompressionMinRatio: number;
 }
 
 export interface XpbdSeamGroupErrorDiagnostic {
@@ -104,6 +137,20 @@ export interface XpbdStepDiagnostics {
   seamErrorsByGroup: Record<string, XpbdSeamGroupErrorDiagnostic>;
   maximumPositionMagnitude: number;
   maximumVelocityMagnitude: number;
+  structuralStretchMeanRatio: number;
+  structuralStretchMaxRatio: number;
+  structuralCompressionMinRatio: number;
+  shearStrainMean: number;
+  shearStrainMax: number;
+  triangleAreaMeanRatio: number;
+  triangleAreaMinRatio: number;
+  triangleAreaMaxRatio: number;
+  flippedTriangleCount: number;
+  garmentAabbGrowthRatio: number;
+  materialMetricsByPanel: Record<string, XpbdMaterialGroupDiagnostic>;
+  materialMetricsByFabric: Record<string, XpbdMaterialGroupDiagnostic>;
+  explicitPinCount: number;
+  temporarySupportCount: number;
   maximumCorrectionApplied: number;
   bodyColliderCount?: number;
   bodyContactCount?: number;
@@ -114,6 +161,7 @@ export interface XpbdStepDiagnostics {
   sweptContactCount?: number;
   bodyCollisionEnabled?: boolean;
   invalid: boolean;
+  invalidReason: "non-finite" | "metric-instability" | null;
   droppedTimeSeconds: number;
   integrationMs?: number;
   stretchMs?: number;
@@ -155,29 +203,55 @@ export const DEFAULT_XPBD_CONFIG: XpbdSolverConfig = {
   maximumCorrection: 0.035,
   maximumVelocity: 12,
   seamTolerance: 0.0025,
+  metricGuardEnabled: true,
 };
 
 const EPSILON = 1e-9;
 
-export function createXpbdState(
-  input: Omit<XpbdState, "body" | "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile"> & { body?: BodyCollisionRuntimeState },
-): XpbdState {
+type XpbdStateInput = Omit<
+  XpbdState,
+  "body" | "triangleMaterial" | "bends" | "correctionLimits" | "stablePositions" |
+  "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" |
+  "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile"
+> & {
+  body?: BodyCollisionRuntimeState;
+  triangleMaterial?: XpbdTriangleMaterialReference;
+  bends?: XpbdBendConstraints;
+};
+
+export function createXpbdState(input: XpbdStateInput): XpbdState {
   const body = input.body ?? createBodyCollisionRuntimeState({ kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] }, new Float32Array(input.positions.length / 3), new Float32Array(input.positions.length / 3), false);
-  validateStateShape({ ...input, body });
+  const bends = input.bends ?? {
+    indices: new Uint32Array(0),
+    restAngles: new Float32Array(0),
+    compliances: new Float32Array(0),
+    lambdas: new Float32Array(0),
+  };
+  const triangleMaterial = input.triangleMaterial ?? buildTriangleMaterialReference(
+    input.materialCoordinates,
+    input.triangles,
+    input.positions,
+  );
+  const normalizedInput = { ...input, body, bends, triangleMaterial };
+  validateStateShape(normalizedInput);
   const correctionLimits = buildParticleCorrectionLimits(
     input.positions.length / 3,
     input.distances,
     input.config.maximumCorrection,
   );
   const state: XpbdState = {
-    ...input,
+    ...normalizedInput,
     body,
     correctionLimits,
     stablePositions: new Float32Array(input.positions),
+    triangleReferenceNormals: new Float32Array(triangleMaterial.initialNormals),
+    lastFlippedTriangleCount: 0,
+    meaningfulStructuralRestLength: meaningfulStructuralRestLength(input.distances),
     maximumCorrectionApplied: 0,
     accumulator: 0,
     stepCount: 0,
     invalid: false,
+    invalidReason: null,
     profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0 },
   };
   initializeBodyDressing(body, state.positions, state.config.maximumCorrection);
@@ -185,6 +259,7 @@ export function createXpbdState(
 }
 
 export function advanceXpbd(state: XpbdState, frameDeltaSeconds: number): XpbdStepDiagnostics {
+  if (state.invalid) return measureXpbdDiagnostics(state, 0, 0);
   const finiteDelta = Number.isFinite(frameDeltaSeconds) ? Math.max(0, frameDeltaSeconds) : 0;
   const acceptedDelta = Math.min(finiteDelta, state.config.maximumFrameDelta);
   const droppedTimeSeconds = Math.max(0, finiteDelta - acceptedDelta);
@@ -230,7 +305,15 @@ export function stepXpbd(state: XpbdState): void {
   for (let iteration = 0; iteration < effectiveIterations; iteration += 1) {
     phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
-    phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
+    phaseStarted = performance.now();
+    solveDistanceSet(state, dt, 1);
+    // Dihedral hinges are considerably more expensive than distance/shear.
+    // A deterministic multi-rate cadence keeps every hinge active at least
+    // twice per step while stretch, shear and seams retain every XPBD iteration.
+    if (iteration === 0 || iteration === effectiveIterations - 1 || iteration % 4 === 0) {
+      solveBendSet(state, dt);
+    }
+    profile.bendMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
     enforcePins(state);
   }
@@ -253,12 +336,15 @@ export function stepXpbd(state: XpbdState): void {
   state.stepCount += 1;
 
   phaseStarted = performance.now();
-  if (!positionsAreSafe(state.positions)) {
+  const invalidReason = materialInstabilityReason(state, dressingActive);
+  if (invalidReason) {
     state.positions.set(state.stablePositions);
     state.previousPositions.set(state.stablePositions);
     state.predictedPositions.set(state.stablePositions);
     state.velocities.fill(0);
+    captureTriangleReferenceNormals(state);
     state.invalid = true;
+    state.invalidReason = invalidReason;
     profile.validationMs = performance.now() - phaseStarted;
     profile.solverStepTotalMs = performance.now() - stepStarted;
     return;
@@ -266,6 +352,7 @@ export function stepXpbd(state: XpbdState): void {
 
   state.stablePositions.set(state.positions);
   state.invalid = false;
+  state.invalidReason = null;
   profile.validationMs = performance.now() - phaseStarted;
   profile.solverStepTotalMs = performance.now() - stepStarted;
 }
@@ -275,11 +362,14 @@ export function resetXpbdState(state: XpbdState): void {
   state.previousPositions.set(state.restPositions);
   state.predictedPositions.set(state.restPositions);
   state.stablePositions.set(state.restPositions);
+  state.triangleReferenceNormals.set(state.triangleMaterial.initialNormals);
+  state.lastFlippedTriangleCount = 0;
   state.velocities.fill(0);
   state.accumulator = 0;
   state.stepCount = 0;
   state.maximumCorrectionApplied = 0;
   state.invalid = false;
+  state.invalidReason = null;
   resetBodyContactStep(state.body);
   initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection);
   resetLambdas(state);
@@ -321,8 +411,7 @@ export function measureXpbdDiagnostics(
   for (const group of Object.values(seamErrorsByGroup)) {
     group.meanError /= Math.max(1, group.constraintCount);
   }
-  let bendConstraintCount = 0;
-  for (const kind of state.distances.kinds) if (kind === 1) bendConstraintCount += 1;
+  const materialMetrics = measureMaterialMetrics(state);
   let maximumPositionMagnitude = 0;
   let maximumVelocityMagnitude = 0;
   for (let particle = 0; particle < state.inverseMasses.length; particle += 1) {
@@ -343,15 +432,29 @@ export function measureXpbdDiagnostics(
     substeps,
     particleCount: state.positions.length / 3,
     triangleCount: state.triangles.length / 3,
-    stretchConstraintCount: state.distances.restLengths.length - bendConstraintCount,
+    stretchConstraintCount: state.distances.restLengths.length - legacyBendConstraintCount(state.distances.kinds),
     shearConstraintCount: state.shears.restCosines.length,
-    bendConstraintCount,
+    bendConstraintCount: state.bends.restAngles.length + legacyBendConstraintCount(state.distances.kinds),
     seamConstraintCount: seamCount,
     seamErrorAverage: seamCount > 0 ? seamErrorSum / seamCount : 0,
     seamErrorMaximum,
     seamErrorsByGroup,
     maximumPositionMagnitude,
     maximumVelocityMagnitude,
+    structuralStretchMeanRatio: materialMetrics.structuralStretchMeanRatio,
+    structuralStretchMaxRatio: materialMetrics.structuralStretchMaxRatio,
+    structuralCompressionMinRatio: materialMetrics.structuralCompressionMinRatio,
+    shearStrainMean: materialMetrics.shearStrainMean,
+    shearStrainMax: materialMetrics.shearStrainMax,
+    triangleAreaMeanRatio: materialMetrics.triangleAreaMeanRatio,
+    triangleAreaMinRatio: materialMetrics.triangleAreaMinRatio,
+    triangleAreaMaxRatio: materialMetrics.triangleAreaMaxRatio,
+    flippedTriangleCount: materialMetrics.flippedTriangleCount,
+    garmentAabbGrowthRatio: materialMetrics.garmentAabbGrowthRatio,
+    materialMetricsByPanel: materialMetrics.materialMetricsByPanel,
+    materialMetricsByFabric: materialMetrics.materialMetricsByFabric,
+    explicitPinCount: state.pins.indices.length,
+    temporarySupportCount: 0,
     maximumCorrectionApplied: state.maximumCorrectionApplied,
     bodyColliderCount: state.body.colliders.kinds.length,
     bodyContactCount: state.body.bodyContactCount,
@@ -362,6 +465,7 @@ export function measureXpbdDiagnostics(
     sweptContactCount: state.body.sweptContactCount,
     bodyCollisionEnabled: state.body.enabled,
     invalid: state.invalid,
+    invalidReason: state.invalidReason,
     droppedTimeSeconds,
     integrationMs: state.profile.integrationMs,
     stretchMs: state.profile.stretchMs,
@@ -396,6 +500,236 @@ export function measureXpbdDiagnostics(
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };
+}
+
+interface MaterialMetricsSnapshot {
+  structuralStretchMeanRatio: number;
+  structuralStretchMaxRatio: number;
+  structuralCompressionMinRatio: number;
+  shearStrainMean: number;
+  shearStrainMax: number;
+  triangleAreaMeanRatio: number;
+  triangleAreaMinRatio: number;
+  triangleAreaMaxRatio: number;
+  flippedTriangleCount: number;
+  garmentAabbGrowthRatio: number;
+  materialMetricsByPanel: Record<string, XpbdMaterialGroupDiagnostic>;
+  materialMetricsByFabric: Record<string, XpbdMaterialGroupDiagnostic>;
+  guardStretchConstraintCount: number;
+  guardStretchRunawayCount: number;
+  guardCompressionRunawayCount: number;
+  guardTriangleCount: number;
+  guardAreaCollapseCount: number;
+  guardAreaExplosionCount: number;
+}
+
+function measureMaterialMetrics(state: XpbdState, captureReferenceNormals = false): MaterialMetricsSnapshot {
+  let stretchSum = 0;
+  let stretchMaximum = 0;
+  let compressionMinimum = Number.POSITIVE_INFINITY;
+  let stretchCount = 0;
+  const meaningfulRestLength = state.meaningfulStructuralRestLength;
+  let guardStretchConstraintCount = 0;
+  let guardStretchRunawayCount = 0;
+  let guardCompressionRunawayCount = 0;
+  const panelMetrics: Record<string, XpbdMaterialGroupDiagnostic> = {};
+  const fabricMetrics: Record<string, XpbdMaterialGroupDiagnostic> = {};
+  for (let index = 0; index < state.distances.restLengths.length; index += 1) {
+    if (state.distances.kinds[index] !== 0) continue;
+    const rest = state.distances.restLengths[index];
+    if (rest <= EPSILON) continue;
+    const a = state.distances.indices[index * 2] * 3;
+    const b = state.distances.indices[index * 2 + 1] * 3;
+    const ratio = Math.hypot(
+      state.positions[b] - state.positions[a],
+      state.positions[b + 1] - state.positions[a + 1],
+      state.positions[b + 2] - state.positions[a + 2],
+    ) / rest;
+    stretchSum += ratio;
+    stretchMaximum = Math.max(stretchMaximum, ratio);
+    compressionMinimum = Math.min(compressionMinimum, ratio);
+    stretchCount += 1;
+    if (rest >= meaningfulRestLength) {
+      guardStretchConstraintCount += 1;
+      if (ratio > 20) guardStretchRunawayCount += 1;
+      if (ratio < 0.01) guardCompressionRunawayCount += 1;
+    }
+    accumulateMaterialGroup(panelMetrics, state.distances.panelIds?.[index] ?? "unassigned-panel", ratio);
+    accumulateMaterialGroup(fabricMetrics, state.distances.fabricIds?.[index] ?? "unassigned-fabric", ratio);
+  }
+  finalizeMaterialGroups(panelMetrics);
+  finalizeMaterialGroups(fabricMetrics);
+
+  let shearSum = 0;
+  let shearMaximum = 0;
+  for (let index = 0; index < state.shears.restCosines.length; index += 1) {
+    const base = index * 3;
+    const a = state.shears.indices[base] * 3;
+    const b = state.shears.indices[base + 1] * 3;
+    const c = state.shears.indices[base + 2] * 3;
+    const e1x = state.positions[b] - state.positions[a];
+    const e1y = state.positions[b + 1] - state.positions[a + 1];
+    const e1z = state.positions[b + 2] - state.positions[a + 2];
+    const e2x = state.positions[c] - state.positions[a];
+    const e2y = state.positions[c + 1] - state.positions[a + 1];
+    const e2z = state.positions[c + 2] - state.positions[a + 2];
+    const denominator = Math.hypot(e1x, e1y, e1z) * Math.hypot(e2x, e2y, e2z);
+    const strain = denominator > EPSILON
+      ? Math.abs((e1x * e2x + e1y * e2y + e1z * e2z) / denominator - state.shears.restCosines[index])
+      : 1;
+    shearSum += strain;
+    shearMaximum = Math.max(shearMaximum, strain);
+  }
+
+  let areaSum = 0;
+  let areaMinimum = Number.POSITIVE_INFINITY;
+  let areaMaximum = 0;
+  let flippedTriangleCount = 0;
+  const triangleCount = state.triangles.length / 3;
+  const meaningfulRestArea = state.triangleMaterial.meaningfulRestArea;
+  let guardTriangleCount = 0;
+  let guardAreaCollapseCount = 0;
+  let guardAreaExplosionCount = 0;
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    const base = triangle * 3;
+    const a = state.triangles[base] * 3;
+    const b = state.triangles[base + 1] * 3;
+    const c = state.triangles[base + 2] * 3;
+    const abx = state.positions[b] - state.positions[a];
+    const aby = state.positions[b + 1] - state.positions[a + 1];
+    const abz = state.positions[b + 2] - state.positions[a + 2];
+    const acx = state.positions[c] - state.positions[a];
+    const acy = state.positions[c + 1] - state.positions[a + 1];
+    const acz = state.positions[c + 2] - state.positions[a + 2];
+    const nx = aby * acz - abz * acy;
+    const ny = abz * acx - abx * acz;
+    const nz = abx * acy - aby * acx;
+    const doubleArea = Math.hypot(nx, ny, nz);
+    const restArea = state.triangleMaterial.restAreas[triangle];
+    const ratio = restArea > EPSILON ? doubleArea * 0.5 / restArea : 1;
+    areaSum += ratio;
+    areaMinimum = Math.min(areaMinimum, ratio);
+    areaMaximum = Math.max(areaMaximum, ratio);
+    if (restArea >= meaningfulRestArea) {
+      guardTriangleCount += 1;
+      if (ratio < 0.001) guardAreaCollapseCount += 1;
+      if (ratio > 250) guardAreaExplosionCount += 1;
+    }
+    const referenceOffset = triangle * 3;
+    const rx = state.triangleReferenceNormals[referenceOffset];
+    const ry = state.triangleReferenceNormals[referenceOffset + 1];
+    const rz = state.triangleReferenceNormals[referenceOffset + 2];
+    const referenceLength = Math.hypot(rx, ry, rz);
+    if (doubleArea > EPSILON && referenceLength > EPSILON
+      && (nx * rx + ny * ry + nz * rz) / (doubleArea * referenceLength) < 0) {
+      flippedTriangleCount += 1;
+    }
+    if (captureReferenceNormals && doubleArea > EPSILON) {
+      state.triangleReferenceNormals[referenceOffset] = nx / doubleArea;
+      state.triangleReferenceNormals[referenceOffset + 1] = ny / doubleArea;
+      state.triangleReferenceNormals[referenceOffset + 2] = nz / doubleArea;
+    }
+  }
+  if (captureReferenceNormals) state.lastFlippedTriangleCount = flippedTriangleCount;
+  else flippedTriangleCount = state.lastFlippedTriangleCount;
+  const currentAabbDiagonal = aabbDiagonal(state.positions);
+  const initialAabbDiagonal = state.triangleMaterial.initialAabbDiagonal;
+  return {
+    structuralStretchMeanRatio: stretchCount > 0 ? stretchSum / stretchCount : 1,
+    structuralStretchMaxRatio: stretchCount > 0 ? stretchMaximum : 1,
+    structuralCompressionMinRatio: stretchCount > 0 ? compressionMinimum : 1,
+    shearStrainMean: state.shears.restCosines.length > 0 ? shearSum / state.shears.restCosines.length : 0,
+    shearStrainMax: shearMaximum,
+    triangleAreaMeanRatio: triangleCount > 0 ? areaSum / triangleCount : 1,
+    triangleAreaMinRatio: triangleCount > 0 ? areaMinimum : 1,
+    triangleAreaMaxRatio: triangleCount > 0 ? areaMaximum : 1,
+    flippedTriangleCount,
+    garmentAabbGrowthRatio: initialAabbDiagonal > EPSILON ? currentAabbDiagonal / initialAabbDiagonal : 1,
+    materialMetricsByPanel: panelMetrics,
+    materialMetricsByFabric: fabricMetrics,
+    guardStretchConstraintCount,
+    guardStretchRunawayCount,
+    guardCompressionRunawayCount,
+    guardTriangleCount,
+    guardAreaCollapseCount,
+    guardAreaExplosionCount,
+  };
+}
+
+function accumulateMaterialGroup(
+  groups: Record<string, XpbdMaterialGroupDiagnostic>,
+  key: string,
+  ratio: number,
+): void {
+  const group = groups[key] ?? {
+    constraintCount: 0,
+    structuralStretchMeanRatio: 0,
+    structuralStretchMaxRatio: 0,
+    structuralCompressionMinRatio: Number.POSITIVE_INFINITY,
+  };
+  group.constraintCount += 1;
+  group.structuralStretchMeanRatio += ratio;
+  group.structuralStretchMaxRatio = Math.max(group.structuralStretchMaxRatio, ratio);
+  group.structuralCompressionMinRatio = Math.min(group.structuralCompressionMinRatio, ratio);
+  groups[key] = group;
+}
+
+function finalizeMaterialGroups(groups: Record<string, XpbdMaterialGroupDiagnostic>): void {
+  for (const group of Object.values(groups)) {
+    group.structuralStretchMeanRatio /= Math.max(1, group.constraintCount);
+    if (!Number.isFinite(group.structuralCompressionMinRatio)) group.structuralCompressionMinRatio = 1;
+  }
+}
+
+function legacyBendConstraintCount(kinds: Uint8Array): number {
+  let count = 0;
+  for (const kind of kinds) if (kind === 1) count += 1;
+  return count;
+}
+
+function meaningfulStructuralRestLength(distances: XpbdDistanceConstraints): number {
+  let sum = 0;
+  let count = 0;
+  for (let index = 0; index < distances.restLengths.length; index += 1) {
+    if (distances.kinds[index] !== 0 || distances.restLengths[index] <= EPSILON) continue;
+    sum += distances.restLengths[index];
+    count += 1;
+  }
+  return count > 0 ? Math.max(EPSILON, sum / count * 1e-4) : EPSILON;
+}
+
+function materialInstabilityReason(
+  state: XpbdState,
+  bodyDressingActive = false,
+): XpbdState["invalidReason"] {
+  if (!positionsAreSafe(state.positions)) return "non-finite";
+  // Gross body depenetration is a bounded setup phase, not a material state.
+  // Velocities are zeroed during it, so accept it as the next rollback point and
+  // start metric catastrophe detection once the normal solver takes ownership.
+  if (state.config.metricGuardEnabled === false || bodyDressingActive) {
+    state.lastFlippedTriangleCount = 0;
+    captureTriangleReferenceNormals(state);
+    return null;
+  }
+  const metrics = measureMaterialMetrics(state, true);
+  const catastrophicFlipCount = Math.max(12, Math.ceil(state.triangles.length / 6));
+  const runawayStretchLimit = guardFailureCount(metrics.guardStretchConstraintCount);
+  const runawayAreaLimit = guardFailureCount(metrics.guardTriangleCount, 0.02);
+  if (metrics.guardStretchRunawayCount >= runawayStretchLimit
+    || metrics.guardCompressionRunawayCount >= runawayStretchLimit
+    || metrics.guardAreaCollapseCount >= runawayAreaLimit
+    || metrics.guardAreaExplosionCount >= runawayAreaLimit
+    || metrics.triangleAreaMaxRatio > 1_000_000
+    || metrics.garmentAabbGrowthRatio > 10
+    || (metrics.flippedTriangleCount >= catastrophicFlipCount && metrics.triangleAreaMinRatio < 0.05)) {
+    return "metric-instability";
+  }
+  return null;
+}
+
+function guardFailureCount(sampleCount: number, fraction = 0.01): number {
+  if (sampleCount < 100) return 1;
+  return Math.max(2, Math.ceil(sampleCount * fraction));
 }
 
 function integrate(
@@ -454,6 +788,124 @@ function solveShearSet(state: XpbdState, dt: number): void {
  }state.maximumCorrectionApplied=maxApplied;
 }
 
+function solveBendSet(state: XpbdState, dt: number): void {
+  const set = state.bends;
+  const pos = state.predictedPositions;
+  const inv = state.inverseMasses;
+  const limits = state.correctionLimits;
+  const alphaScale = 1 / (dt * dt);
+  let maxApplied = state.maximumCorrectionApplied;
+  for (let index = 0; index < set.restAngles.length; index += 1) {
+    const base = index * 4;
+    const p0 = set.indices[base];
+    const p1 = set.indices[base + 1];
+    const p2 = set.indices[base + 2];
+    const p3 = set.indices[base + 3];
+    const o0 = p0 * 3;
+    const o1 = p1 * 3;
+    const o2 = p2 * 3;
+    const o3 = p3 * 3;
+    const ex = pos[o3] - pos[o2];
+    const ey = pos[o3 + 1] - pos[o2 + 1];
+    const ez = pos[o3 + 2] - pos[o2 + 2];
+    const edgeLengthSquared = ex * ex + ey * ey + ez * ez;
+    if (edgeLengthSquared <= EPSILON * EPSILON) continue;
+    const edgeLength = Math.sqrt(edgeLengthSquared);
+    const inverseEdgeLength = 1 / edgeLength;
+
+    const a1x = pos[o2] - pos[o0];
+    const a1y = pos[o2 + 1] - pos[o0 + 1];
+    const a1z = pos[o2 + 2] - pos[o0 + 2];
+    const b1x = pos[o3] - pos[o0];
+    const b1y = pos[o3 + 1] - pos[o0 + 1];
+    const b1z = pos[o3 + 2] - pos[o0 + 2];
+    let n1x = a1y * b1z - a1z * b1y;
+    let n1y = a1z * b1x - a1x * b1z;
+    let n1z = a1x * b1y - a1y * b1x;
+    const n1Squared = n1x * n1x + n1y * n1y + n1z * n1z;
+
+    const a2x = pos[o3] - pos[o1];
+    const a2y = pos[o3 + 1] - pos[o1 + 1];
+    const a2z = pos[o3 + 2] - pos[o1 + 2];
+    const b2x = pos[o2] - pos[o1];
+    const b2y = pos[o2 + 1] - pos[o1 + 1];
+    const b2z = pos[o2 + 2] - pos[o1 + 2];
+    let n2x = a2y * b2z - a2z * b2y;
+    let n2y = a2z * b2x - a2x * b2z;
+    let n2z = a2x * b2y - a2y * b2x;
+    const n2Squared = n2x * n2x + n2y * n2y + n2z * n2z;
+    if (n1Squared <= EPSILON * EPSILON || n2Squared <= EPSILON * EPSILON) continue;
+
+    n1x /= n1Squared; n1y /= n1Squared; n1z /= n1Squared;
+    n2x /= n2Squared; n2y /= n2Squared; n2z /= n2Squared;
+    const d0x = edgeLength * n1x;
+    const d0y = edgeLength * n1y;
+    const d0z = edgeLength * n1z;
+    const d1x = edgeLength * n2x;
+    const d1y = edgeLength * n2y;
+    const d1z = edgeLength * n2z;
+    const p0p3DotEdge = (pos[o0] - pos[o3]) * ex + (pos[o0 + 1] - pos[o3 + 1]) * ey + (pos[o0 + 2] - pos[o3 + 2]) * ez;
+    const p1p3DotEdge = (pos[o1] - pos[o3]) * ex + (pos[o1 + 1] - pos[o3 + 1]) * ey + (pos[o1 + 2] - pos[o3 + 2]) * ez;
+    const p2p0DotEdge = (pos[o2] - pos[o0]) * ex + (pos[o2 + 1] - pos[o0 + 1]) * ey + (pos[o2 + 2] - pos[o0 + 2]) * ez;
+    const p2p1DotEdge = (pos[o2] - pos[o1]) * ex + (pos[o2 + 1] - pos[o1 + 1]) * ey + (pos[o2 + 2] - pos[o1 + 2]) * ez;
+    const d2x = p0p3DotEdge * inverseEdgeLength * n1x + p1p3DotEdge * inverseEdgeLength * n2x;
+    const d2y = p0p3DotEdge * inverseEdgeLength * n1y + p1p3DotEdge * inverseEdgeLength * n2y;
+    const d2z = p0p3DotEdge * inverseEdgeLength * n1z + p1p3DotEdge * inverseEdgeLength * n2z;
+    const d3x = p2p0DotEdge * inverseEdgeLength * n1x + p2p1DotEdge * inverseEdgeLength * n2x;
+    const d3y = p2p0DotEdge * inverseEdgeLength * n1y + p2p1DotEdge * inverseEdgeLength * n2y;
+    const d3z = p2p0DotEdge * inverseEdgeLength * n1z + p2p1DotEdge * inverseEdgeLength * n2z;
+
+    const inverseN1Length = Math.sqrt(n1Squared);
+    const inverseN2Length = Math.sqrt(n2Squared);
+    const u1x = n1x * inverseN1Length;
+    const u1y = n1y * inverseN1Length;
+    const u1z = n1z * inverseN1Length;
+    const u2x = n2x * inverseN2Length;
+    const u2y = n2y * inverseN2Length;
+    const u2z = n2z * inverseN2Length;
+    const cosine = Math.min(1, Math.max(-1, u1x * u2x + u1y * u2y + u1z * u2z));
+    const angle = (-0.6981317 * cosine * cosine - 0.8726646) * cosine + 1.570796;
+    const orientation = ((u1y * u2z - u1z * u2y) * ex
+      + (u1z * u2x - u1x * u2z) * ey
+      + (u1x * u2y - u1y * u2x) * ez) > 0 ? -1 : 1;
+    const constraint = (angle - set.restAngles[index]) * orientation;
+    const g0 = d0x * d0x + d0y * d0y + d0z * d0z;
+    const g1 = d1x * d1x + d1y * d1y + d1z * d1z;
+    const g2 = d2x * d2x + d2y * d2y + d2z * d2z;
+    const g3 = d3x * d3x + d3y * d3y + d3z * d3z;
+    const alpha = Math.max(0, set.compliances[index]) * alphaScale;
+    const denominator = inv[p0] * g0 + inv[p1] * g1 + inv[p2] * g2 + inv[p3] * g3 + alpha;
+    if (denominator <= EPSILON) continue;
+    const rawDelta = (-constraint - alpha * set.lambdas[index]) / denominator;
+    let maximumMultiplier = Number.POSITIVE_INFINITY;
+    let weightedGradient = inv[p0] * Math.sqrt(g0);
+    if (weightedGradient > EPSILON) maximumMultiplier = limits[p0] / weightedGradient;
+    weightedGradient = inv[p1] * Math.sqrt(g1);
+    if (weightedGradient > EPSILON) maximumMultiplier = Math.min(maximumMultiplier, limits[p1] / weightedGradient);
+    weightedGradient = inv[p2] * Math.sqrt(g2);
+    if (weightedGradient > EPSILON) maximumMultiplier = Math.min(maximumMultiplier, limits[p2] / weightedGradient);
+    weightedGradient = inv[p3] * Math.sqrt(g3);
+    if (weightedGradient > EPSILON) maximumMultiplier = Math.min(maximumMultiplier, limits[p3] / weightedGradient);
+    if (!Number.isFinite(maximumMultiplier)) maximumMultiplier = 0;
+    const delta = clampMultiplierByPositionCorrection(rawDelta, maximumMultiplier);
+    set.lambdas[index] += delta;
+    const scale0 = delta * inv[p0];
+    const scale1 = delta * inv[p1];
+    const scale2 = delta * inv[p2];
+    const scale3 = delta * inv[p3];
+    pos[o0] += d0x * scale0; pos[o0 + 1] += d0y * scale0; pos[o0 + 2] += d0z * scale0;
+    pos[o1] += d1x * scale1; pos[o1 + 1] += d1y * scale1; pos[o1 + 2] += d1z * scale1;
+    pos[o2] += d2x * scale2; pos[o2 + 1] += d2y * scale2; pos[o2 + 2] += d2z * scale2;
+    pos[o3] += d3x * scale3; pos[o3 + 1] += d3y * scale3; pos[o3 + 2] += d3z * scale3;
+    const applied0 = Math.abs(scale0) * Math.sqrt(g0);
+    const applied1 = Math.abs(scale1) * Math.sqrt(g1);
+    const applied2 = Math.abs(scale2) * Math.sqrt(g2);
+    const applied3 = Math.abs(scale3) * Math.sqrt(g3);
+    maxApplied = Math.max(maxApplied, applied0, applied1, applied2, applied3);
+  }
+  state.maximumCorrectionApplied = maxApplied;
+}
+
 function solveSeamSet(state: XpbdState, dt: number): void {
  const seams=state.seams,pos=state.predictedPositions,inv=state.inverseMasses,limits=state.correctionLimits,alphaScale=1/(dt*dt);let maxApplied=state.maximumCorrectionApplied;
  for(let i=0;i<seams.restDistances.length;i+=1){const b=i*4,p0=seams.indices[b],p1=seams.indices[b+1],p2=seams.indices[b+2],p3=seams.indices[b+3],w0=seams.weights[b],w1=seams.weights[b+1],w2=seams.weights[b+2],w3=seams.weights[b+3];
@@ -483,16 +935,13 @@ function updateVelocitiesAndPositions(state: XpbdState, dt: number): void {
     let vy = (state.predictedPositions[offset + 1] - state.positions[offset + 1]) / dt * state.config.damping;
     let vz = (state.predictedPositions[offset + 2] - state.positions[offset + 2]) / dt * state.config.damping;
     const speed = Math.hypot(vx, vy, vz);
-    // CFL-style mesh stability: a particle must not cross more than its local
-    // structural edge scale in one fixed step. correctionLimits are defined
-    // as 10% of the smallest incident structural edge, so x10 recovers that
-    // local edge length without a garment- or scene-specific speed constant.
-    const localEdgeLengthM = state.correctionLimits[particle] * 10;
-    const localMaximumVelocity = localEdgeLengthM > EPSILON
-      ? Math.min(maximumVelocity, localEdgeLengthM / dt)
-      : maximumVelocity;
-    if (speed > localMaximumVelocity) {
-      const scale = localMaximumVelocity / speed;
+    // An absolute velocity cap must be identical for every particle. Deriving
+    // it from the local tessellation makes uniform gravity non-uniform: fine
+    // panels stop before coarse panels and seams are pulled apart even during
+    // rigid translation. Local edge scales remain valid for projection trust
+    // regions, but not for world-space velocity.
+    if (speed > maximumVelocity) {
+      const scale = maximumVelocity / speed;
       vx *= scale;
       vy *= scale;
       vz *= scale;
@@ -522,6 +971,7 @@ function enforcePinsOn(positions: Float32Array, pins: XpbdPinConstraints): void 
 function resetLambdas(state: XpbdState): void {
   state.distances.lambdas.fill(0);
   state.shears.lambdas.fill(0);
+  state.bends.lambdas.fill(0);
   state.seams.lambdas.fill(0);
 }
 
@@ -551,7 +1001,7 @@ function interpolatedPoint(
   return result;
 }
 
-function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "profile">): void {
+function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" | "maximumCorrectionApplied" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile">): void {
   const particleCount = input.positions.length / 3;
   if (!Number.isInteger(particleCount)
     || input.previousPositions.length !== input.positions.length
@@ -560,7 +1010,10 @@ function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stableP
     || input.restPositions.length !== input.positions.length
     || input.materialCoordinates.length !== particleCount * 2
     || input.inverseMasses.length !== particleCount
-    || input.triangles.length % 3 !== 0) {
+    || input.triangles.length % 3 !== 0
+    || input.triangleMaterial.restAreas.length !== input.triangles.length / 3
+    || input.triangleMaterial.orientations.length !== input.triangles.length / 3
+    || input.triangleMaterial.initialNormals.length !== input.triangles.length) {
     throw new RangeError("Os buffers SoA da simula\u00e7\u00e3o possuem dimens\u00f5es incompat\u00edveis.");
   }
   if (input.distances.indices.length !== input.distances.restLengths.length * 2
@@ -570,6 +1023,9 @@ function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stableP
     || input.shears.indices.length !== input.shears.restCosines.length * 3
     || input.shears.compliances.length !== input.shears.restCosines.length
     || input.shears.lambdas.length !== input.shears.restCosines.length
+    || input.bends.indices.length !== input.bends.restAngles.length * 4
+    || input.bends.compliances.length !== input.bends.restAngles.length
+    || input.bends.lambdas.length !== input.bends.restAngles.length
     || input.seams.indices.length !== input.seams.restDistances.length * 4
     || input.seams.weights.length !== input.seams.restDistances.length * 4
     || input.seams.compliances.length !== input.seams.restDistances.length
@@ -582,6 +1038,7 @@ function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stableP
   assertParticleIndices(input.triangles, particleCount, false, "tri\u00e2ngulos");
   assertParticleIndices(input.distances.indices, particleCount, false, "stretch/bend");
   assertParticleIndices(input.shears.indices, particleCount, false, "shear");
+  assertParticleIndices(input.bends.indices, particleCount, false, "bends");
   assertParticleIndices(input.seams.indices, particleCount, true, "seams");
   assertParticleIndices(input.pins.indices, particleCount, false, "pins");
   for (const values of [
@@ -592,10 +1049,14 @@ function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stableP
     input.inverseMasses,
     input.restPositions,
     input.materialCoordinates,
+    input.triangleMaterial.restAreas,
+    input.triangleMaterial.initialNormals,
     input.distances.restLengths,
     input.distances.compliances,
     input.shears.restCosines,
     input.shears.compliances,
+    input.bends.restAngles,
+    input.bends.compliances,
     input.seams.weights,
     input.seams.restDistances,
     input.seams.compliances,
@@ -620,6 +1081,111 @@ function assertParticleIndices(
       throw new RangeError(`A constraint ${label} referencia a part\u00edcula ${particle}, mas existem ${particleCount}.`);
     }
   }
+}
+
+export function buildTriangleMaterialReference(
+  materialCoordinates: Float32Array,
+  triangles: Uint32Array,
+  initialPositions: Float32Array,
+): XpbdTriangleMaterialReference {
+  const triangleCount = triangles.length / 3;
+  const restAreas = new Float32Array(triangleCount);
+  const orientations = new Int8Array(triangleCount);
+  const initialNormals = new Float32Array(triangles.length);
+  let restAreaSum = 0;
+  let restAreaCount = 0;
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    const base = triangle * 3;
+    const ia = triangles[base];
+    const ib = triangles[base + 1];
+    const ic = triangles[base + 2];
+    const abx2 = materialCoordinates[ib * 2] - materialCoordinates[ia * 2];
+    const aby2 = materialCoordinates[ib * 2 + 1] - materialCoordinates[ia * 2 + 1];
+    const acx2 = materialCoordinates[ic * 2] - materialCoordinates[ia * 2];
+    const acy2 = materialCoordinates[ic * 2 + 1] - materialCoordinates[ia * 2 + 1];
+    const signedDoubleArea = abx2 * acy2 - aby2 * acx2;
+    restAreas[triangle] = Math.abs(signedDoubleArea) * 0.5;
+    if (restAreas[triangle] > EPSILON) {
+      restAreaSum += restAreas[triangle];
+      restAreaCount += 1;
+    }
+    orientations[triangle] = signedDoubleArea < 0 ? -1 : 1;
+
+    const a = ia * 3;
+    const b = ib * 3;
+    const c = ic * 3;
+    const abx = initialPositions[b] - initialPositions[a];
+    const aby = initialPositions[b + 1] - initialPositions[a + 1];
+    const abz = initialPositions[b + 2] - initialPositions[a + 2];
+    const acx = initialPositions[c] - initialPositions[a];
+    const acy = initialPositions[c + 1] - initialPositions[a + 1];
+    const acz = initialPositions[c + 2] - initialPositions[a + 2];
+    let nx = aby * acz - abz * acy;
+    let ny = abz * acx - abx * acz;
+    let nz = abx * acy - aby * acx;
+    const length = Math.hypot(nx, ny, nz);
+    if (length > EPSILON) {
+      nx /= length; ny /= length; nz /= length;
+    }
+    initialNormals[base] = nx;
+    initialNormals[base + 1] = ny;
+    initialNormals[base + 2] = nz;
+  }
+  return {
+    restAreas,
+    orientations,
+    initialNormals,
+    initialAabbDiagonal: aabbDiagonal(initialPositions),
+    meaningfulRestArea: restAreaCount > 0
+      ? Math.max(EPSILON, restAreaSum / restAreaCount * 1e-5)
+      : EPSILON,
+  };
+}
+
+function captureTriangleReferenceNormals(state: XpbdState): void {
+  for (let triangle = 0; triangle < state.triangles.length / 3; triangle += 1) {
+    const base = triangle * 3;
+    const a = state.triangles[base] * 3;
+    const b = state.triangles[base + 1] * 3;
+    const c = state.triangles[base + 2] * 3;
+    const abx = state.positions[b] - state.positions[a];
+    const aby = state.positions[b + 1] - state.positions[a + 1];
+    const abz = state.positions[b + 2] - state.positions[a + 2];
+    const acx = state.positions[c] - state.positions[a];
+    const acy = state.positions[c + 1] - state.positions[a + 1];
+    const acz = state.positions[c + 2] - state.positions[a + 2];
+    let nx = aby * acz - abz * acy;
+    let ny = abz * acx - abx * acz;
+    let nz = abx * acy - aby * acx;
+    const length = Math.hypot(nx, ny, nz);
+    if (length > EPSILON) {
+      nx /= length;
+      ny /= length;
+      nz /= length;
+      state.triangleReferenceNormals[base] = nx;
+      state.triangleReferenceNormals[base + 1] = ny;
+      state.triangleReferenceNormals[base + 2] = nz;
+    }
+  }
+}
+
+function aabbDiagonal(positions: Float32Array): number {
+  if (positions.length === 0) return 0;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    minX = Math.min(minX, positions[offset]);
+    minY = Math.min(minY, positions[offset + 1]);
+    minZ = Math.min(minZ, positions[offset + 2]);
+    maxX = Math.max(maxX, positions[offset]);
+    maxY = Math.max(maxY, positions[offset + 1]);
+    maxZ = Math.max(maxZ, positions[offset + 2]);
+  }
+  return Math.hypot(maxX - minX, maxY - minY, maxZ - minZ);
 }
 
 function positionsAreSafe(positions: Float32Array): boolean {

@@ -288,6 +288,15 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
             <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
             <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
+            <dt>stretch mean / max</dt><dd>{formatMetric(telemetry?.structuralStretchMeanRatio)} / {formatMetric(telemetry?.structuralStretchMaxRatio)}</dd>
+            <dt>compression min</dt><dd>{formatMetric(telemetry?.structuralCompressionMinRatio)}</dd>
+            <dt>shear mean / max</dt><dd>{formatMetric(telemetry?.shearStrainMean)} / {formatMetric(telemetry?.shearStrainMax)}</dd>
+            <dt>area mean / min / max</dt><dd>{formatMetric(telemetry?.triangleAreaMeanRatio)} / {formatMetric(telemetry?.triangleAreaMinRatio)} / {formatMetric(telemetry?.triangleAreaMaxRatio)}</dd>
+            <dt>flipped triangles</dt><dd>{telemetry?.flippedTriangleCount ?? 0}</dd>
+            <dt>AABB growth</dt><dd>{formatMetric(telemetry?.garmentAabbGrowthRatio)}</dd>
+            <dt>velocity max</dt><dd>{formatMetric(telemetry?.maximumVelocityMagnitude)}</dd>
+            <dt>pins explicit / temporary</dt><dd>{telemetry?.explicitPinCount ?? 0} / {telemetry?.temporarySupportCount ?? 0}</dd>
+            <dt>invalid reason</dt><dd>{telemetry?.invalidReason ?? "-"}</dd>
           </dl>
           {telemetry ? (
             <details className="viewport-physics-seam-groups">

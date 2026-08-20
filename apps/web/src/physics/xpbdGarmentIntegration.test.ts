@@ -171,12 +171,20 @@ function physicalState(garment: GarmentDraft, revision: string): { state: XpbdSt
       compliances: initialization.distanceCompliances,
       lambdas: new Float32Array(initialization.distanceRestLengths.length),
       kinds: initialization.distanceKinds,
+      panelIds: initialization.distancePanelIds,
+      fabricIds: initialization.distanceFabricIds,
     },
     shears: {
       indices: initialization.shearIndices,
       restCosines: initialization.shearRestCosines,
       compliances: initialization.shearCompliances,
       lambdas: new Float32Array(initialization.shearRestCosines.length),
+    },
+    bends: {
+      indices: initialization.bendIndices,
+      restAngles: initialization.bendRestAngles,
+      compliances: initialization.bendCompliances,
+      lambdas: new Float32Array(initialization.bendRestAngles.length),
     },
     seams: {
       indices: initialization.seamIndices,
