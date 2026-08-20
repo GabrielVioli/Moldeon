@@ -6,11 +6,13 @@ import { createBodyCollisionRuntimeState, packAvatarCollisionModel } from "./bod
 import { createXpbdState, measureXpbdDiagnostics, stepXpbd, type XpbdState } from "./xpbd";
 
 const RUN_PERF = process.env.MOLDEON_BODY_TOTAL_PERF_BENCH === "1";
-const ROWS = 72;
-const COLS = 89;
-const PARTICLES = ROWS * COLS; // 6408, matching the recent real-pants particle count.
-const BEND_COUNT = 12_997;
-const SEAM_COUNT = 374;
+const ROWS = 70;
+const COLS = 70;
+const PARTICLES = ROWS * COLS; // 4900, matching the recorded ~4890-particle browser scene.
+const TRIANGLE_COUNT = 7_792;
+const STRETCH_COUNT = 12_678;
+const BEND_COUNT = 10_698;
+const SEAM_COUNT = 248;
 const SPACING = 0.006;
 const MEASUREMENTS: BodyMeasurements = {
   heightMm: 1720,
@@ -32,7 +34,7 @@ const MEASUREMENTS: BodyMeasurements = {
 };
 
 describe("Prompt 11 integrated XPBD/body performance", () => {
-  it("keeps the 6408-particle integrated workload finite with collision on", () => {
+  it("keeps the ~4.9k-particle integrated workload finite with collision on", () => {
     const state = makeState(true);
     for (let step = 0; step < 3; step += 1) stepXpbd(state);
     const diagnostics = measureXpbdDiagnostics(state);
@@ -44,6 +46,7 @@ describe("Prompt 11 integrated XPBD/body performance", () => {
 
   it.skipIf(!RUN_PERF)("prints total physicsStep before/after and bodyCollisionMs separately", () => {
     const off = profile(false);
+    const reference = profile(true, true);
     const on = profile(true);
     const report = {
       particles: PARTICLES,
@@ -55,11 +58,16 @@ describe("Prompt 11 integrated XPBD/body performance", () => {
       iterations: on.counts.iterations,
       bodyColliders: on.counts.bodyColliders,
       offMedianMs: off.totalMedianMs,
+      referenceOnMedianMs: reference.totalMedianMs,
+      referenceBodyCollisionMedianMs: reference.bodyMedianMs,
+      referenceDeltaMedianMs: reference.totalMedianMs - off.totalMedianMs,
       onMedianMs: on.totalMedianMs,
       bodyCollisionMedianMs: on.bodyMedianMs,
       deltaMedianMs: on.totalMedianMs - off.totalMedianMs,
       overheadPercent: off.totalMedianMs > 0 ? (on.totalMedianMs / off.totalMedianMs - 1) * 100 : 0,
       bodyContactsMedian: on.contactsMedian,
+      broadphaseRejectRate: on.broadphaseRejectRate,
+      averageCandidatesPerParticle: on.averageCandidatesPerParticle,
     };
     console.log("MOLDEON_BODY_TOTAL_PERF " + JSON.stringify(report));
     expect(off.invalid).toBe(false);
@@ -68,8 +76,8 @@ describe("Prompt 11 integrated XPBD/body performance", () => {
   }, 60_000);
 });
 
-function profile(bodyEnabled: boolean) {
-  const state = makeState(bodyEnabled);
+function profile(bodyEnabled: boolean, reference = false) {
+  const state = makeState(bodyEnabled, reference);
   for (let warmup = 0; warmup < 4; warmup += 1) stepXpbd(state);
   const totals: number[] = [];
   const bodies: number[] = [];
@@ -86,6 +94,8 @@ function profile(bodyEnabled: boolean) {
     bodyMedianMs: median(bodies),
     contactsMedian: median(contacts),
     invalid: diagnostics.invalid,
+    broadphaseRejectRate: diagnostics.bodyBroadphaseRejectRate ?? 0,
+    averageCandidatesPerParticle: diagnostics.bodyAverageCandidatesPerParticle ?? 0,
     counts: {
       triangles: diagnostics.triangleCount,
       stretch: diagnostics.stretchConstraintCount,
@@ -98,7 +108,7 @@ function profile(bodyEnabled: boolean) {
   };
 }
 
-function makeState(bodyEnabled: boolean): XpbdState {
+function makeState(bodyEnabled: boolean, reference = false): XpbdState {
   const positions = new Float32Array(PARTICLES * 3);
   const material = new Float32Array(PARTICLES * 2);
   const inverseMasses = new Float32Array(PARTICLES).fill(1);
@@ -136,6 +146,9 @@ function makeState(bodyEnabled: boolean): XpbdState {
       if (row + 1 < ROWS && col + 1 < COLS) structuralPairs.push([a, a + COLS + 1]);
     }
   }
+  triangles.length = TRIANGLE_COUNT * 3;
+  shearTriples.length = TRIANGLE_COUNT;
+  structuralPairs.length = STRETCH_COUNT;
 
   const allPairs = structuralPairs.slice();
   for (let index = 0; index < BEND_COUNT; index += 1) {
@@ -186,6 +199,11 @@ function makeState(bodyEnabled: boolean): XpbdState {
     new Float32Array(PARTICLES).fill(0.5),
     bodyEnabled,
   );
+  if (reference) {
+    body.colliders.cache!.usesBitMask = false;
+    body.pointCandidateIndices = new Uint16Array(PARTICLES * body.colliders.kinds.length);
+    body.sweptCandidateIndices = new Uint16Array(PARTICLES * body.colliders.kinds.length);
+  }
 
   return createXpbdState({
     positions: new Float32Array(positions),

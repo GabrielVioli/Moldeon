@@ -1,4 +1,4 @@
-import { applyBodyContactVelocities, createBodyCollisionRuntimeState, finalizeBodyContactDiagnostics, resetBodyContactStep, solveBodyCollisions, type BodyCollisionRuntimeState } from "./bodyCollision";
+import { applyBodyContactVelocities, createBodyCollisionRuntimeState, finalizeBodyContactDiagnostics, initializeBodyDressing, resetBodyContactStep, solveBodyCollisions, type BodyCollisionRuntimeState } from "./bodyCollision";
 
 export const XPBD_MISSING_PARTICLE = 0xffffffff;
 
@@ -124,6 +124,23 @@ export interface XpbdStepDiagnostics {
   validationMs?: number;
   solverStepTotalMs?: number;
   bodyCollisionMs?: number;
+  bodyBroadphaseMs?: number;
+  bodyNarrowphaseMs?: number;
+  bodyProjectionMs?: number;
+  bodyFrictionMs?: number;
+  bodyParticleQueries?: number;
+  bodyColliderTests?: number;
+  bodyCandidateColliderTests?: number;
+  bodyBroadphaseRejected?: number;
+  bodyBroadphaseRejectRate?: number;
+  bodyAverageCandidatesPerParticle?: number;
+  bodyCapsuleNarrowphaseTests?: number;
+  bodyEllipsoidNarrowphaseTests?: number;
+  bodyPointContactsFound?: number;
+  bodySweptTests?: number;
+  bodySweptContactsFound?: number;
+  bodyDressingStepsRemaining?: number;
+  bodyInitialDressingSteps?: number;
   iterations?: number;
   maximumSubsteps?: number;
 }
@@ -147,14 +164,15 @@ export function createXpbdState(
 ): XpbdState {
   const body = input.body ?? createBodyCollisionRuntimeState({ kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] }, new Float32Array(input.positions.length / 3), new Float32Array(input.positions.length / 3), false);
   validateStateShape({ ...input, body });
-  return {
+  const correctionLimits = buildParticleCorrectionLimits(
+    input.positions.length / 3,
+    input.distances,
+    input.config.maximumCorrection,
+  );
+  const state: XpbdState = {
     ...input,
     body,
-    correctionLimits: buildParticleCorrectionLimits(
-      input.positions.length / 3,
-      input.distances,
-      input.config.maximumCorrection,
-    ),
+    correctionLimits,
     stablePositions: new Float32Array(input.positions),
     maximumCorrectionApplied: 0,
     accumulator: 0,
@@ -162,6 +180,8 @@ export function createXpbdState(
     invalid: false,
     profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0 },
   };
+  initializeBodyDressing(body, state.positions, state.config.maximumCorrection);
+  return state;
 }
 
 export function advanceXpbd(state: XpbdState, frameDeltaSeconds: number): XpbdStepDiagnostics {
@@ -199,25 +219,36 @@ export function stepXpbd(state: XpbdState): void {
   state.previousPositions.set(state.positions);
   state.maximumCorrectionApplied = 0;
   resetLambdas(state);
+  const dressingActive = state.body.enabled && state.body.dressingStepsRemaining > 0;
+  const effectiveIterations = dressingActive
+    ? Math.max(state.config.iterations, state.config.iterations * 2)
+    : state.config.iterations;
   let phaseStarted = performance.now();
-  integrate(state, dt);
+  integrate(state, dt, dressingActive ? [0, 0, 0] : state.config.gravity);
   profile.integrationMs = performance.now() - phaseStarted;
 
-  for (let iteration = 0; iteration < state.config.iterations; iteration += 1) {
+  for (let iteration = 0; iteration < effectiveIterations; iteration += 1) {
     phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveDistanceSet(state, dt, 1); profile.bendMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
-    phaseStarted = performance.now();
-    solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: iteration === 0 });
-    profile.bodyCollisionMs += performance.now() - phaseStarted;
     enforcePins(state);
   }
 
+  phaseStarted = performance.now();
+  solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true });
+  profile.bodyCollisionMs = performance.now() - phaseStarted;
+  enforcePins(state);
   finalizeBodyContactDiagnostics(state.body);
   phaseStarted = performance.now();
   updateVelocitiesAndPositions(state, dt);
-  applyBodyContactVelocities(state.velocities, state.body);
+  applyBodyContactVelocities(state.velocities, state.body, dt);
+  if (dressingActive) {
+    state.velocities.fill(0);
+    state.previousPositions.set(state.positions);
+    state.body.dressingStepsRemaining = Math.max(0, state.body.dressingStepsRemaining - 1);
+    if (state.body.dressingStepsRemaining === 0) state.body.grossDepenetrationEnabled = false;
+  }
   profile.velocityUpdateMs = performance.now() - phaseStarted;
   state.stepCount += 1;
 
@@ -250,6 +281,7 @@ export function resetXpbdState(state: XpbdState): void {
   state.maximumCorrectionApplied = 0;
   state.invalid = false;
   resetBodyContactStep(state.body);
+  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection);
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
   enforcePinsOn(state.previousPositions, state.pins);
@@ -340,13 +372,38 @@ export function measureXpbdDiagnostics(
     validationMs: state.profile.validationMs,
     solverStepTotalMs: state.profile.solverStepTotalMs,
     bodyCollisionMs: state.profile.bodyCollisionMs,
+    bodyBroadphaseMs: state.body.broadphaseMs,
+    bodyNarrowphaseMs: state.body.narrowphaseMs,
+    bodyProjectionMs: state.body.projectionMs,
+    bodyFrictionMs: state.body.frictionMs,
+    bodyParticleQueries: state.body.bodyParticleQueries,
+    bodyColliderTests: state.body.bodyColliderTests,
+    bodyCandidateColliderTests: state.body.bodyCandidateColliderTests,
+    bodyBroadphaseRejected: state.body.bodyBroadphaseRejected,
+    bodyBroadphaseRejectRate: state.body.bodyColliderTests > 0
+      ? state.body.bodyBroadphaseRejected / state.body.bodyColliderTests
+      : 0,
+    bodyAverageCandidatesPerParticle: state.body.bodyParticleQueries > 0
+      ? state.body.bodyCandidateColliderTests / state.body.bodyParticleQueries
+      : 0,
+    bodyCapsuleNarrowphaseTests: state.body.bodyCapsuleNarrowphaseTests,
+    bodyEllipsoidNarrowphaseTests: state.body.bodyEllipsoidNarrowphaseTests,
+    bodyPointContactsFound: state.body.bodyPointContactsFound,
+    bodySweptTests: state.body.bodySweptTests,
+    bodySweptContactsFound: state.body.bodySweptContactsFound,
+    bodyDressingStepsRemaining: state.body.dressingStepsRemaining,
+    bodyInitialDressingSteps: state.body.initialDressingSteps,
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };
 }
 
-function integrate(state: XpbdState, dt: number): void {
-  const [gx, gy, gz] = state.config.gravity;
+function integrate(
+  state: XpbdState,
+  dt: number,
+  gravity: readonly [number, number, number] = state.config.gravity,
+): void {
+  const [gx, gy, gz] = gravity;
   const dtSquared = dt * dt;
   for (let particle = 0; particle < state.inverseMasses.length; particle += 1) {
     const offset = particle * 3;
@@ -426,8 +483,16 @@ function updateVelocitiesAndPositions(state: XpbdState, dt: number): void {
     let vy = (state.predictedPositions[offset + 1] - state.positions[offset + 1]) / dt * state.config.damping;
     let vz = (state.predictedPositions[offset + 2] - state.positions[offset + 2]) / dt * state.config.damping;
     const speed = Math.hypot(vx, vy, vz);
-    if (speed > maximumVelocity) {
-      const scale = maximumVelocity / speed;
+    // CFL-style mesh stability: a particle must not cross more than its local
+    // structural edge scale in one fixed step. correctionLimits are defined
+    // as 10% of the smallest incident structural edge, so x10 recovers that
+    // local edge length without a garment- or scene-specific speed constant.
+    const localEdgeLengthM = state.correctionLimits[particle] * 10;
+    const localMaximumVelocity = localEdgeLengthM > EPSILON
+      ? Math.min(maximumVelocity, localEdgeLengthM / dt)
+      : maximumVelocity;
+    if (speed > localMaximumVelocity) {
+      const scale = localMaximumVelocity / speed;
       vx *= scale;
       vy *= scale;
       vz *= scale;

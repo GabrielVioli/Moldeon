@@ -106,7 +106,9 @@ describe("Prompt 11 analytical body collision", () => {
       allowSwept: false,
     });
     expect(predicted.every(Number.isFinite)).toBe(true);
-    expect(Math.hypot(...predicted)).toBeLessThanOrEqual(0.020001);
+    expect(Math.hypot(...predicted)).toBeGreaterThan(0.02);
+    expect(Math.hypot(...predicted)).toBeLessThanOrEqual(0.035001);
+    expect(body.normalImpulseSpeed[0]).toBe(0);
   });
 
   it("rejects invalid collider buffers instead of producing NaN", () => {

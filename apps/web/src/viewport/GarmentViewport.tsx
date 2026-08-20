@@ -274,6 +274,16 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>Max penetration mm</dt><dd>{formatMetric((telemetry?.maximumBodyPenetrationM ?? 0) * 1000)}</dd>
             <dt>Max body correction mm</dt><dd>{formatMetric((telemetry?.maximumBodyCorrectionM ?? 0) * 1000)}</dd>
             <dt>Body collision ms</dt><dd>{formatMetric(telemetry?.bodyCollisionMs)}</dd>
+            <dt>Body broadphase ms</dt><dd>{formatMetric(telemetry?.bodyBroadphaseMs)}</dd>
+            <dt>Body narrowphase ms</dt><dd>{formatMetric(telemetry?.bodyNarrowphaseMs)}</dd>
+            <dt>Body projection ms</dt><dd>{formatMetric(telemetry?.bodyProjectionMs)}</dd>
+            <dt>Body friction ms</dt><dd>{formatMetric(telemetry?.bodyFrictionMs)}</dd>
+            <dt>Body broadphase reject %</dt><dd>{formatMetric((telemetry?.bodyBroadphaseRejectRate ?? 0) * 100)}</dd>
+            <dt>Body candidates/query</dt><dd>{formatMetric(telemetry?.bodyAverageCandidatesPerParticle)}</dd>
+            <dt>Body tests (all / narrow)</dt><dd>{telemetry?.bodyColliderTests ?? 0} / {telemetry?.bodyCandidateColliderTests ?? 0}</dd>
+            <dt>Body narrow (capsule / ellipsoid)</dt><dd>{telemetry?.bodyCapsuleNarrowphaseTests ?? 0} / {telemetry?.bodyEllipsoidNarrowphaseTests ?? 0}</dd>
+            <dt>Body swept (tests / hits)</dt><dd>{telemetry?.bodySweptTests ?? 0} / {telemetry?.bodySweptContactsFound ?? 0}</dd>
+            <dt>Dressing steps</dt><dd>{telemetry?.bodyDressingStepsRemaining ?? 0} / {telemetry?.bodyInitialDressingSteps ?? 0}</dd>
             <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
             <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
             <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>

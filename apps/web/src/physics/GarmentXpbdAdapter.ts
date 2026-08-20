@@ -198,28 +198,12 @@ export function buildXpbdInitialization(
   const pinTargets: number[] = [];
   if (options.pinAssemblyAnchors === true) {
     const seenPins = new Set<number>();
-    const appendPin = (particleIndex: number, x: number, y: number, z: number) => {
-      if (seenPins.has(particleIndex)) return;
-      seenPins.add(particleIndex);
-      pinIndices.push(particleIndex);
-      pinTargets.push(x, y, z);
-      inverseMasses[particleIndex] = 0;
-    };
-
     for (const anchor of state.anchorConstraints) {
-      appendPin(anchor.particleIndex, anchor.targetX, anchor.targetY, anchor.targetZ);
-    }
-    for (const instance of state.instances) {
-      if (instance.placement.region === "custom" || instance.placement.surface === "custom") continue;
-      for (const localIndex of selectInstanceSupportVertices(instance)) {
-        const particleIndex = instance.particleStart + localIndex;
-        appendPin(
-          particleIndex,
-          positions[particleIndex * 3],
-          positions[particleIndex * 3 + 1],
-          positions[particleIndex * 3 + 2],
-        );
-      }
+      if (seenPins.has(anchor.particleIndex)) continue;
+      seenPins.add(anchor.particleIndex);
+      pinIndices.push(anchor.particleIndex);
+      pinTargets.push(anchor.targetX, anchor.targetY, anchor.targetZ);
+      inverseMasses[anchor.particleIndex] = 0;
     }
   }
 
@@ -412,42 +396,6 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
   ];
 }
 
-function selectInstanceSupportVertices(instance: AssemblyPanelInstance): number[] {
-  const boundary = [...instance.topology.boundaryVertices];
-  if (boundary.length <= 16) return boundary;
-  const xOf = (localIndex: number) => instance.topology.positions2DMm[localIndex * 2];
-  const yOf = (localIndex: number) => instance.topology.positions2DMm[localIndex * 2 + 1];
-  const topY = Math.min(...boundary.map(yOf));
-  const minX = Math.min(...boundary.map(xOf));
-  const maxX = Math.max(...boundary.map(xOf));
-  const sideTolerance = Math.max(8, (maxX - minX) * 0.04);
-  const topBand = boundary
-    .filter((localIndex) => yOf(localIndex) <= topY + 12)
-    .sort((left, right) => xOf(left) - xOf(right));
-  const sideRails = boundary
-    .filter((localIndex) => xOf(localIndex) <= minX + sideTolerance || xOf(localIndex) >= maxX - sideTolerance)
-    .sort((left, right) => yOf(left) - yOf(right));
-  const anchors = [
-    ...sampleEvenly(topBand.length >= 2 ? topBand : [...boundary].sort((left, right) => yOf(left) - yOf(right)).slice(0, 2), 8),
-    ...sampleEvenly(sideRails, 8),
-  ];
-  return uniqueNumbers(anchors);
-}
-
-function sampleEvenly(values: readonly number[], maximum: number): number[] {
-  if (values.length <= maximum) return [...values];
-  const result: number[] = [];
-  for (let index = 0; index < maximum; index += 1) {
-    const sourceIndex = Math.round(index * (values.length - 1) / Math.max(1, maximum - 1));
-    const value = values[sourceIndex];
-    if (!result.includes(value)) result.push(value);
-  }
-  return result;
-}
-
-function uniqueNumbers(values: readonly number[]): number[] {
-  return [...new Set(values)];
-}
 function appendEdge(
   edges: Map<string, EdgeRecord>,
   a: number,

@@ -3,8 +3,10 @@ import type { AvatarCollisionModel, AvatarCollisionProxy } from "../avatar/Avata
 export const BODY_COLLIDER_ELLIPSOID = 1;
 export const BODY_COLLIDER_CAPSULE = 2;
 export const BODY_COLLIDER_STRIDE = 10;
+export const BODY_COLLIDER_AABB_STRIDE = 6;
 export const DEFAULT_BODY_CONTACT_SKIN_M = 0.0004;
 const EPSILON = 1e-9;
+const BODY_BROADPHASE_BIN_COUNT = 32;
 
 export interface SimulationBodyTransform {
   translation: readonly [number, number, number];
@@ -15,6 +17,33 @@ export interface PackedBodyColliders {
   kinds: Uint8Array;
   data: Float32Array;
   regions: string[];
+  cache?: PackedBodyColliderCache;
+}
+
+export interface PackedBodyColliderCache {
+  aabbs: Float64Array;
+  capsuleAxes: Float64Array;
+  capsuleFallbackNormals: Float64Array;
+  ellipsoidInverseRadii: Float64Array;
+  yMinimum: number;
+  yMaximum: number;
+  yBinInverseSize: number;
+  yBinMasks: Uint32Array;
+  allMask: number;
+  usesBitMask: boolean;
+}
+
+interface BodyContactScratch {
+  colliderIndex: number;
+  surfaceX: number;
+  surfaceY: number;
+  surfaceZ: number;
+  normalX: number;
+  normalY: number;
+  normalZ: number;
+  penetrationM: number;
+  swept: boolean;
+  t: number;
 }
 
 export interface BodyContactQuery {
@@ -33,16 +62,44 @@ export interface BodyCollisionRuntimeState {
   particleHalfThicknessM: Float32Array;
   particleFriction: Float32Array;
   contactNormals: Float32Array;
+  contactCorrections: Float32Array;
   contactMask: Uint8Array;
   contactRegionIndex: Int16Array;
   normalImpulseSpeed: Float32Array;
+  pointCandidateMasks: Uint32Array;
+  sweptCandidateMasks: Uint32Array;
+  pointCandidateIndices: Uint16Array;
+  pointCandidateCounts: Uint16Array;
+  sweptCandidateIndices: Uint16Array;
+  sweptCandidateCounts: Uint16Array;
+  contactSurfacePoints: Float32Array;
+  contactPenetrations: Float32Array;
+  contactSwept: Uint8Array;
   contactSkinM: number;
+  grossDepenetrationEnabled: boolean;
+  dressingStepsRemaining: number;
+  initialDressingSteps: number;
   bodyContactCount: number;
   frictionContactCount: number;
   sweptContactCount: number;
   maximumBodyPenetrationM: number;
   maximumBodyCorrectionM: number;
   bodyContactsByRegion: Record<string, number>;
+  broadphaseMs: number;
+  narrowphaseMs: number;
+  projectionMs: number;
+  frictionMs: number;
+  contactScratch: BodyContactScratch;
+  bestContactScratch: BodyContactScratch;
+  bodyParticleQueries: number;
+  bodyColliderTests: number;
+  bodyCandidateColliderTests: number;
+  bodyBroadphaseRejected: number;
+  bodyCapsuleNarrowphaseTests: number;
+  bodyEllipsoidNarrowphaseTests: number;
+  bodyPointContactsFound: number;
+  bodySweptTests: number;
+  bodySweptContactsFound: number;
 }
 
 export interface BodyCollisionSolveInput {
@@ -52,6 +109,7 @@ export interface BodyCollisionSolveInput {
   correctionLimits: Float32Array;
   maximumCorrectionM: number;
   fixedTimeStep: number;
+  velocities?: Float32Array;
   body: BodyCollisionRuntimeState;
   allowSwept: boolean;
 }
@@ -88,8 +146,10 @@ export function packAvatarCollisionModel(
     data[offset + 5] = proxy.end[2];
     data[offset + 6] = proxy.radius;
   }
-  validatePackedBodyColliders({ kinds, data, regions });
-  return { kinds, data, regions };
+  const packed: PackedBodyColliders = { kinds, data, regions };
+  validatePackedBodyColliders(packed);
+  packed.cache = buildPackedBodyColliderCache(packed);
+  return packed;
 }
 
 export function validatePackedBodyColliders(colliders: PackedBodyColliders): void {
@@ -123,6 +183,7 @@ export function createBodyCollisionRuntimeState(
   contactSkinM = DEFAULT_BODY_CONTACT_SKIN_M,
 ): BodyCollisionRuntimeState {
   validatePackedBodyColliders(colliders);
+  colliders.cache ??= buildPackedBodyColliderCache(colliders);
   if (particleHalfThicknessM.length !== particleFriction.length) throw new RangeError("Body contact material buffers possuem tamanhos incompatíveis.");
   if (!Number.isFinite(contactSkinM) || contactSkinM < 0 || contactSkinM > 0.01) throw new RangeError("Body contact skin precisa ser finita e pequena.");
   for (let index = 0; index < particleHalfThicknessM.length; index += 1) {
@@ -135,39 +196,180 @@ export function createBodyCollisionRuntimeState(
     particleHalfThicknessM,
     particleFriction,
     contactNormals: new Float32Array(particleHalfThicknessM.length * 3),
+    contactCorrections: new Float32Array(particleHalfThicknessM.length * 3),
     contactMask: new Uint8Array(particleHalfThicknessM.length),
     contactRegionIndex: new Int16Array(particleHalfThicknessM.length).fill(-1),
     normalImpulseSpeed: new Float32Array(particleHalfThicknessM.length),
+    pointCandidateMasks: new Uint32Array(particleHalfThicknessM.length),
+    sweptCandidateMasks: new Uint32Array(particleHalfThicknessM.length),
+    pointCandidateIndices: new Uint16Array(
+      colliders.kinds.length > 32 ? particleHalfThicknessM.length * colliders.kinds.length : 0,
+    ),
+    pointCandidateCounts: new Uint16Array(particleHalfThicknessM.length),
+    sweptCandidateIndices: new Uint16Array(
+      colliders.kinds.length > 32 ? particleHalfThicknessM.length * colliders.kinds.length : 0,
+    ),
+    sweptCandidateCounts: new Uint16Array(particleHalfThicknessM.length),
+    contactSurfacePoints: new Float32Array(particleHalfThicknessM.length * 3),
+    contactPenetrations: new Float32Array(particleHalfThicknessM.length),
+    contactSwept: new Uint8Array(particleHalfThicknessM.length),
     contactSkinM,
+    grossDepenetrationEnabled: true,
+    dressingStepsRemaining: 0,
+    initialDressingSteps: 0,
     bodyContactCount: 0,
     frictionContactCount: 0,
     sweptContactCount: 0,
     maximumBodyPenetrationM: 0,
     maximumBodyCorrectionM: 0,
     bodyContactsByRegion: {},
+    broadphaseMs: 0,
+    narrowphaseMs: 0,
+    projectionMs: 0,
+    frictionMs: 0,
+    contactScratch: createBodyContactScratch(),
+    bestContactScratch: createBodyContactScratch(),
+    bodyParticleQueries: 0,
+    bodyColliderTests: 0,
+    bodyCandidateColliderTests: 0,
+    bodyBroadphaseRejected: 0,
+    bodyCapsuleNarrowphaseTests: 0,
+    bodyEllipsoidNarrowphaseTests: 0,
+    bodyPointContactsFound: 0,
+    bodySweptTests: 0,
+    bodySweptContactsFound: 0,
   };
+}
+
+export function initializeBodyDressing(
+  body: BodyCollisionRuntimeState,
+  positions: Float32Array,
+  maximumCorrectionM: number,
+): void {
+  body.dressingStepsRemaining = 0;
+  body.initialDressingSteps = 0;
+  body.grossDepenetrationEnabled = false;
+  if (!body.enabled || body.colliders.kinds.length === 0 || !Number.isFinite(maximumCorrectionM) || maximumCorrectionM <= 0) return;
+
+  let maximumPenetrationM = 0;
+  const particleCount = positions.length / 3;
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    const offset = particle * 3;
+    const contact = deepestBodyContact(
+      [positions[offset], positions[offset + 1], positions[offset + 2]],
+      body.colliders,
+      body.particleHalfThicknessM[particle] + body.contactSkinM,
+    );
+    if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
+  }
+  if (maximumPenetrationM <= EPSILON) return;
+
+  // Each gross projection is capped by maximumCorrectionM. Two passes per
+  // theoretical minimum leave room for structural constraints to relax between
+  // depenetrations without a garment-specific staging duration.
+  const minimumGrossPasses = Math.ceil(maximumPenetrationM / maximumCorrectionM);
+  body.initialDressingSteps = Math.max(1, minimumGrossPasses * 2);
+  body.dressingStepsRemaining = body.initialDressingSteps;
+  body.grossDepenetrationEnabled = true;
 }
 
 export function resetBodyContactStep(body: BodyCollisionRuntimeState): void {
   body.contactNormals.fill(0);
+  body.contactCorrections.fill(0);
   body.contactMask.fill(0);
   body.contactRegionIndex.fill(-1);
   body.normalImpulseSpeed.fill(0);
+  body.pointCandidateMasks.fill(0);
+  body.sweptCandidateMasks.fill(0);
+  body.pointCandidateCounts.fill(0);
+  body.sweptCandidateCounts.fill(0);
+  body.contactPenetrations.fill(0);
+  body.contactSwept.fill(0);
   body.bodyContactCount = 0;
   body.frictionContactCount = 0;
   body.sweptContactCount = 0;
   body.maximumBodyPenetrationM = 0;
   body.maximumBodyCorrectionM = 0;
   body.bodyContactsByRegion = {};
+  body.broadphaseMs = 0;
+  body.narrowphaseMs = 0;
+  body.projectionMs = 0;
+  body.frictionMs = 0;
+  body.bodyParticleQueries = 0;
+  body.bodyColliderTests = 0;
+  body.bodyCandidateColliderTests = 0;
+  body.bodyBroadphaseRejected = 0;
+  body.bodyCapsuleNarrowphaseTests = 0;
+  body.bodyEllipsoidNarrowphaseTests = 0;
+  body.bodyPointContactsFound = 0;
+  body.bodySweptTests = 0;
+  body.bodySweptContactsFound = 0;
 }
 
 export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
   const { body } = input;
   if (!body.enabled || body.colliders.kinds.length === 0) return;
   const particleCount = input.predictedPositions.length / 3;
+  const colliderCount = body.colliders.kinds.length;
   if (body.particleHalfThicknessM.length !== particleCount || body.particleFriction.length !== particleCount) {
     throw new RangeError("Body collision particle buffers não correspondem ao garment state.");
   }
+  if (input.velocities && input.velocities.length !== input.predictedPositions.length) {
+    throw new RangeError("Body collision velocity buffer não corresponde ao garment state.");
+  }
+  if (body.colliders.cache?.usesBitMask) {
+    solveBodyCollisionsBitmask(input, particleCount, colliderCount);
+    return;
+  }
+  if (body.pointCandidateIndices.length < particleCount * colliderCount || body.sweptCandidateIndices.length < particleCount * colliderCount) {
+    throw new RangeError("Body collision broadphase buffers não correspondem ao collider set.");
+  }
+
+  let phaseStarted = performance.now();
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    body.pointCandidateCounts[particle] = 0;
+    body.sweptCandidateCounts[particle] = 0;
+    if (input.inverseMasses[particle] <= 0) continue;
+    const offset = particle * 3;
+    const point: [number, number, number] = [
+      input.predictedPositions[offset],
+      input.predictedPositions[offset + 1],
+      input.predictedPositions[offset + 2],
+    ];
+    const previous: [number, number, number] = [
+      input.previousPositions[offset],
+      input.previousPositions[offset + 1],
+      input.previousPositions[offset + 2],
+    ];
+    const radius = body.particleHalfThicknessM[particle] + body.contactSkinM;
+    const base = particle * colliderCount;
+    let pointCount = 0;
+    let sweptCount = 0;
+    body.bodyParticleQueries += 1;
+    body.bodyColliderTests += colliderCount;
+    if (input.allowSwept) {
+      body.bodyParticleQueries += 1;
+      body.bodyColliderTests += colliderCount;
+    }
+    for (let collider = 0; collider < colliderCount; collider += 1) {
+      if (pointOverlapsPackedColliderAabb(point, body.colliders, collider, radius)) {
+        body.pointCandidateIndices[base + pointCount] = collider;
+        pointCount += 1;
+      }
+      if (input.allowSwept && segmentOverlapsPackedColliderAabb(previous, point, body.colliders, collider, radius)) {
+        body.sweptCandidateIndices[base + sweptCount] = collider;
+        sweptCount += 1;
+      }
+    }
+    body.pointCandidateCounts[particle] = pointCount;
+    body.sweptCandidateCounts[particle] = sweptCount;
+    body.bodyCandidateColliderTests += pointCount + sweptCount;
+    body.bodyBroadphaseRejected += colliderCount - pointCount;
+    if (input.allowSwept) body.bodyBroadphaseRejected += colliderCount - sweptCount;
+  }
+  body.broadphaseMs = performance.now() - phaseStarted;
+
+  phaseStarted = performance.now();
   for (let particle = 0; particle < particleCount; particle += 1) {
     if (input.inverseMasses[particle] <= 0) continue;
     const offset = particle * 3;
@@ -182,47 +384,309 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
       input.previousPositions[offset + 2],
     ];
     const radius = body.particleHalfThicknessM[particle] + body.contactSkinM;
-    let contact = deepestBodyContact(point, body.colliders, radius);
-    if (!contact && input.allowSwept) contact = earliestSweptBodyContact(previous, point, body.colliders, radius);
-    if (!contact) continue;
-
-    body.maximumBodyPenetrationM = Math.max(body.maximumBodyPenetrationM, contact.penetrationM);
-    let correctionX = contact.surfacePoint[0] - point[0];
-    let correctionY = contact.surfacePoint[1] - point[1];
-    let correctionZ = contact.surfacePoint[2] - point[2];
-    let correction = Math.hypot(correctionX, correctionY, correctionZ);
-    if (!contact.swept) {
-      const limit = Math.max(1e-6, Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM));
-      if (correction > limit) {
-        const scale = limit / correction;
-        correctionX *= scale;
-        correctionY *= scale;
-        correctionZ *= scale;
-        correction = limit;
+    const base = particle * colliderCount;
+    let contact: BodyContactQuery | null = null;
+    for (let candidate = 0; candidate < body.pointCandidateCounts[particle]; candidate += 1) {
+      const colliderIndex = body.pointCandidateIndices[base + candidate];
+      if (body.colliders.kinds[colliderIndex] === BODY_COLLIDER_CAPSULE) body.bodyCapsuleNarrowphaseTests += 1;
+      else body.bodyEllipsoidNarrowphaseTests += 1;
+      const queried = queryPackedColliderNarrowphase(point, body.colliders, colliderIndex, radius);
+      if (queried) {
+        body.bodyPointContactsFound += 1;
+        if (!contact || queried.penetrationM > contact.penetrationM) contact = queried;
       }
-    } else {
-      const maximumSweepCorrection = Math.max(input.maximumCorrectionM, 12 * input.fixedTimeStep);
-      if (correction > maximumSweepCorrection) {
-        const scale = maximumSweepCorrection / correction;
-        correctionX *= scale;
-        correctionY *= scale;
-        correctionZ *= scale;
-        correction = maximumSweepCorrection;
-      }
-      body.sweptContactCount += 1;
     }
-
-    input.predictedPositions[offset] += correctionX;
-    input.predictedPositions[offset + 1] += correctionY;
-    input.predictedPositions[offset + 2] += correctionZ;
-    body.maximumBodyCorrectionM = Math.max(body.maximumBodyCorrectionM, correction);
+    if (!contact && input.allowSwept) {
+      let earliest: (BodyContactQuery & { t: number }) | null = null;
+      for (let candidate = 0; candidate < body.sweptCandidateCounts[particle]; candidate += 1) {
+        const colliderIndex = body.sweptCandidateIndices[base + candidate];
+        body.bodySweptTests += 1;
+        if (body.colliders.kinds[colliderIndex] === BODY_COLLIDER_CAPSULE) body.bodyCapsuleNarrowphaseTests += 1;
+        else body.bodyEllipsoidNarrowphaseTests += 1;
+        const queried = sweptPackedCollider(previous, point, body.colliders, colliderIndex, radius);
+        if (queried) {
+          body.bodySweptContactsFound += 1;
+          if (!earliest || queried.t < earliest.t) earliest = queried;
+        }
+      }
+      if (earliest) {
+        const { t: _t, ...sweptContact } = earliest;
+        contact = sweptContact;
+      }
+    }
+    if (!contact) continue;
     body.contactMask[particle] = 1;
     body.contactRegionIndex[particle] = contact.colliderIndex;
     body.contactNormals[offset] = contact.normal[0];
     body.contactNormals[offset + 1] = contact.normal[1];
     body.contactNormals[offset + 2] = contact.normal[2];
-    body.normalImpulseSpeed[particle] = Math.max(body.normalImpulseSpeed[particle], correction / Math.max(input.fixedTimeStep, EPSILON));
+    body.contactSurfacePoints[offset] = contact.surfacePoint[0];
+    body.contactSurfacePoints[offset + 1] = contact.surfacePoint[1];
+    body.contactSurfacePoints[offset + 2] = contact.surfacePoint[2];
+    body.contactPenetrations[particle] = contact.penetrationM;
+    body.contactSwept[particle] = contact.swept ? 1 : 0;
   }
+  body.narrowphaseMs = performance.now() - phaseStarted;
+
+  phaseStarted = performance.now();
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    if (!body.contactMask[particle]) continue;
+    const offset = particle * 3;
+    const pointX = input.predictedPositions[offset];
+    const pointY = input.predictedPositions[offset + 1];
+    const pointZ = input.predictedPositions[offset + 2];
+    const previousX = input.previousPositions[offset];
+    const previousY = input.previousPositions[offset + 1];
+    const previousZ = input.previousPositions[offset + 2];
+    const penetrationM = body.contactPenetrations[particle];
+    const swept = body.contactSwept[particle] === 1;
+    body.maximumBodyPenetrationM = Math.max(body.maximumBodyPenetrationM, penetrationM);
+
+    let correctionX = body.contactSurfacePoints[offset] - pointX;
+    let correctionY = body.contactSurfacePoints[offset + 1] - pointY;
+    let correctionZ = body.contactSurfacePoints[offset + 2] - pointZ;
+    let correction = Math.hypot(correctionX, correctionY, correctionZ);
+    const localLimit = Math.max(
+      1e-6,
+      Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM),
+    );
+    const grossPenetration = body.grossDepenetrationEnabled && !swept && penetrationM > localLimit;
+    const limit = swept
+      ? body.grossDepenetrationEnabled ? input.maximumCorrectionM : localLimit
+      : grossPenetration ? input.maximumCorrectionM : localLimit;
+    if (correction > limit) {
+      const scale = limit / correction;
+      correctionX *= scale;
+      correctionY *= scale;
+      correctionZ *= scale;
+      correction = limit;
+    }
+    if (swept) body.sweptContactCount += 1;
+
+    const vx = input.velocities
+      ? input.velocities[offset]
+      : (pointX - previousX) / Math.max(input.fixedTimeStep, EPSILON);
+    const vy = input.velocities
+      ? input.velocities[offset + 1]
+      : (pointY - previousY) / Math.max(input.fixedTimeStep, EPSILON);
+    const vz = input.velocities
+      ? input.velocities[offset + 2]
+      : (pointZ - previousZ) / Math.max(input.fixedTimeStep, EPSILON);
+    const nx = body.contactNormals[offset];
+    const ny = body.contactNormals[offset + 1];
+    const nz = body.contactNormals[offset + 2];
+    const inwardSpeed = Math.max(0, -(vx * nx + vy * ny + vz * nz));
+
+    input.predictedPositions[offset] += correctionX;
+    input.predictedPositions[offset + 1] += correctionY;
+    input.predictedPositions[offset + 2] += correctionZ;
+    body.contactCorrections[offset] += correctionX;
+    body.contactCorrections[offset + 1] += correctionY;
+    body.contactCorrections[offset + 2] += correctionZ;
+    body.maximumBodyCorrectionM = Math.max(body.maximumBodyCorrectionM, correction);
+    const settledContactImpulseSpeed = !swept && !grossPenetration
+      ? correction / Math.max(input.fixedTimeStep, EPSILON)
+      : 0;
+    body.normalImpulseSpeed[particle] = Math.max(
+      body.normalImpulseSpeed[particle],
+      inwardSpeed,
+      settledContactImpulseSpeed,
+    );
+  }
+  body.projectionMs = performance.now() - phaseStarted;
+}
+
+function solveBodyCollisionsBitmask(
+  input: BodyCollisionSolveInput,
+  particleCount: number,
+  colliderCount: number,
+): void {
+  const body = input.body;
+  const predicted = input.predictedPositions;
+  const previous = input.previousPositions;
+  const cache = body.colliders.cache!;
+  let phaseStarted = performance.now();
+
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    body.pointCandidateMasks[particle] = 0;
+    body.sweptCandidateMasks[particle] = 0;
+    if (input.inverseMasses[particle] <= 0) continue;
+    const offset = particle * 3;
+    const pointX = predicted[offset];
+    const pointY = predicted[offset + 1];
+    const pointZ = predicted[offset + 2];
+    const radius = body.particleHalfThicknessM[particle] + body.contactSkinM;
+
+    body.bodyParticleQueries += 1;
+    body.bodyColliderTests += colliderCount;
+    const pointMask = refinePointCandidateMask(
+      cache,
+      pointCandidateMask(cache, colliderCount, pointY, radius),
+      pointX,
+      pointY,
+      pointZ,
+      radius,
+    );
+    const pointCandidates = countBits(pointMask);
+    body.bodyCandidateColliderTests += pointCandidates;
+    body.bodyBroadphaseRejected += colliderCount - pointCandidates;
+    body.pointCandidateMasks[particle] = pointMask;
+
+    if (!input.allowSwept) continue;
+    const previousX = previous[offset];
+    const previousY = previous[offset + 1];
+    const previousZ = previous[offset + 2];
+    const movementX = pointX - previousX;
+    const movementY = pointY - previousY;
+    const movementZ = pointZ - previousZ;
+    if (movementX * movementX + movementY * movementY + movementZ * movementZ <= EPSILON * EPSILON) continue;
+    body.bodyParticleQueries += 1;
+    body.bodyColliderTests += colliderCount;
+    const sweptMask = refineSegmentCandidateMask(
+      cache,
+      segmentCandidateMask(cache, colliderCount, previousY, pointY, radius),
+      previousX,
+      previousY,
+      previousZ,
+      pointX,
+      pointY,
+      pointZ,
+      radius,
+    );
+    const sweptCandidates = countBits(sweptMask);
+    body.bodyCandidateColliderTests += sweptCandidates;
+    body.bodyBroadphaseRejected += colliderCount - sweptCandidates;
+    body.sweptCandidateMasks[particle] = sweptMask;
+  }
+  body.broadphaseMs = performance.now() - phaseStarted;
+
+  phaseStarted = performance.now();
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    if (input.inverseMasses[particle] <= 0) continue;
+    const offset = particle * 3;
+    const pointX = predicted[offset];
+    const pointY = predicted[offset + 1];
+    const pointZ = predicted[offset + 2];
+    const previousX = previous[offset];
+    const previousY = previous[offset + 1];
+    const previousZ = previous[offset + 2];
+    const radius = body.particleHalfThicknessM[particle] + body.contactSkinM;
+    const scratch = body.contactScratch;
+    const best = body.bestContactScratch;
+    let bestPenetration = -1;
+    let hasContact = false;
+    let remaining = body.pointCandidateMasks[particle];
+    while (remaining !== 0) {
+      const bit = remaining & -remaining;
+      const colliderIndex = 31 - Math.clz32(bit);
+      remaining = (remaining ^ bit) >>> 0;
+      if (body.colliders.kinds[colliderIndex] === BODY_COLLIDER_CAPSULE) {
+        body.bodyCapsuleNarrowphaseTests += 1;
+        if (!pointCapsuleContactScalar(scratch, body.colliders.data, cache, colliderIndex, pointX, pointY, pointZ, radius)) continue;
+      } else {
+        body.bodyEllipsoidNarrowphaseTests += 1;
+        if (!pointEllipsoidContactScalar(scratch, body.colliders.data, colliderIndex, pointX, pointY, pointZ, radius)) continue;
+      }
+      body.bodyPointContactsFound += 1;
+      if (scratch.penetrationM > bestPenetration) {
+        bestPenetration = scratch.penetrationM;
+        copyScratchContact(best, scratch);
+        hasContact = true;
+      }
+    }
+
+    if (!hasContact && input.allowSwept) {
+      let earliestTime = Number.POSITIVE_INFINITY;
+      remaining = body.sweptCandidateMasks[particle];
+      while (remaining !== 0) {
+        const bit = remaining & -remaining;
+        const colliderIndex = 31 - Math.clz32(bit);
+        remaining = (remaining ^ bit) >>> 0;
+        body.bodySweptTests += 1;
+        let found: boolean;
+        if (body.colliders.kinds[colliderIndex] === BODY_COLLIDER_ELLIPSOID) {
+          body.bodyEllipsoidNarrowphaseTests += 1;
+          found = sweptEllipsoidContactScalar(scratch, body.colliders.data, colliderIndex, previousX, previousY, previousZ, pointX, pointY, pointZ, radius);
+        } else {
+          body.bodyCapsuleNarrowphaseTests += 1;
+          found = sweptCapsuleContactScalar(scratch, body.colliders.data, cache, colliderIndex, previousX, previousY, previousZ, pointX, pointY, pointZ, radius);
+        }
+        if (!found) continue;
+        body.bodySweptContactsFound += 1;
+        if (scratch.t < earliestTime) {
+          earliestTime = scratch.t;
+          copyScratchContact(best, scratch);
+          hasContact = true;
+        }
+      }
+    }
+    if (!hasContact) continue;
+    body.contactMask[particle] = 1;
+    body.contactRegionIndex[particle] = best.colliderIndex;
+    body.contactNormals[offset] = best.normalX;
+    body.contactNormals[offset + 1] = best.normalY;
+    body.contactNormals[offset + 2] = best.normalZ;
+    body.contactSurfacePoints[offset] = best.surfaceX;
+    body.contactSurfacePoints[offset + 1] = best.surfaceY;
+    body.contactSurfacePoints[offset + 2] = best.surfaceZ;
+    body.contactPenetrations[particle] = best.penetrationM;
+    body.contactSwept[particle] = best.swept ? 1 : 0;
+  }
+  body.narrowphaseMs = performance.now() - phaseStarted;
+
+  phaseStarted = performance.now();
+  const inverseDt = 1 / Math.max(input.fixedTimeStep, EPSILON);
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    if (!body.contactMask[particle]) continue;
+    const offset = particle * 3;
+    const pointX = predicted[offset];
+    const pointY = predicted[offset + 1];
+    const pointZ = predicted[offset + 2];
+    const previousX = previous[offset];
+    const previousY = previous[offset + 1];
+    const previousZ = previous[offset + 2];
+    const penetrationM = body.contactPenetrations[particle];
+    const swept = body.contactSwept[particle] === 1;
+    if (penetrationM > body.maximumBodyPenetrationM) body.maximumBodyPenetrationM = penetrationM;
+    let correctionX = body.contactSurfacePoints[offset] - pointX;
+    let correctionY = body.contactSurfacePoints[offset + 1] - pointY;
+    let correctionZ = body.contactSurfacePoints[offset + 2] - pointZ;
+    let correction = Math.sqrt(correctionX * correctionX + correctionY * correctionY + correctionZ * correctionZ);
+    const localLimit = Math.max(1e-6, Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM));
+    const grossPenetration = body.grossDepenetrationEnabled && !swept && penetrationM > localLimit;
+    const limit = swept
+      ? body.grossDepenetrationEnabled ? input.maximumCorrectionM : localLimit
+      : grossPenetration ? input.maximumCorrectionM : localLimit;
+    if (correction > limit) {
+      const scale = limit / correction;
+      correctionX *= scale;
+      correctionY *= scale;
+      correctionZ *= scale;
+      correction = limit;
+    }
+    if (swept) body.sweptContactCount += 1;
+    const velocityX = input.velocities ? input.velocities[offset] : (pointX - previousX) * inverseDt;
+    const velocityY = input.velocities ? input.velocities[offset + 1] : (pointY - previousY) * inverseDt;
+    const velocityZ = input.velocities ? input.velocities[offset + 2] : (pointZ - previousZ) * inverseDt;
+    const normalX = body.contactNormals[offset];
+    const normalY = body.contactNormals[offset + 1];
+    const normalZ = body.contactNormals[offset + 2];
+    const inwardSpeed = Math.max(0, -(velocityX * normalX + velocityY * normalY + velocityZ * normalZ));
+    predicted[offset] = pointX + correctionX;
+    predicted[offset + 1] = pointY + correctionY;
+    predicted[offset + 2] = pointZ + correctionZ;
+    body.contactCorrections[offset] += correctionX;
+    body.contactCorrections[offset + 1] += correctionY;
+    body.contactCorrections[offset + 2] += correctionZ;
+    if (correction > body.maximumBodyCorrectionM) body.maximumBodyCorrectionM = correction;
+    const settledContactImpulseSpeed = !swept && !grossPenetration ? correction * inverseDt : 0;
+    body.normalImpulseSpeed[particle] = Math.max(
+      body.normalImpulseSpeed[particle],
+      inwardSpeed,
+      settledContactImpulseSpeed,
+    );
+  }
+  body.projectionMs = performance.now() - phaseStarted;
 }
 
 export function finalizeBodyContactDiagnostics(body: BodyCollisionRuntimeState): void {
@@ -259,23 +723,49 @@ export function applyBodyContactVelocity(
   ];
 }
 
-export function applyBodyContactVelocities(velocities: Float32Array, body: BodyCollisionRuntimeState): void {
+export function applyBodyContactVelocities(
+  velocities: Float32Array,
+  body: BodyCollisionRuntimeState,
+  fixedTimeStep = 1,
+): void {
+  const phaseStarted = performance.now();
   body.frictionContactCount = 0;
+  const inverseDt = 1 / Math.max(fixedTimeStep, EPSILON);
   for (let particle = 0; particle < body.contactMask.length; particle += 1) {
     if (!body.contactMask[particle]) continue;
     const offset = particle * 3;
     const friction = body.particleFriction[particle];
-    const next = applyBodyContactVelocity(
-      [velocities[offset], velocities[offset + 1], velocities[offset + 2]],
-      [body.contactNormals[offset], body.contactNormals[offset + 1], body.contactNormals[offset + 2]],
-      friction,
-      body.normalImpulseSpeed[particle],
-    );
-    velocities[offset] = next[0];
-    velocities[offset + 1] = next[1];
-    velocities[offset + 2] = next[2];
+    const velocityX = velocities[offset] - body.contactCorrections[offset] * inverseDt;
+    const velocityY = velocities[offset + 1] - body.contactCorrections[offset + 1] * inverseDt;
+    const velocityZ = velocities[offset + 2] - body.contactCorrections[offset + 2] * inverseDt;
+    let normalX = body.contactNormals[offset];
+    let normalY = body.contactNormals[offset + 1];
+    let normalZ = body.contactNormals[offset + 2];
+    const normalLength = Math.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+    if (normalLength > EPSILON && Number.isFinite(normalLength)) {
+      const inverseNormalLength = 1 / normalLength;
+      normalX *= inverseNormalLength;
+      normalY *= inverseNormalLength;
+      normalZ *= inverseNormalLength;
+    } else {
+      normalX = 1;
+      normalY = 0;
+      normalZ = 0;
+    }
+    const signedNormalSpeed = velocityX * normalX + velocityY * normalY + velocityZ * normalZ;
+    const outwardNormalSpeed = Math.max(0, signedNormalSpeed);
+    const tangentX = velocityX - normalX * signedNormalSpeed;
+    const tangentY = velocityY - normalY * signedNormalSpeed;
+    const tangentZ = velocityZ - normalZ * signedNormalSpeed;
+    const tangentSpeed = Math.sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+    const frictionBudget = Math.max(0, friction) * Math.max(0, body.normalImpulseSpeed[particle]);
+    const tangentScale = tangentSpeed > EPSILON ? Math.max(0, 1 - frictionBudget / tangentSpeed) : 0;
+    velocities[offset] = normalX * outwardNormalSpeed + tangentX * tangentScale;
+    velocities[offset + 1] = normalY * outwardNormalSpeed + tangentY * tangentScale;
+    velocities[offset + 2] = normalZ * outwardNormalSpeed + tangentZ * tangentScale;
     if (friction > 0 && body.normalImpulseSpeed[particle] > 0) body.frictionContactCount += 1;
   }
+  body.frictionMs = performance.now() - phaseStarted;
 }
 
 export function deepestBodyContact(
@@ -289,6 +779,38 @@ export function deepestBodyContact(
     if (contact && (!best || contact.penetrationM > best.penetrationM)) best = contact;
   }
   return best;
+}
+
+function queryPackedColliderNarrowphase(
+  point: readonly [number, number, number],
+  colliders: PackedBodyColliders,
+  colliderIndex: number,
+  particleRadiusM = 0,
+): BodyContactQuery | null {
+  const offset = colliderIndex * BODY_COLLIDER_STRIDE;
+  const region = colliders.regions[colliderIndex] ?? "unknown";
+  const kind = colliders.kinds[colliderIndex];
+  if (kind === BODY_COLLIDER_ELLIPSOID) {
+    return pointEllipsoidContact(
+      point,
+      [colliders.data[offset], colliders.data[offset + 1], colliders.data[offset + 2]],
+      [colliders.data[offset + 3], colliders.data[offset + 4], colliders.data[offset + 5]],
+      particleRadiusM,
+      colliderIndex,
+      region,
+    );
+  }
+  if (kind === BODY_COLLIDER_CAPSULE) {
+    return pointCapsuleContact(
+      point,
+      [colliders.data[offset], colliders.data[offset + 1], colliders.data[offset + 2]],
+      [colliders.data[offset + 3], colliders.data[offset + 4], colliders.data[offset + 5]],
+      colliders.data[offset + 6] + particleRadiusM,
+      colliderIndex,
+      region,
+    );
+  }
+  return null;
 }
 
 export function queryPackedCollider(
@@ -519,6 +1041,501 @@ function segmentOverlapsPackedColliderAabb(
   return Math.max(start[0], end[0]) >= minX && Math.min(start[0], end[0]) <= maxX
     && Math.max(start[1], end[1]) >= minY && Math.min(start[1], end[1]) <= maxY
     && Math.max(start[2], end[2]) >= minZ && Math.min(start[2], end[2]) <= maxZ;
+}
+
+function buildPackedBodyColliderCache(colliders: PackedBodyColliders): PackedBodyColliderCache {
+  const colliderCount = colliders.kinds.length;
+  // Float64 preserves the exact arithmetic of the 11.0.1 reference path even
+  // though the canonical collider source remains packed as Float32.
+  const aabbs = new Float64Array(colliderCount * BODY_COLLIDER_AABB_STRIDE);
+  const capsuleAxes = new Float64Array(colliderCount * 4);
+  const capsuleFallbackNormals = new Float64Array(colliderCount * 3);
+  const ellipsoidInverseRadii = new Float64Array(colliderCount * 3);
+  let yMinimum = Number.POSITIVE_INFINITY;
+  let yMaximum = Number.NEGATIVE_INFINITY;
+
+  for (let collider = 0; collider < colliderCount; collider += 1) {
+    const dataOffset = collider * BODY_COLLIDER_STRIDE;
+    const aabbOffset = collider * BODY_COLLIDER_AABB_STRIDE;
+    if (colliders.kinds[collider] === BODY_COLLIDER_ELLIPSOID) {
+      const centerX = colliders.data[dataOffset];
+      const centerY = colliders.data[dataOffset + 1];
+      const centerZ = colliders.data[dataOffset + 2];
+      const radiusX = colliders.data[dataOffset + 3];
+      const radiusY = colliders.data[dataOffset + 4];
+      const radiusZ = colliders.data[dataOffset + 5];
+      aabbs[aabbOffset] = centerX - radiusX;
+      aabbs[aabbOffset + 1] = centerX + radiusX;
+      aabbs[aabbOffset + 2] = centerY - radiusY;
+      aabbs[aabbOffset + 3] = centerY + radiusY;
+      aabbs[aabbOffset + 4] = centerZ - radiusZ;
+      aabbs[aabbOffset + 5] = centerZ + radiusZ;
+      const inverseOffset = collider * 3;
+      ellipsoidInverseRadii[inverseOffset] = 1 / radiusX;
+      ellipsoidInverseRadii[inverseOffset + 1] = 1 / radiusY;
+      ellipsoidInverseRadii[inverseOffset + 2] = 1 / radiusZ;
+    } else {
+      const startX = colliders.data[dataOffset];
+      const startY = colliders.data[dataOffset + 1];
+      const startZ = colliders.data[dataOffset + 2];
+      const endX = colliders.data[dataOffset + 3];
+      const endY = colliders.data[dataOffset + 4];
+      const endZ = colliders.data[dataOffset + 5];
+      const radius = colliders.data[dataOffset + 6];
+      aabbs[aabbOffset] = Math.min(startX, endX) - radius;
+      aabbs[aabbOffset + 1] = Math.max(startX, endX) + radius;
+      aabbs[aabbOffset + 2] = Math.min(startY, endY) - radius;
+      aabbs[aabbOffset + 3] = Math.max(startY, endY) + radius;
+      aabbs[aabbOffset + 4] = Math.min(startZ, endZ) - radius;
+      aabbs[aabbOffset + 5] = Math.max(startZ, endZ) + radius;
+      const axisX = endX - startX;
+      const axisY = endY - startY;
+      const axisZ = endZ - startZ;
+      const axisLengthSquared = axisX * axisX + axisY * axisY + axisZ * axisZ;
+      const axisOffset = collider * 4;
+      capsuleAxes[axisOffset] = axisX;
+      capsuleAxes[axisOffset + 1] = axisY;
+      capsuleAxes[axisOffset + 2] = axisZ;
+      capsuleAxes[axisOffset + 3] = axisLengthSquared > EPSILON ? 1 / axisLengthSquared : 0;
+      const fallback = deterministicPerpendicular([axisX, axisY, axisZ]);
+      const fallbackOffset = collider * 3;
+      capsuleFallbackNormals[fallbackOffset] = fallback[0];
+      capsuleFallbackNormals[fallbackOffset + 1] = fallback[1];
+      capsuleFallbackNormals[fallbackOffset + 2] = fallback[2];
+    }
+    yMinimum = Math.min(yMinimum, aabbs[aabbOffset + 2]);
+    yMaximum = Math.max(yMaximum, aabbs[aabbOffset + 3]);
+  }
+
+  if (colliderCount === 0) {
+    yMinimum = 0;
+    yMaximum = 1;
+  }
+  const ySpan = Math.max(yMaximum - yMinimum, EPSILON);
+  const yBinInverseSize = BODY_BROADPHASE_BIN_COUNT / ySpan;
+  const yBinMasks = new Uint32Array(BODY_BROADPHASE_BIN_COUNT);
+  const usesBitMask = colliderCount <= 32;
+  if (usesBitMask) {
+    for (let collider = 0; collider < colliderCount; collider += 1) {
+      const aabbOffset = collider * BODY_COLLIDER_AABB_STRIDE;
+      const firstBin = broadphaseBin(aabbs[aabbOffset + 2], yMinimum, yBinInverseSize);
+      const lastBin = broadphaseBin(aabbs[aabbOffset + 3], yMinimum, yBinInverseSize);
+      const colliderBit = (1 << collider) >>> 0;
+      for (let bin = firstBin; bin <= lastBin; bin += 1) yBinMasks[bin] = (yBinMasks[bin] | colliderBit) >>> 0;
+    }
+  }
+  const allMask = colliderCount === 32 ? 0xffffffff : colliderCount === 0 ? 0 : ((1 << colliderCount) - 1) >>> 0;
+  return {
+    aabbs,
+    capsuleAxes,
+    capsuleFallbackNormals,
+    ellipsoidInverseRadii,
+    yMinimum,
+    yMaximum,
+    yBinInverseSize,
+    yBinMasks,
+    allMask,
+    usesBitMask,
+  };
+}
+
+function createBodyContactScratch(): BodyContactScratch {
+  return {
+    colliderIndex: -1,
+    surfaceX: 0,
+    surfaceY: 0,
+    surfaceZ: 0,
+    normalX: 0,
+    normalY: 0,
+    normalZ: 0,
+    penetrationM: 0,
+    swept: false,
+    t: 0,
+  };
+}
+
+function broadphaseBin(y: number, minimum: number, inverseSize: number): number {
+  return Math.max(0, Math.min(BODY_BROADPHASE_BIN_COUNT - 1, Math.floor((y - minimum) * inverseSize)));
+}
+
+function pointCandidateMask(cache: PackedBodyColliderCache, colliderCount: number, y: number, inflationM: number): number {
+  if (colliderCount === 0) return 0;
+  const firstBin = broadphaseBin(y - inflationM, cache.yMinimum, cache.yBinInverseSize);
+  const lastBin = broadphaseBin(y + inflationM, cache.yMinimum, cache.yBinInverseSize);
+  let mask = 0;
+  for (let bin = firstBin; bin <= lastBin; bin += 1) mask = (mask | cache.yBinMasks[bin]) >>> 0;
+  return mask;
+}
+
+function segmentCandidateMask(
+  cache: PackedBodyColliderCache,
+  colliderCount: number,
+  startY: number,
+  endY: number,
+  inflationM: number,
+): number {
+  if (colliderCount === 0) return 0;
+  const firstBin = broadphaseBin(Math.min(startY, endY) - inflationM, cache.yMinimum, cache.yBinInverseSize);
+  const lastBin = broadphaseBin(Math.max(startY, endY) + inflationM, cache.yMinimum, cache.yBinInverseSize);
+  let mask = 0;
+  for (let bin = firstBin; bin <= lastBin; bin += 1) mask = (mask | cache.yBinMasks[bin]) >>> 0;
+  return mask;
+}
+
+function refinePointCandidateMask(
+  cache: PackedBodyColliderCache,
+  initialMask: number,
+  x: number,
+  y: number,
+  z: number,
+  inflationM: number,
+): number {
+  let result = 0;
+  let remaining = initialMask >>> 0;
+  while (remaining !== 0) {
+    const bit = remaining & -remaining;
+    const collider = 31 - Math.clz32(bit);
+    remaining = (remaining ^ bit) >>> 0;
+    const offset = collider * BODY_COLLIDER_AABB_STRIDE;
+    if (x > cache.aabbs[offset] - inflationM && x < cache.aabbs[offset + 1] + inflationM
+      && y > cache.aabbs[offset + 2] - inflationM && y < cache.aabbs[offset + 3] + inflationM
+      && z > cache.aabbs[offset + 4] - inflationM && z < cache.aabbs[offset + 5] + inflationM) {
+      result = (result | bit) >>> 0;
+    }
+  }
+  return result;
+}
+
+function refineSegmentCandidateMask(
+  cache: PackedBodyColliderCache,
+  initialMask: number,
+  startX: number,
+  startY: number,
+  startZ: number,
+  endX: number,
+  endY: number,
+  endZ: number,
+  inflationM: number,
+): number {
+  let result = 0;
+  let remaining = initialMask >>> 0;
+  const segmentMinimumX = Math.min(startX, endX);
+  const segmentMaximumX = Math.max(startX, endX);
+  const segmentMinimumY = Math.min(startY, endY);
+  const segmentMaximumY = Math.max(startY, endY);
+  const segmentMinimumZ = Math.min(startZ, endZ);
+  const segmentMaximumZ = Math.max(startZ, endZ);
+  while (remaining !== 0) {
+    const bit = remaining & -remaining;
+    const collider = 31 - Math.clz32(bit);
+    remaining = (remaining ^ bit) >>> 0;
+    const offset = collider * BODY_COLLIDER_AABB_STRIDE;
+    if (segmentMaximumX >= cache.aabbs[offset] - inflationM && segmentMinimumX <= cache.aabbs[offset + 1] + inflationM
+      && segmentMaximumY >= cache.aabbs[offset + 2] - inflationM && segmentMinimumY <= cache.aabbs[offset + 3] + inflationM
+      && segmentMaximumZ >= cache.aabbs[offset + 4] - inflationM && segmentMinimumZ <= cache.aabbs[offset + 5] + inflationM) {
+      result = (result | bit) >>> 0;
+    }
+  }
+  return result;
+}
+
+function countBits(value: number): number {
+  let bits = value >>> 0;
+  bits -= (bits >>> 1) & 0x55555555;
+  bits = (bits & 0x33333333) + ((bits >>> 2) & 0x33333333);
+  return (((bits + (bits >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
+}
+
+function copyScratchContact(target: BodyContactScratch, source: BodyContactScratch): void {
+  target.colliderIndex = source.colliderIndex;
+  target.surfaceX = source.surfaceX;
+  target.surfaceY = source.surfaceY;
+  target.surfaceZ = source.surfaceZ;
+  target.normalX = source.normalX;
+  target.normalY = source.normalY;
+  target.normalZ = source.normalZ;
+  target.penetrationM = source.penetrationM;
+  target.swept = source.swept;
+  target.t = source.t;
+}
+
+function pointCapsuleContactScalar(
+  output: BodyContactScratch,
+  data: Float32Array,
+  cache: PackedBodyColliderCache,
+  collider: number,
+  pointX: number,
+  pointY: number,
+  pointZ: number,
+  inflationM: number,
+): boolean {
+  const dataOffset = collider * BODY_COLLIDER_STRIDE;
+  const axisOffset = collider * 4;
+  const axisX = cache.capsuleAxes[axisOffset];
+  const axisY = cache.capsuleAxes[axisOffset + 1];
+  const axisZ = cache.capsuleAxes[axisOffset + 2];
+  const parameter = cache.capsuleAxes[axisOffset + 3] > 0
+    ? clamp(
+      ((pointX - data[dataOffset]) * axisX
+        + (pointY - data[dataOffset + 1]) * axisY
+        + (pointZ - data[dataOffset + 2]) * axisZ) * cache.capsuleAxes[axisOffset + 3],
+      0,
+      1,
+    )
+    : 0;
+  const centerX = data[dataOffset] + axisX * parameter;
+  const centerY = data[dataOffset + 1] + axisY * parameter;
+  const centerZ = data[dataOffset + 2] + axisZ * parameter;
+  const deltaX = pointX - centerX;
+  const deltaY = pointY - centerY;
+  const deltaZ = pointZ - centerZ;
+  const distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+  const radius = data[dataOffset + 6] + inflationM;
+  if (distanceSquared >= radius * radius) return false;
+  const distance = Math.sqrt(distanceSquared);
+  let normalX: number;
+  let normalY: number;
+  let normalZ: number;
+  if (distance > EPSILON) {
+    const inverseDistance = 1 / distance;
+    normalX = deltaX * inverseDistance;
+    normalY = deltaY * inverseDistance;
+    normalZ = deltaZ * inverseDistance;
+  } else {
+    const fallbackOffset = collider * 3;
+    normalX = cache.capsuleFallbackNormals[fallbackOffset];
+    normalY = cache.capsuleFallbackNormals[fallbackOffset + 1];
+    normalZ = cache.capsuleFallbackNormals[fallbackOffset + 2];
+  }
+  output.colliderIndex = collider;
+  output.surfaceX = centerX + normalX * radius;
+  output.surfaceY = centerY + normalY * radius;
+  output.surfaceZ = centerZ + normalZ * radius;
+  output.normalX = normalX;
+  output.normalY = normalY;
+  output.normalZ = normalZ;
+  output.penetrationM = radius - distance;
+  output.swept = false;
+  output.t = 0;
+  return true;
+}
+
+function pointEllipsoidContactScalar(
+  output: BodyContactScratch,
+  data: Float32Array,
+  collider: number,
+  pointX: number,
+  pointY: number,
+  pointZ: number,
+  inflationM: number,
+): boolean {
+  const offset = collider * BODY_COLLIDER_STRIDE;
+  const centerX = data[offset];
+  const centerY = data[offset + 1];
+  const centerZ = data[offset + 2];
+  const radiusX = data[offset + 3] + inflationM;
+  const radiusY = data[offset + 4] + inflationM;
+  const radiusZ = data[offset + 5] + inflationM;
+  const deltaX = pointX - centerX;
+  const deltaY = pointY - centerY;
+  const deltaZ = pointZ - centerZ;
+  const normalizedX = deltaX / radiusX;
+  const normalizedY = deltaY / radiusY;
+  const normalizedZ = deltaZ / radiusZ;
+  const normalizedRadiusSquared = normalizedX * normalizedX + normalizedY * normalizedY + normalizedZ * normalizedZ;
+  if (normalizedRadiusSquared >= 1) return false;
+
+  let surfaceX: number;
+  let surfaceY: number;
+  let surfaceZ: number;
+  let normalX: number;
+  let normalY: number;
+  let normalZ: number;
+  if (normalizedRadiusSquared <= EPSILON * EPSILON) {
+    const axis = radiusX <= radiusY && radiusX <= radiusZ ? 0 : radiusY <= radiusZ ? 1 : 2;
+    surfaceX = centerX + (axis === 0 ? radiusX : 0);
+    surfaceY = centerY + (axis === 1 ? radiusY : 0);
+    surfaceZ = centerZ + (axis === 2 ? radiusZ : 0);
+    normalX = axis === 0 ? 1 : 0;
+    normalY = axis === 1 ? 1 : 0;
+    normalZ = axis === 2 ? 1 : 0;
+  } else {
+    const inverseNormalizedRadius = 1 / Math.sqrt(normalizedRadiusSquared);
+    surfaceX = centerX + deltaX * inverseNormalizedRadius;
+    surfaceY = centerY + deltaY * inverseNormalizedRadius;
+    surfaceZ = centerZ + deltaZ * inverseNormalizedRadius;
+    let gradientX = (surfaceX - centerX) / (radiusX * radiusX);
+    let gradientY = (surfaceY - centerY) / (radiusY * radiusY);
+    let gradientZ = (surfaceZ - centerZ) / (radiusZ * radiusZ);
+    const gradientLength = Math.sqrt(gradientX * gradientX + gradientY * gradientY + gradientZ * gradientZ);
+    if (gradientLength > EPSILON && Number.isFinite(gradientLength)) {
+      const inverseGradientLength = 1 / gradientLength;
+      gradientX *= inverseGradientLength;
+      gradientY *= inverseGradientLength;
+      gradientZ *= inverseGradientLength;
+    } else {
+      gradientX = 1;
+      gradientY = 0;
+      gradientZ = 0;
+    }
+    normalX = gradientX;
+    normalY = gradientY;
+    normalZ = gradientZ;
+  }
+  const correctionX = surfaceX - pointX;
+  const correctionY = surfaceY - pointY;
+  const correctionZ = surfaceZ - pointZ;
+  output.colliderIndex = collider;
+  output.surfaceX = surfaceX;
+  output.surfaceY = surfaceY;
+  output.surfaceZ = surfaceZ;
+  output.normalX = normalX;
+  output.normalY = normalY;
+  output.normalZ = normalZ;
+  output.penetrationM = Math.sqrt(correctionX * correctionX + correctionY * correctionY + correctionZ * correctionZ);
+  output.swept = false;
+  output.t = 0;
+  return true;
+}
+
+function sweptEllipsoidContactScalar(
+  output: BodyContactScratch,
+  data: Float32Array,
+  collider: number,
+  startX: number,
+  startY: number,
+  startZ: number,
+  endX: number,
+  endY: number,
+  endZ: number,
+  inflationM: number,
+): boolean {
+  const offset = collider * BODY_COLLIDER_STRIDE;
+  const centerX = data[offset];
+  const centerY = data[offset + 1];
+  const centerZ = data[offset + 2];
+  const radiusX = data[offset + 3] + inflationM;
+  const radiusY = data[offset + 4] + inflationM;
+  const radiusZ = data[offset + 5] + inflationM;
+  const motionX = endX - startX;
+  const motionY = endY - startY;
+  const motionZ = endZ - startZ;
+  const scaledStartX = (startX - centerX) / radiusX;
+  const scaledStartY = (startY - centerY) / radiusY;
+  const scaledStartZ = (startZ - centerZ) / radiusZ;
+  const scaledMotionX = motionX / radiusX;
+  const scaledMotionY = motionY / radiusY;
+  const scaledMotionZ = motionZ / radiusZ;
+  const a = scaledMotionX * scaledMotionX + scaledMotionY * scaledMotionY + scaledMotionZ * scaledMotionZ;
+  const b = 2 * (scaledStartX * scaledMotionX + scaledStartY * scaledMotionY + scaledStartZ * scaledMotionZ);
+  const c = scaledStartX * scaledStartX + scaledStartY * scaledStartY + scaledStartZ * scaledStartZ - 1;
+  if (a <= EPSILON || c <= 0) return false;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) return false;
+  const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+  if (t < 0 || t > 1) return false;
+  const hitX = startX + motionX * t;
+  const hitY = startY + motionY * t;
+  const hitZ = startZ + motionZ * t;
+  let normalX = (hitX - centerX) / (radiusX * radiusX);
+  let normalY = (hitY - centerY) / (radiusY * radiusY);
+  let normalZ = (hitZ - centerZ) / (radiusZ * radiusZ);
+  const normalLength = Math.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+  if (normalLength > EPSILON && Number.isFinite(normalLength)) {
+    const inverseNormalLength = 1 / normalLength;
+    normalX *= inverseNormalLength;
+    normalY *= inverseNormalLength;
+    normalZ *= inverseNormalLength;
+  } else {
+    normalX = 1;
+    normalY = 0;
+    normalZ = 0;
+  }
+  output.colliderIndex = collider;
+  output.surfaceX = hitX + normalX * 1e-6;
+  output.surfaceY = hitY + normalY * 1e-6;
+  output.surfaceZ = hitZ + normalZ * 1e-6;
+  output.normalX = normalX;
+  output.normalY = normalY;
+  output.normalZ = normalZ;
+  output.penetrationM = 0;
+  output.swept = true;
+  output.t = t;
+  return true;
+}
+
+function sweptCapsuleContactScalar(
+  output: BodyContactScratch,
+  data: Float32Array,
+  cache: PackedBodyColliderCache,
+  collider: number,
+  startX: number,
+  startY: number,
+  startZ: number,
+  endX: number,
+  endY: number,
+  endZ: number,
+  inflationM: number,
+): boolean {
+  const offset = collider * BODY_COLLIDER_STRIDE;
+  const axisOffset = collider * 4;
+  const motionX = endX - startX;
+  const motionY = endY - startY;
+  const motionZ = endZ - startZ;
+  const axisX = cache.capsuleAxes[axisOffset];
+  const axisY = cache.capsuleAxes[axisOffset + 1];
+  const axisZ = cache.capsuleAxes[axisOffset + 2];
+  const relativeX = startX - data[offset];
+  const relativeY = startY - data[offset + 1];
+  const relativeZ = startZ - data[offset + 2];
+  const aa = motionX * motionX + motionY * motionY + motionZ * motionZ;
+  const bb = motionX * axisX + motionY * axisY + motionZ * axisZ;
+  const cc = axisX * axisX + axisY * axisY + axisZ * axisZ;
+  const dd = motionX * relativeX + motionY * relativeY + motionZ * relativeZ;
+  const ee = axisX * relativeX + axisY * relativeY + axisZ * relativeZ;
+  const denominator = aa * cc - bb * bb;
+  let motionParameter = denominator > EPSILON ? clamp((bb * ee - cc * dd) / denominator, 0, 1) : 0;
+  let axisParameter = cc > EPSILON ? clamp((bb * motionParameter + ee) / cc, 0, 1) : 0;
+  if (aa > EPSILON) motionParameter = clamp((bb * axisParameter - dd) / aa, 0, 1);
+  if (cc > EPSILON) axisParameter = clamp((bb * motionParameter + ee) / cc, 0, 1);
+  const hitX = startX + motionX * motionParameter;
+  const hitY = startY + motionY * motionParameter;
+  const hitZ = startZ + motionZ * motionParameter;
+  const axisPointX = data[offset] + axisX * axisParameter;
+  const axisPointY = data[offset + 1] + axisY * axisParameter;
+  const axisPointZ = data[offset + 2] + axisZ * axisParameter;
+  const deltaX = hitX - axisPointX;
+  const deltaY = hitY - axisPointY;
+  const deltaZ = hitZ - axisPointZ;
+  const distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+  const radius = data[offset + 6] + inflationM;
+  if (distanceSquared > radius * radius) return false;
+  const distance = Math.sqrt(distanceSquared);
+  let normalX: number;
+  let normalY: number;
+  let normalZ: number;
+  if (distance > EPSILON) {
+    const inverseDistance = 1 / distance;
+    normalX = deltaX * inverseDistance;
+    normalY = deltaY * inverseDistance;
+    normalZ = deltaZ * inverseDistance;
+  } else {
+    const fallbackOffset = collider * 3;
+    normalX = cache.capsuleFallbackNormals[fallbackOffset];
+    normalY = cache.capsuleFallbackNormals[fallbackOffset + 1];
+    normalZ = cache.capsuleFallbackNormals[fallbackOffset + 2];
+  }
+  output.colliderIndex = collider;
+  output.surfaceX = axisPointX + normalX * (radius + 1e-6);
+  output.surfaceY = axisPointY + normalY * (radius + 1e-6);
+  output.surfaceZ = axisPointZ + normalZ * (radius + 1e-6);
+  output.normalX = normalX;
+  output.normalY = normalY;
+  output.normalZ = normalZ;
+  output.penetrationM = 0;
+  output.swept = true;
+  output.t = motionParameter;
+  return true;
 }
 
 export const IDENTITY_BODY_TRANSFORM: SimulationBodyTransform = {

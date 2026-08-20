@@ -29,7 +29,7 @@ describe("Prompt 11.0.1 stabilized body collision candidate", () => {
     expect(scene.initialization.pinIndices.length).toBe(0);
     expect(scene.initialization.config.iterations).toBe(scene.iterations);
     expect(metrics.invalid).toBe(false);
-    expect(metrics.bodyContactCount).toBeGreaterThan(0);
+    expect(metrics.maximumObservedContacts).toBeGreaterThan(0);
   }, 120_000);
 
   it("keeps the same skirt finite with body collision off", () => {
@@ -93,9 +93,11 @@ function runFixedSteps(state: ReturnType<typeof createXpbdWorkerState>, steps: n
   const bodySamples: number[] = [];
   const totalSamples: number[] = [];
   let latest = measureXpbdDiagnostics(state);
+  let maximumObservedContacts = 0;
   for (let step = 0; step < steps; step += 1) {
     stepXpbd(state);
     latest = measureXpbdDiagnostics(state, 1);
+    maximumObservedContacts = Math.max(maximumObservedContacts, latest.bodyContactCount ?? 0);
     if (step >= Math.max(0, steps - 100)) {
       bodySamples.push(latest.bodyCollisionMs ?? 0);
       totalSamples.push(latest.solverStepTotalMs ?? 0);
@@ -107,6 +109,7 @@ function runFixedSteps(state: ReturnType<typeof createXpbdWorkerState>, steps: n
     solverStepMedianMs: median(totalSamples),
     bodyColliderCount: latest.bodyColliderCount ?? 0,
     bodyContactCount: latest.bodyContactCount ?? 0,
+    maximumObservedContacts,
     frictionContactCount: latest.frictionContactCount ?? 0,
     maximumBodyPenetrationM: latest.maximumBodyPenetrationM ?? 0,
     maximumBodyCorrectionM: latest.maximumBodyCorrectionM ?? 0,

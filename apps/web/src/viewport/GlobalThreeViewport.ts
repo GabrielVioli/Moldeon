@@ -266,12 +266,10 @@ export class ThreeViewport {
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
         bodyColliders: packedColliders,
         bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
-        pinAssemblyAnchors: registration.status === "registered",
         config: {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
-          iterations: registration.status === "registered" ? Math.max(settings.iterations, 24) : settings.iterations,
-          ...(registration.status === "registered" ? { maximumVelocity: 1 } : {}),
+          iterations: settings.iterations,
         },
       });
       this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
