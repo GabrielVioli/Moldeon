@@ -132,3 +132,59 @@ new_builder = r'''export function buildAvatarParametricModel(
 text = text[:start] + new_builder + text[end:]
 path.write_text(text, encoding="utf-8")
 print(f"patched {path}")
+
+viewport = Path("apps/web/src/viewport/GlobalThreeViewport.ts")
+text = viewport.read_text(encoding="utf-8")
+old_asset_import = '''import {
+  approvedAvatarForBody,
+  AVATAR_NOT_CONFIGURED_MESSAGE,
+} from "../avatar/ApprovedAvatarAsset";
+import { loadApprovedAvatar } from "../avatar/ApprovedAvatarLoader";
+'''
+if old_asset_import not in text:
+    raise RuntimeError("approved avatar imports not found")
+text = text.replace(old_asset_import, "", 1)
+text = text.replace('import type { BodyType } from "../domain/pattern";\n', "", 1)
+old_call = '    const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);\n'
+new_call = '    const avatarConfiguration = this.configureCanonicalAvatar(avatarModel);\n'
+if old_call not in text:
+    raise RuntimeError("configureApprovedAvatar call not found")
+text = text.replace(old_call, new_call, 1)
+
+method_start = text.index('  private configureApprovedAvatar(\n')
+method_end = text.index('  private resize(): void {\n', method_start)
+new_method = r'''  private configureCanonicalAvatar(
+    avatarModel: AvatarParametricModel,
+  ): { changed: boolean; warning?: string } {
+    const body = avatarModel.humanBody;
+    const signature = `canonical:${body.version}:${JSON.stringify(body.measurements)}`;
+    if (signature === this.avatarSignature) return { changed: false };
+
+    this.avatarLoadController?.abort();
+    this.avatarLoadController = null;
+    this.clearAvatar();
+    this.avatarSignature = signature;
+    const visual = createAvatarVisual(avatarModel, {
+      radialSegments: 24,
+      castShadow: this.profile.shadows,
+      receiveShadow: this.profile.shadows,
+    });
+    this.avatarGroup.add(visual);
+    this.host.dataset.avatarVisible = "true";
+    this.host.dataset.avatarStatus = "ready";
+    this.host.dataset.avatarAssetId = body.version;
+    this.host.dataset.avatarInspection = JSON.stringify({
+      source: "canonical-procedural-human-body",
+      visualVertices: body.visualMesh.positions.length / 3,
+      visualTriangles: body.visualMesh.indices.length / 3,
+      collisionVertices: body.collisionMesh.positions.length / 3,
+      collisionTriangles: body.collisionMesh.indices.length / 3,
+      diagnostics: body.diagnostics,
+    });
+    return { changed: true };
+  }
+
+'''
+text = text[:method_start] + new_method + text[method_end:]
+viewport.write_text(text, encoding="utf-8")
+print(f"patched {viewport}")
