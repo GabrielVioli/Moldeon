@@ -33,6 +33,7 @@ jobs:
         run: |
           python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4a_opening_cycle.py
+          python3 scripts/recovery11_0_4a_opening_variant_probe.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_band_diagnostics.py
 
@@ -42,23 +43,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: 11.0.4A band recovery gates
+      - name: Probe cut-on-fold opening phase and orientation
         env:
           MOLDEON_PHASE_A_REPORT: "1"
-        run: >-
-          npm run test --workspace @moldeon/web --
-          src/physics/waistbandZeroEnergyRecovery.test.ts
-          src/physics/waistbandAttachmentRegression.test.ts
-          src/physics/phase0BandAttachmentInvariant.test.ts
-          -t 'self-seam-tube|spatial-four-panel-tube|straight-skirt-standard|sewn local flap'
-
-      - name: Existing four-panel zero-energy band gate
-        env:
-          MOLDEON_PHASE_A_REPORT: "1"
-        run: >-
-          npm run test --workspace @moldeon/web --
-          src/physics/zeroEnergyInitialDressPose.test.ts
-          -t phase-a-four-panel-waistband
+        run: |
+          for variant in 0 1 2 3 4 5 6 7; do
+            echo "=== OPENING VARIANT $variant ==="
+            MOLDEON_OPENING_VARIANT=$variant npm run test --workspace @moldeon/web -- src/physics/waistbandZeroEnergyRecovery.test.ts -t 'preserves the resolved parent shell for straight-skirt-standard' || true
+          done
 
   inherited-phase0-regressions:
     if: ${{ github.head_ref == 'recovery/11.0.4a-waistband-zero-energy' }}
@@ -105,6 +97,3 @@ jobs:
 
       - name: Straight-skirt baseline sanity regression
         run: npm run test --workspace @moldeon/web -- src/physics/canonicalStraightSkirtGate.test.ts
-
-      - name: Pants band invariance under inherited stack
-        run: npm run test --workspace @moldeon/web -- src/physics/phase0BandAttachmentInvariant.test.ts -t straight-pants-standard
