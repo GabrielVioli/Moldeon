@@ -8,18 +8,17 @@ on:
       - apps/web/src/avatar/HumanBodyModel.ts
       - apps/web/src/avatar/AvatarParametricModel.ts
       - apps/web/src/viewport/AvatarVisual.ts
+      - apps/web/src/avatar/HumanBodyModel.metrics.test.ts
       - scripts/recovery11_0_4b_p0_geometry.py
+      - scripts/recovery11_0_4b_p0_geometry_round2.py
       - .github/workflows/recovery-11-0-4b-human-body.yml
-  pull_request:
-    branches:
-      - recovery/11.0.4a-waistband-zero-energy
 
 permissions:
   contents: write
 
 jobs:
   human-body:
-    if: github.event_name == 'pull_request' || github.event.head_commit.message != 'fix(body): materialize P0 geometry'
+    if: github.event.head_commit.message != 'fix(body): materialize P0 geometry'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -33,53 +32,15 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply P0 geometry recovery
-        run: python3 scripts/recovery11_0_4b_p0_geometry.py
+        run: |
+          python3 scripts/recovery11_0_4b_p0_geometry.py
+          python3 scripts/recovery11_0_4b_p0_geometry_round2.py
       - name: Diff check
         run: git diff --check
       - name: Typecheck
         run: npm run typecheck
       - name: Geometry metrics probe
-        shell: bash
-        run: |
-          cat > apps/web/src/avatar/HumanBodyModel.metrics.test.ts <<'EOF'
-          import { it } from "vitest";
-          import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
-          import { buildHumanBodyModel, inspectHumanBodyMesh, measureHumanBodyMeshCircumferenceAtY } from "./HumanBodyModel";
-          it("prints P0 geometry metrics", () => {
-            const body = buildHumanBodyModel(DEFAULT_BODY_MEASUREMENTS, { disableCache: true });
-            const crotchY = body.landmarks["inseam-top-left"].position[1];
-            let nearestCenterX = Number.POSITIVE_INFINITY;
-            for (let vertex = 0; vertex < body.visualMesh.positions.length / 3; vertex += 1) {
-              const x = body.visualMesh.positions[vertex * 3];
-              const y = body.visualMesh.positions[vertex * 3 + 1];
-              if (y < crotchY - 0.04 && y > crotchY - 0.13) nearestCenterX = Math.min(nearestCenterX, Math.abs(x));
-            }
-            const bustY = body.landmarks["bust-apex-left"].position[1];
-            const waistY = body.landmarks["center-front-waist"].position[1];
-            const hipY = body.landmarks["full-hip-front"].position[1];
-            console.log("HUMAN_BODY_P0_METRICS", JSON.stringify({
-              visual: inspectHumanBodyMesh(body.visualMesh),
-              collision: inspectHumanBodyMesh(body.collisionMesh),
-              targetMm: { bust: body.measurements.bustMm, waist: body.measurements.waistMm, hip: body.measurements.fullHipMm },
-              visualMm: {
-                bust: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, bustY),
-                waist: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, waistY),
-                hip: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, hipY),
-              },
-              collisionMm: {
-                bust: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, bustY),
-                waist: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, waistY),
-                hip: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, hipY),
-              },
-              measurementErrorsMm: body.diagnostics.measurementErrorsMm,
-              lodSectionDeltaMm: body.diagnostics.lodSectionDeltaMm,
-              maxLodSectionDeltaMm: body.diagnostics.maxLodSectionDeltaMm,
-              nearestCenterXmm: nearestCenterX * 1000,
-            }));
-          }, 30_000);
-          EOF
-          npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose | tee /tmp/human-body-metrics.log
-          rm apps/web/src/avatar/HumanBodyModel.metrics.test.ts
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose | tee /tmp/human-body-metrics.log
       - name: HumanBody geometry and measurements
         id: geometry
         shell: bash
@@ -90,7 +51,6 @@ jobs:
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
           exit 0
       - name: Record geometry result
-        if: github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p artifacts/recovery-11-0-4b-human-body
@@ -117,7 +77,7 @@ jobs:
         if: steps.geometry.outputs.status == '0'
         run: npm run build
       - name: Materialize validated P0 geometry
-        if: github.event_name == 'push' && steps.geometry.outputs.status == '0'
+        if: steps.geometry.outputs.status == '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
