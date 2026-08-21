@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - recovery/11.0.4b-canonical-female-human-body
+    paths:
+      - apps/web/src/avatar/HumanBodyModel.ts
+      - apps/web/src/avatar/AvatarParametricModel.ts
+      - apps/web/src/viewport/AvatarVisual.ts
+      - scripts/recovery11_0_4b_p0_geometry.py
+      - .github/workflows/recovery-11-0-4b-human-body.yml
   pull_request:
     branches:
       - recovery/11.0.4a-waistband-zero-energy
@@ -15,10 +21,11 @@ jobs:
   human-body:
     if: github.event_name == 'pull_request' || github.event.head_commit.message != 'fix(body): materialize P0 geometry'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: recovery/11.0.4b-canonical-female-human-body
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -31,14 +38,86 @@ jobs:
         run: git diff --check
       - name: Typecheck
         run: npm run typecheck
+      - name: Geometry metrics probe
+        shell: bash
+        run: |
+          cat > apps/web/src/avatar/HumanBodyModel.metrics.test.ts <<'EOF'
+          import { it } from "vitest";
+          import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
+          import { buildHumanBodyModel, inspectHumanBodyMesh, measureHumanBodyMeshCircumferenceAtY } from "./HumanBodyModel";
+          it("prints P0 geometry metrics", () => {
+            const body = buildHumanBodyModel(DEFAULT_BODY_MEASUREMENTS, { disableCache: true });
+            const crotchY = body.landmarks["inseam-top-left"].position[1];
+            let nearestCenterX = Number.POSITIVE_INFINITY;
+            for (let vertex = 0; vertex < body.visualMesh.positions.length / 3; vertex += 1) {
+              const x = body.visualMesh.positions[vertex * 3];
+              const y = body.visualMesh.positions[vertex * 3 + 1];
+              if (y < crotchY - 0.04 && y > crotchY - 0.13) nearestCenterX = Math.min(nearestCenterX, Math.abs(x));
+            }
+            const bustY = body.landmarks["bust-apex-left"].position[1];
+            const waistY = body.landmarks["center-front-waist"].position[1];
+            const hipY = body.landmarks["full-hip-front"].position[1];
+            console.log("HUMAN_BODY_P0_METRICS", JSON.stringify({
+              visual: inspectHumanBodyMesh(body.visualMesh),
+              collision: inspectHumanBodyMesh(body.collisionMesh),
+              targetMm: { bust: body.measurements.bustMm, waist: body.measurements.waistMm, hip: body.measurements.fullHipMm },
+              visualMm: {
+                bust: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, bustY),
+                waist: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, waistY),
+                hip: measureHumanBodyMeshCircumferenceAtY(body.visualMesh, hipY),
+              },
+              collisionMm: {
+                bust: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, bustY),
+                waist: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, waistY),
+                hip: measureHumanBodyMeshCircumferenceAtY(body.collisionMesh, hipY),
+              },
+              measurementErrorsMm: body.diagnostics.measurementErrorsMm,
+              lodSectionDeltaMm: body.diagnostics.lodSectionDeltaMm,
+              maxLodSectionDeltaMm: body.diagnostics.maxLodSectionDeltaMm,
+              nearestCenterXmm: nearestCenterX * 1000,
+            }));
+          }, 30_000);
+          EOF
+          npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose | tee /tmp/human-body-metrics.log
+          rm apps/web/src/avatar/HumanBodyModel.metrics.test.ts
       - name: HumanBody geometry and measurements
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose
+        id: geometry
+        shell: bash
+        run: |
+          set +e
+          npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose 2>&1 | tee /tmp/human-body-test.log
+          STATUS=${PIPESTATUS[0]}
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Record geometry result
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p artifacts/recovery-11-0-4b-human-body
+          {
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo "GEOMETRY_STATUS=${{ steps.geometry.outputs.status }}"
+            echo "--- METRICS ---"
+            cat /tmp/human-body-metrics.log
+            echo "--- TEST ---"
+            cat /tmp/human-body-test.log
+          } > artifacts/recovery-11-0-4b-human-body/p0-result.txt
+          git config user.name "Moldeon Recovery Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add artifacts/recovery-11-0-4b-human-body/p0-result.txt
+          git commit -m "ci(body): record P0 geometry result"
+          git push origin HEAD:recovery/11.0.4b-canonical-female-human-body
+      - name: Stop on red geometry
+        if: steps.geometry.outputs.status != '0'
+        run: exit 1
       - name: Avatar compatibility and visual bridge
+        if: steps.geometry.outputs.status == '0'
         run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
       - name: Build
+        if: steps.geometry.outputs.status == '0'
         run: npm run build
       - name: Materialize validated P0 geometry
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.geometry.outputs.status == '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
