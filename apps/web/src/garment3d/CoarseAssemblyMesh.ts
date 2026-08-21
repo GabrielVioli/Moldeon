@@ -1,5 +1,9 @@
 import { buildPanelTopology, type PanelTopology } from "./PanelTopology";
-import { refinePanelTopology, remeshStructuredQuadrilateral } from "./PanelRefinement";
+import {
+  refinePanelTopology,
+  remeshStructuredQuadrilateral,
+  remeshStructuredQuadrilateralWithEdgeStops,
+} from "./PanelRefinement";
 import type {
   AssemblyPanelInstance,
   GarmentAssemblyState,
@@ -113,7 +117,11 @@ export function buildCoarseAssemblyMesh(
     stitch.instanceA === instance.id
     && stitch.instanceB === instance.id
     && stitch.treatment.toLowerCase() !== "dart");
-  const topology = buildLocalCoarseTopology(baseTopology, hasStructuredSelfSeam);
+  const topology = buildLocalCoarseTopology(
+    baseTopology,
+    hasStructuredSelfSeam,
+    instance.structuredAttachmentPlan,
+  );
   const positions = new Float32Array(topology.positions2DMm.length / 2 * 3);
   for (let vertex = 0; vertex < topology.positions2DMm.length / 2; vertex += 1) {
     const xMm = topology.positions2DMm[vertex * 2];
@@ -148,12 +156,23 @@ export function buildCoarseAssemblyMesh(
   };
 }
 
-function buildLocalCoarseTopology(base: PanelTopology, hasStructuredSelfSeam: boolean): PanelTopology {
+function buildLocalCoarseTopology(
+  base: PanelTopology,
+  hasStructuredSelfSeam: boolean,
+  attachmentPlan: AssemblyPanelInstance["structuredAttachmentPlan"],
+): PanelTopology {
   // This is the exact parent topology used by buildGarmentAssembly before two
   // midpoint subdivisions. Fine vertices are therefore nested barycentric
   // points of coarse triangles, not samples of an unrelated triangulation.
   if (hasStructuredSelfSeam) {
-    const structured = remeshStructuredQuadrilateral(base, 80);
+    const structured = attachmentPlan
+      ? remeshStructuredQuadrilateralWithEdgeStops(
+          base,
+          attachmentPlan.edgeId,
+          attachmentPlan.stopsT,
+          80,
+        )
+      : remeshStructuredQuadrilateral(base, 80);
     if (structured) return structured;
   }
   const structured = remeshStructuredQuadrilateral(base, 40);

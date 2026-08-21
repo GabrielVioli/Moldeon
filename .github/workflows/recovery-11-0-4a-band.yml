@@ -1,0 +1,84 @@
+name: recovery-11.0.4a-band
+
+on:
+  pull_request:
+    branches:
+      - recovery/11.0.4-human-body-placement-scale
+
+permissions:
+  contents: read
+
+jobs:
+  band-source-only:
+    if: ${{ github.head_ref == 'recovery/11.0.4a-waistband-zero-energy' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: recovery/11.0.4a-waistband-zero-energy
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply 11.0.4A prototypes
+        run: |
+          python3 scripts/recovery11_0_4a_physical_opening.py
+          python3 scripts/recovery11_0_4a_opening_cycle.py
+          python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
+          python3 scripts/recovery11_0_4a_topology_sample_count.py
+          python3 scripts/recovery11_0_4a_dominant_self_closed.py
+          python3 scripts/recovery11_0_4a_attachment_monotonic_fallback.py
+          python3 scripts/recovery11_0_4a_band_diagnostics.py
+      - name: Diff check
+        run: git diff --check origin/recovery/11.0.4-human-body-placement-scale...HEAD && git diff --check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Straight-skirt physical opening gate
+        env:
+          MOLDEON_PHASE_A_REPORT: "1"
+        run: npm run test --workspace @moldeon/web -- src/physics/waistbandZeroEnergyRecovery.test.ts -t 'preserves the resolved parent shell for straight-skirt-standard'
+
+  inherited-phase0-regressions:
+    if: ${{ github.head_ref == 'recovery/11.0.4a-waistband-zero-energy' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: recovery/11.0.4a-waistband-zero-energy
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply 11.0.4A plus inherited non-band Phase 0 WIP
+        run: |
+          python3 scripts/recovery11_0_4a_physical_opening.py
+          python3 scripts/recovery11_0_4a_opening_cycle.py
+          python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
+          python3 scripts/recovery11_0_4a_topology_sample_count.py
+          python3 scripts/recovery11_0_4a_dominant_self_closed.py
+          python3 scripts/recovery11_0_4a_attachment_monotonic_fallback.py
+          python3 scripts/recovery11_0_4_dart_candidate.py
+          python3 scripts/recovery11_0_4_rigid_structural_polish.py
+          python3 scripts/recovery11_0_4_freeflight_diagnostics.py
+      - name: Diff check
+        run: git diff --check
+      - name: Typecheck inherited stack
+        run: npm run typecheck
+      - name: Previously green zero-energy regressions
+        env:
+          MOLDEON_PHASE_A_REPORT: "1"
+        run: npm run test --workspace @moldeon/web -- src/physics/zeroEnergyInitialDressPose.test.ts -t 'self-seam-tube|phase-a-three-panel-cylinder|spatial-four-panel-tube|dart-piece|phase-a-four-panel-waistband'
+      - name: Straight-skirt baseline sanity regression
+        run: npm run test --workspace @moldeon/web -- src/physics/canonicalStraightSkirtGate.test.ts

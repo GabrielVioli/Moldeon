@@ -324,6 +324,177 @@ export function remeshStructuredQuadrilateral(
   };
 }
 
+/**
+ * Structured quadrilateral remesh with explicit material stops on one edge.
+ *
+ * The supplied stops are edge-local t values in canonical edge direction.
+ * They are mirrored to the opposite edge, producing a nested developable
+ * strip grid. This is used when an attachment seam owns exact material
+ * correspondence anchors that must become coarse/fine hinge columns rather
+ * than falling inside unrelated 80 mm cells.
+ */
+export function remeshStructuredQuadrilateralWithEdgeStops(
+  topology: PanelTopology,
+  edgeId: string,
+  stopsT: readonly number[],
+  transverseTargetCellMm = 80,
+): PanelTopology | undefined {
+  const piece = topology.sourcePiece;
+  const edges = getPatternEdges(piece);
+  if (piece.points.length !== 4
+    || edges.length !== 4
+    || (piece.segments?.length && piece.segments.some((segment) => segment.kind !== "line"))
+    || piece.points.some((point) => point.handleIn || point.handleOut)
+    || (piece.darts?.length ?? 0) > 0
+    || !Number.isFinite(transverseTargetCellMm)
+    || transverseTargetCellMm <= 0) return undefined;
+
+  const edgeIndex = edges.findIndex((edge) => edge.id === edgeId);
+  if (edgeIndex < 0) return undefined;
+  const [p00, p10, p11, p01] = piece.points;
+  const corners = [p00, p10, p11, p01];
+  const turns = corners.map((point, index) => {
+    const next = corners[(index + 1) % corners.length];
+    const after = corners[(index + 2) % corners.length];
+    return (next.xMm - point.xMm) * (after.yMm - next.yMm)
+      - (next.yMm - point.yMm) * (after.xMm - next.xMm);
+  });
+  if (turns.some((turn) => Math.abs(turn) <= 1e-6)
+    || (turns.some((turn) => turn > 0) && turns.some((turn) => turn < 0))) return undefined;
+
+  const horizontalMm = Math.max(
+    Math.hypot(p10.xMm - p00.xMm, p10.yMm - p00.yMm),
+    Math.hypot(p11.xMm - p01.xMm, p11.yMm - p01.yMm),
+  );
+  const verticalMm = Math.max(
+    Math.hypot(p11.xMm - p10.xMm, p11.yMm - p10.yMm),
+    Math.hypot(p01.xMm - p00.xMm, p01.yMm - p00.yMm),
+  );
+  if (horizontalMm <= 1e-6 || verticalMm <= 1e-6) return undefined;
+
+  const canonicalStops = normalizeStructuredStops(stopsT);
+  if (canonicalStops.length < 3) return undefined;
+  const edgeRunsAlongU = edgeIndex === 0 || edgeIndex === 2;
+  const orientedStops = edgeIndex === 2 || edgeIndex === 3
+    ? canonicalStops.map((value) => 1 - value).sort((a, b) => a - b)
+    : canonicalStops;
+  const uValues = edgeRunsAlongU
+    ? orientedStops
+    : uniformStructuredStops(horizontalMm, transverseTargetCellMm);
+  const vValues = edgeRunsAlongU
+    ? uniformStructuredStops(verticalMm, transverseTargetCellMm)
+    : orientedStops;
+  const columns = uValues.length - 1;
+  const rows = vValues.length - 1;
+  if (columns < 1 || rows < 1) return undefined;
+
+  const positions: number[] = [];
+  const vertexSources: PanelVertexSourceMapping[] = [];
+  const sourcePointVertices = new Map<string, number[]>();
+  const indexAt = (column: number, row: number) => row * (columns + 1) + column;
+
+  for (let row = 0; row <= rows; row += 1) {
+    const v = vValues[row];
+    for (let column = 0; column <= columns; column += 1) {
+      const u = uValues[column];
+      const topX = p00.xMm + (p10.xMm - p00.xMm) * u;
+      const topY = p00.yMm + (p10.yMm - p00.yMm) * u;
+      const bottomX = p01.xMm + (p11.xMm - p01.xMm) * u;
+      const bottomY = p01.yMm + (p11.yMm - p01.yMm) * u;
+      const x = topX + (bottomX - topX) * v;
+      const y = topY + (bottomY - topY) * v;
+      const vertexIndex = indexAt(column, row);
+      positions.push(x, y);
+
+      let boundaryEdgeIndex = -1;
+      let t = 0;
+      if (row === 0) { boundaryEdgeIndex = 0; t = u; }
+      else if (column === columns) { boundaryEdgeIndex = 1; t = v; }
+      else if (row === rows) { boundaryEdgeIndex = 2; t = 1 - u; }
+      else if (column === 0) { boundaryEdgeIndex = 3; t = 1 - v; }
+      const cornerPoint = row === 0 && column === 0 ? p00
+        : row === 0 && column === columns ? p10
+          : row === rows && column === columns ? p11
+            : row === rows && column === 0 ? p01
+              : undefined;
+      const edge = boundaryEdgeIndex >= 0 ? edges[boundaryEdgeIndex] : undefined;
+      vertexSources.push({
+        vertexIndex,
+        sourcePatternId: topology.sourcePatternId,
+        ...(cornerPoint ? { sourcePointId: cornerPoint.id } : {}),
+        ...(edge ? { sourceSegmentId: edge.id, edgeId: edge.id, t } : {}),
+        ...(edge ? { interpolation: { startPointId: edge.startPointId, endPointId: edge.endPointId, t } } : {}),
+        restPosition2DMm: { x, y },
+      });
+      if (cornerPoint) sourcePointVertices.set(cornerPoint.id, [vertexIndex]);
+    }
+  }
+
+  const triangles: number[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const a = indexAt(column, row);
+      const b = indexAt(column + 1, row);
+      const c = indexAt(column + 1, row + 1);
+      const d = indexAt(column, row + 1);
+      triangles.push(a, b, c, a, c, d);
+    }
+  }
+  const edgeVertexIndices = [
+    Array.from({ length: columns + 1 }, (_, column) => indexAt(column, 0)),
+    Array.from({ length: rows + 1 }, (_, row) => indexAt(columns, row)),
+    Array.from({ length: columns + 1 }, (_, offset) => indexAt(columns - offset, rows)),
+    Array.from({ length: rows + 1 }, (_, offset) => indexAt(0, rows - offset)),
+  ];
+  const edgePaths = new Map(edges.map((edge, index) => [
+    edge.id,
+    createEdgePath(piece.id, edge.id, edgeVertexIndices[index], positions),
+  ]));
+  const boundaryVertices = [
+    ...edgeVertexIndices[0].slice(0, -1),
+    ...edgeVertexIndices[1].slice(0, -1),
+    ...edgeVertexIndices[2].slice(0, -1),
+    ...edgeVertexIndices[3].slice(0, -1),
+  ];
+  const positions2DMm = Float32Array.from(positions);
+  const xCoordinates = positions.filter((_value, index) => index % 2 === 0);
+  const yCoordinates = positions.filter((_value, index) => index % 2 === 1);
+  const minX = Math.min(...xCoordinates);
+  const minY = Math.min(...yCoordinates);
+  const maxX = Math.max(...xCoordinates);
+  const maxY = Math.max(...yCoordinates);
+  return {
+    ...topology,
+    positions2DMm,
+    positions2D: Float32Array.from(positions.map((value) => value * 0.001)),
+    triangles: Uint32Array.from(triangles),
+    boundaryVertices,
+    edges: edgePaths,
+    edgeVertices: new Map([...edgePaths].map(([id, path]) => [id, [...path.vertexIndices]])),
+    sourcePointVertices,
+    vertexSources,
+    sourcePointToVertices: sourcePointVertices,
+    boundsMm: { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY },
+  };
+}
+
+function normalizeStructuredStops(values: readonly number[]): number[] {
+  const sorted = [0, 1, ...values]
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Math.min(1, Math.max(0, value)))
+    .sort((a, b) => a - b);
+  const result: number[] = [];
+  for (const value of sorted) {
+    if (result.length === 0 || Math.abs(value - result[result.length - 1]) > 1e-7) result.push(value);
+  }
+  return result;
+}
+
+function uniformStructuredStops(lengthMm: number, targetCellMm: number): number[] {
+  const count = Math.max(2, Math.ceil(lengthMm / targetCellMm));
+  return Array.from({ length: count + 1 }, (_, index) => index / count);
+}
+
 function cloneEdgePaths(
   edges: ReadonlyMap<string, PanelEdgePath>,
 ): Map<string, PanelEdgePath> {

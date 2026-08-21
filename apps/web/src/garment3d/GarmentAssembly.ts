@@ -20,6 +20,7 @@ import {
 import {
   recommendedPanelRefinement,
   remeshStructuredQuadrilateral,
+  remeshStructuredQuadrilateralWithEdgeStops,
   refinePanelTopology,
 } from "./PanelRefinement";
 import type { PanelEdgePath, PanelVertexSourceMapping } from "./types";
@@ -87,6 +88,13 @@ export interface AssemblyInstanceArrangement {
   flipWinding: boolean;
 }
 
+export interface AssemblyStructuredAttachmentPlan {
+  seamGroupId: string;
+  edgeId: string;
+  /** Canonical edge-local t positions: seam anchors plus one hinge per interval. */
+  stopsT: number[];
+}
+
 export interface AssemblyPanelInstance {
   id: string;
   pieceId: string;
@@ -99,6 +107,7 @@ export interface AssemblyPanelInstance {
   particleStart: number;
   vertexCount: number;
   vertexSources: Array<PanelVertexSourceMapping & { panelInstanceId: string; meshVertexIndex: number }>;
+  structuredAttachmentPlan?: AssemblyStructuredAttachmentPlan;
   arrangement?: AssemblyInstanceArrangement;
 }
 
@@ -239,13 +248,26 @@ export function buildGarmentAssembly(
   const instances: AssemblyPanelInstance[] = [];
   const positionValues: number[] = [];
   const structuredSelfSeamPieces = findStructuredSelfSeamPieces(snapshots, garment);
+  const structuredAttachmentPlans = buildStructuredAttachmentPlans(
+    snapshots,
+    garment,
+    structuredSelfSeamPieces,
+  );
   for (const snapshot of snapshots) {
     let topology: PanelTopology;
 
     try {
       const baseTopology = buildPanelTopology(snapshot.piece, METERS_PER_MM, geometrySignatures.get(snapshot.piece.id));
       if (structuredSelfSeamPieces.has(snapshot.piece.id)) {
-        const assemblyBase = remeshStructuredQuadrilateral(baseTopology, 80);
+        const attachmentPlan = structuredAttachmentPlans.get(snapshot.piece.id);
+        const assemblyBase = attachmentPlan
+          ? remeshStructuredQuadrilateralWithEdgeStops(
+              baseTopology,
+              attachmentPlan.edgeId,
+              attachmentPlan.stopsT,
+              80,
+            )
+          : remeshStructuredQuadrilateral(baseTopology, 80);
         topology = assemblyBase
           ? refinePanelTopology(assemblyBase, 2)
           : refinePanelTopology(
@@ -293,6 +315,9 @@ export function buildGarmentAssembly(
           panelInstanceId: placement.id,
           meshVertexIndex: source.vertexIndex,
         })),
+        ...(structuredAttachmentPlans.get(snapshot.piece.id)
+          ? { structuredAttachmentPlan: structuredClone(structuredAttachmentPlans.get(snapshot.piece.id)!) }
+          : {}),
       };
 
       appendInitialPositions(positionValues, instance);
@@ -343,6 +368,73 @@ export function buildGarmentAssembly(
     warnings,
     invalid: false,
   };
+}
+
+function buildStructuredAttachmentPlans(
+  snapshots: readonly PatternSnapshot[],
+  garment: GarmentDraft,
+  structuredSelfSeamPieces: ReadonlySet<string>,
+): Map<string, AssemblyStructuredAttachmentPlan> {
+  const pieces = snapshots.map((snapshot) => snapshot.piece);
+  const plans = new Map<string, AssemblyStructuredAttachmentPlan>();
+  for (const seam of garment.seams ?? []) {
+    if (seam.active === false) continue;
+    const firstRanges = orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "first"));
+    const secondRanges = orderCompositeEdgeRangesByContinuity(pieces, seamSideRanges(seam, "second"));
+    const firstLength = edgeRangeSequenceLength(pieces, firstRanges);
+    const secondLength = edgeRangeSequenceLength(pieces, secondRanges);
+    if (firstLength <= DISTANCE_EPSILON || secondLength <= DISTANCE_EPSILON) continue;
+    const mismatchMm = Math.abs(firstLength - secondLength);
+    const targetRatio = Number.isFinite(seam.targetRatio) && (seam.targetRatio ?? 0) > 0
+      ? seam.targetRatio! : Math.max(0.000001, 1 + seam.easeRatio);
+    const slackMm = Number.isFinite(seam.slackMm) && (seam.slackMm ?? 0) >= 0 ? seam.slackMm! : 0;
+    // Exact developable attachment planning is only valid for metric-compatible
+    // closure. Ease/gather remain attachment relations but are not forced into
+    // a zero-energy strip topology.
+    if (mismatchMm > 0.5 || Math.abs(targetRatio - 1) > 1e-6 || slackMm > 1e-6) continue;
+    const sampleCount = Math.min(MAX_SEAM_SAMPLES, Math.max(2,
+      Math.ceil(Math.max(firstLength, secondLength) / SEAM_SAMPLE_SPACING_MM) + 1));
+
+    for (const side of ["first", "second"] as const) {
+      const localRanges = side === "first" ? firstRanges : secondRanges;
+      const oppositeRanges = side === "first" ? secondRanges : firstRanges;
+      if (localRanges.length !== 1) continue;
+      const localRange = localRanges[0];
+      if (!structuredSelfSeamPieces.has(localRange.pieceId)) continue;
+      if (oppositeRanges.every((range) => range.pieceId === localRange.pieceId)) continue;
+      const edgeId = localRange.edgeId;
+      const anchors: number[] = [];
+      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        const progress = sampleCount === 1 ? 0 : sampleIndex / (sampleCount - 1);
+        const localProgress = side === "first"
+          ? progress
+          : seam.direction === "opposite" ? 1 - progress : progress;
+        anchors.push(
+          localRange.startT + (localRange.endT - localRange.startT) * localProgress,
+        );
+      }
+      anchors.sort((a, b) => a - b);
+      const stops = [...anchors];
+      for (let index = 0; index + 1 < anchors.length; index += 1) {
+        stops.push((anchors[index] + anchors[index + 1]) * 0.5);
+      }
+      const normalized = [...new Set(stops.map((value) => Math.round(value * 1e9) / 1e9))]
+        .sort((a, b) => a - b);
+      const existing = plans.get(localRange.pieceId);
+      if (existing && existing.edgeId !== edgeId) {
+        plans.delete(localRange.pieceId);
+        continue;
+      }
+      plans.set(localRange.pieceId, {
+        seamGroupId: seam.groupId ?? seam.id,
+        edgeId,
+        stopsT: existing
+          ? [...new Set([...existing.stopsT, ...normalized])].sort((a, b) => a - b)
+          : normalized,
+      });
+    }
+  }
+  return plans;
 }
 
 function findStructuredSelfSeamPieces(
