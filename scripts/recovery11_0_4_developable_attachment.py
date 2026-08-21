@@ -62,12 +62,12 @@ helper = '''interface AttachedBoundarySample {
  * Develop a one-panel, self-closed narrow strip directly from an already
  * solved attachment opening. The parent island is immutable.
  *
- * The attachment samples are hard anchors. Between two anchors the 2D
- * material distance is authoritative, so a circular arc of that exact length
- * is constructed instead of using the shorter spatial chord. Extruding the
- * resulting arclength-parameterized boundary along the opening-plane normal
- * yields a generalized cylinder with the same first fundamental form as the
- * rectangular 2D strip. No scale and no iterative closure are involved.
+ * Seam samples are hard anchors. The attachment-aware material topology adds
+ * one unconstrained hinge column halfway between each pair of anchors. That
+ * hinge is placed so the two straight 3D segments each retain exactly half of
+ * the authored 2D interval length. The fine topology is a nested refinement of
+ * these same facets, so coarse-to-fine transfer preserves the discrete metric
+ * consumed by XPBD. No scale and no iterative closure are involved.
  */
 function mapAttachedClosedStripToBoundary(
   id: string,
@@ -139,17 +139,12 @@ function mapAttachedClosedStripToBoundary(
     if (dot(extrusion, materialAlong) < 0) extrusion = scale(extrusion, -1);
   }
 
-  // The opening must be close to planar for one rectangular strip to attach
-  // isometrically as a generalized cylinder with a constant extrusion axis.
   const planeResidualM = collapsed.reduce(
     (maximum, sample) => Math.max(maximum, Math.abs(dot(sub(sample.target, center), extrusion))),
     0,
   );
   if (planeResidualM > Math.max(0.0015, materialSpanMm * 0.001 * 0.01)) return null;
 
-  // Validate every anchor interval before writing any vertex. A target chord
-  // longer than its authored material interval is geometrically impossible
-  // without stretch, so this mapper refuses rather than silently scaling.
   for (let index = 0; index + 1 < collapsed.length; index += 1) {
     const requiredM = (collapsed[index + 1].acrossMm - collapsed[index].acrossMm) * 0.001;
     const chordM = length3(sub(collapsed[index + 1].target, collapsed[index].target));
@@ -207,7 +202,7 @@ function evaluateLengthPreservingAttachedBoundary(
   const materialSpanMm = second.acrossMm - first.acrossMm;
   if (materialSpanMm <= 1e-9) return scale(add(first.target, second.target), 0.5);
   const u = clamp((acrossMm - first.acrossMm) / materialSpanMm, 0, 1);
-  return prescribedArcPoint(
+  return prescribedHingePolylinePoint(
     first.target,
     second.target,
     materialSpanMm * 0.001,
@@ -217,49 +212,33 @@ function evaluateLengthPreservingAttachedBoundary(
   );
 }
 
-/** Point on the minor circular arc with prescribed arclength. */
-function prescribedArcPoint(
+/**
+ * Two straight segments with exact total authored length. u=0.5 is the
+ * topology hinge introduced between the two seam-anchor columns.
+ */
+function prescribedHingePolylinePoint(
   first: readonly [number, number, number],
   second: readonly [number, number, number],
-  arcLengthM: number,
+  authoredLengthM: number,
   u: number,
   planeNormal: readonly [number, number, number],
   loopCenter: readonly [number, number, number],
 ): readonly [number, number, number] {
   const chord = sub(second, first);
   const chordLength = length3(chord);
-  if (arcLengthM <= EPS || chordLength <= EPS) return first;
-  if (arcLengthM - chordLength <= Math.max(1e-8, arcLengthM * 1e-6)) {
-    return add(first, scale(chord, u));
-  }
-
-  const ratio = clamp(chordLength / arcLengthM, 1e-9, 1);
-  let low = 1e-6;
-  let high = Math.PI * 1.999;
-  for (let iteration = 0; iteration < 64; iteration += 1) {
-    const theta = (low + high) * 0.5;
-    const current = 2 * Math.sin(theta * 0.5) / theta;
-    if (current > ratio) low = theta;
-    else high = theta;
-  }
-  const theta = (low + high) * 0.5;
-  const radius = arcLengthM / theta;
+  if (authoredLengthM <= EPS || chordLength <= EPS) return first;
+  const midpoint = scale(add(first, second), 0.5);
+  const halfLength = authoredLengthM * 0.5;
   const halfChord = chordLength * 0.5;
-  const centerDistance = Math.sqrt(Math.max(0, radius * radius - halfChord * halfChord));
+  if (halfLength <= halfChord * (1 + 1e-7)) return add(first, scale(chord, u));
   const tangent = scale(chord, 1 / chordLength);
   let bulge = normalize(cross(planeNormal, tangent));
-  const midpoint = scale(add(first, second), 0.5);
   const radial = sub(midpoint, loopCenter);
   if (dot(bulge, radial) < 0) bulge = scale(bulge, -1);
-  const circleCenter = sub(midpoint, scale(bulge, centerDistance));
-  const phi = (u - 0.5) * theta;
-  return add(
-    circleCenter,
-    add(
-      scale(tangent, Math.sin(phi) * radius),
-      scale(bulge, Math.cos(phi) * radius),
-    ),
-  );
+  const height = Math.sqrt(Math.max(0, halfLength * halfLength - halfChord * halfChord));
+  const hinge = add(midpoint, scale(bulge, height));
+  if (u <= 0.5) return add(first, scale(sub(hinge, first), u * 2));
+  return add(hinge, scale(sub(second, hinge), (u - 0.5) * 2));
 }
 
 function realignCurrentStructuralIslandsByAttachments(
