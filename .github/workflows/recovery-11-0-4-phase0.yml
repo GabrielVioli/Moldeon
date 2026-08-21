@@ -31,8 +31,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply narrow-band developable prototype
-        run: python3 scripts/recovery11_0_4_developable_attachment.py
+      - name: Apply Phase 0 prototypes
+        run: |
+          python3 scripts/recovery11_0_4_developable_attachment.py
+          python3 scripts/recovery11_0_4_dart_candidate.py
 
       - name: Diff check
         run: git diff --check origin/recovery/11.0.3-material-physics-integrity...HEAD && git diff --check
