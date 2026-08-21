@@ -41,6 +41,7 @@ jobs:
           MOLDEON_PHASE_A_REPORT: "1"
         run: >-
           npm run test --workspace @moldeon/web --
+          src/physics/phase0BandAttachmentInvariant.test.ts
           src/physics/zeroEnergyInitialDressPose.test.ts
           src/physics/canonicalStraightSkirtGate.test.ts
           src/garment3d/CoarseAssemblyDartFrame.test.ts
