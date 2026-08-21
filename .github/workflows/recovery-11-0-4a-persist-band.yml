@@ -1,0 +1,62 @@
+name: recovery-11.0.4a-persist-band
+
+on:
+  push:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
+
+permissions:
+  contents: write
+
+jobs:
+  persist-band-source:
+    if: ${{ !contains(github.event.head_commit.message, '[persist-band-source]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact recovery branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: recovery/11.0.4a-waistband-zero-energy
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Materialize proven band topology and developable mapping
+        run: |
+          python3 scripts/recovery11_0_4_attachment_topology.py
+          python3 scripts/recovery11_0_4_developable_attachment.py
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Focused band invariance gate
+        run: npm run test --workspace @moldeon/web -- src/physics/phase0BandAttachmentInvariant.test.ts
+
+      - name: Four-panel waistband zero-energy gate
+        env:
+          MOLDEON_PHASE_A_REPORT: "1"
+        run: npm run test --workspace @moldeon/web -- src/physics/zeroEnergyInitialDressPose.test.ts -t phase-a-four-panel-waistband
+
+      - name: Persist implementation only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/garment3d/PanelRefinement.ts \
+            apps/web/src/garment3d/GarmentAssembly.ts \
+            apps/web/src/garment3d/CoarseAssemblyMesh.ts \
+            apps/web/src/garment3d/IsometricSurfaceAssembly.ts
+          git diff --cached --check
+          git commit -m "[persist-band-source] feat(phase0): develop attached narrow bands from seam anchors"
+          git push origin HEAD:recovery/11.0.4a-waistband-zero-energy
