@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { PatternVector } from "../domain/pattern";
+import {
+  createMeasurementProfile,
+  measurementProfileToBodyMeasurements,
+} from "../domain/parametricMeasurements";
 import { draftBasePattern } from "./basePatternDrafting";
 import { DEFAULT_BODY_MEASUREMENTS } from "./templateCatalog";
 
 describe("canonical skirt dart geometry", () => {
   it("drafts equal material legs around the waist-edge mouth", () => {
-    const draft = draftBasePattern("straight-skirt", DEFAULT_BODY_MEASUREMENTS);
+    const measurements = measurementProfileToBodyMeasurements(
+      createMeasurementProfile(DEFAULT_BODY_MEASUREMENTS, "feminine"),
+    );
+    const draft = draftBasePattern("straight-skirt", measurements);
     const darts = draft.pieces.flatMap((piece) => piece.darts ?? []);
 
     expect(darts).toHaveLength(2);

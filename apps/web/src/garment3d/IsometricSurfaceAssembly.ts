@@ -81,6 +81,12 @@ interface Component {
   meshIds: string[];
   seams: CoarseSeamConstraint[];
   relations: Relation[];
+  /**
+   * Seam groups that connect independently poseable structural islands.
+   * They still connect the garment, but must not redefine either island's
+   * cycle graph or purchase attachment closure by deforming the parent shell.
+   */
+  attachmentGroupIds: Set<string>;
   cycleRank: number;
   parallelRelationCount: number;
   supportsShell: boolean;
@@ -103,6 +109,7 @@ interface Candidate {
 interface CandidateScore {
   candidate: Candidate;
   metrics: IsometricAssemblyMetrics;
+  selectionMetrics: IsometricAssemblyMetrics;
   score: number;
 }
 
@@ -135,6 +142,7 @@ export function solveIsometricSurfaceAssembly(
   for (const component of components) {
     const componentStarted = nowMs();
     const candidates = buildCandidates(component, coarse);
+    const selectionComponent = dominantStructuralSubcomponent(component, coarse);
     candidateCount += candidates.length;
     const solved = candidates.map((candidate) => {
       setComponentPositions(component, coarse, candidate.positions);
@@ -142,15 +150,18 @@ export function solveIsometricSurfaceAssembly(
         preAlignComponentRigidTranslations(component, coarse);
         projectComponent(component, coarse, options);
       }
+      realignCurrentStructuralIslandsByAttachments(component, coarse);
       const metrics = measureComponentMetrics(component, coarse);
+      const selectionMetrics = measureComponentMetrics(selectionComponent, coarse);
       return {
         candidate: snapshotCandidate(candidate.name, component, coarse),
         metrics,
-        score: objective(metrics, component),
+        selectionMetrics,
+        score: objective(selectionMetrics, selectionComponent),
       };
     });
     solved.sort((left, right) =>
-      candidateAdmissibilityRank(left.metrics) - candidateAdmissibilityRank(right.metrics)
+      candidateAdmissibilityRank(left.selectionMetrics) - candidateAdmissibilityRank(right.selectionMetrics)
       || left.score - right.score
       || left.candidate.name.localeCompare(right.candidate.name),
     );
@@ -159,6 +170,7 @@ export function solveIsometricSurfaceAssembly(
     setComponentPositions(component, coarse, best.candidate.positions);
     const prePolish = snapshotCandidate("pre-zero-energy-polish", component, coarse);
     polishZeroEnergyPose(component, coarse, options);
+    realignCurrentStructuralIslandsByAttachments(component, coarse);
     let finalMetrics = measureComponentMetrics(component, coarse);
     if (!zeroEnergyPolishPreservesMaterial(best.metrics, finalMetrics)) {
       // An incompatible/under-resolved constraint system must never purchase a
@@ -243,7 +255,8 @@ function polishZeroEnergyPose(
   options: IsometricAssemblyOptions,
 ): void {
   const closures = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    (seam.classification === "structural-alignment"
+      && !component.attachmentGroupIds.has(seam.seamGroupId))
     || seam.classification === "local-shaping-closure",
   );
   if (closures.length === 0) return;
@@ -432,26 +445,165 @@ function buildComponents(coarse: CoarseAssemblySet, seamResolution: CoarseSeamRe
       || left.progress - right.progress
       || left.id.localeCompare(right.id),
     );
-    const nonSelfEdges = componentRelations.filter((relation) => relation.a !== relation.b).length;
-    const selfEdges = componentRelations.filter((relation) => relation.a === relation.b).length;
-    const cycleRank = Math.max(0, nonSelfEdges - Math.max(0, nodes.length - 1)) + selfEdges;
-    const pairCounts = new Map<string, number>();
-    for (const relation of componentRelations) {
-      const pair = `${relation.a}|${relation.b}`;
-      pairCounts.set(pair, (pairCounts.get(pair) ?? 0) + 1);
-    }
-    const parallelRelationCount = [...pairCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+    const attachmentGroupIds = detectAttachmentGroups(nodes, componentRelations);
+    const structuralRelations = componentRelations.filter(
+      (relation) => !attachmentGroupIds.has(relation.seamGroupId),
+    );
+    const topology = relationTopologyMetrics(nodes, structuralRelations);
     result.push({
       id: `coarse-component:${result.length + 1}:${nodes.join("+")}`,
       meshIds: nodes,
       seams: componentSeams,
-      relations: componentRelations,
-      cycleRank,
-      parallelRelationCount,
-      supportsShell: cycleRank > 0 || parallelRelationCount > 0,
+      relations: structuralRelations,
+      attachmentGroupIds,
+      cycleRank: topology.cycleRank,
+      parallelRelationCount: topology.parallelRelationCount,
+      supportsShell: topology.cycleRank > 0 || topology.parallelRelationCount > 0,
     });
   }
   return result;
+}
+
+function relationTopologyMetrics(
+  nodes: readonly string[],
+  relations: readonly Relation[],
+): { cycleRank: number; parallelRelationCount: number } {
+  const nonSelfEdges = relations.filter((relation) => relation.a !== relation.b).length;
+  const selfEdges = relations.filter((relation) => relation.a === relation.b).length;
+  const adjacency = new Map(nodes.map((id) => [id, new Set<string>()]));
+  for (const relation of relations) {
+    if (relation.a === relation.b) continue;
+    adjacency.get(relation.a)?.add(relation.b);
+    adjacency.get(relation.b)?.add(relation.a);
+  }
+  let connectedComponents = 0;
+  const visited = new Set<string>();
+  for (const root of nodes) {
+    if (visited.has(root)) continue;
+    connectedComponents += 1;
+    const queue = [root];
+    visited.add(root);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const next of adjacency.get(current) ?? []) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  const cycleRank = Math.max(0, nonSelfEdges - nodes.length + connectedComponents) + selfEdges;
+  const pairCounts = new Map<string, number>();
+  for (const relation of relations) {
+    const pair = `${relation.a}|${relation.b}`;
+    pairCounts.set(pair, (pairCounts.get(pair) ?? 0) + 1);
+  }
+  const parallelRelationCount = [...pairCounts.values()].reduce(
+    (sum, count) => sum + Math.max(0, count - 1),
+    0,
+  );
+  return { cycleRank, parallelRelationCount };
+}
+
+/**
+ * A seam group is an attachment when removing that complete semantic relation
+ * disconnects the pose graph and at least one remaining side is already a
+ * shell on its own. This is a topology test, not a garment/template-name test.
+ * Composite attachments are therefore one hyperedge instead of N extra cycle
+ * edges, which prevents a narrow local shell from hijacking the parent's pose.
+ */
+function detectAttachmentGroups(
+  nodes: readonly string[],
+  relations: readonly Relation[],
+): Set<string> {
+  const result = new Set<string>();
+  const groupIds = [...new Set(
+    relations
+      .filter((relation) => relation.a !== relation.b)
+      .map((relation) => relation.seamGroupId),
+  )].sort();
+  for (const groupId of groupIds) {
+    const remaining = relations.filter((relation) => relation.seamGroupId !== groupId);
+    const partitions = relationPartitions(nodes, remaining);
+    if (partitions.length < 2) continue;
+    const hasIndependentShell = partitions.some((partition) => {
+      const members = new Set(partition);
+      const internal = remaining.filter(
+        (relation) => members.has(relation.a) && members.has(relation.b),
+      );
+      const topology = relationTopologyMetrics(partition, internal);
+      return topology.cycleRank > 0 || topology.parallelRelationCount > 0;
+    });
+    if (hasIndependentShell) result.add(groupId);
+  }
+  return result;
+}
+
+function relationPartitions(
+  nodes: readonly string[],
+  relations: readonly Relation[],
+): string[][] {
+  const adjacency = new Map(nodes.map((id) => [id, new Set<string>()]));
+  for (const relation of relations) {
+    if (relation.a === relation.b) continue;
+    adjacency.get(relation.a)?.add(relation.b);
+    adjacency.get(relation.b)?.add(relation.a);
+  }
+  const visited = new Set<string>();
+  const result: string[][] = [];
+  for (const root of [...nodes].sort()) {
+    if (visited.has(root)) continue;
+    const queue = [root];
+    const partition: string[] = [];
+    visited.add(root);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      partition.push(current);
+      for (const next of [...(adjacency.get(current) ?? [])].sort()) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+    result.push(partition.sort());
+  }
+  return result;
+}
+
+function dominantStructuralSubcomponent(
+  component: Component,
+  coarse: CoarseAssemblySet,
+): Component {
+  const islands = structuralIslands(component);
+  if (islands.length <= 1) return component;
+  islands.sort((left, right) =>
+    structuralIslandScore(right, component, coarse) - structuralIslandScore(left, component, coarse)
+    || left.join("|").localeCompare(right.join("|")),
+  );
+  return structuralSubcomponent(component, islands[0]);
+}
+
+function structuralSubcomponent(
+  component: Component,
+  ids: readonly string[],
+): Component {
+  const members = new Set(ids);
+  const relations = component.relations.filter(
+    (relation) => members.has(relation.a) && members.has(relation.b),
+  );
+  const topology = relationTopologyMetrics(ids, relations);
+  return {
+    id: `${component.id}:island:${ids.join("+")}`,
+    meshIds: [...ids],
+    seams: component.seams.filter(
+      (seam) => members.has(seam.instanceA) && members.has(seam.instanceB),
+    ),
+    relations,
+    attachmentGroupIds: new Set(),
+    cycleRank: topology.cycleRank,
+    parallelRelationCount: topology.parallelRelationCount,
+    supportsShell: topology.cycleRank > 0 || topology.parallelRelationCount > 0,
+  };
 }
 
 function buildCandidates(component: Component, coarse: CoarseAssemblySet): Candidate[] {
@@ -764,7 +916,7 @@ function alignStructuralIslandsByAttachments(
     for (let index = 0; index < remaining.length; index += 1) {
       const island = new Set(remaining[index]);
       const attachments = component.seams.filter((seam) =>
-        seam.classification === "intentional-mismatch"
+        component.attachmentGroupIds.has(seam.seamGroupId)
         && ((island.has(seam.instanceA) && placed.has(seam.instanceB))
           || (island.has(seam.instanceB) && placed.has(seam.instanceA))));
       if (attachments.length > selectedAttachments.length) {
@@ -801,12 +953,22 @@ function alignStructuralIslandsByAttachments(
   return { ...candidate, positions };
 }
 
+function realignCurrentStructuralIslandsByAttachments(
+  component: Component,
+  coarse: CoarseAssemblySet,
+): void {
+  if (component.attachmentGroupIds.size === 0) return;
+  const current = snapshotCandidate("attachment-realign", component, coarse);
+  const aligned = alignStructuralIslandsByAttachments(component, coarse, current);
+  setComponentPositions(component, coarse, aligned.positions);
+}
+
 function structuralIslands(component: Component): string[][] {
   const adjacency = new Map(component.meshIds.map((id) => [id, new Set<string>()]));
-  for (const seam of component.seams) {
-    if (seam.classification !== "structural-alignment" || seam.instanceA === seam.instanceB) continue;
-    adjacency.get(seam.instanceA)?.add(seam.instanceB);
-    adjacency.get(seam.instanceB)?.add(seam.instanceA);
+  for (const relation of component.relations) {
+    if (relation.a === relation.b) continue;
+    adjacency.get(relation.a)?.add(relation.b);
+    adjacency.get(relation.b)?.add(relation.a);
   }
   const visited = new Set<string>();
   const islands: string[][] = [];
@@ -836,10 +998,8 @@ function structuralIslandScore(
 ): number {
   const members = new Set(ids);
   const area = ids.reduce((sum, id) => sum + (coarse.byInstanceId.get(id)?.materialAreaM2 ?? 0), 0);
-  const structuralSamples = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
-    && members.has(seam.instanceA)
-    && members.has(seam.instanceB)).length;
+  const structuralSamples = component.relations.filter((relation) =>
+    members.has(relation.a) && members.has(relation.b)).length;
   return area + structuralSamples * 1e-6;
 }
 
@@ -957,11 +1117,15 @@ function alignCandidateAlongStructuralTree(
     [...candidate.positions].map(([id, values]) => [id, new Float32Array(values)]),
   );
   const structural = component.seams.filter((seam) =>
-    participatesInShellTopology(seam) && seam.instanceA !== seam.instanceB);
+    participatesInShellTopology(seam)
+    && !component.attachmentGroupIds.has(seam.seamGroupId)
+    && seam.instanceA !== seam.instanceB);
   const ids = [...component.meshIds].sort();
   if (ids.length < 2 || structural.length === 0) return { name, positions };
 
-  const placed = new Set<string>([ids[0]]);
+  const placed = new Set<string>(
+    structuralIslands(component).map((island) => island[0]).filter(Boolean),
+  );
   while (placed.size < ids.length) {
     let progressed = false;
     for (const id of ids) {
@@ -1008,12 +1172,14 @@ function alignCandidateAlongStructuralTree(
   // Reconcile the one or more cycle-closing relations as a rigid pose graph.
   // The anchor remains fixed; every other node receives one O(3)-preserving
   // transform per Jacobi round. No vertex-level deformation is permitted here.
-  const anchor = ids[0];
+  const anchors = new Set(
+    structuralIslands(component).map((island) => island[0]).filter(Boolean),
+  );
   for (let iteration = 0; iteration < 256; iteration += 1) {
     const snapshot = new Map([...positions].map(([id, values]) => [id, new Float32Array(values)]));
     const pending = new Map<string, Float32Array>();
     for (const id of ids) {
-      if (id === anchor) continue;
+      if (anchors.has(id)) continue;
       const local = snapshot.get(id);
       const mesh = coarse.byInstanceId.get(id);
       if (!local || !mesh) continue;
@@ -1273,6 +1439,7 @@ function preAlignComponentRigidTranslations(
 ): void {
   const structural = component.seams.filter((seam) =>
     participatesInShellTopology(seam)
+    && !component.attachmentGroupIds.has(seam.seamGroupId)
     && seam.instanceA !== seam.instanceB,
   );
   if (structural.length === 0) return;
@@ -1370,11 +1537,13 @@ function projectComponent(component: Component, coarse: CoarseAssemblySet, optio
     }
     const structuralGroupCounts = new Map<string, number>();
     for (const seam of component.seams) {
-      if (seam.classification !== "structural-alignment") continue;
+      if (seam.classification !== "structural-alignment"
+        || component.attachmentGroupIds.has(seam.seamGroupId)) continue;
       structuralGroupCounts.set(seam.seamGroupId, (structuralGroupCounts.get(seam.seamGroupId) ?? 0) + 1);
     }
     for (const seam of component.seams) {
-      if (seam.classification !== "structural-alignment") continue;
+      if (seam.classification !== "structural-alignment"
+        || component.attachmentGroupIds.has(seam.seamGroupId)) continue;
       const sampleCount = structuralGroupCounts.get(seam.seamGroupId) ?? 1;
       projectStructuralSeam(coarse, buffers, seam, 1 / Math.sqrt(sampleCount));
     }
@@ -1494,6 +1663,10 @@ function projectOverlapBarrier(
   buffers: Map<string, ProjectionBuffer>,
   ignoredSelfOverlapIds: ReadonlySet<string>,
 ): void {
+  const islandByMesh = new Map<string, number>();
+  structuralIslands(component).forEach((island, index) => {
+    for (const id of island) islandByMesh.set(id, index);
+  });
   const triangles: Array<{
     mesh: CoarseAssemblyMesh;
     tri: number;
@@ -1540,6 +1713,7 @@ function projectOverlapBarrier(
     for (let j = i + 1; j < triangles.length; j += 1) {
       const second = triangles[j];
       if (second.min[0] > first.max[0] + padding) break;
+      if (islandByMesh.get(first.mesh.panelInstanceId) !== islandByMesh.get(second.mesh.panelInstanceId)) continue;
       if (first.mesh.panelInstanceId === second.mesh.panelInstanceId) {
         if (ignoredSelfOverlapIds.has(first.mesh.panelInstanceId)) continue;
         if (trianglesShareVertex(first.vertices, second.vertices)) continue;
@@ -1633,7 +1807,9 @@ function measureComponentMetrics(component: Component, coarse: CoarseAssemblySet
       if (length3(normal) > EPS) normals.push(normal);
     }
   }
-  const structural = component.seams.filter((seam) => seam.classification === "structural-alignment");
+  const structural = component.seams.filter((seam) =>
+    seam.classification === "structural-alignment"
+    && !component.attachmentGroupIds.has(seam.seamGroupId));
   let seamSum = 0;
   let seamMax = 0;
   for (const seam of structural) {

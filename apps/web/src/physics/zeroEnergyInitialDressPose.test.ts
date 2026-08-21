@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getPatternEdges, type GarmentDraft, type PatternPiece, type Seam } from "../domain/pattern";
 import { garmentDraftToPatternDocumentV3 } from "../domain/patternDocumentV3";
 import { buildCoarseIsometricAssembly } from "../garment3d/CoarseAssemblyPipeline";
+import { measureIntrinsicDistortion } from "../garment3d/GarmentAssembly";
 import { createBaselineFixture } from "../testFixtures/baselineGarments";
 import { buildXpbdInitialization } from "./GarmentXpbdAdapter";
 import { createXpbdWorkerState } from "./XpbdWorkerState";
@@ -27,6 +28,7 @@ describe("Phase A zero-energy initial dress pose", () => {
     const zeroGravity = createXpbdWorkerState(initialization);
     const step0 = new Float32Array(zeroGravity.positions);
     const step0Diagnostics = measureXpbdDiagnostics(zeroGravity);
+    const step0Intrinsic = measureIntrinsicDistortion(assembly.state);
 
     run(zeroGravity, 500);
     const zeroGravityShapeDeltaM = maximumCenteredDelta(step0, zeroGravity.positions);
@@ -67,6 +69,11 @@ describe("Phase A zero-energy initial dress pose", () => {
         fixtureId,
         assembly: assembly.assembly.metrics,
         selectedSeeds: assembly.assembly.components.map((component) => component.selectedSeed),
+        candidateDiagnostics: assembly.assembly.components.map((component) => ({
+          componentId: component.componentId,
+          candidates: component.candidateDiagnostics,
+        })),
+        step0Intrinsic,
         step0SeamMeanMm: step0Diagnostics.seamErrorAverage * 1_000,
         step0SeamMaxMm: step0Diagnostics.seamErrorMaximum * 1_000,
         step0StretchMean: step0Diagnostics.structuralStretchMeanRatio,

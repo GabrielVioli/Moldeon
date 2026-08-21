@@ -1,0 +1,59 @@
+name: recovery-11.0.4-phase0
+
+on:
+  push:
+    branches:
+      - recovery/11.0.4-human-body-placement-scale
+  pull_request:
+    branches:
+      - recovery/11.0.3-material-physics-integrity
+
+permissions:
+  contents: read
+
+jobs:
+  phase0-focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply Phase 0 prototypes
+        run: |
+          python3 scripts/recovery11_0_4_attachment_topology.py
+          python3 scripts/recovery11_0_4_developable_attachment.py
+          python3 scripts/recovery11_0_4_dart_candidate.py
+          python3 scripts/recovery11_0_4_rigid_structural_polish.py
+          python3 scripts/recovery11_0_4_freeflight_diagnostics.py
+
+      - name: Diff check
+        run: git diff --check origin/recovery/11.0.3-material-physics-integrity...HEAD && git diff --check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Phase 0 focused assembly and physics gates
+        env:
+          MOLDEON_PHASE_A_REPORT: "1"
+        run: >-
+          npm run test --workspace @moldeon/web --
+          src/physics/phase0BandAttachmentInvariant.test.ts
+          src/physics/zeroEnergyInitialDressPose.test.ts
+          src/physics/canonicalStraightSkirtGate.test.ts
+          src/garment3d/CoarseAssemblyDartFrame.test.ts
+          src/garment3d/CoarseSeamConstraints.test.ts
+          src/domain/templateAssemblySeams.test.ts
+          src/patterns/canonicalSkirtDartGeometry.test.ts
