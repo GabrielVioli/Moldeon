@@ -1,0 +1,74 @@
+/* Final responsive polish kept separate from the historical stylesheet. */
+
+.fitting-tabs-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/*
+ * Mid-size desktops and notebooks have enough width for the whole product,
+ * but not enough for a verbose single-row toolbar. Keep actions on one compact
+ * row and the six essential tools on a second 38px row instead of allowing an
+ * accidental tall auto-row caused by font metrics.
+ */
+@media (min-width: 1181px) and (max-width: 1599px) {
+  .toolbar {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-rows: 42px 38px;
+    gap: 0 8px;
+    min-height: 80px;
+    padding: 1px 10px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .brand-copy {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .workspace-mode-switch {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .toolbar-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .tool-buttons {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .tool-button {
+    width: 38px;
+    height: 32px;
+    flex: 0 0 38px;
+    padding-inline: 0;
+  }
+
+  .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
