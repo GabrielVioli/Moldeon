@@ -36,6 +36,7 @@ jobs:
           python3 scripts/recovery11_0_4_developable_attachment.py
           python3 scripts/recovery11_0_4_dart_candidate.py
           python3 scripts/recovery11_0_4_rigid_structural_polish.py
+          python3 scripts/recovery11_0_4_band_resolution_probe.py
 
       - name: Diff check
         run: git diff --check origin/recovery/11.0.3-material-physics-integrity...HEAD && git diff --check
