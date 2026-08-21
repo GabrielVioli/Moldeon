@@ -30,14 +30,14 @@ jobs:
         run: |
           python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4a_opening_cycle.py
+          python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_band_diagnostics.py
-          python3 scripts/recovery11_0_4a_mapper_diagnostics.py
       - name: Diff check
         run: git diff --check origin/recovery/11.0.4-human-body-placement-scale...HEAD && git diff --check
       - name: Typecheck
         run: npm run typecheck
-      - name: Diagnose straight-skirt cut-on-fold band
+      - name: Straight-skirt physical opening gate
         env:
           MOLDEON_PHASE_A_REPORT: "1"
         run: npm run test --workspace @moldeon/web -- src/physics/waistbandZeroEnergyRecovery.test.ts -t 'preserves the resolved parent shell for straight-skirt-standard'
@@ -63,6 +63,7 @@ jobs:
         run: |
           python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4a_opening_cycle.py
+          python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4_dart_candidate.py
           python3 scripts/recovery11_0_4_rigid_structural_polish.py
