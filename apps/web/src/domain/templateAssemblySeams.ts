@@ -19,6 +19,8 @@ interface SeamDefinition {
   firstEdge: PatternEdge;
   secondPiece: PatternPiece;
   secondEdge: PatternEdge;
+  firstEdges?: PatternEdge[];
+  secondEdges?: PatternEdge[];
   direction: SeamDirection;
   treatment?: SeamTreatment;
 }
@@ -237,19 +239,21 @@ function buildSkirtDefinitions(
 
   if (candidates.length !== 2) return [];
 
-  const firstSide = firstEdge(candidates[0], "sideSeam");
-  const secondSide = firstEdge(candidates[1], "sideSeam");
+  const firstSides = edgesWithRole(candidates[0], "sideSeam");
+  const secondSides = edgesWithRole(candidates[1], "sideSeam");
 
-  if (!firstSide || !secondSide) return [];
+  if (firstSides.length === 0 || firstSides.length !== secondSides.length) return [];
 
   return [
     {
       key: "skirt-side",
       name: "Laterais da saia",
       firstPiece: candidates[0],
-      firstEdge: firstSide,
+      firstEdge: firstSides[0],
+      firstEdges: firstSides,
       secondPiece: candidates[1],
-      secondEdge: secondSide,
+      secondEdge: secondSides[0],
+      secondEdges: secondSides,
       direction: "same",
       treatment: "standard",
     },
@@ -257,33 +261,45 @@ function buildSkirtDefinitions(
 }
 
 function createSeam(definition: SeamDefinition): Seam {
-  const first = {
+  const firstRanges = (definition.firstEdges ?? [definition.firstEdge]).map((edge) => ({
     pieceId: definition.firstPiece.id,
-    edgeId: definition.firstEdge.id,
+    edgeId: edge.id,
     startT: 0,
     endT: 1,
-  };
-  const second = {
+  }));
+  const secondRanges = (definition.secondEdges ?? [definition.secondEdge]).map((edge) => ({
     pieceId: definition.secondPiece.id,
-    edgeId: definition.secondEdge.id,
+    edgeId: edge.id,
     startT: 0,
     endT: 1,
-  };
-  const firstLength = edgeRangeLength(definition.firstPiece, first);
-  const secondLength = edgeRangeLength(definition.secondPiece, second);
+  }));
+  const first = firstRanges[0];
+  const second = secondRanges[0];
+  const firstLength = firstRanges.reduce(
+    (sum, range) => sum + edgeRangeLength(definition.firstPiece, range),
+    0,
+  );
+  const secondLength = secondRanges.reduce(
+    (sum, range) => sum + edgeRangeLength(definition.secondPiece, range),
+    0,
+  );
   const difference = Math.abs(firstLength - secondLength);
   const reference = Math.max(firstLength, secondLength, 1);
   const treatment = definition.treatment ?? "standard";
 
   return {
     id: `template-seam:${definition.key}`,
+    groupId: `template-seam:${definition.key}`,
     name: definition.name,
     first,
     second,
+    ...(firstRanges.length === 1 ? {} : { firstRanges }),
+    ...(secondRanges.length === 1 ? {} : { secondRanges }),
     direction: definition.direction,
     easeRatio: difference / reference,
     type: treatment,
     treatment,
+    targetRatio: firstLength / Math.max(secondLength, 1e-9),
   };
 }
 

@@ -136,15 +136,17 @@ export function classifyCoarseStitch(
   }
   if (
     treatment === "intentional-mismatch"
+    || treatment === "ease"
     || treatment === "gather"
     || treatment === "stretch"
     || stitch.slackMm > 1e-4
-    || (Math.abs(stitch.targetRatio - 1) > 0.12 && treatment !== "ease")
+    || Math.abs(stitch.targetRatio - 1) > 0.12
   ) {
     return "intentional-mismatch";
   }
-  // `ease` is a physical structural seam with a non-zero fit residual. It
-  // participates in initial alignment but restDistance retains the authored
-  // mismatch so the geometric solver does not force metric stretch.
+  // This class describes metric compatibility, not graph connectivity.
+  // Ease/gather/stretch still participate in shell topology, while the
+  // isometric projector leaves their unequal-length closure as a declared
+  // residual for drape instead of stretching the authored material.
   return "structural-alignment";
 }

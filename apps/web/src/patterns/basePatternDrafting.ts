@@ -508,12 +508,18 @@ function createSkirtPiece(
   const waistTangent = waistRun > 1e-9
     ? { xMm: waistCutWidth / waistRun, yMm: (values.sideWaistY - centerWaistY) / waistRun }
     : { xMm: 1, yMm: 0 };
+  const inwardNormal = { xMm: -waistTangent.yMm, yMm: waistTangent.xMm };
+  const dartMouth = { xMm: dartX, yMm: waistYAtDart };
+  const dartApex = {
+    xMm: dartMouth.xMm + inwardNormal.xMm * dartLength,
+    yMm: dartMouth.yMm + inwardNormal.yMm * dartLength,
+  };
   const darts = dartWidth > 0.05
     ? [closeDart({
         ...createDart(
           id,
-          { xMm: dartX, yMm: waistYAtDart },
-          { xMm: dartX, yMm: waistYAtDart + dartLength },
+          dartMouth,
+          dartApex,
           dartWidth,
         ),
         // Dart intake is measured along the authored waist edge. The generic

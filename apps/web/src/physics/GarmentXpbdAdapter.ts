@@ -249,18 +249,11 @@ export function buildXpbdInitialization(
     );
     seamRestDistances.push(restDistance);
     seamCompliances.push(seamCompliance(seam.treatment));
-    seamRelaxations.push(
-      seam.treatment === "dart"
-        // Paired legs begin separated by the dart intake. A modestly wider
-        // trust region closes that local fold without changing seam compliance.
-        ? 16
-        // An equilibrium STEP-0 bypasses constraint projection entirely. If
-        // this seam reaches XPBD, another material constraint has displaced
-        // it and it needs the full bounded trust region to recover; retaining
-        // the former 0.35 factor made compatible crotch seams diverge for ~240
-        // steps before slowly returning to the same solution.
-        : 1,
-    );
+    // Every seam correction obeys the same material-length trust region. The
+    // former 16x dart multiplier let a sub-millimetre closing residual move a
+    // light vertex farther than its adjacent material bars could recover,
+    // turning a valid local fold into the first-frame skirt explosion.
+    seamRelaxations.push(1);
     seamGroupIds.push(seam.seamGroupId);
   }
 

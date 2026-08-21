@@ -93,6 +93,8 @@ export interface AssemblyPanelInstance {
   sourcePatternId: string;
   geometrySignature: string;
   placement: PatternPreviewPlacement;
+  /** Orientation parity of the material chart in 3D (+1 proper, -1 reflected). */
+  materialParity: 1 | -1;
   topology: PanelTopology;
   particleStart: number;
   vertexCount: number;
@@ -282,6 +284,7 @@ export function buildGarmentAssembly(
         sourcePatternId: snapshot.piece.id,
         geometrySignature: topology.geometrySignature,
         placement,
+        materialParity: placement.mirrorX ? -1 : 1,
         topology,
         particleStart,
         vertexCount: topology.positions2DMm.length / 2,

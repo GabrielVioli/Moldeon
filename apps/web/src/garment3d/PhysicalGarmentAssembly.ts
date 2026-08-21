@@ -182,6 +182,9 @@ function createFoldPlans(
         id: `${source.placement.id}:${suffix}`,
         bodySide: side,
       },
+      materialParity: suffix === "fold-b"
+        ? (source.materialParity === 1 ? -1 : 1)
+        : source.materialParity,
     },
     positions,
     inverseMasses: new Float32Array(sourceMasses),

@@ -378,6 +378,16 @@ function buildComponents(coarse: CoarseAssemblySet, seamResolution: CoarseSeamRe
   const adjacency = new Map(meshIds.map((id) => [id, new Set<string>()]));
   const relationSamples = new Map<string, Relation>();
   for (const seam of seamResolution.constraints) {
+    // Connectivity and metric compatibility are separate concerns. Inter-panel
+    // ease/gather seams still define the garment shell, even though the exact
+    // projector may not stretch them closed. A dart is a local closure: letting
+    // it increase cycle rank made a small intake compete with side seams and
+    // occasionally promoted it to the dominant garment loop.
+    if (seam.instanceA !== seam.instanceB) {
+      adjacency.get(seam.instanceA)?.add(seam.instanceB);
+      adjacency.get(seam.instanceB)?.add(seam.instanceA);
+    }
+    if (!participatesInShellTopology(seam)) continue;
     const pair = seam.instanceA <= seam.instanceB
       ? `${seam.instanceA}|${seam.instanceB}`
       : `${seam.instanceB}|${seam.instanceA}`;
@@ -392,10 +402,6 @@ function buildComponents(coarse: CoarseAssemblySet, seamResolution: CoarseSeamRe
       });
     }
     relationSamples.get(key)!.sampleCount += 1;
-    if (seam.instanceA !== seam.instanceB) {
-      adjacency.get(seam.instanceA)?.add(seam.instanceB);
-      adjacency.get(seam.instanceB)?.add(seam.instanceA);
-    }
   }
   const relations = [...relationSamples.values()].sort((a, b) => a.key.localeCompare(b.key));
   const visited = new Set<string>();
@@ -452,16 +458,66 @@ function buildCandidates(component: Component, coarse: CoarseAssemblySet): Candi
   const authoredDevelopable = snapshotCandidate("authored-developable-seed", component, coarse);
   const flat = buildFlatCandidate(component, coarse);
   const developable = buildDevelopableCandidate(component, coarse);
+  const metricRelaxed = relaxCandidateMaterialMetric(
+    component,
+    coarse,
+    developable,
+    "developable-metric-restored",
+  );
+  const metricRelaxedRaw: Candidate = {
+    name: "developable-metric-restored-raw",
+    positions: new Map([...metricRelaxed.positions].map(([id, values]) => [id, new Float32Array(values)])),
+    project: false,
+  };
+  const materialFramed = transportCandidateThroughSurfaceFrames(
+    component,
+    coarse,
+    authoredDevelopable,
+    developable,
+    "material-framed-shell-seed",
+  );
+  const structurallyAligned = alignCandidateAlongStructuralTree(
+    component,
+    coarse,
+    materialFramed,
+    developable,
+    "material-preserving-shell-seed",
+  );
+  const materialPreserving = alignStructuralIslandsByAttachments(
+    component,
+    coarse,
+    structurallyAligned,
+  );
+  const materialPreservingRaw: Candidate = {
+    name: "material-preserving-shell-raw",
+    positions: new Map([...materialPreserving.positions].map(([id, values]) => [id, new Float32Array(values)])),
+    project: false,
+  };
   const developableRaw: Candidate = {
     name: "developable-cycle-raw",
     positions: new Map([...developable.positions].map(([id, values]) => [id, new Float32Array(values)])),
     project: false,
   };
   const mirrored = mirrorCandidate(developable, "developable-cycle-mirror");
+  const materialPreservingMirror = mirrorCandidate(
+    materialPreserving,
+    "material-preserving-shell-mirror",
+  );
   const hinged = buildAmbiguousHingeCandidate(component, coarse, flat);
   const hingedMirror = mirrorCandidate(hinged, "ambiguous-hinge-mirror");
   const candidates = component.supportsShell
-    ? [authoredDevelopable, flat, developableRaw, developable, mirrored]
+    ? [
+        authoredDevelopable,
+        flat,
+        metricRelaxedRaw,
+        metricRelaxed,
+        materialPreservingRaw,
+        materialPreserving,
+        materialPreservingMirror,
+        developableRaw,
+        developable,
+        mirrored,
+      ]
     : [authoredDevelopable, flat, developable, hinged, hingedMirror];
   return dedupeCandidates(candidates);
 }
@@ -514,7 +570,7 @@ function preferredAmbiguousHingeAxis(
 ): readonly [number, number, number] {
   const materialSamples: Array<readonly [number, number]> = [];
   for (const seam of component.seams) {
-    if (seam.classification !== "structural-alignment") continue;
+    if (!participatesInShellTopology(seam)) continue;
     if (seam.instanceA === id) materialSamples.push([seam.a.materialXMm, seam.a.materialYMm]);
     if (seam.instanceB === id) materialSamples.push([seam.b.materialXMm, seam.b.materialYMm]);
   }
@@ -613,6 +669,399 @@ function buildDevelopableCandidate(component: Component, coarse: CoarseAssemblyS
   return { name: "developable-cycle-seed", positions: base.positions };
 }
 
+function relaxCandidateMaterialMetric(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  candidate: Candidate,
+  name: string,
+): Candidate {
+  setComponentPositions(component, coarse, candidate.positions);
+  for (let iteration = 0; iteration < 1_200; iteration += 1) {
+    for (const id of component.meshIds) {
+      projectMetricEdgesSequential(coarse.byInstanceId.get(id)!, iteration % 2 === 1);
+    }
+  }
+  return snapshotCandidate(name, component, coarse);
+}
+
+/**
+ * Uses the graph-derived shell only as an arrangement guide.  Every authored
+ * panel surface (including an already developed dart) is transported by one
+ * rigid transform, so taper, mirror parity and the material first fundamental
+ * form are never replaced by the cylindrical seed itself.
+ */
+function transportCandidateThroughSurfaceFrames(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  material: Candidate,
+  target: Candidate,
+  name: string,
+): Candidate {
+  const positions = new Map<string, Float32Array>();
+  for (const [id, source] of material.positions) {
+    const guide = target.positions.get(id);
+    const mesh = coarse.byInstanceId.get(id);
+    if (!mesh || !guide || guide.length !== source.length) {
+      positions.set(id, new Float32Array(source));
+      continue;
+    }
+    const selfClosed = selfStructuralSeams(component, id).length >= 2;
+    const hasLocalShaping = component.seams.some((seam) =>
+      seam.classification === "local-shaping-closure"
+      && (seam.instanceA === id || seam.instanceB === id));
+    if (selfClosed && !hasLocalShaping) {
+      // A self-sewn surface already has a graph-derived developable seed.
+      // Replacing it with a rigidly moved flat chart re-opens its closure and
+      // forces XPBD to manufacture the tube. Keep the developed local shell;
+      // attachment seams will place the complete shell as one rigid island.
+      positions.set(id, new Float32Array(guide));
+      continue;
+    }
+    const sourceFrame = materialSurfaceFrame(mesh, source);
+    const targetFrame = materialSurfaceFrame(mesh, guide);
+    if (!sourceFrame || !targetFrame) {
+      positions.set(id, new Float32Array(source));
+      continue;
+    }
+    const sourcePoints = frameFitPoints(sourceFrame);
+    const targetPoints = frameFitPoints(targetFrame);
+    positions.set(id, transformPositionsRigidly(
+      source,
+      bestRigidPointFit(sourcePoints, targetPoints),
+    ));
+  }
+  return { name, positions };
+}
+
+/**
+ * Structural seams define independent material shells.  Intentional mismatch
+ * seams (ease/gather/stretch) connect those shells but must not redefine their
+ * topology.  Once every shell has been developed, place each complete island
+ * with one rigid transform against already placed neighbours.  This keeps a
+ * closed sleeve/body tube closed while bringing its attachment curve near the
+ * corresponding armhole without stretching either 2D chart.
+ */
+function alignStructuralIslandsByAttachments(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  candidate: Candidate,
+): Candidate {
+  const islands = structuralIslands(component);
+  if (islands.length < 2) return candidate;
+  const positions: Map<string, Float32Array> = new Map(
+    [...candidate.positions].map(([id, values]) => [id, new Float32Array(values)]),
+  );
+  islands.sort((left, right) =>
+    structuralIslandScore(right, component, coarse) - structuralIslandScore(left, component, coarse)
+    || left.join("|").localeCompare(right.join("|")),
+  );
+  const placed = new Set(islands[0]);
+  const remaining = islands.slice(1);
+
+  while (remaining.length > 0) {
+    let selectedIndex = -1;
+    let selectedAttachments: CoarseSeamConstraint[] = [];
+    for (let index = 0; index < remaining.length; index += 1) {
+      const island = new Set(remaining[index]);
+      const attachments = component.seams.filter((seam) =>
+        seam.classification === "intentional-mismatch"
+        && ((island.has(seam.instanceA) && placed.has(seam.instanceB))
+          || (island.has(seam.instanceB) && placed.has(seam.instanceA))));
+      if (attachments.length > selectedAttachments.length) {
+        selectedIndex = index;
+        selectedAttachments = attachments;
+      }
+    }
+    if (selectedIndex < 0 || selectedAttachments.length === 0) break;
+    const island = remaining.splice(selectedIndex, 1)[0];
+    const islandSet = new Set(island);
+    const sourcePoints: Array<readonly [number, number, number]> = [];
+    const targetPoints: Array<readonly [number, number, number]> = [];
+    for (const seam of selectedAttachments) {
+      const localIsA = islandSet.has(seam.instanceA);
+      const localId = localIsA ? seam.instanceA : seam.instanceB;
+      const fixedId = localIsA ? seam.instanceB : seam.instanceA;
+      const localBinding = localIsA ? seam.a : seam.b;
+      const fixedBinding = localIsA ? seam.b : seam.a;
+      const local = positions.get(localId);
+      const fixed = positions.get(fixedId);
+      if (!local || !fixed) continue;
+      sourcePoints.push(evaluateBindingOnPositions(local, localBinding));
+      targetPoints.push(evaluateBindingOnPositions(fixed, fixedBinding));
+    }
+    if (sourcePoints.length > 0) {
+      const fit = bestRigidPointFit(sourcePoints, targetPoints);
+      for (const id of island) {
+        const source = positions.get(id);
+        if (source) positions.set(id, transformPositionsRigidly(source, fit));
+        placed.add(id);
+      }
+    }
+  }
+  return { ...candidate, positions };
+}
+
+function structuralIslands(component: Component): string[][] {
+  const adjacency = new Map(component.meshIds.map((id) => [id, new Set<string>()]));
+  for (const seam of component.seams) {
+    if (seam.classification !== "structural-alignment" || seam.instanceA === seam.instanceB) continue;
+    adjacency.get(seam.instanceA)?.add(seam.instanceB);
+    adjacency.get(seam.instanceB)?.add(seam.instanceA);
+  }
+  const visited = new Set<string>();
+  const islands: string[][] = [];
+  for (const root of [...component.meshIds].sort()) {
+    if (visited.has(root)) continue;
+    const queue = [root];
+    const island: string[] = [];
+    visited.add(root);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      island.push(current);
+      for (const next of [...(adjacency.get(current) ?? [])].sort()) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+    islands.push(island.sort());
+  }
+  return islands;
+}
+
+function structuralIslandScore(
+  ids: readonly string[],
+  component: Component,
+  coarse: CoarseAssemblySet,
+): number {
+  const members = new Set(ids);
+  const area = ids.reduce((sum, id) => sum + (coarse.byInstanceId.get(id)?.materialAreaM2 ?? 0), 0);
+  const structuralSamples = component.seams.filter((seam) =>
+    seam.classification === "structural-alignment"
+    && members.has(seam.instanceA)
+    && members.has(seam.instanceB)).length;
+  return area + structuralSamples * 1e-6;
+}
+
+interface MaterialSurfaceFrame {
+  center: readonly [number, number, number];
+  x: readonly [number, number, number];
+  y: readonly [number, number, number];
+  normal: readonly [number, number, number];
+}
+
+function materialSurfaceFrame(
+  mesh: CoarseAssemblyMesh,
+  positions: Float32Array,
+): MaterialSurfaceFrame | null {
+  const bounds = materialBounds(mesh);
+  const targetX = (bounds.minX + bounds.maxX) * 0.5;
+  const targetY = (bounds.minY + bounds.maxY) * 0.5;
+  const diagonalSquared = Math.max(
+    1,
+    (bounds.maxX - bounds.minX) ** 2 + (bounds.maxY - bounds.minY) ** 2,
+  );
+  let selected: readonly [number, number, number] | null = null;
+  let selectedScore = Number.POSITIVE_INFINITY;
+  let maximumArea = 0;
+  for (let offset = 0; offset < mesh.triangles.length; offset += 3) {
+    maximumArea = Math.max(maximumArea, triangleMaterialArea(
+      mesh,
+      mesh.triangles[offset],
+      mesh.triangles[offset + 1],
+      mesh.triangles[offset + 2],
+    ));
+  }
+  for (let offset = 0; offset < mesh.triangles.length; offset += 3) {
+    const a = mesh.triangles[offset];
+    const b = mesh.triangles[offset + 1];
+    const c = mesh.triangles[offset + 2];
+    const area = triangleMaterialArea(mesh, a, b, c);
+    if (area <= EPS) continue;
+    const x = (
+      mesh.materialPositionsMm[a * 2]
+      + mesh.materialPositionsMm[b * 2]
+      + mesh.materialPositionsMm[c * 2]
+    ) / 3;
+    const y = (
+      mesh.materialPositionsMm[a * 2 + 1]
+      + mesh.materialPositionsMm[b * 2 + 1]
+      + mesh.materialPositionsMm[c * 2 + 1]
+    ) / 3;
+    const score = ((x - targetX) ** 2 + (y - targetY) ** 2) / diagonalSquared
+      + maximumArea / area * 1e-4;
+    if (score < selectedScore) {
+      selected = [a, b, c];
+      selectedScore = score;
+    }
+  }
+  if (!selected) return null;
+
+  const [a, b, c] = selected;
+  const ua = mesh.materialPositionsMm[a * 2];
+  const va = mesh.materialPositionsMm[a * 2 + 1];
+  const ub = mesh.materialPositionsMm[b * 2];
+  const vb = mesh.materialPositionsMm[b * 2 + 1];
+  const uc = mesh.materialPositionsMm[c * 2];
+  const vc = mesh.materialPositionsMm[c * 2 + 1];
+  const du1 = ub - ua;
+  const dv1 = vb - va;
+  const du2 = uc - ua;
+  const dv2 = vc - va;
+  const determinant = du1 * dv2 - dv1 * du2;
+  if (Math.abs(determinant) <= EPS) return null;
+
+  const pa = vertex(positions, a);
+  const pb = vertex(positions, b);
+  const pc = vertex(positions, c);
+  const edge1 = sub(pb, pa);
+  const edge2 = sub(pc, pa);
+  const derivativeX = scale(sub(scale(edge1, dv2), scale(edge2, dv1)), 1 / determinant);
+  const derivativeY = scale(sub(scale(edge2, du1), scale(edge1, du2)), 1 / determinant);
+  const x = normalize(derivativeX);
+  const y = normalize(sub(derivativeY, scale(x, dot(derivativeY, x))));
+  const normal = normalize(cross(x, y));
+  if (length3(x) <= EPS || length3(y) <= EPS || length3(normal) <= EPS) return null;
+  return {
+    center: scale(add(add(pa, pb), pc), 1 / 3),
+    x,
+    y,
+    normal,
+  };
+}
+
+function frameFitPoints(frame: MaterialSurfaceFrame): Array<readonly [number, number, number]> {
+  const span = 0.1;
+  return [
+    frame.center,
+    add(frame.center, scale(frame.x, span)),
+    add(frame.center, scale(frame.y, span)),
+    add(frame.center, scale(frame.normal, span)),
+  ];
+}
+
+/**
+ * Closes a deterministic spanning tree with rigid panel transforms only. The
+ * remaining cycle edge is deliberately left as a residual instead of buying
+ * closure with stretch. This gives the global solver a near-shell seed while
+ * preserving every authored dart/developable surface exactly.
+ */
+function alignCandidateAlongStructuralTree(
+  component: Component,
+  coarse: CoarseAssemblySet,
+  candidate: Candidate,
+  guide: Candidate,
+  name: string,
+): Candidate {
+  const positions: Map<string, Float32Array> = new Map(
+    [...candidate.positions].map(([id, values]) => [id, new Float32Array(values)]),
+  );
+  const structural = component.seams.filter((seam) =>
+    participatesInShellTopology(seam) && seam.instanceA !== seam.instanceB);
+  const ids = [...component.meshIds].sort();
+  if (ids.length < 2 || structural.length === 0) return { name, positions };
+
+  const placed = new Set<string>([ids[0]]);
+  while (placed.size < ids.length) {
+    let progressed = false;
+    for (const id of ids) {
+      if (placed.has(id)) continue;
+      const relevant = structural.filter((seam) =>
+        (seam.instanceA === id && placed.has(seam.instanceB))
+        || (seam.instanceB === id && placed.has(seam.instanceA)));
+      if (relevant.length === 0) continue;
+      const local = positions.get(id);
+      const mesh = coarse.byInstanceId.get(id);
+      if (!local || !mesh) continue;
+      const sourcePoints: Array<readonly [number, number, number]> = [];
+      const targetPoints: Array<readonly [number, number, number]> = [];
+      for (const seam of relevant) {
+        const localBinding = seam.instanceA === id ? seam.a : seam.b;
+        const fixedId = seam.instanceA === id ? seam.instanceB : seam.instanceA;
+        const fixedBinding = seam.instanceA === id ? seam.b : seam.a;
+        const fixed = positions.get(fixedId);
+        if (!fixed) continue;
+        sourcePoints.push(evaluateBindingOnPositions(local, localBinding));
+        targetPoints.push(evaluateBindingOnPositions(fixed, fixedBinding));
+      }
+      if (sourcePoints.length === 0) continue;
+
+      // Samples on a straight seam leave twist underconstrained. Retain the
+      // graph-derived outward side with one frame-normal witness; seam samples
+      // still dominate its translation and tangent fit.
+      const localFrame = materialSurfaceFrame(mesh, local);
+      const guidePositions = guide.positions.get(id);
+      const guideFrame = guidePositions ? materialSurfaceFrame(mesh, guidePositions) : null;
+      if (localFrame && guideFrame) {
+        const sourceMid = centroidOfPointList(sourcePoints);
+        const targetMid = centroidOfPointList(targetPoints);
+        sourcePoints.push(add(sourceMid, scale(localFrame.normal, 0.04)));
+        targetPoints.push(add(targetMid, scale(guideFrame.normal, 0.04)));
+      }
+      positions.set(id, transformPositionsRigidly(local, bestRigidPointFit(sourcePoints, targetPoints)));
+      placed.add(id);
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+
+  // Reconcile the one or more cycle-closing relations as a rigid pose graph.
+  // The anchor remains fixed; every other node receives one O(3)-preserving
+  // transform per Jacobi round. No vertex-level deformation is permitted here.
+  const anchor = ids[0];
+  for (let iteration = 0; iteration < 256; iteration += 1) {
+    const snapshot = new Map([...positions].map(([id, values]) => [id, new Float32Array(values)]));
+    const pending = new Map<string, Float32Array>();
+    for (const id of ids) {
+      if (id === anchor) continue;
+      const local = snapshot.get(id);
+      const mesh = coarse.byInstanceId.get(id);
+      if (!local || !mesh) continue;
+      const relevant = structural.filter((seam) => seam.instanceA === id || seam.instanceB === id);
+      const sourcePoints: Array<readonly [number, number, number]> = [];
+      const targetPoints: Array<readonly [number, number, number]> = [];
+      for (const seam of relevant) {
+        const localBinding = seam.instanceA === id ? seam.a : seam.b;
+        const fixedId = seam.instanceA === id ? seam.instanceB : seam.instanceA;
+        const fixedBinding = seam.instanceA === id ? seam.b : seam.a;
+        const fixed = snapshot.get(fixedId);
+        if (!fixed) continue;
+        sourcePoints.push(evaluateBindingOnPositions(local, localBinding));
+        targetPoints.push(evaluateBindingOnPositions(fixed, fixedBinding));
+      }
+      if (sourcePoints.length < 2) continue;
+      const localFrame = materialSurfaceFrame(mesh, local);
+      const guidePositions = guide.positions.get(id);
+      const guideFrame = guidePositions ? materialSurfaceFrame(mesh, guidePositions) : null;
+      if (localFrame && guideFrame) {
+        const sourceMid = centroidOfPointList(sourcePoints);
+        const targetMid = centroidOfPointList(targetPoints);
+        sourcePoints.push(add(sourceMid, scale(localFrame.normal, 0.025)));
+        targetPoints.push(add(targetMid, scale(guideFrame.normal, 0.025)));
+      }
+      const fit = dampRigidPointFit(bestRigidPointFit(sourcePoints, targetPoints), 0.58);
+      pending.set(id, transformPositionsRigidly(local, fit));
+    }
+    for (const [id, values] of pending) positions.set(id, values);
+  }
+  return { name, positions };
+}
+
+function evaluateBindingOnPositions(
+  positions: Float32Array,
+  binding: CoarseMaterialBinding,
+): readonly [number, number, number] {
+  let x = 0; let y = 0; let z = 0;
+  for (let index = 0; index < binding.vertices.length; index += 1) {
+    const offset = binding.vertices[index] * 3;
+    const weight = binding.weights[index];
+    x += positions[offset] * weight;
+    y += positions[offset + 1] * weight;
+    z += positions[offset + 2] * weight;
+  }
+  return [x, y, z];
+}
+
 /**
  * Develops a self-sewn panel from the two authored seam generators instead
  * of its bounding box.  A sleeve cap, crotch extension or any other free
@@ -625,7 +1074,7 @@ function mapSelfClosedMeshToCylinder(
   axis: ReturnType<typeof acrossAxis>,
 ): Float32Array | null {
   const self = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    participatesInShellTopology(seam)
     && seam.instanceA === mesh.panelInstanceId
     && seam.instanceB === mesh.panelInstanceId,
   );
@@ -757,7 +1206,7 @@ function selectLongitudinalBoundaryProfile(
 ): ShellBoundaryProfile | null {
   const byGroup = new Map<string, Array<{ along: number; across: number }>>();
   for (const seam of component.seams) {
-    if (seam.classification !== "structural-alignment") continue;
+    if (!participatesInShellTopology(seam)) continue;
     const matches = (seam.instanceA === id && seam.instanceB === neighbor)
       || (seam.instanceB === id && seam.instanceA === neighbor);
     if (!matches) continue;
@@ -823,7 +1272,7 @@ function preAlignComponentRigidTranslations(
   coarse: CoarseAssemblySet,
 ): void {
   const structural = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    participatesInShellTopology(seam)
     && seam.instanceA !== seam.instanceB,
   );
   if (structural.length === 0) return;
@@ -1385,7 +1834,7 @@ function phaseAlignClosedSeed(
   positions: Map<string, Float32Array>,
 ): void {
   const relevant = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    participatesInShellTopology(seam)
     && seam.instanceA !== seam.instanceB
     && ((seam.instanceA === id && seeded.has(seam.instanceB)) || (seam.instanceB === id && seeded.has(seam.instanceA))),
   );
@@ -1481,6 +1930,26 @@ function bestRigidPointFit(
   return { quaternion, sourceCenter, targetCenter };
 }
 
+function dampRigidPointFit(fit: RigidPointFit, amount: number): RigidPointFit {
+  const sign = fit.quaternion[0] < 0 ? -1 : 1;
+  const blended: [number, number, number, number] = [
+    1 + (fit.quaternion[0] * sign - 1) * amount,
+    fit.quaternion[1] * sign * amount,
+    fit.quaternion[2] * sign * amount,
+    fit.quaternion[3] * sign * amount,
+  ];
+  const magnitude = Math.max(EPS, Math.hypot(...blended));
+  const quaternion = blended.map((value) => value / magnitude) as [number, number, number, number];
+  return {
+    quaternion,
+    sourceCenter: fit.sourceCenter,
+    targetCenter: add(
+      fit.sourceCenter,
+      scale(sub(fit.targetCenter, fit.sourceCenter), amount),
+    ),
+  };
+}
+
 function centroidOfPointList(
   points: readonly (readonly [number, number, number])[],
 ): readonly [number, number, number] {
@@ -1546,7 +2015,7 @@ function translateSeedNearConnectedSeam(
   positions: Map<string, Float32Array>,
 ): void {
   const relevant = component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    participatesInShellTopology(seam)
     && ((seam.instanceA === id && seeded.has(seam.instanceB)) || (seam.instanceB === id && seeded.has(seam.instanceA))),
   );
   if (relevant.length === 0) return;
@@ -1629,7 +2098,7 @@ function meanRelationAcross(
 ): number | null {
   const samples: number[] = [];
   for (const seam of component.seams) {
-    if (seam.classification !== "structural-alignment") continue;
+    if (!participatesInShellTopology(seam)) continue;
     const matches = (seam.instanceA === id && seam.instanceB === neighbor)
       || (seam.instanceB === id && seam.instanceA === neighbor);
     if (!matches) continue;
@@ -1649,7 +2118,7 @@ function acrossAxis(
   const height = bounds.maxY - bounds.minY;
   let acrossIsX: boolean;
   const samples = selfSeams
-    .filter((seam) => seam.classification === "structural-alignment")
+    .filter(participatesInShellTopology)
     .map((seam) => seam.a)
     .sort((a, b) => a.materialXMm - b.materialXMm || a.materialYMm - b.materialYMm);
   if (samples.length >= 2) {
@@ -1674,10 +2143,21 @@ function acrossAxis(
 
 function selfStructuralSeams(component: Component, id: string): CoarseSeamConstraint[] {
   return component.seams.filter((seam) =>
-    seam.classification === "structural-alignment"
+    participatesInShellTopology(seam)
     && seam.instanceA === id
     && seam.instanceB === id,
   );
+}
+
+/**
+ * Topology and metric compatibility are independent. Ease/gather/stretch
+ * seams still connect material shells and therefore participate in cycle and
+ * placement discovery; only their unequal-length closure is excluded from
+ * the exact zero-distance projection. Local dart shaping must never become a
+ * garment-wide shell relation.
+ */
+function participatesInShellTopology(seam: CoarseSeamConstraint): boolean {
+  return seam.classification !== "local-shaping-closure";
 }
 
 function materialBounds(mesh: CoarseAssemblyMesh) {
@@ -1762,7 +2242,7 @@ function measureOverlap(component: Component, coarse: CoarseAssemblySet): { scor
 function estimateFreeBoundaries(component: Component, coarse: CoarseAssemblySet): number {
   const stitchedByInstance = new Map<string, Set<string>>(component.meshIds.map((id) => [id, new Set<string>()]));
   for (const seam of component.seams) {
-    if (seam.classification !== "structural-alignment") continue;
+    if (!participatesInShellTopology(seam)) continue;
     // Material binding preserves x/y but not the named source edge after
     // triangulation. Estimate free boundary richness by structural relation
     // count versus authored boundary path count; it is diagnostic only.

@@ -9,9 +9,11 @@ import { measureXpbdDiagnostics, resetXpbdState, stepXpbd, type XpbdState } from
 
 const FIXTURES = [
   "self-seam-tube",
+  "phase-a-three-panel-cylinder",
   "spatial-four-panel-tube",
   "dart-piece",
   "phase-a-four-panel-waistband",
+  "straight-skirt-standard",
 ] as const;
 
 describe("Phase A zero-energy initial dress pose", () => {
@@ -28,6 +30,7 @@ describe("Phase A zero-energy initial dress pose", () => {
 
     run(zeroGravity, 500);
     const zeroGravityShapeDeltaM = maximumCenteredDelta(step0, zeroGravity.positions);
+    const zeroGravityDiagnostics = measureXpbdDiagnostics(zeroGravity);
 
     const falling = createXpbdWorkerState(buildXpbdInitialization(
       assembly.state,
@@ -40,6 +43,7 @@ describe("Phase A zero-energy initial dress pose", () => {
     run(falling, 500);
     const finalCentroid = centroid(falling.positions);
     const freeFallShapeDeltaM = maximumCenteredDelta(fallStep0, falling.positions);
+    const freeFallDiagnostics = measureXpbdDiagnostics(falling);
 
     let deterministicTrajectory: Float32Array | null = null;
     for (let reset = 0; reset < 10; reset += 1) {
@@ -87,12 +91,9 @@ describe("Phase A zero-energy initial dress pose", () => {
       }));
     }
 
-    expect(step0Diagnostics.seamErrorMaximum).toBeLessThan(0.0005);
-    expect(step0Diagnostics.structuralStretchMaxRatio).toBeLessThan(1.001);
-    expect(step0Diagnostics.structuralCompressionMinRatio).toBeGreaterThan(0.999);
-    expect(step0Diagnostics.shearStrainMax).toBeLessThan(0.001);
-    expect(step0Diagnostics.triangleAreaMinRatio).toBeGreaterThan(0.998);
-    expect(step0Diagnostics.triangleAreaMaxRatio).toBeLessThan(1.002);
+    expectZeroEnergyMaterialPose(step0Diagnostics);
+    expectZeroEnergyMaterialPose(zeroGravityDiagnostics);
+    expectZeroEnergyMaterialPose(freeFallDiagnostics);
     expect(zeroGravity.invalid).toBe(false);
     expect(falling.invalid).toBe(false);
     expect(zeroGravityShapeDeltaM).toBeLessThan(0.0005);
@@ -105,7 +106,51 @@ function run(state: XpbdState, steps: number): void {
   for (let step = 0; step < steps && !state.invalid; step += 1) stepXpbd(state);
 }
 
+function expectZeroEnergyMaterialPose(
+  diagnostics: ReturnType<typeof measureXpbdDiagnostics>,
+): void {
+  expect(diagnostics.seamErrorMaximum).toBeLessThan(0.0005);
+  expect(diagnostics.structuralStretchMaxRatio).toBeLessThan(1.001);
+  expect(diagnostics.structuralCompressionMinRatio).toBeGreaterThan(0.999);
+  expect(diagnostics.shearStrainMax).toBeLessThan(0.001);
+  expect(diagnostics.triangleAreaMinRatio).toBeGreaterThan(0.998);
+  expect(diagnostics.triangleAreaMaxRatio).toBeLessThan(1.002);
+}
+
 function createPhaseAFixture(fixtureId: (typeof FIXTURES)[number]): GarmentDraft {
+  if (fixtureId === "phase-a-three-panel-cylinder") {
+    const garment = createBaselineFixture("spatial-open-chain");
+    const first = garment.pieces[0];
+    const last = garment.pieces[garment.pieces.length - 1];
+    const closure: Seam = {
+      id: "phase-a-three-panel-cylinder:join-3",
+      groupId: "phase-a-three-panel-cylinder:join-3",
+      name: "Fechamento estrutural do cilindro em três painéis",
+      first: {
+        pieceId: last.id,
+        edgeId: getPatternEdges(last)[1].id,
+        startT: 0,
+        endT: 1,
+      },
+      second: {
+        pieceId: first.id,
+        edgeId: getPatternEdges(first)[3].id,
+        startT: 0,
+        endT: 1,
+      },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      active: true,
+    };
+    return {
+      ...garment,
+      id: "phase-a-three-panel-cylinder",
+      name: "Phase A three-panel cylinder",
+      seams: [...(garment.seams ?? []), closure],
+    };
+  }
   if (fixtureId === "dart-piece") {
     const garment = createBaselineFixture(fixtureId);
     return {

@@ -100,6 +100,24 @@ describe("template assembly seams", () => {
     expect(roles.some((role) => role === "backCrotch/backCrotch")).toBe(true);
   });
 
+  it("sews the complete multi-segment skirt side from waist to hem", () => {
+    const garment = createGarmentFromTemplate(
+      "straight-skirt",
+      DEFAULT_BODY_MEASUREMENTS,
+    );
+    const seams = buildTemplateAssemblySeams(garment);
+    const side = seams.find((seam) => seam.id === "template-seam:skirt-side")!;
+    const firstPiece = garment.pieces.find((piece) => piece.id === side.first.pieceId)!;
+    const secondPiece = garment.pieces.find((piece) => piece.id === side.second.pieceId)!;
+    const lengths = groupLengths(garment, [side], side.groupId ?? side.id);
+
+    expect(seamSideRanges(side, "first")).toHaveLength(2);
+    expect(seamSideRanges(side, "second")).toHaveLength(2);
+    expect(lengths.first).toBeCloseTo(roleLength(firstPiece, "sideSeam"), 6);
+    expect(lengths.second).toBeCloseTo(roleLength(secondPiece, "sideSeam"), 6);
+    expect(side.targetRatio).toBeCloseTo(lengths.first / lengths.second, 9);
+  });
+
   it("replaces incompatible template-edge seams and preserves unrelated custom seams", () => {
     const generated = createGarmentFromTemplate(
       "tshirt",

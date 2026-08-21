@@ -124,7 +124,7 @@ export function buildCoarseAssemblyMesh(
     positions[offset + 1] = sampled[1];
     positions[offset + 2] = sampled[2];
   }
-  applyClosedDartDevelopableSeed(topology, positions);
+  applyClosedDartDevelopableSeed(topology, positions, instance);
 
   return {
     panelInstanceId: instance.id,
@@ -170,6 +170,7 @@ function buildLocalCoarseTopology(base: PanelTopology, hasStructuredSelfSeam: bo
 function applyClosedDartDevelopableSeed(
   topology: PanelTopology,
   positions: Float32Array,
+  instance: AssemblyPanelInstance,
 ): boolean {
   const materialized = topology.darts.filter((dart) =>
     dart.dart.closed
@@ -207,6 +208,8 @@ function applyClosedDartDevelopableSeed(
   if (coneHalfAngle === null) return false;
 
   const previousCentroid = centroid3(positions);
+  const spatialFrame = fitMaterialChartFrame(topology, positions, instance);
+  if (!spatialFrame) return false;
   const mapped = new Float64Array(positions.length);
   const assigned = new Uint8Array(positions.length / 3);
   const sinBeta = Math.sin(coneHalfAngle);
@@ -272,12 +275,104 @@ function applyClosedDartDevelopableSeed(
   }
 
   const mappedCentroid = centroid3(mapped);
+  const radial2 = normalize2([
+    topology.positions2DMm[bodyBoundary[0] * 2] - apex2[0],
+    -(topology.positions2DMm[bodyBoundary[0] * 2 + 1] - apex2[1]),
+  ]);
+  const next2 = normalize2([
+    topology.positions2DMm[bodyBoundary[1] * 2] - apex2[0],
+    -(topology.positions2DMm[bodyBoundary[1] * 2 + 1] - apex2[1]),
+  ]);
+  const traversalSign = radial2[0] * next2[1] - radial2[1] * next2[0] >= 0 ? 1 : -1;
+  const transverse2: readonly [number, number] = [
+    -radial2[1] * traversalSign,
+    radial2[0] * traversalSign,
+  ];
+  const targetRadial = add3(
+    scale3(spatialFrame.u, radial2[0]),
+    scale3(spatialFrame.v, radial2[1]),
+  );
+  const targetTransverse = add3(
+    scale3(spatialFrame.u, transverse2[0]),
+    scale3(spatialFrame.v, transverse2[1]),
+  );
+  const targetNormal = scale3(spatialFrame.w, traversalSign);
+  const canonicalRadial = normalize3(seamDirection);
+  const canonicalTransverse = normalize3([0, 0, 1]);
+  const canonicalNormal = normalize3(cross3(canonicalRadial, canonicalTransverse));
   for (let offset = 0; offset < positions.length; offset += 3) {
-    positions[offset] = mapped[offset] + previousCentroid[0] - mappedCentroid[0];
-    positions[offset + 1] = mapped[offset + 1] + previousCentroid[1] - mappedCentroid[1];
-    positions[offset + 2] = mapped[offset + 2] + previousCentroid[2] - mappedCentroid[2];
+    const local: readonly [number, number, number] = [
+      mapped[offset] - mappedCentroid[0],
+      mapped[offset + 1] - mappedCentroid[1],
+      mapped[offset + 2] - mappedCentroid[2],
+    ];
+    const transformed = add3(
+      add3(
+        scale3(targetRadial, dot3(local, canonicalRadial)),
+        scale3(targetTransverse, dot3(local, canonicalTransverse)),
+      ),
+      scale3(targetNormal, dot3(local, canonicalNormal)),
+    );
+    positions[offset] = transformed[0] + previousCentroid[0];
+    positions[offset + 1] = transformed[1] + previousCentroid[1];
+    positions[offset + 2] = transformed[2] + previousCentroid[2];
   }
   return true;
+}
+
+interface MaterialChartFrame {
+  u: readonly [number, number, number];
+  v: readonly [number, number, number];
+  w: readonly [number, number, number];
+}
+
+function fitMaterialChartFrame(
+  topology: PanelTopology,
+  positions: Float32Array,
+  instance: AssemblyPanelInstance,
+): MaterialChartFrame | null {
+  const vertices = [...topology.boundaryVertices];
+  if (vertices.length < 3) return null;
+  let meanX = 0; let meanY = 0;
+  let meanP: [number, number, number] = [0, 0, 0];
+  for (const vertex of vertices) {
+    meanX += topology.positions2DMm[vertex * 2];
+    meanY += -topology.positions2DMm[vertex * 2 + 1];
+    meanP = add3(meanP, position3(positions, vertex)) as [number, number, number];
+  }
+  meanX /= vertices.length;
+  meanY /= vertices.length;
+  meanP = scale3(meanP, 1 / vertices.length) as [number, number, number];
+
+  let xx = 0; let xy = 0; let yy = 0;
+  let px: [number, number, number] = [0, 0, 0];
+  let py: [number, number, number] = [0, 0, 0];
+  for (const vertex of vertices) {
+    const x = topology.positions2DMm[vertex * 2] - meanX;
+    const y = -topology.positions2DMm[vertex * 2 + 1] - meanY;
+    const p = sub3(position3(positions, vertex), meanP);
+    xx += x * x;
+    xy += x * y;
+    yy += y * y;
+    px = add3(px, scale3(p, x)) as [number, number, number];
+    py = add3(py, scale3(p, y)) as [number, number, number];
+  }
+  const determinant = xx * yy - xy * xy;
+  if (Math.abs(determinant) <= BARY_EPSILON) return null;
+  const rawU = scale3(sub3(scale3(px, yy), scale3(py, xy)), 1 / determinant);
+  const rawV = scale3(sub3(scale3(py, xx), scale3(px, xy)), 1 / determinant);
+  const u = normalize3(rawU);
+  const v = normalize3(sub3(rawV, scale3(u, dot3(rawV, u))));
+  const chartNormal = normalize3(cross3(u, v));
+  if (lengthSquared3(u) < 0.5 || lengthSquared3(v) < 0.5 || lengthSquared3(chartNormal) < 0.5) {
+    return null;
+  }
+  const surfaceSign = instance.placement.surface === "back" ? -1 : 1;
+  return {
+    u,
+    v,
+    w: scale3(chartNormal, surfaceSign * instance.materialParity),
+  };
 }
 
 function cyclicTopologyPath(
@@ -319,6 +414,43 @@ function sub2(
   second: readonly [number, number],
 ): readonly [number, number] {
   return [first[0] - second[0], first[1] - second[1]];
+}
+
+function normalize2(value: readonly [number, number]): readonly [number, number] {
+  const length = Math.hypot(value[0], value[1]);
+  return length <= BARY_EPSILON ? [1, 0] : [value[0] / length, value[1] / length];
+}
+
+function position3(values: Float32Array, vertex: number): readonly [number, number, number] {
+  return [values[vertex * 3], values[vertex * 3 + 1], values[vertex * 3 + 2]];
+}
+
+function add3(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+): [number, number, number] {
+  return [first[0] + second[0], first[1] + second[1], first[2] + second[2]];
+}
+
+function sub3(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+): [number, number, number] {
+  return [first[0] - second[0], first[1] - second[1], first[2] - second[2]];
+}
+
+function scale3(
+  value: readonly [number, number, number],
+  scalar: number,
+): [number, number, number] {
+  return [value[0] * scalar, value[1] * scalar, value[2] * scalar];
+}
+
+function dot3(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+): number {
+  return first[0] * second[0] + first[1] * second[1] + first[2] * second[2];
 }
 
 function angleBetween2(

@@ -337,6 +337,13 @@ export function stepXpbd(state: XpbdState): void {
   profile.integrationMs = performance.now() - phaseStarted;
 
   for (let iteration = 0; iteration < effectiveIterations; iteration += 1) {
+    // Alternate the seam/material order so neither family systematically owns
+    // the final state of every solver iteration. The last regular iteration is
+    // seam-first, leaving the immutable 2D metric as its closing projection.
+    const seamFirst = iteration % 2 === 1;
+    if (seamFirst) {
+      phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
+    }
     phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
     phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
     phaseStarted = performance.now();
@@ -348,9 +355,21 @@ export function stepXpbd(state: XpbdState): void {
       solveBendSet(state, dt);
     }
     profile.bendMs += performance.now() - phaseStarted;
-    phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
+    if (!seamFirst) {
+      phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
+    }
     enforcePins(state);
   }
+
+  // Constraint order must not let the final seam sweep purchase closure by
+  // leaving the material bars/shear violated at the end of every step. One
+  // symmetric material reconciliation makes the immutable 2D metric the last
+  // hard boundary of the solve. Compatible seams remain closed; incompatible
+  // ease/dart residual stays explicit instead of accumulating into the severe
+  // first-frame stretch seen on the canonical skirt.
+  phaseStarted = performance.now(); solveDistanceSet(state, dt, 0); profile.stretchMs += performance.now() - phaseStarted;
+  phaseStarted = performance.now(); solveShearSet(state, dt); profile.shearMs += performance.now() - phaseStarted;
+  enforcePins(state);
 
   phaseStarted = performance.now();
   solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true });
