@@ -1,0 +1,28 @@
+name: recovery-11.0.4b-human-body
+
+on:
+  push:
+    branches:
+      - recovery/11.0.4b-canonical-female-human-body
+  pull_request:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
+
+permissions:
+  contents: read
+
+jobs:
+  human-body:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Diff check
+        run: git diff --check HEAD^
+      - name: Typecheck
+        run: npm run typecheck
