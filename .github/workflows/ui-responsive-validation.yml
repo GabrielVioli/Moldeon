@@ -1,6 +1,19 @@
 name: UI Responsive Workspace
 
 on:
+  push:
+    branches:
+      - "feat/ui-responsive-cleanup"
+    paths:
+      - "apps/web/src/components/Toolbar.tsx"
+      - "apps/web/src/components/FittingRoomDialog.tsx"
+      - "apps/web/src/viewport/GarmentViewport.tsx"
+      - "apps/web/src/main.tsx"
+      - "apps/web/src/responsive-workspace.css"
+      - "apps/web/src/responsive-workspace-polish.css"
+      - "apps/web/src/responsiveWorkspace.test.ts"
+      - "scripts/ui-responsive-audit.mjs"
+      - ".github/workflows/ui-responsive-validation.yml"
   pull_request:
     paths:
       - "apps/web/src/components/Toolbar.tsx"
