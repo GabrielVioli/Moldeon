@@ -50,8 +50,16 @@ jobs:
       - name: Build fallback application
         run: npm run build
 
-      - name: Install browser controller
-        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+      - name: Install browser controller in isolation
+        shell: bash
+        run: |
+          rm -rf /tmp/moldeon-playwright
+          mkdir -p /tmp/moldeon-playwright
+          cd /tmp/moldeon-playwright
+          npm init -y >/dev/null
+          npm install --no-package-lock --no-audit --no-fund playwright-core@1.55.0
+          rm -rf "$GITHUB_WORKSPACE/node_modules/playwright-core"
+          ln -s /tmp/moldeon-playwright/node_modules/playwright-core "$GITHUB_WORKSPACE/node_modules/playwright-core"
 
       - name: Start fallback application
         shell: bash
