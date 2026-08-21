@@ -21,6 +21,7 @@ const viewports = [
 
 const manualGateLabels = new Set(["390x844", "1024x600", "1366x768", "1920x1080"]);
 const zoomLevels = [80, 100, 125, 150];
+const zoomReferenceViewport = { width: 1366, height: 768 };
 const primaryTools = ["draft", "select", "cut", "dart", "seam", "measure"];
 
 await mkdir(artifactDir, { recursive: true });
@@ -62,22 +63,41 @@ try {
     await context.close();
   }
 
+  // Headless Chromium does not expose browser-chrome zoom shortcuts as a reliable
+  // reflow signal. Browser zoom changes the amount of CSS-pixel workspace available,
+  // so reproduce that layout effect by inversely scaling the logical viewport while
+  // retaining the 1366x768 browser-window reference in the report.
   for (const zoom of zoomLevels) {
-    const width = 1366;
-    const height = 768;
-    const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+    const effectiveViewport = effectiveViewportForZoom(zoomReferenceViewport, zoom);
+    const context = await browser.newContext({ viewport: effectiveViewport, deviceScaleFactor: 1 });
     const page = await context.newPage();
     const errors = attachErrorCollectors(page);
 
     await prepareWorkspace(page);
-    await setBrowserZoom(page, zoom);
-    await page.waitForTimeout(180);
-    const inspection = await inspectLayout(page, { width, height });
+    const inspection = await inspectLayout(page, {
+      ...effectiveViewport,
+      browserZoomPercent: zoom,
+      referenceBrowserViewport: zoomReferenceViewport,
+    });
     assertStructuralLayout(`zoom-${zoom}`, inspection, errors);
+
+    if (
+      inspection.innerWidth !== effectiveViewport.width
+      || inspection.innerHeight !== effectiveViewport.height
+    ) {
+      throw new Error(`zoom-${zoom}: viewport CSS equivalente não foi aplicado.`);
+    }
 
     const screenshot = `${artifactDir}/zoom-${zoom}.png`;
     await page.screenshot({ path: screenshot, fullPage: false });
-    report.zoom.push({ zoom, inspection, errors, screenshot });
+    report.zoom.push({
+      zoom,
+      referenceBrowserViewport: zoomReferenceViewport,
+      effectiveCssViewport: effectiveViewport,
+      inspection,
+      errors,
+      screenshot,
+    });
     await context.close();
   }
 } finally {
@@ -85,6 +105,14 @@ try {
 }
 
 console.log(JSON.stringify(report, null, 2));
+
+function effectiveViewportForZoom(referenceViewport, zoomPercent) {
+  const scale = zoomPercent / 100;
+  return {
+    width: Math.round(referenceViewport.width / scale),
+    height: Math.round(referenceViewport.height / scale),
+  };
+}
 
 function attachErrorCollectors(page) {
   const consoleErrors = [];
@@ -208,7 +236,11 @@ async function runManualGate(page, label, viewport) {
   }
 
   const drawButton = page.locator("[data-testid='primary-tool-draft']");
-  result.tools.draft = await drawButton.isEnabled();
+  await drawButton.click();
+  result.tools.draft = {
+    enabled: await drawButton.isEnabled(),
+    activated: await drawButton.getAttribute("aria-pressed"),
+  };
 
   const overflow = page.locator(".toolbar-overflow > summary");
   await overflow.click();
@@ -302,15 +334,5 @@ async function completeDressingPreflight(page, host, steps) {
     }
 
     await page.waitForTimeout(180);
-  }
-}
-
-async function setBrowserZoom(page, zoom) {
-  await page.keyboard.press("Control+0");
-  const delta = zoom === 80 ? -2 : zoom === 100 ? 0 : zoom === 125 ? 2 : zoom === 150 ? 3 : 0;
-  const shortcut = delta < 0 ? "Control+-" : "Control+=";
-  for (let index = 0; index < Math.abs(delta); index += 1) {
-    await page.keyboard.press(shortcut);
-    await page.waitForTimeout(60);
   }
 }
