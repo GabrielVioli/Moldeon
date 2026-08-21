@@ -1,8 +1,16 @@
-import type { BodyAnchorId, BodyMeasurements, BodyType, PatternPreviewPlacement, PreviewBodySide, PreviewRegion, PreviewSurface } from "../domain/pattern";
-import { createMeasurementProfile, measurementProfileToBodyMeasurements, type MeasurementOrigin } from "../domain/parametricMeasurements";
+import type {
+  BodyAnchorId,
+  BodyMeasurements,
+  BodyType,
+  PatternPreviewPlacement,
+  PreviewBodySide,
+  PreviewRegion,
+  PreviewSurface,
+} from "../domain/pattern";
+import type { MeasurementOrigin } from "../domain/parametricMeasurements";
+import { buildHumanBodyModel, type HumanBodyModel } from "./HumanBodyModel";
 
 export type AvatarVector3 = [number, number, number];
-
 export type AvatarArrangementAnchorId = BodyAnchorId | "head";
 
 export interface AvatarResolvedMeasurements {
@@ -68,9 +76,14 @@ export interface AvatarTorsoStation {
   halfDepth: number;
 }
 
+/**
+ * Compatibility facade for garment arrangement. All anatomy now originates in
+ * HumanBodyModel; this interface only preserves the older arrangement API.
+ */
 export interface AvatarParametricModel {
   version: "avatar-parametric@1";
   bodyType: BodyType;
+  humanBody: HumanBodyModel;
   measurements: AvatarResolvedMeasurements;
   measurementOrigins?: Record<string, MeasurementOrigin>;
   landmarks: AvatarLandmarks;
@@ -85,108 +98,67 @@ export function buildAvatarParametricModel(
   input: BodyMeasurements,
   bodyType: BodyType,
 ): AvatarParametricModel {
-  const measurementProfile = createMeasurementProfile(input, bodyType);
-  const resolved = measurementProfileToBodyMeasurements(measurementProfile);
-  const measurementOrigins = Object.fromEntries(Object.entries(measurementProfile.entries).map(([key, entry]) => [key, entry.origin])) as Record<string, MeasurementOrigin>;
+  // 11.0.4B is intentionally the canonical female implementation. Keeping the
+  // bodyType in the facade preserves the document API while the female body is
+  // the single geometric source for the implemented path.
+  const humanBody = buildHumanBodyModel(input);
+  const body = humanBody.measurements;
   const measurements: AvatarResolvedMeasurements = {
-    heightMm: positive(resolved.heightMm, 1700),
-    bustMm: positive(resolved.bustMm, 900),
-    waistMm: positive(resolved.waistMm, 740),
-    hipMm: positive(resolved.hipMm, 960),
-    shoulderWidthMm: positive(resolved.shoulderWidthMm, 410),
-    torsoLengthMm: positive(resolved.torsoLengthMm, 620),
-    armLengthMm: positive(resolved.armLengthMm, 590),
-    bicepMm: positive(resolved.bicepMm, resolved.bustMm * 0.34),
-    wristMm: positive(resolved.wristMm, resolved.bustMm * 0.18),
-    inseamMm: positive(resolved.insideLegLengthMm ?? resolved.inseamMm, 790),
-    thighMm: positive(resolved.thighMm, resolved.hipMm * 0.58),
-    calfMm: positive(resolved.calfMm, resolved.hipMm * 0.38),
-    ankleMm: positive(resolved.ankleCircumferenceMm, resolved.hipMm * 0.24),
+    heightMm: body.heightMm,
+    bustMm: body.bustMm,
+    waistMm: body.waistMm,
+    hipMm: body.fullHipMm,
+    shoulderWidthMm: body.shoulderWidthMm,
+    torsoLengthMm: body.torsoLengthMm,
+    armLengthMm: body.armLengthMm,
+    bicepMm: body.bicepMm,
+    wristMm: body.wristMm,
+    inseamMm: body.inseamMm,
+    thighMm: body.thighMm,
+    calfMm: body.calfMm,
+    ankleMm: body.ankleMm,
   };
 
-  const height = measurements.heightMm * 0.001;
-  const ankleY = Math.max(0.055, height * 0.038);
-  const crotchY = clamp(measurements.inseamMm * 0.001 + ankleY, height * 0.43, height * 0.52);
-  const kneeY = clamp(
-    positive(resolved.kneeHeightMm, measurements.inseamMm * 0.53) * 0.001 + ankleY,
-    ankleY + 0.25,
-    crotchY - 0.18,
-  );
-  const hipY = clamp(crotchY + height * 0.055, height * 0.49, height * 0.58);
-  const waistY = clamp(
-    hipY + positive(resolved.hipHeightMm, height * 1000 * 0.105) * 0.001,
-    height * 0.57,
-    height * 0.67,
-  );
-  const shoulderY = clamp(height - Math.max(0.27, height * 0.17), height * 0.78, height * 0.86);
-  const bustY = clamp(
-    shoulderY - positive(resolved.bustHeightMm, height * 1000 * 0.105) * 0.001,
-    waistY + 0.08,
-    shoulderY - 0.08,
-  );
-  const neckY = shoulderY + height * 0.055;
-  const headCenterY = neckY + height * 0.065;
-  const headTopY = height;
+  const position = (id: keyof HumanBodyModel["landmarks"]): AvatarVector3 =>
+    [...humanBody.landmarks[id].position] as AvatarVector3;
+  const joint = (id: string): AvatarVector3 => {
+    const value = humanBody.joints[id];
+    if (!value) throw new Error(`HumanBody joint ausente: ${id}`);
+    return [...value.position] as AvatarVector3;
+  };
+
+  const shoulderLeft = joint("shoulder-left");
+  const shoulderRight = joint("shoulder-right");
+  const elbowLeft = joint("elbow-left");
+  const elbowRight = joint("elbow-right");
+  const wristLeft = joint("wrist-left");
+  const wristRight = joint("wrist-right");
+  const hipLeft = joint("hip-left");
+  const hipRight = joint("hip-right");
+  const kneeLeft = joint("knee-left");
+  const kneeRight = joint("knee-right");
+  const ankleLeft = joint("ankle-left");
+  const ankleRight = joint("ankle-right");
+
+  const bustLeft = position("bust-apex-left");
+  const waistFront = position("center-front-waist");
+  const hipFront = position("full-hip-front");
+  const crotchLeft = position("inseam-top-left");
+  const neckBase = position("neck-base-center");
+  const headTop = position("head-top");
   const landmarks: AvatarLandmarks = {
     groundY: 0,
-    ankleY,
-    kneeY,
-    crotchY,
-    hipY,
-    waistY,
-    bustY,
-    shoulderY,
-    neckY,
-    headCenterY,
-    headTopY,
+    ankleY: ankleLeft[1],
+    kneeY: kneeLeft[1],
+    crotchY: crotchLeft[1],
+    hipY: hipFront[1],
+    waistY: waistFront[1],
+    bustY: bustLeft[1],
+    shoulderY: (shoulderLeft[1] + shoulderRight[1]) * 0.5,
+    neckY: neckBase[1],
+    headCenterY: (neckBase[1] + headTop[1]) * 0.55,
+    headTopY: headTop[1],
   };
-
-  const bustAxes = ellipseAxes(measurements.bustMm * 0.001, bodyType === "feminine" ? 1.19 : 1.23);
-  const waistAxes = ellipseAxes(measurements.waistMm * 0.001, 1.16);
-  const hipAxes = ellipseAxes(measurements.hipMm * 0.001, bodyType === "feminine" ? 1.27 : 1.2);
-  const shoulderHalf = measurements.shoulderWidthMm * 0.0005;
-  const shoulderAxes: [number, number] = [
-    Math.max(shoulderHalf * 0.94, bustAxes[0] * 0.94),
-    bustAxes[1] * 0.72,
-  ];
-  const crotchAxes: [number, number] = [hipAxes[0] * 0.72, hipAxes[1] * 0.78];
-  const torsoStations: AvatarTorsoStation[] = [
-    { y: crotchY, halfWidth: crotchAxes[0], halfDepth: crotchAxes[1] },
-    { y: hipY, halfWidth: hipAxes[0], halfDepth: hipAxes[1] },
-    { y: waistY, halfWidth: waistAxes[0], halfDepth: waistAxes[1] },
-    { y: bustY, halfWidth: bustAxes[0], halfDepth: bustAxes[1] },
-    { y: shoulderY, halfWidth: shoulderAxes[0], halfDepth: shoulderAxes[1] },
-  ];
-
-  const armPoseAngleDeg = 14;
-  const armAngle = armPoseAngleDeg * Math.PI / 180;
-  const armLength = measurements.armLengthMm * 0.001;
-  const upperArmLength = armLength * 0.49;
-  const shoulderJointX = shoulderHalf * 0.92;
-  const shoulderLeft: AvatarVector3 = [-shoulderJointX, shoulderY - 0.012, 0];
-  const shoulderRight: AvatarVector3 = [shoulderJointX, shoulderY - 0.012, 0];
-  const leftArmAxis: AvatarVector3 = normalize3([-Math.sin(armAngle), -Math.cos(armAngle), 0]);
-  const rightArmAxis: AvatarVector3 = normalize3([Math.sin(armAngle), -Math.cos(armAngle), 0]);
-  const elbowLeft = addScaled3(shoulderLeft, leftArmAxis, upperArmLength);
-  const elbowRight = addScaled3(shoulderRight, rightArmAxis, upperArmLength);
-  const wristLeft = addScaled3(shoulderLeft, leftArmAxis, armLength);
-  const wristRight = addScaled3(shoulderRight, rightArmAxis, armLength);
-
-  const legPoseAngleDeg = 4;
-  const legAngle = legPoseAngleDeg * Math.PI / 180;
-  const hipJointX = hipAxes[0] * 0.34;
-  const hipLeft: AvatarVector3 = [-hipJointX, crotchY + 0.035, 0];
-  const hipRight: AvatarVector3 = [hipJointX, crotchY + 0.035, 0];
-  const leftLegAxis: AvatarVector3 = normalize3([-Math.sin(legAngle), -Math.cos(legAngle), 0]);
-  const rightLegAxis: AvatarVector3 = normalize3([Math.sin(legAngle), -Math.cos(legAngle), 0]);
-  const upperLegLength = Math.max(0.28, hipLeft[1] - kneeY);
-  const fullLegLength = Math.max(0.5, hipLeft[1] - ankleY);
-  const kneeLeft = addScaled3(hipLeft, leftLegAxis, upperLegLength);
-  const kneeRight = addScaled3(hipRight, rightLegAxis, upperLegLength);
-  const ankleLeft = addScaled3(hipLeft, leftLegAxis, fullLegLength);
-  const ankleRight = addScaled3(hipRight, rightLegAxis, fullLegLength);
-  ankleLeft[1] = ankleY;
-  ankleRight[1] = ankleY;
 
   const joints: AvatarJoints = {
     shoulderLeft,
@@ -203,30 +175,45 @@ export function buildAvatarParametricModel(
     ankleRight,
   };
 
-  const anchors = createAnchors({
-    bodyType,
-    measurements,
-    measurementOrigins,
-    landmarks,
-    joints,
-    torsoStations,
-    armPoseAngleDeg,
-    legPoseAngleDeg,
-    version: "avatar-parametric@1",
-    anchors: [],
+  const stationIds = ["crotch", "full-hip", "waist", "bust", "shoulder"] as const;
+  const torsoStations: AvatarTorsoStation[] = stationIds.map((id) => {
+    const section = humanBody.crossSections.find((candidate) => candidate.id === id);
+    if (!section) throw new Error(`HumanBody cross-section ausente: ${id}`);
+    return {
+      y: section.yM,
+      halfWidth: section.halfWidthM,
+      halfDepth: (section.frontDepthM + section.backDepthM) * 0.5,
+    };
   });
 
-  return {
+  const armVector: AvatarVector3 = [
+    wristRight[0] - shoulderRight[0],
+    wristRight[1] - shoulderRight[1],
+    wristRight[2] - shoulderRight[2],
+  ];
+  const legVector: AvatarVector3 = [
+    ankleRight[0] - hipRight[0],
+    ankleRight[1] - hipRight[1],
+    ankleRight[2] - hipRight[2],
+  ];
+  const armPoseAngleDeg = Math.atan2(Math.abs(armVector[0]), Math.abs(armVector[1])) * 180 / Math.PI;
+  const legPoseAngleDeg = Math.atan2(Math.abs(legVector[0]), Math.abs(legVector[1])) * 180 / Math.PI;
+
+  const model: AvatarParametricModel = {
     version: "avatar-parametric@1",
     bodyType,
+    humanBody,
     measurements,
+    measurementOrigins: { ...humanBody.measurementSources },
     landmarks,
     joints,
     torsoStations,
-    anchors,
+    anchors: [],
     armPoseAngleDeg,
     legPoseAngleDeg,
   };
+  model.anchors = createAnchors(model);
+  return model;
 }
 
 export function resolveAvatarAnchor(
@@ -326,13 +313,16 @@ export function addScaled3(origin: AvatarVector3, direction: AvatarVector3, scal
 }
 
 function createAnchors(model: AvatarParametricModel): AvatarArrangementAnchor[] {
+  const body = model.humanBody;
   const front: AvatarVector3 = [0, 0, 1];
   const back: AvatarVector3 = [0, 0, -1];
   const down: AvatarVector3 = [0, -1, 0];
   const horizontal: AvatarVector3 = [1, 0, 0];
-  const torso = sampleTorsoAxes(model, model.landmarks.bustY);
-  const waist = sampleTorsoAxes(model, model.landmarks.waistY);
-  const hip = sampleTorsoAxes(model, model.landmarks.hipY);
+  const point = (id: keyof HumanBodyModel["landmarks"]): AvatarVector3 =>
+    [...body.landmarks[id].position] as AvatarVector3;
+  const normal = (id: keyof HumanBodyModel["landmarks"]): AvatarVector3 =>
+    [...body.landmarks[id].normal] as AvatarVector3;
+
   const leftArmAxis = normalize3([
     model.joints.wristLeft[0] - model.joints.shoulderLeft[0],
     model.joints.wristLeft[1] - model.joints.shoulderLeft[1],
@@ -353,12 +343,13 @@ function createAnchors(model: AvatarParametricModel): AvatarArrangementAnchor[] 
     model.joints.ankleRight[1] - model.joints.hipRight[1],
     model.joints.ankleRight[2] - model.joints.hipRight[2],
   ]);
+
   const make = (
     id: AvatarArrangementAnchorId,
     region: AvatarArrangementAnchor["region"],
     surface: PreviewSurface,
     bodySide: PreviewBodySide,
-    position: AvatarVector3,
+    positionValue: AvatarVector3,
     outwardNormal: AvatarVector3,
     axis: AvatarVector3,
     tangent: AvatarVector3,
@@ -368,7 +359,7 @@ function createAnchors(model: AvatarParametricModel): AvatarArrangementAnchor[] 
     region,
     surface,
     bodySide,
-    position,
+    position: positionValue,
     outwardNormal: normalize3(outwardNormal),
     axis: normalize3(axis),
     tangent: normalize3(tangent),
@@ -376,39 +367,23 @@ function createAnchors(model: AvatarParametricModel): AvatarArrangementAnchor[] 
   });
 
   return [
-    make("torso-front", "torso", "front", "center", [0, model.landmarks.bustY, torso.halfDepth], front, down, horizontal, 0.014),
-    make("torso-back", "torso", "back", "center", [0, model.landmarks.bustY, -torso.halfDepth], back, down, [-1, 0, 0], 0.014),
-    make("shoulder-left", "shoulder", "side", "left", model.joints.shoulderLeft, [-1, 0.15, 0], leftArmAxis, front, 0.012),
-    make("shoulder-right", "shoulder", "side", "right", model.joints.shoulderRight, [1, 0.15, 0], rightArmAxis, front, 0.012),
-    make("arm-left", "arm", "side", "left", model.joints.shoulderLeft, [-1, 0, 0], leftArmAxis, front, 0.012),
-    make("arm-right", "arm", "side", "right", model.joints.shoulderRight, [1, 0, 0], rightArmAxis, front, 0.012),
-    make("waist-front", "waist", "front", "center", [0, model.landmarks.waistY, waist.halfDepth], front, down, horizontal, 0.012),
-    make("waist-back", "waist", "back", "center", [0, model.landmarks.waistY, -waist.halfDepth], back, down, [-1, 0, 0], 0.012),
-    make("hip-front", "hip", "front", "center", [0, model.landmarks.hipY, hip.halfDepth], front, down, horizontal, 0.014),
-    make("hip-back", "hip", "back", "center", [0, model.landmarks.hipY, -hip.halfDepth], back, down, [-1, 0, 0], 0.014),
-    make("hip-left", "hip", "side", "left", [-hip.halfWidth, model.landmarks.hipY, 0], [-1, 0, 0], down, front, 0.014),
-    make("hip-right", "hip", "side", "right", [hip.halfWidth, model.landmarks.hipY, 0], [1, 0, 0], down, front, 0.014),
+    make("torso-front", "torso", "front", "center", point("bust-apex-right").map((value, index) => index === 0 ? 0 : value) as AvatarVector3, front, down, horizontal, 0.014),
+    make("torso-back", "torso", "back", "center", [0, model.landmarks.bustY, point("center-back-waist")[2]], back, down, [-1, 0, 0], 0.014),
+    make("shoulder-left", "shoulder", "side", "left", point("shoulder-left"), normal("shoulder-left"), leftArmAxis, front, 0.012),
+    make("shoulder-right", "shoulder", "side", "right", point("shoulder-right"), normal("shoulder-right"), rightArmAxis, front, 0.012),
+    make("arm-left", "arm", "side", "left", point("armhole-left"), [-1, 0, 0], leftArmAxis, front, 0.012),
+    make("arm-right", "arm", "side", "right", point("armhole-right"), [1, 0, 0], rightArmAxis, front, 0.012),
+    make("waist-front", "waist", "front", "center", point("center-front-waist"), normal("center-front-waist"), down, horizontal, 0.012),
+    make("waist-back", "waist", "back", "center", point("center-back-waist"), normal("center-back-waist"), down, [-1, 0, 0], 0.012),
+    make("hip-front", "hip", "front", "center", point("full-hip-front"), normal("full-hip-front"), down, horizontal, 0.014),
+    make("hip-back", "hip", "back", "center", point("full-hip-back"), normal("full-hip-back"), down, [-1, 0, 0], 0.014),
+    make("hip-left", "hip", "side", "left", [-sampleTorsoAxes(model, model.landmarks.hipY).halfWidth, model.landmarks.hipY, 0], [-1, 0, 0], down, front, 0.014),
+    make("hip-right", "hip", "side", "right", [sampleTorsoAxes(model, model.landmarks.hipY).halfWidth, model.landmarks.hipY, 0], [1, 0, 0], down, front, 0.014),
     make("leg-left", "leg", "side", "left", model.joints.hipLeft, [-1, 0, 0], leftLegAxis, front, 0.012),
     make("leg-right", "leg", "side", "right", model.joints.hipRight, [1, 0, 0], rightLegAxis, front, 0.012),
-    make("neck", "neck", "front", "center", [0, model.landmarks.neckY, 0], front, [0, 1, 0], horizontal, 0.01),
+    make("neck", "neck", "front", "center", point("neck-base-center"), normal("neck-base-center"), [0, 1, 0], horizontal, 0.01),
     make("head", "head", "front", "center", [0, model.landmarks.headCenterY, 0], front, [0, 1, 0], horizontal, 0.01),
   ];
-}
-
-function ellipseAxes(circumference: number, widthBias: number): [number, number] {
-  const baseA = Math.max(0.5, widthBias);
-  const baseB = 1;
-  const unitCircumference = ramanujanCircumference(baseA, baseB);
-  const scale = circumference / Math.max(unitCircumference, 1e-6);
-  return [baseA * scale, baseB * scale];
-}
-
-function ramanujanCircumference(a: number, b: number): number {
-  return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
-}
-
-function positive(value: number | undefined, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
