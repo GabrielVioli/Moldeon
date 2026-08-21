@@ -9,7 +9,7 @@ on:
       - recovery/11.0.3-material-physics-integrity
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   phase0-focused:
@@ -31,22 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Consolidate proven structural-island decomposition
-        run: |
-          if ! grep -q 'attachmentGroupIds: Set<string>' apps/web/src/garment3d/IsometricSurfaceAssembly.ts; then
-            python3 scripts/recovery11_0_4_phase0_patch.py
-          fi
-
-      - name: Commit structural-island source
-        if: github.event_name == 'push'
-        run: |
-          if ! git diff --quiet -- apps/web/src/garment3d/IsometricSurfaceAssembly.ts; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add apps/web/src/garment3d/IsometricSurfaceAssembly.ts
-            git commit -m "fix(assembly): isolate attachment structural islands"
-            git push origin HEAD:recovery/11.0.4-human-body-placement-scale
-          fi
+      - name: Apply narrow-band developable prototype
+        run: python3 scripts/recovery11_0_4_developable_attachment.py
 
       - name: Diff check
         run: git diff --check origin/recovery/11.0.3-material-physics-integrity...HEAD && git diff --check
