@@ -52,14 +52,22 @@ anchor = '''function realignCurrentStructuralIslandsByAttachments(
   component: Component,
   coarse: CoarseAssemblySet,
 ): void {'''
-helper = '''/**
- * Develop a one-panel, self-closed strip directly from the already solved
- * attachment boundary. The test is purely geometric/topological: the local
- * attachment samples must span the strip's closed material direction while
- * remaining approximately constant in the transverse direction.
+helper = '''interface AttachedBoundarySample {
+  acrossMm: number;
+  alongMm: number;
+  target: readonly [number, number, number];
+}
+
+/**
+ * Develop a one-panel, self-closed narrow strip directly from an already
+ * solved attachment opening. The parent island is immutable.
  *
- * This creates a generalized cylinder: attachment curve + constant extrusion
- * direction. No scale is introduced and the parent island is never moved.
+ * The attachment samples are hard anchors. Between two anchors the 2D
+ * material distance is authoritative, so a circular arc of that exact length
+ * is constructed instead of using the shorter spatial chord. Extruding the
+ * resulting arclength-parameterized boundary along the opening-plane normal
+ * yields a generalized cylinder with the same first fundamental form as the
+ * rectangular 2D strip. No scale and no iterative closure are involved.
  */
 function mapAttachedClosedStripToBoundary(
   id: string,
@@ -75,11 +83,7 @@ function mapAttachedClosedStripToBoundary(
   const selfSeams = selfStructuralSeams(component, id);
   if (selfSeams.length < 2) return null;
   const axis = acrossAxis(mesh, selfSeams);
-  const samples: Array<{
-    across: number;
-    along: number;
-    target: readonly [number, number, number];
-  }> = [];
+  const samples: AttachedBoundarySample[] = [];
   for (const seam of attachments) {
     const localIsA = seam.instanceA === id && placed.has(seam.instanceB);
     const localIsB = seam.instanceB === id && placed.has(seam.instanceA);
@@ -91,17 +95,25 @@ function mapAttachedClosedStripToBoundary(
     if (!fixed) continue;
     const material = materialAxisSample(localBinding, axis);
     samples.push({
-      across: material.across,
-      along: material.along,
+      acrossMm: material.across,
+      alongMm: material.along,
       target: evaluateBindingOnPositions(fixed, fixedBinding),
     });
   }
   if (samples.length < 4) return null;
-  samples.sort((left, right) => left.across - right.across || left.along - right.along);
-  const acrossSpan = samples[samples.length - 1].across - samples[0].across;
-  const alongValues = samples.map((sample) => sample.along);
-  const alongSpan = Math.max(...alongValues) - Math.min(...alongValues);
-  if (acrossSpan < 10 || alongSpan > Math.max(2, acrossSpan * 0.02)) return null;
+  samples.sort((left, right) => left.acrossMm - right.acrossMm || left.alongMm - right.alongMm);
+
+  const collapsed: AttachedBoundarySample[] = [];
+  for (const sample of samples) {
+    const previous = collapsed[collapsed.length - 1];
+    if (previous && Math.abs(previous.acrossMm - sample.acrossMm) <= 1e-4) {
+      previous.alongMm = (previous.alongMm + sample.alongMm) * 0.5;
+      previous.target = scale(add(previous.target, sample.target), 0.5);
+    } else {
+      collapsed.push({ ...sample });
+    }
+  }
+  if (collapsed.length < 4) return null;
 
   const materialAcrossValues: number[] = [];
   for (let vertexIndex = 0; vertexIndex < mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
@@ -109,46 +121,55 @@ function mapAttachedClosedStripToBoundary(
     const y = mesh.materialPositionsMm[vertexIndex * 2 + 1];
     materialAcrossValues.push(axis.acrossIsX ? x : y);
   }
-  const materialAcrossSpan = Math.max(...materialAcrossValues) - Math.min(...materialAcrossValues);
-  if (materialAcrossSpan <= 1 || acrossSpan / materialAcrossSpan < 0.9) return null;
+  const materialMin = Math.min(...materialAcrossValues);
+  const materialMax = Math.max(...materialAcrossValues);
+  const materialSpanMm = materialMax - materialMin;
+  const sampledSpanMm = collapsed[collapsed.length - 1].acrossMm - collapsed[0].acrossMm;
+  const alongValues = collapsed.map((sample) => sample.alongMm);
+  const alongSpanMm = Math.max(...alongValues) - Math.min(...alongValues);
+  if (materialSpanMm <= 1 || sampledSpanMm < materialSpanMm * 0.9) return null;
+  if (alongSpanMm > Math.max(2, materialSpanMm * 0.02)) return null;
 
-  const collapsed: typeof samples = [];
-  for (const sample of samples) {
-    const previous = collapsed[collapsed.length - 1];
-    if (previous && Math.abs(previous.across - sample.across) <= 1e-5) {
-      previous.along = (previous.along + sample.along) * 0.5;
-      previous.target = scale(add(previous.target, sample.target), 0.5);
-    } else {
-      collapsed.push({ ...sample });
-    }
-  }
-  if (collapsed.length < 3) return null;
-  const attachmentAlong = collapsed.reduce((sum, sample) => sum + sample.along, 0) / collapsed.length;
   const center = centroidOfPointList(collapsed.map((sample) => sample.target));
-  let normal: readonly [number, number, number] = [0, 0, 0];
-  for (let index = 0; index < collapsed.length - 1; index += 1) {
-    normal = add(
-      normal,
-      cross(sub(collapsed[index].target, center), sub(collapsed[index + 1].target, center)),
-    );
-  }
-  normal = normalize(normal);
-  if (length3(normal) <= EPS) return null;
-
-  const frame = materialSurfaceFrame(mesh, current);
-  if (frame) {
-    const existingAlong = axis.acrossIsX ? frame.y : frame.x;
-    if (dot(normal, existingAlong) < 0) normal = scale(normal, -1);
+  let extrusion = polygonPlaneNormal(collapsed.map((sample) => sample.target), center);
+  if (length3(extrusion) <= EPS) return null;
+  const currentFrame = materialSurfaceFrame(mesh, current);
+  if (currentFrame) {
+    const materialAlong = axis.acrossIsX ? currentFrame.y : currentFrame.x;
+    if (dot(extrusion, materialAlong) < 0) extrusion = scale(extrusion, -1);
   }
 
+  // The opening must be close to planar for one rectangular strip to attach
+  // isometrically as a generalized cylinder with a constant extrusion axis.
+  const planeResidualM = collapsed.reduce(
+    (maximum, sample) => Math.max(maximum, Math.abs(dot(sub(sample.target, center), extrusion))),
+    0,
+  );
+  if (planeResidualM > Math.max(0.0015, materialSpanMm * 0.001 * 0.01)) return null;
+
+  // Validate every anchor interval before writing any vertex. A target chord
+  // longer than its authored material interval is geometrically impossible
+  // without stretch, so this mapper refuses rather than silently scaling.
+  for (let index = 0; index + 1 < collapsed.length; index += 1) {
+    const requiredM = (collapsed[index + 1].acrossMm - collapsed[index].acrossMm) * 0.001;
+    const chordM = length3(sub(collapsed[index + 1].target, collapsed[index].target));
+    if (requiredM <= EPS || chordM > requiredM * 1.0005) return null;
+  }
+
+  const attachmentAlongMm = collapsed.reduce((sum, sample) => sum + sample.alongMm, 0) / collapsed.length;
   const result = new Float32Array(mesh.materialPositionsMm.length / 2 * 3);
   for (let vertexIndex = 0; vertexIndex < mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
     const x = mesh.materialPositionsMm[vertexIndex * 2];
     const y = mesh.materialPositionsMm[vertexIndex * 2 + 1];
-    const across = axis.acrossIsX ? x : y;
-    const along = axis.acrossIsX ? y : x;
-    const boundary = interpolateAttachedBoundary(collapsed, across);
-    const point = add(boundary, scale(normal, (along - attachmentAlong) * 0.001));
+    const acrossMm = axis.acrossIsX ? x : y;
+    const alongMm = axis.acrossIsX ? y : x;
+    const boundary = evaluateLengthPreservingAttachedBoundary(
+      collapsed,
+      acrossMm,
+      extrusion,
+      center,
+    );
+    const point = add(boundary, scale(extrusion, (alongMm - attachmentAlongMm) * 0.001));
     const offset = vertexIndex * 3;
     result[offset] = point[0];
     result[offset + 1] = point[1];
@@ -157,30 +178,95 @@ function mapAttachedClosedStripToBoundary(
   return result;
 }
 
-function interpolateAttachedBoundary(
-  samples: readonly {
-    across: number;
-    target: readonly [number, number, number];
-  }[],
-  across: number,
+function polygonPlaneNormal(
+  points: readonly (readonly [number, number, number])[],
+  center: readonly [number, number, number],
 ): readonly [number, number, number] {
-  if (across <= samples[0].across) return samples[0].target;
-  if (across >= samples[samples.length - 1].across) return samples[samples.length - 1].target;
+  let normal: readonly [number, number, number] = [0, 0, 0];
+  for (let index = 0; index + 1 < points.length; index += 1) {
+    normal = add(
+      normal,
+      cross(sub(points[index], center), sub(points[index + 1], center)),
+    );
+  }
+  return normalize(normal);
+}
+
+function evaluateLengthPreservingAttachedBoundary(
+  samples: readonly AttachedBoundarySample[],
+  acrossMm: number,
+  planeNormal: readonly [number, number, number],
+  loopCenter: readonly [number, number, number],
+): readonly [number, number, number] {
+  if (acrossMm <= samples[0].acrossMm) return samples[0].target;
+  if (acrossMm >= samples[samples.length - 1].acrossMm) return samples[samples.length - 1].target;
   let upper = 1;
-  while (upper < samples.length && samples[upper].across < across) upper += 1;
-  const lower = samples[upper - 1];
-  const next = samples[Math.min(upper, samples.length - 1)];
-  const span = next.across - lower.across;
-  if (span <= 1e-9) return scale(add(lower.target, next.target), 0.5);
-  const t = (across - lower.across) / span;
-  return add(lower.target, scale(sub(next.target, lower.target), t));
+  while (upper < samples.length && samples[upper].acrossMm < acrossMm) upper += 1;
+  const first = samples[upper - 1];
+  const second = samples[Math.min(upper, samples.length - 1)];
+  const materialSpanMm = second.acrossMm - first.acrossMm;
+  if (materialSpanMm <= 1e-9) return scale(add(first.target, second.target), 0.5);
+  const u = clamp((acrossMm - first.acrossMm) / materialSpanMm, 0, 1);
+  return prescribedArcPoint(
+    first.target,
+    second.target,
+    materialSpanMm * 0.001,
+    u,
+    planeNormal,
+    loopCenter,
+  );
+}
+
+/** Point on the minor circular arc with prescribed arclength. */
+function prescribedArcPoint(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+  arcLengthM: number,
+  u: number,
+  planeNormal: readonly [number, number, number],
+  loopCenter: readonly [number, number, number],
+): readonly [number, number, number] {
+  const chord = sub(second, first);
+  const chordLength = length3(chord);
+  if (arcLengthM <= EPS || chordLength <= EPS) return first;
+  if (arcLengthM - chordLength <= Math.max(1e-8, arcLengthM * 1e-6)) {
+    return add(first, scale(chord, u));
+  }
+
+  const ratio = clamp(chordLength / arcLengthM, 1e-9, 1);
+  let low = 1e-6;
+  let high = Math.PI * 1.999;
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const theta = (low + high) * 0.5;
+    const current = 2 * Math.sin(theta * 0.5) / theta;
+    if (current > ratio) low = theta;
+    else high = theta;
+  }
+  const theta = (low + high) * 0.5;
+  const radius = arcLengthM / theta;
+  const halfChord = chordLength * 0.5;
+  const centerDistance = Math.sqrt(Math.max(0, radius * radius - halfChord * halfChord));
+  const tangent = scale(chord, 1 / chordLength);
+  let bulge = normalize(cross(planeNormal, tangent));
+  const midpoint = scale(add(first, second), 0.5);
+  const radial = sub(midpoint, loopCenter);
+  if (dot(bulge, radial) < 0) bulge = scale(bulge, -1);
+  const circleCenter = sub(midpoint, scale(bulge, centerDistance));
+  const phi = (u - 0.5) * theta;
+  return add(
+    circleCenter,
+    add(
+      scale(tangent, Math.sin(phi) * radius),
+      scale(bulge, Math.cos(phi) * radius),
+    ),
+  );
 }
 
 function realignCurrentStructuralIslandsByAttachments(
   component: Component,
   coarse: CoarseAssemblySet,
 ): void {'''
-replace_once(anchor, helper, "developable attachment mapping helpers")
+replace_once(anchor, helper, "length-preserving developable attachment mapping")
 
 path.write_text(text, encoding="utf-8")
 print(f"patched {path}")
