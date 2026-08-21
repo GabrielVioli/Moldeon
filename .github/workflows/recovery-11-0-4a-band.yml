@@ -31,6 +31,7 @@ jobs:
           python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4a_opening_cycle.py
           python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
+          python3 scripts/recovery11_0_4a_topology_sample_count.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_attachment_monotonic_fallback.py
           python3 scripts/recovery11_0_4a_band_diagnostics.py
@@ -65,6 +66,7 @@ jobs:
           python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4a_opening_cycle.py
           python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
+          python3 scripts/recovery11_0_4a_topology_sample_count.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_attachment_monotonic_fallback.py
           python3 scripts/recovery11_0_4_dart_candidate.py
