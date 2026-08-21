@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - recovery/11.0.4-human-body-placement-scale
+  pull_request:
+    branches:
+      - recovery/11.0.3-material-physics-integrity
 
 permissions:
   contents: read
@@ -26,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Diff check
-        run: git diff --check HEAD^
+        run: git diff --check origin/recovery/11.0.3-material-physics-integrity...HEAD
 
       - name: Typecheck
         run: npm run typecheck
