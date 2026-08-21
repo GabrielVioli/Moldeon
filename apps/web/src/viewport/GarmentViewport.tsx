@@ -170,149 +170,153 @@ export const GarmentViewport = memo(function GarmentViewport({
             viewportRef.current?.resumeSimulation();
           }}>Continuar</button>
         )}
-        <button type="button" onClick={() => {
-          viewportRef.current?.stepSimulation();
-        }}>Passo</button>
+        {import.meta.env.DEV ? (
+          <button type="button" onClick={() => {
+            viewportRef.current?.stepSimulation();
+          }}>Passo</button>
+        ) : null}
         <button type="button" onClick={() => {
           viewportRef.current?.resetSimulation();
         }}>Reiniciar</button>
       </div>
       {import.meta.env.DEV ? (
-        <aside className="viewport-physics-dev" aria-label="Diagnóstico físico DEV">
-          <strong>Física DEV</strong>
-          <label>
-            Gravidade
-            <select
-              value={devSettings.gravityScale}
-              onChange={(event) => setDevSettings((current) => ({
-                ...current,
-                gravityScale: Number(event.target.value) as SimulationDevSettings["gravityScale"],
-              }))}
-            >
-              <option value={0}>0%</option>
-              <option value={0.25}>25%</option>
-              <option value={1}>100%</option>
-            </select>
-          </label>
-          <label>
-            Simulação
-            <select
-              value={devSettings.cadence}
-              onChange={(event) => setDevSettings((current) => ({
-                ...current,
-                cadence: Number(event.target.value) as SimulationDevSettings["cadence"],
-              }))}
-            >
-              <option value={0.1}>0.1x</option>
-              <option value={0.25}>0.25x</option>
-              <option value={1}>1x</option>
-            </select>
-          </label>
-          <label>
-            Auto-pause
-            <select
-              value={devSettings.autoPauseSteps}
-              onChange={(event) => setDevSettings((current) => ({
-                ...current,
-                autoPauseSteps: Number(event.target.value) as SimulationDevSettings["autoPauseSteps"],
-              }))}
-            >
-              <option value={0}>desligado</option>
-              <option value={30}>30 steps</option>
-              <option value={60}>60 steps</option>
-              <option value={120}>120 steps</option>
-            </select>
-          </label>
-          <label className="viewport-physics-toggle">
-            <input
-              type="checkbox"
-              checked={devSettings.bodyCollisionEnabled}
-              onChange={(event) => setDevSettings((current) => ({ ...current, bodyCollisionEnabled: event.target.checked }))}
-            />
-            Body collision
-          </label>
-          <label className="viewport-physics-toggle">
-            <input
-              type="checkbox"
-              checked={devSettings.showBodyColliders}
-              onChange={(event) => setDevSettings((current) => ({ ...current, showBodyColliders: event.target.checked }))}
-            />
-            Show body colliders
-          </label>
-          <label className="viewport-physics-toggle">
-            <input
-              type="checkbox"
-              checked={devSettings.showProceduralAvatar}
-              onChange={(event) => setDevSettings((current) => ({ ...current, showProceduralAvatar: event.target.checked }))}
-            />
-            Show procedural avatar
-          </label>
-          <label className="viewport-physics-toggle">
-            <input
-              type="checkbox"
-              checked={wireframe}
-              onChange={(event) => setWireframe(event.target.checked)}
-            />
-            Wireframe
-          </label>
-          <button type="button" onClick={() => viewportRef.current?.frameGarment()}>
-            Enquadrar roupa
-          </button>
-          <dl>
-            <dt>physicsStep</dt><dd>{telemetry?.stepCount ?? 0}</dd>
-            <dt>FPS</dt><dd>{formatMetric(telemetry?.approximateFps)}</dd>
-            <dt>physicsStepMs</dt><dd>{formatMetric(telemetry?.physicsStepMs)}</dd>
-            <dt>particles</dt><dd>{telemetry?.particleCount ?? 0}</dd>
-            <dt>triangles</dt><dd>{telemetry?.triangleCount ?? 0}</dd>
-            <dt>stretch</dt><dd>{telemetry?.stretchConstraintCount ?? 0}</dd>
-            <dt>shear</dt><dd>{telemetry?.shearConstraintCount ?? 0}</dd>
-            <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
-            <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
-            <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
-            <dt>Body colliders</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
-            <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
-            <dt>Max penetration mm</dt><dd>{formatMetric((telemetry?.maximumBodyPenetrationM ?? 0) * 1000)}</dd>
-            <dt>Max body correction mm</dt><dd>{formatMetric((telemetry?.maximumBodyCorrectionM ?? 0) * 1000)}</dd>
-            <dt>Body collision ms</dt><dd>{formatMetric(telemetry?.bodyCollisionMs)}</dd>
-            <dt>Body broadphase ms</dt><dd>{formatMetric(telemetry?.bodyBroadphaseMs)}</dd>
-            <dt>Body narrowphase ms</dt><dd>{formatMetric(telemetry?.bodyNarrowphaseMs)}</dd>
-            <dt>Body projection ms</dt><dd>{formatMetric(telemetry?.bodyProjectionMs)}</dd>
-            <dt>Body friction ms</dt><dd>{formatMetric(telemetry?.bodyFrictionMs)}</dd>
-            <dt>Body broadphase reject %</dt><dd>{formatMetric((telemetry?.bodyBroadphaseRejectRate ?? 0) * 100)}</dd>
-            <dt>Body candidates/query</dt><dd>{formatMetric(telemetry?.bodyAverageCandidatesPerParticle)}</dd>
-            <dt>Body tests (all / narrow)</dt><dd>{telemetry?.bodyColliderTests ?? 0} / {telemetry?.bodyCandidateColliderTests ?? 0}</dd>
-            <dt>Body narrow (capsule / ellipsoid)</dt><dd>{telemetry?.bodyCapsuleNarrowphaseTests ?? 0} / {telemetry?.bodyEllipsoidNarrowphaseTests ?? 0}</dd>
-            <dt>Body swept (tests / hits)</dt><dd>{telemetry?.bodySweptTests ?? 0} / {telemetry?.bodySweptContactsFound ?? 0}</dd>
-            <dt>Dressing steps</dt><dd>{telemetry?.bodyDressingStepsRemaining ?? 0} / {telemetry?.bodyInitialDressingSteps ?? 0}</dd>
-            <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
-            <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
-            <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
-            <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
-            <dt>stretch mean / max</dt><dd>{formatMetric(telemetry?.structuralStretchMeanRatio)} / {formatMetric(telemetry?.structuralStretchMaxRatio)}</dd>
-            <dt>compression min</dt><dd>{formatMetric(telemetry?.structuralCompressionMinRatio)}</dd>
-            <dt>shear mean / max</dt><dd>{formatMetric(telemetry?.shearStrainMean)} / {formatMetric(telemetry?.shearStrainMax)}</dd>
-            <dt>area mean / min / max</dt><dd>{formatMetric(telemetry?.triangleAreaMeanRatio)} / {formatMetric(telemetry?.triangleAreaMinRatio)} / {formatMetric(telemetry?.triangleAreaMaxRatio)}</dd>
-            <dt>flipped triangles</dt><dd>{telemetry?.flippedTriangleCount ?? 0}</dd>
-            <dt>AABB growth</dt><dd>{formatMetric(telemetry?.garmentAabbGrowthRatio)}</dd>
-            <dt>velocity max</dt><dd>{formatMetric(telemetry?.maximumVelocityMagnitude)}</dd>
-            <dt>pins explicit / temporary</dt><dd>{telemetry?.explicitPinCount ?? 0} / {telemetry?.temporarySupportCount ?? 0}</dd>
-            <dt>invalid reason</dt><dd>{telemetry?.invalidReason ?? "-"}</dd>
-          </dl>
-          {telemetry ? (
-            <details className="viewport-physics-seam-groups">
-              <summary>SeamGroups por residual</summary>
-              {[...Object.entries(telemetry.seamErrorsByGroup)]
-                .sort((left, right) => right[1].maxError - left[1].maxError)
-                .slice(0, 8)
-                .map(([groupId, group]) => (
-                  <div key={groupId}>
-                    <code>{groupId}</code>
-                    <span> mean {formatMetric(group.meanError * 1000)} mm · max {formatMetric(group.maxError * 1000)} mm</span>
-                  </div>
-                ))}
-            </details>
-          ) : null}
-        </aside>
+        <details className="viewport-physics-dev" data-testid="physics-dev-panel">
+          <summary>Física DEV</summary>
+          <div className="viewport-physics-dev-body">
+            <label>
+              Gravidade
+              <select
+                value={devSettings.gravityScale}
+                onChange={(event) => setDevSettings((current) => ({
+                  ...current,
+                  gravityScale: Number(event.target.value) as SimulationDevSettings["gravityScale"],
+                }))}
+              >
+                <option value={0}>0%</option>
+                <option value={0.25}>25%</option>
+                <option value={1}>100%</option>
+              </select>
+            </label>
+            <label>
+              Simulação
+              <select
+                value={devSettings.cadence}
+                onChange={(event) => setDevSettings((current) => ({
+                  ...current,
+                  cadence: Number(event.target.value) as SimulationDevSettings["cadence"],
+                }))}
+              >
+                <option value={0.1}>0.1x</option>
+                <option value={0.25}>0.25x</option>
+                <option value={1}>1x</option>
+              </select>
+            </label>
+            <label>
+              Auto-pause
+              <select
+                value={devSettings.autoPauseSteps}
+                onChange={(event) => setDevSettings((current) => ({
+                  ...current,
+                  autoPauseSteps: Number(event.target.value) as SimulationDevSettings["autoPauseSteps"],
+                }))}
+              >
+                <option value={0}>desligado</option>
+                <option value={30}>30 steps</option>
+                <option value={60}>60 steps</option>
+                <option value={120}>120 steps</option>
+              </select>
+            </label>
+            <label className="viewport-physics-toggle">
+              <input
+                type="checkbox"
+                checked={devSettings.bodyCollisionEnabled}
+                onChange={(event) => setDevSettings((current) => ({ ...current, bodyCollisionEnabled: event.target.checked }))}
+              />
+              Body collision
+            </label>
+            <label className="viewport-physics-toggle">
+              <input
+                type="checkbox"
+                checked={devSettings.showBodyColliders}
+                onChange={(event) => setDevSettings((current) => ({ ...current, showBodyColliders: event.target.checked }))}
+              />
+              Show body colliders
+            </label>
+            <label className="viewport-physics-toggle">
+              <input
+                type="checkbox"
+                checked={devSettings.showProceduralAvatar}
+                onChange={(event) => setDevSettings((current) => ({ ...current, showProceduralAvatar: event.target.checked }))}
+              />
+              Show procedural avatar
+            </label>
+            <label className="viewport-physics-toggle">
+              <input
+                type="checkbox"
+                checked={wireframe}
+                onChange={(event) => setWireframe(event.target.checked)}
+              />
+              Wireframe
+            </label>
+            <button type="button" onClick={() => viewportRef.current?.frameGarment()}>
+              Enquadrar roupa
+            </button>
+            <dl>
+              <dt>physicsStep</dt><dd>{telemetry?.stepCount ?? 0}</dd>
+              <dt>FPS</dt><dd>{formatMetric(telemetry?.approximateFps)}</dd>
+              <dt>physicsStepMs</dt><dd>{formatMetric(telemetry?.physicsStepMs)}</dd>
+              <dt>particles</dt><dd>{telemetry?.particleCount ?? 0}</dd>
+              <dt>triangles</dt><dd>{telemetry?.triangleCount ?? 0}</dd>
+              <dt>stretch</dt><dd>{telemetry?.stretchConstraintCount ?? 0}</dd>
+              <dt>shear</dt><dd>{telemetry?.shearConstraintCount ?? 0}</dd>
+              <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
+              <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
+              <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
+              <dt>Body colliders</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
+              <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
+              <dt>Max penetration mm</dt><dd>{formatMetric((telemetry?.maximumBodyPenetrationM ?? 0) * 1000)}</dd>
+              <dt>Max body correction mm</dt><dd>{formatMetric((telemetry?.maximumBodyCorrectionM ?? 0) * 1000)}</dd>
+              <dt>Body collision ms</dt><dd>{formatMetric(telemetry?.bodyCollisionMs)}</dd>
+              <dt>Body broadphase ms</dt><dd>{formatMetric(telemetry?.bodyBroadphaseMs)}</dd>
+              <dt>Body narrowphase ms</dt><dd>{formatMetric(telemetry?.bodyNarrowphaseMs)}</dd>
+              <dt>Body projection ms</dt><dd>{formatMetric(telemetry?.bodyProjectionMs)}</dd>
+              <dt>Body friction ms</dt><dd>{formatMetric(telemetry?.bodyFrictionMs)}</dd>
+              <dt>Body broadphase reject %</dt><dd>{formatMetric((telemetry?.bodyBroadphaseRejectRate ?? 0) * 100)}</dd>
+              <dt>Body candidates/query</dt><dd>{formatMetric(telemetry?.bodyAverageCandidatesPerParticle)}</dd>
+              <dt>Body tests (all / narrow)</dt><dd>{telemetry?.bodyColliderTests ?? 0} / {telemetry?.bodyCandidateColliderTests ?? 0}</dd>
+              <dt>Body narrow (capsule / ellipsoid)</dt><dd>{telemetry?.bodyCapsuleNarrowphaseTests ?? 0} / {telemetry?.bodyEllipsoidNarrowphaseTests ?? 0}</dd>
+              <dt>Body swept (tests / hits)</dt><dd>{telemetry?.bodySweptTests ?? 0} / {telemetry?.bodySweptContactsFound ?? 0}</dd>
+              <dt>Dressing steps</dt><dd>{telemetry?.bodyDressingStepsRemaining ?? 0} / {telemetry?.bodyInitialDressingSteps ?? 0}</dd>
+              <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
+              <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
+              <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>
+              <dt>seamMaxErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorMaximum ?? 0) * 1000)}</dd>
+              <dt>stretch mean / max</dt><dd>{formatMetric(telemetry?.structuralStretchMeanRatio)} / {formatMetric(telemetry?.structuralStretchMaxRatio)}</dd>
+              <dt>compression min</dt><dd>{formatMetric(telemetry?.structuralCompressionMinRatio)}</dd>
+              <dt>shear mean / max</dt><dd>{formatMetric(telemetry?.shearStrainMean)} / {formatMetric(telemetry?.shearStrainMax)}</dd>
+              <dt>area mean / min / max</dt><dd>{formatMetric(telemetry?.triangleAreaMeanRatio)} / {formatMetric(telemetry?.triangleAreaMinRatio)} / {formatMetric(telemetry?.triangleAreaMaxRatio)}</dd>
+              <dt>flipped triangles</dt><dd>{telemetry?.flippedTriangleCount ?? 0}</dd>
+              <dt>AABB growth</dt><dd>{formatMetric(telemetry?.garmentAabbGrowthRatio)}</dd>
+              <dt>velocity max</dt><dd>{formatMetric(telemetry?.maximumVelocityMagnitude)}</dd>
+              <dt>pins explicit / temporary</dt><dd>{telemetry?.explicitPinCount ?? 0} / {telemetry?.temporarySupportCount ?? 0}</dd>
+              <dt>invalid reason</dt><dd>{telemetry?.invalidReason ?? "-"}</dd>
+            </dl>
+            {telemetry ? (
+              <details className="viewport-physics-seam-groups">
+                <summary>SeamGroups por residual</summary>
+                {[...Object.entries(telemetry.seamErrorsByGroup)]
+                  .sort((left, right) => right[1].maxError - left[1].maxError)
+                  .slice(0, 8)
+                  .map(([groupId, group]) => (
+                    <div key={groupId}>
+                      <code>{groupId}</code>
+                      <span> mean {formatMetric(group.meanError * 1000)} mm · max {formatMetric(group.maxError * 1000)} mm</span>
+                    </div>
+                  ))}
+              </details>
+            ) : null}
+          </div>
+        </details>
       ) : null}
     </div>
   );
