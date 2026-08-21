@@ -33,6 +33,7 @@ jobs:
           python3 scripts/recovery11_0_4a_rebuild_physical_attachment_samples.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_band_diagnostics.py
+          python3 scripts/recovery11_0_4a_mapper_diagnostics.py
       - name: Diff check
         run: git diff --check origin/recovery/11.0.4-human-body-placement-scale...HEAD && git diff --check
       - name: Typecheck
