@@ -17,12 +17,22 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Apply canonical body integration
+        run: python3 scripts/recovery11_0_4b_integrate_human_body.py
       - name: Diff check
-        run: git diff --check HEAD^
+        run: git diff --check
       - name: Typecheck
         run: npm run typecheck
+      - name: HumanBody geometry and measurements
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts
+      - name: Avatar compatibility and visual bridge
+        run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
+      - name: Build
+        run: npm run build
