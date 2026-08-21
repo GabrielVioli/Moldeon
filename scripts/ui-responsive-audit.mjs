@@ -246,22 +246,63 @@ async function runManualGate(page, label, viewport) {
   }
 
   const proveButton = page.locator(".toolbar-preview-button");
-  result.preview = { enabled: await proveButton.isEnabled(), opened: false };
-  if (result.preview.enabled) {
-    await proveButton.click();
-    const host = page.locator("[data-testid='dressed-avatar-viewport']");
-    await host.waitFor({ state: "visible", timeout: 15_000 });
-    result.preview.opened = true;
-    const physicsDev = page.locator("[data-testid='physics-dev-panel']");
-    if (await physicsDev.count()) {
-      result.preview.physicsDevOpen = await physicsDev.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
-      if (result.preview.physicsDevOpen) throw new Error(`${label}: Physics DEV abriu por padrão.`);
-    }
+  result.preview = { enabled: await proveButton.isEnabled(), opened: false, preflightSteps: [] };
+  if (!result.preview.enabled) {
+    throw new Error(`${label}: a prova 3D não está acessível para a fixture padrão.`);
+  }
+
+  await proveButton.click();
+  const host = page.locator("[data-testid='dressed-avatar-viewport']");
+  await completeDressingPreflight(page, host, result.preview.preflightSteps);
+  await host.waitFor({ state: "visible", timeout: 15_000 });
+  result.preview.opened = true;
+
+  const physicsDev = page.locator("[data-testid='physics-dev-panel']");
+  if (await physicsDev.count()) {
+    result.preview.physicsDevOpen = await physicsDev.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+    if (result.preview.physicsDevOpen) throw new Error(`${label}: Physics DEV abriu por padrão.`);
   }
 
   result.screenshot = `${artifactDir}/${label}-manual-gate.png`;
   await page.screenshot({ path: result.screenshot, fullPage: false });
   return result;
+}
+
+async function completeDressingPreflight(page, host, steps) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (await host.isVisible().catch(() => false)) return;
+
+    const preflight = page.locator(".dressing-preflight-dialog");
+    if (!await preflight.isVisible().catch(() => false)) {
+      await page.waitForTimeout(180);
+      continue;
+    }
+
+    const blocker = preflight.locator("[role='alert']");
+    if (await blocker.isVisible().catch(() => false)) {
+      throw new Error(`A fixture padrão encontrou bloqueio na pré-prova: ${await blocker.innerText()}`);
+    }
+
+    const lowerRegion = preflight.getByRole("button", { name: /Parte inferior/i });
+    if (await lowerRegion.isVisible().catch(() => false)) {
+      steps.push("region:lower");
+      await lowerRegion.click();
+      await page.waitForTimeout(120);
+      continue;
+    }
+
+    const referenceCandidate = preflight.getByRole("button", { name: /^Usar .+ como referência frontal$/i }).first();
+    if (await referenceCandidate.isVisible().catch(() => false)) {
+      steps.push("front-reference:selected");
+      await referenceCandidate.click();
+      const confirmReference = preflight.getByRole("button", { name: "Usar como referência frontal", exact: true });
+      await confirmReference.click();
+      await page.waitForTimeout(180);
+      continue;
+    }
+
+    await page.waitForTimeout(180);
+  }
 }
 
 async function setBrowserZoom(page, zoom) {
