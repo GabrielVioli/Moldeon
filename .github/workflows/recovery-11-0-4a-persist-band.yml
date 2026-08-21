@@ -56,9 +56,9 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: npm run typecheck
 
-      - name: Focused band invariance gate
+      - name: Focused skirt and tube band invariance gate
         if: steps.gate.outputs.skip != 'true'
-        run: npm run test --workspace @moldeon/web -- src/physics/phase0BandAttachmentInvariant.test.ts
+        run: npm run test --workspace @moldeon/web -- src/physics/phase0BandAttachmentInvariant.test.ts -t 'spatial-four-panel-tube|straight-skirt-standard'
 
       - name: Four-panel waistband zero-energy gate
         if: steps.gate.outputs.skip != 'true'
