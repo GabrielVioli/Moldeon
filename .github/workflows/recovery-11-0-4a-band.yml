@@ -32,6 +32,7 @@ jobs:
       - name: Apply 11.0.4A prototypes
         run: |
           python3 scripts/recovery11_0_4a_physical_opening.py
+          python3 scripts/recovery11_0_4a_opening_cycle.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4a_band_diagnostics.py
 
@@ -82,6 +83,7 @@ jobs:
       - name: Apply 11.0.4A plus inherited non-band Phase 0 WIP
         run: |
           python3 scripts/recovery11_0_4a_physical_opening.py
+          python3 scripts/recovery11_0_4a_opening_cycle.py
           python3 scripts/recovery11_0_4a_dominant_self_closed.py
           python3 scripts/recovery11_0_4_dart_candidate.py
           python3 scripts/recovery11_0_4_rigid_structural_polish.py
