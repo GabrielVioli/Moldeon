@@ -1,9 +1,7 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const src = fileURLToPath(new URL(".", import.meta.url));
-const readSource = (path: string) => readFileSync(new URL(path, `file://${src}/`), "utf8");
+const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 describe("responsive workspace UI contract", () => {
   it("loads the responsive layer after the historical styles", () => {
