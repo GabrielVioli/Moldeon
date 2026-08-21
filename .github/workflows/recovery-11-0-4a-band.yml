@@ -29,8 +29,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply physical opening correspondence prototype
+        run: python3 scripts/recovery11_0_4a_physical_opening.py
+
       - name: Diff check
-        run: git diff --check origin/recovery/11.0.4-human-body-placement-scale...HEAD
+        run: git diff --check origin/recovery/11.0.4-human-body-placement-scale...HEAD && git diff --check
 
       - name: Typecheck
         run: npm run typecheck
@@ -73,8 +76,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply inherited non-band Phase 0 WIP only
+      - name: Apply 11.0.4A plus inherited non-band Phase 0 WIP
         run: |
+          python3 scripts/recovery11_0_4a_physical_opening.py
           python3 scripts/recovery11_0_4_dart_candidate.py
           python3 scripts/recovery11_0_4_rigid_structural_polish.py
           python3 scripts/recovery11_0_4_freeflight_diagnostics.py
