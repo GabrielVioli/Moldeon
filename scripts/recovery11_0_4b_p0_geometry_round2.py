@@ -6,7 +6,7 @@ text = path.read_text(encoding="utf-8")
 pairs = [
     (
         'const DEFAULT_VISUAL_RESOLUTION = [48, 92, 42] as const;\n// Keep the same Y stations in both LODs so circumference sampling hits the\n// same anatomical interpolation planes. X/Z stay cheaper for fitting.\nconst DEFAULT_COLLISION_RESOLUTION = [38, 92, 34] as const;',
-        'const DEFAULT_VISUAL_RESOLUTION = [64, 96, 56] as const;\nconst DEFAULT_COLLISION_RESOLUTION = [56, 96, 48] as const;',
+        '// Both LODs sample the same Y stations. The calibrated surface and robust\n// topology repair let us keep the canonical silhouette while avoiding a >5s\n// first-build cost in the compatibility facade.\nconst DEFAULT_VISUAL_RESOLUTION = [56, 84, 48] as const;\nconst DEFAULT_COLLISION_RESOLUTION = [48, 84, 40] as const;',
     ),
     (
         'section("bust", "chest-front", f.bustY, m.bustMm, 1.27, 1.035, 0.89, 0.006, 0.082, 0, clamp(m.bustPointDistanceMm / m.bustMm, 0.18, 0.29)),',
