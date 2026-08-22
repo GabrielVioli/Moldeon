@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Diff check
-        run: git diff --check recovery/11.0.4a-waistband-zero-energy...HEAD
+        run: git diff --check origin/recovery/11.0.4a-waistband-zero-energy...HEAD
       - name: Typecheck
         run: npm run typecheck
       - name: Geometry metrics
