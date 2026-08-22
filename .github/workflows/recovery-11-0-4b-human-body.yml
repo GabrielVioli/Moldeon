@@ -4,15 +4,13 @@ on:
   push:
     branches:
       - recovery/11.0.4b-canonical-female-human-body
-  pull_request:
-    branches:
-      - recovery/11.0.4a-waistband-zero-energy
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  human-body:
+  materialize-human-body:
+    if: github.event.head_commit.message != 'fix(body): materialize validated canonical geometry'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -24,22 +22,23 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Apply P0 geometry recovery prototypes
+      - name: Apply validated P0 geometry recovery
         run: |
           python3 scripts/recovery11_0_4b_p0_geometry.py
           python3 scripts/recovery11_0_4b_p0_geometry_round2.py
           python3 scripts/recovery11_0_4b_p0_geometry_spatial_weld.py
           python3 scripts/recovery11_0_4b_p0_geometry_boundary_fill.py
           python3 scripts/recovery11_0_4b_p0_geometry_calibration_only.py
-      - name: Diff check
-        run: git diff --check
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Geometry metrics probe
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
-      - name: HumanBody geometry and measurements
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose
-      - name: Avatar compatibility and visual bridge
-        run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
-      - name: Build
-        run: npm run build
+      - run: git diff --check
+      - run: npm run typecheck
+      - run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
+      - run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
+      - run: npm run build
+      - name: Materialize validated source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/avatar/HumanBodyModel.ts
+          git diff --cached --check
+          git commit -m "fix(body): materialize validated canonical geometry"
+          git push origin HEAD:recovery/11.0.4b-canonical-female-human-body
