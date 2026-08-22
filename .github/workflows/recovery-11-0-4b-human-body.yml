@@ -31,6 +31,7 @@ jobs:
           python3 scripts/recovery11_0_4b_p0_geometry_round3.py
           python3 scripts/recovery11_0_4b_p0_geometry_round4.py
           python3 scripts/recovery11_0_4b_p0_geometry_round5.py
+          python3 scripts/recovery11_0_4b_p0_geometry_round6.py
       - name: Diff check
         run: git diff --check
       - name: Typecheck
