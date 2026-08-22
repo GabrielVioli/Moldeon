@@ -3,7 +3,7 @@ from pathlib import Path
 path = Path("apps/web/src/avatar/HumanBodyModel.ts")
 text = path.read_text(encoding="utf-8")
 start = text.find("function weldPolygonizedSurface(\n")
-end = text.find("function buildVertexNormals(", start)
+end = text.find("function polygonizeTetra(\n", start)
 if start < 0 or end < 0:
     raise RuntimeError("spatial-weld function markers not found")
 
