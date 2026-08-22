@@ -28,7 +28,7 @@ jobs:
         run: |
           python3 scripts/recovery11_0_4b_p0_geometry.py
           python3 scripts/recovery11_0_4b_p0_geometry_round2.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round4.py
+          python3 scripts/recovery11_0_4b_p0_geometry_spatial_weld.py
           python3 scripts/recovery11_0_4b_p0_geometry_calibration_only.py
       - name: Diff check
         run: git diff --check
