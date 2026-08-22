@@ -1,40 +1,58 @@
 name: recovery-11.0.4b-human-body
 
 on:
-  push:
+  pull_request:
     branches:
-      - recovery/11.0.4b-canonical-female-human-body
+      - recovery/11.0.4a-waistband-zero-energy
 
 permissions:
   contents: write
 
 jobs:
   materialize-human-body:
-    if: github.event.head_commit.message != 'fix(body): materialize validated canonical geometry'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: recovery/11.0.4b-canonical-female-human-body
           fetch-depth: 0
+      - name: Check whether source is already materialized
+        id: gate
+        shell: bash
+        run: |
+          if [ "$(git log -1 --pretty=%s)" = "fix(body): materialize validated canonical geometry" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.skip != 'true'
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm ci
       - name: Apply validated P0 geometry recovery
+        if: steps.gate.outputs.skip != 'true'
         run: |
           python3 scripts/recovery11_0_4b_p0_geometry.py
           python3 scripts/recovery11_0_4b_p0_geometry_round2.py
           python3 scripts/recovery11_0_4b_p0_geometry_spatial_weld.py
           python3 scripts/recovery11_0_4b_p0_geometry_boundary_fill.py
           python3 scripts/recovery11_0_4b_p0_geometry_calibration_only.py
-      - run: git diff --check
-      - run: npm run typecheck
-      - run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
-      - run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
-      - run: npm run build
+      - if: steps.gate.outputs.skip != 'true'
+        run: git diff --check
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm run typecheck
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm run build
       - name: Materialize validated source
+        if: steps.gate.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
