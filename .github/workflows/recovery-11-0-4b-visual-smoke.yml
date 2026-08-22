@@ -6,75 +6,29 @@ on:
       - recovery/11.0.4a-waistband-zero-energy
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  visual-smoke:
+  visual-evidence-export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      HUMAN_BODY_BASE_URL: http://127.0.0.1:4183
-      HUMAN_BODY_SMOKE_DIR: docs/validation/human-body-11.0.4b
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           ref: recovery/11.0.4b-canonical-female-human-body
-          fetch-depth: 0
-      - name: Skip if screenshots already captured
-        id: gate
-        shell: bash
+      - name: Verify screenshots
         run: |
-          if [ "$(git log -1 --pretty=%s)" = "docs(body): capture canonical visual smoke" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/setup-node@v4
-        if: steps.gate.outputs.skip != 'true'
+          test -f docs/validation/human-body-11.0.4b/front.png
+          test -f docs/validation/human-body-11.0.4b/side.png
+          test -f docs/validation/human-body-11.0.4b/back.png
+          test -f docs/validation/human-body-11.0.4b/three-quarter.png
+      - name: Upload visual evidence
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 24
-          cache: npm
-      - if: steps.gate.outputs.skip != 'true'
-        run: npm ci
-      - name: Install browser controller
-        if: steps.gate.outputs.skip != 'true'
-        run: npm install --no-save --package-lock=false playwright-core@1.55.0
-      - name: Start visual smoke server
-        if: steps.gate.outputs.skip != 'true'
-        shell: bash
-        run: |
-          mkdir -p "$HUMAN_BODY_SMOKE_DIR"
-          (
-            cd apps/web
-            npx vite --mode fallback --host 127.0.0.1 --port 4183 --strictPort
-          ) > "$HUMAN_BODY_SMOKE_DIR/server.log" 2>&1 &
-          echo $! > "$HUMAN_BODY_SMOKE_DIR/server.pid"
-          for attempt in $(seq 1 120); do
-            if curl --silent --fail "$HUMAN_BODY_BASE_URL/body-smoke.html" >/dev/null; then
-              exit 0
-            fi
-            sleep 0.25
-          done
-          cat "$HUMAN_BODY_SMOKE_DIR/server.log"
-          exit 1
-      - name: Capture canonical front side back and 3/4
-        if: steps.gate.outputs.skip != 'true'
-        run: node scripts/recovery11_0_4b_visual_smoke.mjs
-      - name: Stop server
-        if: always() && steps.gate.outputs.skip != 'true'
-        shell: bash
-        run: |
-          if test -f "$HUMAN_BODY_SMOKE_DIR/server.pid"; then
-            kill "$(cat "$HUMAN_BODY_SMOKE_DIR/server.pid")" 2>/dev/null || true
-          fi
-          rm -f "$HUMAN_BODY_SMOKE_DIR/server.pid" "$HUMAN_BODY_SMOKE_DIR/server.log"
-      - name: Commit visual evidence
-        if: steps.gate.outputs.skip != 'true'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$HUMAN_BODY_SMOKE_DIR"
-          git diff --cached --check
-          git commit -m "docs(body): capture canonical visual smoke"
-          git push origin HEAD:recovery/11.0.4b-canonical-female-human-body
+          name: human-body-11.0.4b-screenshots
+          path: |
+            docs/validation/human-body-11.0.4b/front.png
+            docs/validation/human-body-11.0.4b/side.png
+            docs/validation/human-body-11.0.4b/back.png
+            docs/validation/human-body-11.0.4b/three-quarter.png
+          retention-days: 7
