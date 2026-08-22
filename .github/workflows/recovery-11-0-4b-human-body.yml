@@ -4,84 +4,41 @@ on:
   push:
     branches:
       - recovery/11.0.4b-canonical-female-human-body
-    paths:
-      - apps/web/src/avatar/HumanBodyModel.ts
-      - apps/web/src/avatar/AvatarParametricModel.ts
-      - apps/web/src/viewport/AvatarVisual.ts
-      - apps/web/src/avatar/HumanBodyModel.metrics.test.ts
-      - scripts/recovery11_0_4b_p0_geometry.py
-      - scripts/recovery11_0_4b_p0_geometry_round2.py
-      - .github/workflows/recovery-11-0-4b-human-body.yml
+  pull_request:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   human-body:
-    if: github.event.head_commit.message != 'fix(body): materialize P0 geometry'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: recovery/11.0.4b-canonical-female-human-body
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Apply P0 geometry recovery
+      - name: Apply P0 geometry recovery prototypes
         run: |
           python3 scripts/recovery11_0_4b_p0_geometry.py
           python3 scripts/recovery11_0_4b_p0_geometry_round2.py
+          python3 scripts/recovery11_0_4b_p0_geometry_round3.py
+          python3 scripts/recovery11_0_4b_p0_geometry_round4.py
       - name: Diff check
         run: git diff --check
       - name: Typecheck
         run: npm run typecheck
       - name: Geometry metrics probe
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose | tee /tmp/human-body-metrics.log
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
       - name: HumanBody geometry and measurements
-        id: geometry
-        shell: bash
-        run: |
-          set +e
-          npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose 2>&1 | tee /tmp/human-body-test.log
-          STATUS=${PIPESTATUS[0]}
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Record geometry result
-        shell: bash
-        run: |
-          mkdir -p artifacts/recovery-11-0-4b-human-body
-          {
-            echo "HEAD=$(git rev-parse HEAD)"
-            echo "GEOMETRY_STATUS=${{ steps.geometry.outputs.status }}"
-            echo "--- METRICS ---"
-            cat /tmp/human-body-metrics.log
-            echo "--- TEST ---"
-            cat /tmp/human-body-test.log
-          } > artifacts/recovery-11-0-4b-human-body/p0-result.txt
-          git config user.name "Moldeon Recovery Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add artifacts/recovery-11-0-4b-human-body/p0-result.txt
-          git commit -m "ci(body): record P0 geometry result"
-          git push origin HEAD:recovery/11.0.4b-canonical-female-human-body
-      - name: Stop on red geometry
-        if: steps.geometry.outputs.status != '0'
-        run: exit 1
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose
       - name: Avatar compatibility and visual bridge
-        if: steps.geometry.outputs.status == '0'
         run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
       - name: Build
-        if: steps.geometry.outputs.status == '0'
         run: npm run build
-      - name: Materialize validated P0 geometry
-        if: steps.geometry.outputs.status == '0'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/avatar/HumanBodyModel.ts
-          git diff --cached --check
-          git commit -m "fix(body): materialize P0 geometry"
-          git push origin HEAD:recovery/11.0.4b-canonical-female-human-body
