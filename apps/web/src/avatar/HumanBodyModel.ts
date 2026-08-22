@@ -259,8 +259,11 @@ const BODY_FRAME: HumanBodyFrame = {
 // Both LODs sample exactly the same anatomy field. The visual grid is dense
 // enough to preserve bust/glute silhouettes while the collision grid stays
 // substantially cheaper for future triangle fitting.
-const DEFAULT_VISUAL_RESOLUTION = [44, 92, 38] as const;
-const DEFAULT_COLLISION_RESOLUTION = [30, 64, 26] as const;
+// Both LODs sample the same Y stations. The calibrated surface and robust
+// topology repair let us keep the canonical silhouette while avoiding a >5s
+// first-build cost in the compatibility facade.
+const DEFAULT_VISUAL_RESOLUTION = [56, 84, 48] as const;
+const DEFAULT_COLLISION_RESOLUTION = [48, 84, 40] as const;
 const modelCache = new Map<string, HumanBodyModel>();
 
 const TETRAHEDRA: readonly (readonly [number, number, number, number])[] = [
@@ -291,8 +294,14 @@ export function buildHumanBodyModel(
   const torsoSections = buildTorsoCrossSections(measurements, frame);
   const crossSections = [...torsoSections, ...buildLimbCrossSections(measurements, frame)];
   const field = buildAnatomyField(measurements, frame, torsoSections);
-  const visualMesh = polygonizeAnatomy(field, visualResolution);
-  const collisionMesh = polygonizeAnatomy(field, collisionResolution);
+  const visualMesh = calibrateCriticalSections(
+    polygonizeAnatomy(field, visualResolution),
+    torsoSections,
+  );
+  const collisionMesh = calibrateCriticalSections(
+    polygonizeAnatomy(field, collisionResolution),
+    torsoSections,
+  );
   const joints = buildJoints(frame);
   const landmarks = buildLandmarks(measurements, frame, torsoSections);
   const surfaceRegions = buildSurfaceRegions(visualMesh, collisionMesh);
@@ -456,6 +465,9 @@ function buildTorsoCrossSections(m: HumanBodyMeasurements, f: AnatomyFrame): Hum
     section("abdomen", "abdomen", lerp(f.highHipY, f.waistY, 0.46), abdomenCirc, 1.31, 1.09, 0.97, 0.012, 0, 0, 0.22),
     section("waist", "waist", f.waistY, m.waistMm, 1.31, 1.03, 0.97, 0.004, 0, 0, 0.22),
     section("underbust", "underbust", f.underbustY, m.underbustMm, 1.31, 1.04, 0.96, 0.005, 0.010, 0, 0.22),
+    // Spread the measured bust projection through the chest section instead
+    // of concentrating it in a high-curvature lobe. This preserves the same
+    // authored perimeter while reducing polygonization overshoot.
     section("bust", "chest-front", f.bustY, m.bustMm, 1.27, 0.98, 0.89, 0.006, 0.110, 0, clamp(m.bustPointDistanceMm / m.bustMm, 0.18, 0.29)),
     section("upper-chest", "chest-front", f.upperChestY, upperChestCirc, 1.45, 0.93, 1.04, 0, 0.018, 0, 0.23),
     section("shoulder", "back-upper", f.shoulderY, shoulderCirc, 1.78, 0.84, 1.12, -0.005, 0, 0, 0.22),
@@ -610,7 +622,7 @@ function buildAnatomyField(
     [x, y, z], [0, f.shoulderY - 0.015, -0.004], [0, f.neckBaseY + 0.035, -0.006],
     neckRadius * 1.12, neckRadius * 0.96, neckRadius * 1.02, neckRadius * 0.92,
   );
-  const headRY = Math.max(0.09, f.heightM - f.headCenterY);
+  const headRY = Math.max(0.06, f.heightM - f.headCenterY);
   const headField = (x: number, y: number, z: number) => ellipsoidField(
     x, y, z, [0, f.headCenterY, -headRadius * 0.05], [headRadius * 0.82, headRY, headRadius * 0.96],
   );
@@ -664,9 +676,12 @@ function buildAnatomyField(
     // retaining one continuous watertight body above the groin.
     const separator = ellipsoidField(
       x, y, z, [0, f.crotchY - 0.062, 0.016],
-      [Math.max(0.016, Math.abs(f.hipRight[0]) * 0.34), 0.175, Math.max(0.070, m.crotchDepthMm * 0.00036)],
+      // The cutter must traverse the complete front/back depth of the upper
+    // legs. A shallow closed ellipsoid only created an internal dimple and left
+    // centerline surface vertices. This depth opens the bifurcation to outside.
+      [Math.max(0.018, Math.abs(f.hipRight[0]) * 0.38), 0.180, Math.max(0.180, m.crotchDepthMm * 0.00082)],
     );
-    if (y <= f.crotchY + 0.030) body = Math.max(body, -separator);
+    if (y <= f.crotchY + 0.018) body = Math.max(body, -separator);
     return body;
   };
 
@@ -674,6 +689,8 @@ function buildAnatomyField(
     sample,
     regionAt: (x, y, z) => classifyRegion(f, sections, x, y, z),
     bounds: {
+// Keep the complete closed iso-surface strictly inside the lattice.
+      // In particular the head/feet must never intersect the sampling box.
       min: [-xExtent, -0.03, -zBack - 0.055],
       max: [xExtent, f.heightM + 0.03, zFront + 0.055],
     },
@@ -722,7 +739,9 @@ function polygonizeAnatomy(field: AnatomyField, requested: readonly [number, num
   for (let iz = 0; iz < gz; iz += 1) {
     for (let iy = 0; iy < gy; iy += 1) {
       for (let ix = 0; ix < gx; ix += 1) {
-        values[latticeId(ix, iy, iz)] = field.sample(min[0] + ix * sx, min[1] + iy * sy, min[2] + iz * sz);
+        const id = latticeId(ix, iy, iz);
+        const sampled = field.sample(min[0] + ix * sx, min[1] + iy * sy, min[2] + iz * sz);
+        values[id] = Math.abs(sampled) <= 1e-10 ? 1e-10 : sampled;
       }
     }
   }
@@ -776,20 +795,203 @@ function polygonizeAnatomy(field: AnatomyField, requested: readonly [number, num
     }
   }
 
-  if (signedVolume(positions, indices) < 0) {
-    for (let offset = 0; offset < indices.length; offset += 3) {
-      const swap = indices[offset + 1];
-      indices[offset + 1] = indices[offset + 2];
-      indices[offset + 2] = swap;
+  const welded = weldPolygonizedSurface(positions, indices, regionIds);
+  const closed = triangulateBoundaryLoops(welded.positions, welded.indices, welded.regionIds);
+  if (signedVolume(closed.positions, closed.indices) < 0) {
+    for (let offset = 0; offset < closed.indices.length; offset += 3) {
+      const swap = closed.indices[offset + 1];
+      closed.indices[offset + 1] = closed.indices[offset + 2];
+      closed.indices[offset + 2] = swap;
     }
   }
   return {
-    positions: Float32Array.from(positions),
-    normals: buildVertexNormals(positions, indices),
-    indices: Uint32Array.from(indices),
-    regionIds,
-    bounds: computeBounds(positions),
+    positions: Float32Array.from(closed.positions),
+    normals: buildVertexNormals(closed.positions, closed.indices),
+    indices: Uint32Array.from(closed.indices),
+    regionIds: closed.regionIds,
+    bounds: computeBounds(closed.positions),
   };
+}
+
+/**
+ * Marching tetrahedra can emit the same zero-isosurface lattice vertex through
+ * different lattice edges when the field evaluates to exactly zero. Welding
+ * only numerically coincident vertices closes those topological cracks without
+ * changing the body surface or its measurements.
+ */
+function weldPolygonizedSurface(
+  positions: readonly number[],
+  indices: readonly number[],
+  regionIds: readonly HumanBodyRegionId[],
+): { positions: number[]; indices: number[]; regionIds: HumanBodyRegionId[] } {
+  // 0.02 mm is far below fitting tolerances. Adjacent-cell lookup avoids the
+  // quantization-boundary crack that the previous scalar rounding produced.
+  const toleranceM = 0.00002;
+  const tolerance2 = toleranceM * toleranceM;
+  const cellSize = toleranceM;
+  const weldedPositions: number[] = [];
+  const weldedRegions: HumanBodyRegionId[] = [];
+  const remap = new Uint32Array(positions.length / 3);
+  const grid = new Map<string, number[]>();
+  const cell = (value: number) => Math.floor(value / cellSize);
+  const key = (ix: number, iy: number, iz: number) => `${ix}:${iy}:${iz}`;
+
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const x = positions[vertex * 3];
+    const y = positions[vertex * 3 + 1];
+    const z = positions[vertex * 3 + 2];
+    const ix = cell(x);
+    const iy = cell(y);
+    const iz = cell(z);
+    let target = -1;
+    let bestDistance2 = Number.POSITIVE_INFINITY;
+    for (let dz = -1; dz <= 1; dz += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          for (const candidate of grid.get(key(ix + dx, iy + dy, iz + dz)) ?? []) {
+            const cx = weldedPositions[candidate * 3];
+            const cy = weldedPositions[candidate * 3 + 1];
+            const cz = weldedPositions[candidate * 3 + 2];
+            const distance2 = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2;
+            if (distance2 <= tolerance2 && distance2 < bestDistance2) {
+              target = candidate;
+              bestDistance2 = distance2;
+            }
+          }
+        }
+      }
+    }
+    if (target < 0) {
+      target = weldedPositions.length / 3;
+      weldedPositions.push(x, y, z);
+      weldedRegions.push(regionIds[vertex]);
+      const bucketKey = key(ix, iy, iz);
+      const bucket = grid.get(bucketKey) ?? [];
+      bucket.push(target);
+      grid.set(bucketKey, bucket);
+    }
+    remap[vertex] = target;
+  }
+
+  const weldedIndices: number[] = [];
+  const triangles = new Set<string>();
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const a = remap[indices[offset]];
+    const b = remap[indices[offset + 1]];
+    const c = remap[indices[offset + 2]];
+    if (a === b || b === c || c === a) continue;
+    const pa = arrayVertex(weldedPositions, a);
+    const pb = arrayVertex(weldedPositions, b);
+    const pc = arrayVertex(weldedPositions, c);
+    if (magnitude(cross(sub(pb, pa), sub(pc, pa))) <= 1e-10) continue;
+    const canonical = [a, b, c].sort((first, second) => first - second).join(":");
+    if (triangles.has(canonical)) continue;
+    triangles.add(canonical);
+    weldedIndices.push(a, b, c);
+  }
+  return { positions: weldedPositions, indices: weldedIndices, regionIds: weldedRegions };
+}
+
+function triangulateBoundaryLoops(
+  sourcePositions: readonly number[],
+  sourceIndices: readonly number[],
+  sourceRegions: readonly HumanBodyRegionId[],
+): { positions: number[]; indices: number[]; regionIds: HumanBodyRegionId[] } {
+  const positions = [...sourcePositions];
+  const indices = [...sourceIndices];
+  const regionIds = [...sourceRegions];
+  const edgeRecords = new Map<string, { a: number; b: number; count: number; from: number; to: number }>();
+  const edgeKey = (a: number, b: number) => a < b ? `${a}:${b}` : `${b}:${a}`;
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const tri = [indices[offset], indices[offset + 1], indices[offset + 2]] as const;
+    for (const [from, to] of [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]] as const) {
+      const key = edgeKey(from, to);
+      const current = edgeRecords.get(key);
+      if (current) current.count += 1;
+      else edgeRecords.set(key, { a: Math.min(from, to), b: Math.max(from, to), count: 1, from, to });
+    }
+  }
+  const boundary = [...edgeRecords.values()].filter((edge) => edge.count === 1);
+  if (boundary.length === 0) return { positions, indices, regionIds };
+
+  const outgoing = new Map<number, number[]>();
+  const undirected = new Map<number, number[]>();
+  for (const edge of boundary) {
+    const out = outgoing.get(edge.from) ?? [];
+    out.push(edge.to);
+    outgoing.set(edge.from, out);
+    for (const [a, b] of [[edge.a, edge.b], [edge.b, edge.a]] as const) {
+      const list = undirected.get(a) ?? [];
+      list.push(b);
+      undirected.set(a, list);
+    }
+  }
+
+  const unused = new Set(boundary.map((edge) => edgeKey(edge.a, edge.b)));
+  const triangleKeys = new Set<string>();
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    triangleKeys.add([indices[offset], indices[offset + 1], indices[offset + 2]].sort((a, b) => a - b).join(":"));
+  }
+
+  while (unused.size > 0) {
+    const seedKey = unused.values().next().value as string;
+    const seed = edgeRecords.get(seedKey);
+    if (!seed) {
+      unused.delete(seedKey);
+      continue;
+    }
+    const loop = [seed.from, seed.to];
+    unused.delete(seedKey);
+    let previous = seed.from;
+    let current = seed.to;
+    let closed = false;
+    for (let guard = 0; guard <= boundary.length + 2; guard += 1) {
+      if (current === loop[0]) {
+        loop.pop();
+        closed = true;
+        break;
+      }
+      const directedNext = (outgoing.get(current) ?? []).find((candidate) =>
+        candidate !== previous && unused.has(edgeKey(current, candidate))
+      );
+      const fallbackNext = (undirected.get(current) ?? []).find((candidate) =>
+        candidate !== previous && unused.has(edgeKey(current, candidate))
+      );
+      const next = directedNext ?? fallbackNext;
+      if (next === undefined) {
+        if ((undirected.get(current) ?? []).includes(loop[0])) closed = true;
+        break;
+      }
+      unused.delete(edgeKey(current, next));
+      if (next === loop[0]) {
+        closed = true;
+        break;
+      }
+      loop.push(next);
+      previous = current;
+      current = next;
+    }
+    if (!closed || loop.length < 3) continue;
+
+    // Existing surface triangles traverse the hole boundary in one direction.
+    // New faces use the opposite winding. No centroid vertex is introduced, so
+    // a tiny numerical loop cannot generate zero-area fan triangles.
+    for (let index = 1; index < loop.length - 1; index += 1) {
+      const a = loop[0];
+      const b = loop[index + 1];
+      const c = loop[index];
+      if (a === b || b === c || c === a) continue;
+      const pa = arrayVertex(positions, a);
+      const pb = arrayVertex(positions, b);
+      const pc = arrayVertex(positions, c);
+      if (magnitude(cross(sub(pb, pa), sub(pc, pa))) <= 1e-10) continue;
+      const canonical = [a, b, c].sort((first, second) => first - second).join(":");
+      if (triangleKeys.has(canonical)) continue;
+      triangleKeys.add(canonical);
+      indices.push(a, b, c);
+    }
+  }
+  return { positions, indices, regionIds };
 }
 
 function polygonizeTetra(
@@ -814,6 +1016,43 @@ function polygonizeTetra(
   const bd = edge(inside[1], outside[1]);
   emit(ac, ad, bc);
   emit(ad, bd, bc);
+}
+
+
+function calibrateCriticalSections(
+  mesh: HumanBodyMesh,
+  sections: readonly HumanBodyCrossSection[],
+): HumanBodyMesh {
+  const positions = new Float32Array(mesh.positions);
+  const critical = ["bust", "waist", "full-hip"] as const;
+  for (const id of critical) {
+    const sectionValue = sectionById(sections, id);
+    const currentMm = measureMeshCircumferenceAtY({ ...mesh, positions }, sectionValue.yM) * 1000;
+    if (!Number.isFinite(currentMm) || currentMm <= 1e-6) continue;
+    const factor = sectionValue.targetCircumferenceMm / currentMm;
+    const plateauM = 0.012;
+    const influenceM = id === "waist" ? 0.042 : 0.036;
+    for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+      const y = positions[vertex * 3 + 1];
+      const distanceY = Math.abs(y - sectionValue.yM);
+      if (distanceY >= influenceM) continue;
+      const weight = distanceY <= plateauM
+        ? 1
+        : smoothstep(1 - (distanceY - plateauM) / (influenceM - plateauM));
+      const localScale = 1 + (factor - 1) * weight;
+      positions[vertex * 3] *= localScale;
+      positions[vertex * 3 + 2] = sectionValue.centerZM
+        + (positions[vertex * 3 + 2] - sectionValue.centerZM) * localScale;
+    }
+  }
+  const positionsArray = Array.from(positions);
+  const indicesArray = Array.from(mesh.indices);
+  return {
+    ...mesh,
+    positions,
+    normals: buildVertexNormals(positionsArray, indicesArray),
+    bounds: computeBounds(positionsArray),
+  };
 }
 
 function buildVertexNormals(positions: readonly number[], indices: readonly number[]): Float32Array {
