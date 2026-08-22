@@ -12,11 +12,9 @@ replacement = r'''function weldPolygonizedSurface(
   indices: readonly number[],
   regionIds: readonly HumanBodyRegionId[],
 ): { positions: number[]; indices: number[]; regionIds: HumanBodyRegionId[] } {
-  // 0.05 mm is orders of magnitude below fitting tolerances and the lattice
-  // spacing. Search adjacent spatial cells as well as the current one so two
-  // numerically coincident isosurface vertices cannot remain split merely
-  // because they landed on opposite sides of a quantization boundary.
-  const toleranceM = 0.00005;
+  // 0.02 mm is far below fitting tolerances. Adjacent-cell lookup avoids the
+  // quantization-boundary crack that the previous scalar rounding produced.
+  const toleranceM = 0.00002;
   const tolerance2 = toleranceM * toleranceM;
   const cellSize = toleranceM;
   const weldedPositions: number[] = [];
