@@ -63,6 +63,9 @@ export interface XpbdSolverConfig {
   maximumVelocity: number;
   seamTolerance: number;
   metricGuardEnabled?: boolean;
+  floorCollisionEnabled?: boolean;
+  floorY?: number;
+  floorContactSkinM?: number;
 }
 
 export interface XpbdProfileTimings {
@@ -75,6 +78,7 @@ export interface XpbdProfileTimings {
   validationMs: number;
   solverStepTotalMs: number;
   bodyCollisionMs: number;
+  floorCollisionMs: number;
 }
 
 export interface XpbdState {
@@ -105,6 +109,13 @@ export interface XpbdState {
   zeroEnergyFreeFlightActive: boolean;
   zeroEnergyFreeFlightOffset: [number, number, number];
   zeroEnergyFreeFlightVelocity: [number, number, number];
+  floorContactMask: Uint8Array;
+  floorNormalImpulseSpeeds: Float32Array;
+  floorContactCount: number;
+  floorCcdContactCount: number;
+  floorFrictionContactCount: number;
+  maximumFloorPenetrationM: number;
+  meanFloorPenetrationM: number;
   config: XpbdSolverConfig;
   accumulator: number;
   stepCount: number;
@@ -164,6 +175,13 @@ export interface XpbdStepDiagnostics {
   frictionContactCount?: number;
   sweptContactCount?: number;
   bodyCollisionEnabled?: boolean;
+  floorCollisionEnabled?: boolean;
+  floorContactCount?: number;
+  floorCcdContactCount?: number;
+  floorFrictionContactCount?: number;
+  maximumFloorPenetrationM?: number;
+  meanFloorPenetrationM?: number;
+  floorCollisionMs?: number;
   invalid: boolean;
   invalidReason: "non-finite" | "metric-instability" | null;
   droppedTimeSeconds: number;
@@ -208,6 +226,9 @@ export const DEFAULT_XPBD_CONFIG: XpbdSolverConfig = {
   maximumVelocity: 12,
   seamTolerance: 0.0025,
   metricGuardEnabled: true,
+  floorCollisionEnabled: false,
+  floorY: 0,
+  floorContactSkinM: 0.0002,
 };
 
 const EPSILON = 1e-9;
@@ -216,7 +237,10 @@ type XpbdStateInput = Omit<
   XpbdState,
   "body" | "triangleMaterial" | "bends" | "correctionLimits" | "stablePositions" |
   "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" |
-  "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile"
+  "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" |
+  "floorContactMask" | "floorNormalImpulseSpeeds" | "floorContactCount" | "floorCcdContactCount" |
+  "floorFrictionContactCount" | "maximumFloorPenetrationM" | "meanFloorPenetrationM" |
+  "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile"
 > & {
   body?: BodyCollisionRuntimeState;
   triangleMaterial?: XpbdTriangleMaterialReference;
@@ -238,6 +262,13 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
   );
   const normalizedInput = { ...input, body, bends, triangleMaterial };
   validateStateShape(normalizedInput);
+  if (!Number.isFinite(input.config.floorY ?? 0)) {
+    throw new RangeError("A altura do piso precisa ser finita.");
+  }
+  const floorSkin = input.config.floorContactSkinM ?? 0.0002;
+  if (!Number.isFinite(floorSkin) || floorSkin < 0 || floorSkin > 0.01) {
+    throw new RangeError("A margem de contato do piso precisa ser finita e pequena.");
+  }
   const correctionLimits = buildParticleCorrectionLimits(
     input.positions.length / 3,
     input.distances,
@@ -255,11 +286,18 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
     zeroEnergyFreeFlightActive: false,
     zeroEnergyFreeFlightOffset: [0, 0, 0],
     zeroEnergyFreeFlightVelocity: [0, 0, 0],
+    floorContactMask: new Uint8Array(input.positions.length / 3),
+    floorNormalImpulseSpeeds: new Float32Array(input.positions.length / 3),
+    floorContactCount: 0,
+    floorCcdContactCount: 0,
+    floorFrictionContactCount: 0,
+    maximumFloorPenetrationM: 0,
+    meanFloorPenetrationM: 0,
     accumulator: 0,
     stepCount: 0,
     invalid: false,
     invalidReason: null,
-    profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0 },
+    profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0, floorCollisionMs: 0 },
   };
   initializeBodyDressing(body, state.positions, state.config.maximumCorrection);
   return state;
@@ -293,7 +331,7 @@ export function advanceXpbd(state: XpbdState, frameDeltaSeconds: number): XpbdSt
 export function stepXpbd(state: XpbdState): void {
   const stepStarted = performance.now();
   const profile = state.profile;
-  profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0; profile.bodyCollisionMs = 0;
+  profile.integrationMs = 0; profile.stretchMs = 0; profile.shearMs = 0; profile.bendMs = 0; profile.seamMs = 0; profile.velocityUpdateMs = 0; profile.validationMs = 0; profile.bodyCollisionMs = 0; profile.floorCollisionMs = 0;
   // Metric rollback is an auto-pause, not a one-frame warning.  Advancing the
   // restored snapshot on the next scheduler tick used to clear `invalid` and
   // hide the catastrophe from both diagnostics and the UI.  Only an explicit
@@ -303,6 +341,7 @@ export function stepXpbd(state: XpbdState): void {
     return;
   }
   resetBodyContactStep(state.body);
+  resetFloorContactStep(state);
   const dt = state.config.fixedTimeStep;
   if (!Number.isFinite(dt) || dt <= 0) throw new RangeError("O passo da simula\u00e7\u00e3o precisa ser positivo e finito.");
 
@@ -374,11 +413,15 @@ export function stepXpbd(state: XpbdState): void {
   phaseStarted = performance.now();
   solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true });
   profile.bodyCollisionMs = performance.now() - phaseStarted;
+  phaseStarted = performance.now();
+  solveFloorCollisions(state);
+  profile.floorCollisionMs = performance.now() - phaseStarted;
   enforcePins(state);
   finalizeBodyContactDiagnostics(state.body);
   phaseStarted = performance.now();
   updateVelocitiesAndPositions(state, dt);
   applyBodyContactVelocities(state.velocities, state.body, dt);
+  applyFloorContactVelocities(state);
   if (dressingActive) {
     state.velocities.fill(0);
     state.previousPositions.set(state.positions);
@@ -427,6 +470,7 @@ export function resetXpbdState(state: XpbdState): void {
   state.invalid = false;
   state.invalidReason = null;
   resetBodyContactStep(state.body);
+  resetFloorContactStep(state);
   initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection);
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
@@ -520,6 +564,12 @@ export function measureXpbdDiagnostics(
     frictionContactCount: state.body.frictionContactCount,
     sweptContactCount: state.body.sweptContactCount,
     bodyCollisionEnabled: state.body.enabled,
+    floorCollisionEnabled: state.config.floorCollisionEnabled !== false,
+    floorContactCount: state.floorContactCount,
+    floorCcdContactCount: state.floorCcdContactCount,
+    floorFrictionContactCount: state.floorFrictionContactCount,
+    maximumFloorPenetrationM: state.maximumFloorPenetrationM,
+    meanFloorPenetrationM: state.meanFloorPenetrationM,
     invalid: state.invalid,
     invalidReason: state.invalidReason,
     droppedTimeSeconds,
@@ -532,6 +582,7 @@ export function measureXpbdDiagnostics(
     validationMs: state.profile.validationMs,
     solverStepTotalMs: state.profile.solverStepTotalMs,
     bodyCollisionMs: state.profile.bodyCollisionMs,
+    floorCollisionMs: state.profile.floorCollisionMs,
     bodyBroadphaseMs: state.body.broadphaseMs,
     bodyNarrowphaseMs: state.body.narrowphaseMs,
     bodyProjectionMs: state.body.projectionMs,
@@ -559,7 +610,7 @@ export function measureXpbdDiagnostics(
 }
 
 function canAdvanceAsZeroEnergyFreeFlight(state: XpbdState): boolean {
-  if (state.body.enabled || state.pins.indices.length > 0 || state.positions.length === 0) return false;
+  if (state.body.enabled || state.config.floorCollisionEnabled !== false || state.pins.indices.length > 0 || state.positions.length === 0) return false;
   const particleCount = state.positions.length / 3;
   for (let particle = 0; particle < particleCount; particle += 1) {
     if (state.inverseMasses[particle] <= 0) return false;
@@ -1096,6 +1147,75 @@ function solveSeamSet(state: XpbdState, dt: number): void {
  }state.maximumCorrectionApplied=maxApplied;
 }
 
+function resetFloorContactStep(state: XpbdState): void {
+  state.floorContactMask.fill(0);
+  state.floorNormalImpulseSpeeds.fill(0);
+  state.floorContactCount = 0;
+  state.floorCcdContactCount = 0;
+  state.floorFrictionContactCount = 0;
+  state.maximumFloorPenetrationM = 0;
+  state.meanFloorPenetrationM = 0;
+}
+
+/**
+ * Infinite horizontal unilateral contact plane in canonical body space.
+ * It is deliberately independent from the avatar collider toggle.  The CCD
+ * branch records a previous->predicted crossing; both crossing and resting
+ * contacts finish at the same thickness-aware surface without restitution.
+ */
+function solveFloorCollisions(state: XpbdState): void {
+  if (state.config.floorCollisionEnabled === false) return;
+  const floorY = Number.isFinite(state.config.floorY) ? (state.config.floorY ?? 0) : 0;
+  const skin = Math.max(0, state.config.floorContactSkinM ?? 0.0002);
+  for (let particle = 0; particle < state.inverseMasses.length; particle += 1) {
+    if (state.inverseMasses[particle] <= 0) continue;
+    const offset = particle * 3;
+    const contactY = floorY + Math.max(0, state.body.particleHalfThicknessM[particle] ?? 0) + skin;
+    const previousY = state.previousPositions[offset + 1];
+    const predictedY = state.predictedPositions[offset + 1];
+    if (predictedY >= contactY) continue;
+    const penetration = contactY - predictedY;
+    const incomingNormalSpeed = Math.max(0, (previousY - predictedY) / Math.max(EPSILON, state.config.fixedTimeStep));
+    const supportImpulseSpeed = Math.max(0, -state.config.gravity[1]) * state.config.fixedTimeStep;
+    state.floorContactMask[particle] = 1;
+    // Coulomb friction consumes a velocity-equivalent normal impulse.  It is
+    // derived from incoming normal momentum plus the gravity support load,
+    // never from the number of millimetres used by positional projection.
+    state.floorNormalImpulseSpeeds[particle] = incomingNormalSpeed + supportImpulseSpeed;
+    state.floorContactCount += 1;
+    if (previousY >= contactY && predictedY < contactY) state.floorCcdContactCount += 1;
+    state.predictedPositions[offset + 1] = contactY;
+  }
+  // Telemetry reports the residual penetration after the unilateral solve,
+  // not the swept travel distance corrected by CCD.  The latter is retained
+  // separately as a physical normal-impulse estimate for load/friction.
+  state.maximumFloorPenetrationM = 0;
+  state.meanFloorPenetrationM = 0;
+}
+
+function applyFloorContactVelocities(state: XpbdState): void {
+  if (state.config.floorCollisionEnabled === false) return;
+  for (let particle = 0; particle < state.inverseMasses.length; particle += 1) {
+    if (state.floorContactMask[particle] === 0) continue;
+    const offset = particle * 3;
+    // The normal component is unilateral and non-bouncy: only velocity into
+    // the plane is removed, never a legitimate upward separating velocity.
+    if (state.velocities[offset + 1] < 0) state.velocities[offset + 1] = 0;
+    const vx = state.velocities[offset];
+    const vz = state.velocities[offset + 2];
+    const tangentSpeed = Math.hypot(vx, vz);
+    if (tangentSpeed <= EPSILON) continue;
+    const friction = Math.max(0, state.body.particleFriction[particle] ?? 0);
+    const normalLoadSpeed = state.floorNormalImpulseSpeeds[particle];
+    const removedSpeed = Math.min(tangentSpeed, friction * normalLoadSpeed);
+    if (removedSpeed <= 0) continue;
+    const scale = (tangentSpeed - removedSpeed) / tangentSpeed;
+    state.velocities[offset] *= scale;
+    state.velocities[offset + 2] *= scale;
+    state.floorFrictionContactCount += 1;
+  }
+}
+
 function updateVelocitiesAndPositions(state: XpbdState, dt: number): void {
   const maximumVelocity = state.config.maximumVelocity;
   for (let particle = 0; particle < state.inverseMasses.length; particle += 1) {
@@ -1179,7 +1299,7 @@ function interpolatedPoint(
   return result;
 }
 
-function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" | "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile">): void {
+function validateStateShape(input: Omit<XpbdState, "correctionLimits" | "stablePositions" | "triangleReferenceNormals" | "lastFlippedTriangleCount" | "meaningfulStructuralRestLength" | "maximumCorrectionApplied" | "zeroEnergyFreeFlightActive" | "zeroEnergyFreeFlightOffset" | "zeroEnergyFreeFlightVelocity" | "floorContactMask" | "floorNormalImpulseSpeeds" | "floorContactCount" | "floorCcdContactCount" | "floorFrictionContactCount" | "maximumFloorPenetrationM" | "meanFloorPenetrationM" | "accumulator" | "stepCount" | "invalid" | "invalidReason" | "profile">): void {
   const particleCount = input.positions.length / 3;
   if (!Number.isInteger(particleCount)
     || input.previousPositions.length !== input.positions.length

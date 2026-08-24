@@ -353,7 +353,12 @@ interface MeasuredSection {
   backDepthM: number;
 }
 
-const BODY_FRAME: HumanBodyFrame = {
+/**
+ * The only anatomical/world frame used by garment registration, rendering
+ * and contact. Imported assets are normalized into this frame; callers must
+ * never substitute the camera or an asset-local basis for it.
+ */
+export const HUMAN_BODY_FRAME: HumanBodyFrame = {
   units: "m",
   measurementUnits: "mm",
   origin: "ground-center-between-feet",
@@ -473,7 +478,7 @@ export function buildHumanBodyModel(
     sex: "female",
     measurements,
     measurementSources,
-    bodyFrame: BODY_FRAME,
+    bodyFrame: HUMAN_BODY_FRAME,
     joints,
     landmarks,
     surfaceRegions,

@@ -11,8 +11,17 @@ import { buildAvatarCollisionModel } from "../avatar/AvatarCollisionModel";
 import { createAvatarVisual } from "./AvatarVisual";
 import { createAvatarCollisionDebugVisual } from "./AvatarCollisionDebugVisual";
 import { resolveAvatarFloorPosition } from "./AvatarGroundPlane";
-import { packAvatarCollisionModel, type SimulationBodyTransform } from "../physics/bodyCollision";
-import { resolveSimulationBodyRegistration, type BodyRegistrationStatus } from "../physics/BodyCollisionRegistration";
+import {
+  IDENTITY_BODY_TRANSFORM,
+  packAvatarCollisionModel,
+  type SimulationBodyTransform,
+} from "../physics/bodyCollision";
+import {
+  applyGarmentBodyRegistration,
+  resolveGarmentBodyRegistration,
+  type GarmentRegistrationDiagnostic,
+  type GarmentRegistrationStatus,
+} from "../physics/GarmentBodyRegistration";
 import type { BodyType } from "../domain/pattern";
 import {
   buildGarmentAssemblyMeshes,
@@ -41,12 +50,14 @@ export interface SimulationDevSettings {
   cadence: XpbdSimulationCadence;
   autoPauseSteps: XpbdAutoPauseSteps;
   bodyCollisionEnabled: boolean;
+  floorCollisionEnabled: boolean;
   showBodyColliders: boolean;
   showProceduralAvatar: boolean;
+  showRegistrationAxes: boolean;
 }
 export interface SimulationDevTelemetry extends XpbdWorkerDiagnostics {
   approximateFps: number;
-  bodyRegistrationStatus: BodyRegistrationStatus;
+  bodyRegistrationStatus: GarmentRegistrationStatus;
 }
 type ViewportRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
@@ -64,6 +75,7 @@ export class ThreeViewport {
   private readonly avatarGroup = new THREE.Group();
   private readonly proceduralAvatarGroup = new THREE.Group();
   private readonly bodyColliderDebugGroup = new THREE.Group();
+  private readonly registrationAxesGroup = new THREE.Group();
   private readonly floor: THREE.Mesh;
   private readonly resizeObserver: ResizeObserver;
   private readonly profile: PerformanceProfile;
@@ -88,10 +100,10 @@ export class ThreeViewport {
   private framesApplied = 0;
   private framesDiscarded = 0;
   private baseGravity: [number, number, number] = [0, -9.81, 0];
-  private devSettings: SimulationDevSettings = { gravityScale: 1, cadence: 1, autoPauseSteps: 0, bodyCollisionEnabled: true, showBodyColliders: false, showProceduralAvatar: true };
-  private bodyRegistrationStatus: BodyRegistrationStatus = "body-placement-required";
+  private devSettings: SimulationDevSettings = { gravityScale: 1, cadence: 1, autoPauseSteps: 0, bodyCollisionEnabled: true, floorCollisionEnabled: true, showBodyColliders: false, showProceduralAvatar: true, showRegistrationAxes: false };
+  private bodyRegistrationStatus: GarmentRegistrationStatus = "body-placement-required";
   private currentAvatarModel: AvatarParametricModel | null = null;
-  private currentBodyTransform: SimulationBodyTransform = { translation: [0, 0, 0], rotation: [0, 0, 0, 1] };
+  private currentBodyTransform: SimulationBodyTransform = IDENTITY_BODY_TRANSFORM;
   private wireframeEnabled = false;
   private approximateFps = 0;
   private lastAppliedFrameAt = 0;
@@ -170,9 +182,11 @@ export class ThreeViewport {
     this.scene.add(createLights());
     this.proceduralAvatarGroup.name = "avatar-procedural-dev-root";
     this.bodyColliderDebugGroup.name = "body-collider-debug-root";
+    this.registrationAxesGroup.name = "registration-axes-dev-root";
     this.scene.add(this.avatarGroup);
     this.scene.add(this.proceduralAvatarGroup);
     this.scene.add(this.bodyColliderDebugGroup);
+    this.scene.add(this.registrationAxesGroup);
     this.scene.add(this.garmentGroup);
     this.scene.add(this.floor);
 
@@ -181,6 +195,7 @@ export class ThreeViewport {
     });
     this.resizeObserver.observe(this.host);
     document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    if (import.meta.env.DEV) this.installDevViewportBridge();
   }
 
   static async create(
@@ -246,6 +261,8 @@ export class ThreeViewport {
     void this.assembly.solve({ document: input.assemblyDocument, revision: input.signature }).then((response) => {
       if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== input.signature) return;
       const state = response.state;
+      const registration = resolveGarmentBodyRegistration(state, avatarModel);
+      applyGarmentBodyRegistration(state, registration);
       const visibleInstanceIds = new Set(state.instances.map((instance) => instance.id));
       const nextMeshes = buildGarmentAssemblyMeshes(state, garment, {
         castShadow: this.profile.shadows,
@@ -262,18 +279,21 @@ export class ThreeViewport {
       this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
       this.host.dataset.assemblyWarnings = JSON.stringify(response.warnings);
 
-      const registration = resolveSimulationBodyRegistration(state, avatarModel);
       this.bodyRegistrationStatus = registration.status;
-      this.currentBodyTransform = registration.transform;
+      this.currentBodyTransform = IDENTITY_BODY_TRANSFORM;
       const collisionModel = buildAvatarCollisionModel(avatarModel);
       const packedColliders = registration.status === "registered"
-        ? packAvatarCollisionModel(collisionModel, registration.transform)
+        ? packAvatarCollisionModel(collisionModel, IDENTITY_BODY_TRANSFORM)
         : { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] as string[] };
       this.host.dataset.bodyRegistration = JSON.stringify(registration);
+      this.host.dataset.garmentRegistration = JSON.stringify(registration);
       this.host.dataset.avatarMeasurementOrigins = JSON.stringify(avatarModel.measurementOrigins ?? {});
       this.host.dataset.avatarResolvedMeasurements = JSON.stringify(avatarModel.measurements);
+      this.host.dataset.physicalFloorY = String(this.floor.position.y);
+      this.host.dataset.visualFloorY = String(this.floor.position.y);
       this.host.dataset.bodyColliderCount = String(collisionModel.proxies.length);
-      if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, collisionModel, registration.transform);
+      if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, collisionModel, IDENTITY_BODY_TRANSFORM);
+      if (import.meta.env.DEV) this.configureRegistrationAxes(state, registration);
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
         bodyColliders: packedColliders,
         bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
@@ -281,6 +301,8 @@ export class ThreeViewport {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
           iterations: settings.iterations,
+          floorCollisionEnabled: this.devSettings.floorCollisionEnabled,
+          floorY: this.floor.position.y,
         },
       });
       this.host.dataset.simulationTopologyDiagnostics = JSON.stringify(initialization.topologyDiagnostics);
@@ -311,11 +333,25 @@ export class ThreeViewport {
           state: component.constraintState,
           confidence: component.assemblyConfidence,
           reason: component.ambiguityReason ?? null,
+          selectedSeed: component.selectedSeed,
+          metrics: {
+            metricDistortionMean: component.metricDistortionMean,
+            metricDistortionMax: component.metricDistortionMax,
+            areaDistortionMean: component.areaDistortionMean,
+            areaDistortionMax: component.areaDistortionMax,
+            structuralSeamMeanMm: component.structuralSeamMeanMm,
+            structuralSeamMaxMm: component.structuralSeamMaxMm,
+            overlapScore: component.overlapScore,
+            nonPlanarityRad: component.nonPlanarityRad,
+          },
+          candidates: component.candidateDiagnostics,
         })),
         instances: state.instances.map((instance) => ({
           id: instance.id,
           pieceId: instance.pieceId,
           vertexCount: instance.vertexCount,
+          placement: instance.placement,
+          arrangement: instance.arrangement,
         })),
         seamGraph: summarizeAssemblySeamGraph(state),
       });
@@ -396,6 +432,7 @@ export class ThreeViewport {
     this.devSettings = settings;
     this.host.dataset.simulationDevSettings = JSON.stringify(settings);
     this.applyWorkerDevSettings();
+    if (import.meta.env.DEV) this.applyDevBodyVisibility();
   }
 
   setWireframe(enabled: boolean): void {
@@ -440,10 +477,13 @@ export class ThreeViewport {
     this.simulationEpoch = 0;
     if (import.meta.env.DEV) {
       delete (window as Window & { __MOLDEON_ASSEMBLY_DEV__?: unknown }).__MOLDEON_ASSEMBLY_DEV__;
+      delete (window as Window & { __MOLDEON_VIEWPORT_DEV__?: unknown }).__MOLDEON_VIEWPORT_DEV__;
     }
     this.clearGarment();
     this.clearAvatar();
     this.clearDevBodyVisuals();
+    disposeObject(this.registrationAxesGroup);
+    this.registrationAxesGroup.clear();
     disposeObject(this.scene);
     this.scene.clear();
     if (this.renderer instanceof THREE.WebGLRenderer) {
@@ -584,9 +624,47 @@ export class ThreeViewport {
   private applyDevBodyVisibility(): void {
     this.proceduralAvatarGroup.visible = this.devSettings.showProceduralAvatar;
     this.bodyColliderDebugGroup.visible = this.devSettings.showBodyColliders;
+    this.registrationAxesGroup.visible = this.devSettings.showRegistrationAxes;
     this.host.dataset.proceduralAvatarVisible = String(this.proceduralAvatarGroup.visible);
     this.host.dataset.bodyCollidersVisible = String(this.bodyColliderDebugGroup.visible);
     this.requestRender();
+  }
+
+  private installDevViewportBridge(): void {
+    const target = window as Window & {
+      __MOLDEON_VIEWPORT_DEV__?: { cameraView(view: "front" | "side" | "back"): void };
+    };
+    target.__MOLDEON_VIEWPORT_DEV__ = {
+      cameraView: (view) => this.setCanonicalCameraView(view),
+    };
+  }
+
+  private setCanonicalCameraView(view: "front" | "side" | "back"): void {
+    const distance = Math.max(0.45, this.camera.position.distanceTo(this.controls.target));
+    const direction = view === "front"
+      ? new THREE.Vector3(0, 0, 1)
+      : view === "back"
+        ? new THREE.Vector3(0, 0, -1)
+        : new THREE.Vector3(1, 0, 0);
+    this.camera.position.copy(this.controls.target).addScaledVector(direction, distance);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(this.controls.target);
+    this.controls.update();
+    this.requestRender();
+  }
+
+  private configureRegistrationAxes(
+    state: GarmentAssemblyState,
+    registration: GarmentRegistrationDiagnostic,
+  ): void {
+    disposeObject(this.registrationAxesGroup);
+    this.registrationAxesGroup.clear();
+    const bodyOrigin = new THREE.Vector3(0, 0.012, 0);
+    addFrameAxes(this.registrationAxesGroup, bodyOrigin, "body", 0.18);
+    const garmentOrigin = garmentCentroid(state.positions);
+    addFrameAxes(this.registrationAxesGroup, garmentOrigin, "garment", 0.12);
+    this.registrationAxesGroup.userData.registration = registration;
+    this.registrationAxesGroup.visible = this.devSettings.showRegistrationAxes;
   }
 
   private configureApprovedAvatar(
@@ -681,6 +759,9 @@ export class ThreeViewport {
         this.framesApplied += 1;
         this.writeFrameCounters();
         this.writeSimulationDiagnostics(frame.diagnostics);
+        if (import.meta.env.DEV) {
+          this.host.dataset.garmentMeshDiagnostics = JSON.stringify(captureGarmentMeshDiagnostics(this.garmentMeshes));
+        }
         this.host.dataset.simulationPositionSignature = positionSignature(frame.positions);
         // Um frame aceito prova que o Worker concluiu a inicialização dessa
         // identidade. Regrava o marcador porque uma renderização React muito
@@ -741,6 +822,7 @@ export class ThreeViewport {
       cadence: this.devSettings.cadence,
       autoPauseSteps: this.devSettings.autoPauseSteps,
       bodyCollisionEnabled: this.devSettings.bodyCollisionEnabled && this.bodyRegistrationStatus === "registered",
+      floorCollisionEnabled: this.devSettings.floorCollisionEnabled,
     });
     this.applyDevBodyVisibility();
   }
@@ -922,6 +1004,34 @@ function createFloor(shadows: boolean): THREE.Mesh {
   floor.position.y = 0;
   floor.receiveShadow = shadows;
   return floor;
+}
+
+function addFrameAxes(
+  group: THREE.Group,
+  origin: THREE.Vector3,
+  label: string,
+  length: number,
+): void {
+  const arrows = [
+    new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, length, 0xc64545),
+    new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, length, 0x3d9348),
+    new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, length, 0x376fb3),
+  ];
+  arrows.forEach((arrow, index) => {
+    arrow.name = `${label}:${index === 0 ? "right" : index === 1 ? "up" : "front"}`;
+    group.add(arrow);
+  });
+}
+
+function garmentCentroid(positions: Float32Array): THREE.Vector3 {
+  const center = new THREE.Vector3();
+  const count = positions.length / 3;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    center.x += positions[offset];
+    center.y += positions[offset + 1];
+    center.z += positions[offset + 2];
+  }
+  return count > 0 ? center.multiplyScalar(1 / count) : center;
 }
 
 function measurementOriginsFromDocument(

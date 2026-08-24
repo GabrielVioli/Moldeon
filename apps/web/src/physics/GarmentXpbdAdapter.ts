@@ -166,8 +166,10 @@ export function buildXpbdInitialization(
 
     for (let offset = 0; offset < topology.triangles.length; offset += 3) {
       const localA = topology.triangles[offset];
-      const localB = topology.triangles[offset + 1];
-      const localC = topology.triangles[offset + 2];
+      // Registration owns the canonical outward side.  Keep renderer and
+      // physics triangle orientation identical after a proper rigid transform.
+      const localB = topology.triangles[offset + (instance.arrangement?.flipWinding ? 2 : 1)];
+      const localC = topology.triangles[offset + (instance.arrangement?.flipWinding ? 1 : 2)];
       const a = instance.particleStart + localA;
       const b = instance.particleStart + localB;
       const c = instance.particleStart + localC;

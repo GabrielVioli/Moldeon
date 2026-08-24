@@ -40,8 +40,10 @@ export const GarmentViewport = memo(function GarmentViewport({
     cadence: 1,
     autoPauseSteps: 0,
     bodyCollisionEnabled: true,
+    floorCollisionEnabled: true,
     showBodyColliders: false,
     showProceduralAvatar: true,
+    showRegistrationAxes: false,
   });
   const [wireframe, setWireframe] = useState(false);
   const [telemetry, setTelemetry] = useState<SimulationDevTelemetry | null>(null);
@@ -234,6 +236,14 @@ export const GarmentViewport = memo(function GarmentViewport({
           <label className="viewport-physics-toggle">
             <input
               type="checkbox"
+              checked={devSettings.floorCollisionEnabled}
+              onChange={(event) => setDevSettings((current) => ({ ...current, floorCollisionEnabled: event.target.checked }))}
+            />
+            Floor collision
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
               checked={devSettings.showBodyColliders}
               onChange={(event) => setDevSettings((current) => ({ ...current, showBodyColliders: event.target.checked }))}
             />
@@ -246,6 +256,14 @@ export const GarmentViewport = memo(function GarmentViewport({
               onChange={(event) => setDevSettings((current) => ({ ...current, showProceduralAvatar: event.target.checked }))}
             />
             Show procedural avatar
+          </label>
+          <label className="viewport-physics-toggle">
+            <input
+              type="checkbox"
+              checked={devSettings.showRegistrationAxes}
+              onChange={(event) => setDevSettings((current) => ({ ...current, showRegistrationAxes: event.target.checked }))}
+            />
+            Show registration axes
           </label>
           <label className="viewport-physics-toggle">
             <input
@@ -271,6 +289,12 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
             <dt>Body colliders</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
             <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
+            <dt>Floor contacts</dt><dd>{telemetry?.floorContactCount ?? 0}</dd>
+            <dt>Floor CCD contacts</dt><dd>{telemetry?.floorCcdContactCount ?? 0}</dd>
+            <dt>Floor friction contacts</dt><dd>{telemetry?.floorFrictionContactCount ?? 0}</dd>
+            <dt>Max floor penetration mm</dt><dd>{formatMetric((telemetry?.maximumFloorPenetrationM ?? 0) * 1000)}</dd>
+            <dt>Mean floor penetration mm</dt><dd>{formatMetric((telemetry?.meanFloorPenetrationM ?? 0) * 1000)}</dd>
+            <dt>Floor collision ms</dt><dd>{formatMetric(telemetry?.floorCollisionMs)}</dd>
             <dt>Max penetration mm</dt><dd>{formatMetric((telemetry?.maximumBodyPenetrationM ?? 0) * 1000)}</dd>
             <dt>Max body correction mm</dt><dd>{formatMetric((telemetry?.maximumBodyCorrectionM ?? 0) * 1000)}</dd>
             <dt>Body collision ms</dt><dd>{formatMetric(telemetry?.bodyCollisionMs)}</dd>

@@ -435,6 +435,55 @@ export function deriveDressingPanelInstances(
     if (!includedIds.has(instance.sourcePatternId)) return instance;
     const definition = document.patternDefinitions.find((candidate) => candidate.id === instance.sourcePatternId);
     if (!definition || definition.bodyPlacement.includeIn3D === false) return instance;
+    const authoredPlacement = definition.bodyPlacement;
+    const authoredAnchor = instance.arrangementAnchor;
+    const connectorRegion = semanticRegionForDefinition(definition);
+    const authoritativeRegion = authoredPlacement.source === "manual"
+      ? authoredPlacement.region
+      : connectorRegion ?? authoredPlacement.region;
+    if (
+      (authoredPlacement.status === "confirmed" || connectorRegion !== undefined)
+      && authoritativeRegion
+      && authoritativeRegion !== "custom"
+    ) {
+      // The Provar region/front-reference choice supplies only missing global
+      // context.  It must never erase a more specific confirmed classification
+      // (notably a sleeve/arm) by relabelling every connected panel as torso.
+      // This is also the metadata precedence consumed by garment registration.
+      const bodySide = authoritativeRegion === "arm" || authoritativeRegion === "leg"
+        ? instance.copyIndex % 2 === 0 ? "left" : "right"
+        : authoredAnchor?.bodySide ?? instance.bodySide ?? "center";
+      const surface = authoredPlacement.source === "manual"
+        ? authoredPlacement.surface ?? authoredAnchor?.surface ?? instance.surface ?? "front"
+        : connectorRegion === "arm"
+          ? "side"
+          : surfaceByPieceId.get(instance.sourcePatternId)
+            ?? authoredPlacement.surface
+            ?? authoredAnchor?.surface
+            ?? instance.surface
+            ?? "front";
+      return {
+        ...instance,
+        placementStatus: "confirmed",
+        bodySide,
+        surface,
+        includedIn3D: true,
+        arrangementAnchor: {
+          id: authoredAnchor?.id ?? `${instance.id}:semantic`,
+          ...(authoredAnchor ?? {}),
+          bodyAnchorId: anchorFor(authoritativeRegion, surface === "back" ? "back" : "front", bodySide),
+          region: authoritativeRegion,
+          surface,
+          bodySide,
+          rotationDeg: authoredAnchor?.rotationDeg ?? authoredPlacement.rotationZDeg,
+          offsetXMm: authoredAnchor?.offsetXMm ?? authoredPlacement.offsetXMm,
+          offsetYMm: authoredAnchor?.offsetYMm ?? authoredPlacement.offsetYMm,
+          offsetZMm: authoredAnchor?.offsetZMm ?? authoredPlacement.offsetZMm,
+          scale: authoredAnchor?.scale ?? 1,
+          source: authoredPlacement.source,
+        },
+      };
+    }
     const surface = surfaceByPieceId.get(instance.sourcePatternId) ?? "front";
     const bodySide = definition.mirrorRule === "paired" && definition.cutQuantity > 1
       ? instance.copyIndex % 2 === 0 ? "left" : "right"
@@ -463,6 +512,22 @@ export function deriveDressingPanelInstances(
       },
     };
   });
+}
+
+function semanticRegionForDefinition(
+  definition: PatternDocumentV3["patternDefinitions"][number],
+): BodyPlacementRegion | undefined {
+  if (definition.semanticRole === "sleeve"
+    || definition.connectors.some((connector) => connector.role === "sleeve-cap-front" || connector.role === "sleeve-cap-back")) {
+    return "arm";
+  }
+  if (definition.semanticRole === "waistband"
+    || definition.connectors.some((connector) => connector.role === "waistband")) {
+    return "waist";
+  }
+  if (definition.semanticRole === "collar") return "neck";
+  if (definition.semanticRole === "leg-front" || definition.semanticRole === "leg-back") return "leg";
+  return undefined;
 }
 
 export function evaluateGarment3DEligibility(
@@ -679,12 +744,14 @@ function previewRegionFor(region: GarmentDressingRegion): "torso" | "hip" | "arm
 }
 
 function anchorFor(
-  region: "torso" | "hip" | "arm" | "neck" | "custom",
+  region: BodyPlacementRegion,
   surface: "front" | "back",
   bodySide: "center" | "left" | "right",
 ): BodyAnchorId {
   if (region === "arm") return bodySide === "right" ? "arm-right" : "arm-left";
+  if (region === "leg") return bodySide === "right" ? "leg-right" : "leg-left";
   if (region === "neck") return "neck";
+  if (region === "waist") return surface === "back" ? "waist-back" : "waist-front";
   if (region === "hip") return surface === "back" ? "hip-back" : "hip-front";
   return surface === "back" ? "torso-back" : "torso-front";
 }

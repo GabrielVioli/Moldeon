@@ -77,6 +77,7 @@ export class XpbdWorkerClient {
     cadence: XpbdSimulationCadence;
     autoPauseSteps: XpbdAutoPauseSteps;
     bodyCollisionEnabled?: boolean;
+    floorCollisionEnabled?: boolean;
   }): void {
     this.post({ type: "configureDev", generation: this.generation, ...settings });
   }

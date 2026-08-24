@@ -1,4 +1,4 @@
-import type { GarmentAssemblyState } from "./GarmentAssembly";
+import type { AssemblyPanelInstance, GarmentAssemblyState } from "./GarmentAssembly";
 import {
   evaluateCoarseBinding,
   type CoarseAssemblyMesh,
@@ -52,6 +52,7 @@ export interface IsometricAssemblyComponentDiagnostic extends IsometricAssemblyM
   candidateDiagnostics: Array<{
     name: string;
     score: number;
+    semanticChirality: number;
     metrics: IsometricAssemblyMetrics;
   }>;
   constraintState: AssemblyConstraintState;
@@ -110,6 +111,7 @@ interface CandidateScore {
   candidate: Candidate;
   metrics: IsometricAssemblyMetrics;
   selectionMetrics: IsometricAssemblyMetrics;
+  semanticChirality: number;
   score: number;
 }
 
@@ -153,15 +155,18 @@ export function solveIsometricSurfaceAssembly(
       realignCurrentStructuralIslandsByAttachments(component, coarse);
       const metrics = measureComponentMetrics(component, coarse);
       const selectionMetrics = measureComponentMetrics(selectionComponent, coarse);
+      const semanticChirality = measureSemanticChirality(state, component, coarse);
       return {
         candidate: snapshotCandidate(candidate.name, component, coarse),
         metrics,
         selectionMetrics,
+        semanticChirality,
         score: objective(selectionMetrics, selectionComponent),
       };
     });
     solved.sort((left, right) =>
-      candidateAdmissibilityRank(left.selectionMetrics) - candidateAdmissibilityRank(right.selectionMetrics)
+      semanticChiralityRank(left.semanticChirality) - semanticChiralityRank(right.semanticChirality)
+      || candidateAdmissibilityRank(left.selectionMetrics) - candidateAdmissibilityRank(right.selectionMetrics)
       || left.score - right.score
       || left.candidate.name.localeCompare(right.candidate.name),
     );
@@ -192,6 +197,7 @@ export function solveIsometricSurfaceAssembly(
       candidateDiagnostics: solved.map((candidate) => ({
         name: candidate.candidate.name,
         score: candidate.score,
+        semanticChirality: candidate.semanticChirality,
         metrics: candidate.metrics,
       })),
       constraintState: constraint.state,
@@ -224,6 +230,81 @@ function candidateAdmissibilityRank(metrics: IsometricAssemblyMetrics): number {
   if (metrics.overlapScore > 0.5 || metrics.triangleCrossingProxyCount > 8_000) return 2;
   if (metrics.overlapScore > 0.2 || metrics.triangleCrossingProxyCount > 4_000) return 1;
   return 0;
+}
+
+function semanticChiralityRank(value: number): number {
+  if (value > 0.1) return 0;
+  if (value < -0.1) return 2;
+  return 1;
+}
+
+/**
+ * The geometric surface solver produces mirror-equivalent spatial branches.
+ * Explicit front/back and left/right placement metadata selects the branch
+ * that can be registered to the body with a proper rigid transform.  This
+ * does not move, scale or deform the candidate and it never inspects names.
+ */
+function measureSemanticChirality(
+  state: Pick<GarmentAssemblyState, "instances">,
+  component: Component,
+  coarse: CoarseAssemblySet,
+): number {
+  const instances = state.instances.filter((instance) => component.meshIds.includes(instance.id));
+  const centroidFor = (predicate: (instance: AssemblyPanelInstance) => boolean) => {
+    const selected = instances.filter(predicate);
+    if (selected.length === 0) return null;
+    const totalArea = selected.reduce(
+      (sum, instance) => sum + Math.max(EPS, coarse.byInstanceId.get(instance.id)?.materialAreaM2 ?? 0),
+      0,
+    );
+    let result: readonly [number, number, number] = [0, 0, 0];
+    for (const instance of selected) {
+      const mesh = coarse.byInstanceId.get(instance.id);
+      if (!mesh) continue;
+      const weight = Math.max(EPS, mesh.materialAreaM2) / Math.max(EPS, totalArea);
+      result = add(result, scale(centroidOfPositions(mesh.positions), weight));
+    }
+    return result;
+  };
+  const front = centroidFor((instance) => instance.placement.surface === "front");
+  const back = centroidFor((instance) => instance.placement.surface === "back");
+  const right = centroidFor((instance) => instance.placement.bodySide === "right");
+  const left = centroidFor((instance) => instance.placement.bodySide === "left");
+  if (!front || !back || !right || !left) return 0;
+
+  const up = weightedCoarseMaterialUp(instances, coarse);
+  const forward = normalize(sub(front, back));
+  const lateral = normalize(sub(right, left));
+  if (length3(up) <= EPS || length3(forward) <= EPS || length3(lateral) <= EPS) return 0;
+  return dot(normalize(cross(up, forward)), lateral);
+}
+
+function weightedCoarseMaterialUp(
+  instances: readonly AssemblyPanelInstance[],
+  coarse: CoarseAssemblySet,
+): readonly [number, number, number] {
+  let result: readonly [number, number, number] = [0, 0, 0];
+  for (const instance of instances) {
+    if (instance.placement.region !== "torso"
+      && instance.placement.region !== "hip"
+      && instance.placement.region !== "leg"
+      && instance.placement.region !== "waist") continue;
+    const mesh = coarse.byInstanceId.get(instance.id);
+    if (!mesh) continue;
+    const center = centroidOfPositions(mesh.positions);
+    let meanMaterialY = 0;
+    for (let vertexIndex = 0; vertexIndex < mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
+      meanMaterialY += mesh.materialPositionsMm[vertexIndex * 2 + 1];
+    }
+    meanMaterialY /= Math.max(1, mesh.materialPositionsMm.length / 2);
+    let down: readonly [number, number, number] = [0, 0, 0];
+    for (let vertexIndex = 0; vertexIndex < mesh.materialPositionsMm.length / 2; vertexIndex += 1) {
+      const scalar = mesh.materialPositionsMm[vertexIndex * 2 + 1] - meanMaterialY;
+      down = add(down, scale(sub(vertex(mesh.positions, vertexIndex), center), scalar));
+    }
+    result = add(result, scale(normalize(down), -Math.max(EPS, mesh.materialAreaM2)));
+  }
+  return normalize(result);
 }
 
 function zeroEnergyPolishPreservesMaterial(

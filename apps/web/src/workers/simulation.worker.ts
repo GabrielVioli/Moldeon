@@ -93,6 +93,9 @@ function handleRequest(request: XpbdWorkerRequest): void {
       if (request.bodyCollisionEnabled !== undefined) {
         state.body.enabled = request.bodyCollisionEnabled;
       }
+      if (request.floorCollisionEnabled !== undefined) {
+        state.config.floorCollisionEnabled = request.floorCollisionEnabled;
+      }
       cadence = request.cadence;
       autoPauseSteps = request.autoPauseSteps;
       if (running) {

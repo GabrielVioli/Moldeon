@@ -1,0 +1,4759 @@
+{
+  "page": {
+    "contentLength": 692,
+    "errorOverlay": false
+  },
+  "orientation": {
+    "tshirt": {
+      "registration": {
+        "status": "registered",
+        "source": "semantic-body-placement",
+        "transform": {
+          "translation": [
+            0.01811011226300032,
+            1.3571619152548344,
+            0.025080094274880477
+          ],
+          "rotation": [
+            0.3604231022525415,
+            0.19768694562674086,
+            -0.07736330454962073,
+            0.9083116084255373
+          ]
+        },
+        "islandTransforms": [],
+        "garmentForward": [
+          -0.41488973954647834,
+          0.624165544681444,
+          0.662030117782848
+        ],
+        "garmentUp": [
+          0.0019619092580774353,
+          0.7282202129436333,
+          -0.6853404062014674
+        ],
+        "garmentRight": [
+          0.9098695812758653,
+          0.2830418596124002,
+          0.3033556506413485
+        ],
+        "bodyForward": [
+          0,
+          0,
+          1
+        ],
+        "bodyUp": [
+          0,
+          1,
+          0
+        ],
+        "bodyRight": [
+          1,
+          0,
+          0
+        ],
+        "registrationRotationDeg": [
+          43.31374503731936,
+          24.51237305033646,
+          0.12354402034809599
+        ],
+        "registrationTranslationMm": [
+          18.11011226300032,
+          1357.1619152548344,
+          25.080094274880476
+        ],
+        "registrationDeterminant": 0.9999999999999998,
+        "registeredInstanceIds": [
+          "tshirt-front:panel:1:fold-a",
+          "tshirt-front:panel:1:fold-b",
+          "tshirt-back:panel:1:fold-a",
+          "tshirt-back:panel:1:fold-b",
+          "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+          "guided-sleeve:tshirt-front:tshirt-back:panel:2"
+        ],
+        "structuralIslandCount": 3,
+        "registrationIslandCount": 1,
+        "panelOutwardConsistency": 1,
+        "flippedPanelCount": 2,
+        "negativeTransformCount": 0,
+        "residualMeanM": 0.18657061529728813,
+        "residualMaxM": 0.2478355251562495,
+        "registrationAmbiguities": []
+      },
+      "meshes": [
+        {
+          "id": "tshirt-front:panel:1:fold-a",
+          "vertexCount": 1035,
+          "triangleCount": 1648,
+          "boundingBox": {
+            "min": [
+              -0.000056174900237238035,
+              0.7446296811103821,
+              -0.03151434659957886
+            ],
+            "max": [
+              0.2517036199569702,
+              1.4036147594451904,
+              0.15172122418880463
+            ]
+          },
+          "centroid": [
+            0.09111698236874828,
+            1.0914318962949485,
+            0.05998667228697284
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "ae0d0fd6",
+          "geometryRevision": "6a379f43-b93a-4c00-8dc3-c307912dedaa:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5565178285065433,
+            0.0815269837083177,
+            0.8268260140330523
+          ],
+          "meanTriangleNormal": [
+            0.533779973587216,
+            0.08606370351973859,
+            0.8412324165970411
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "tshirt-front:panel:1:fold-b",
+          "vertexCount": 1035,
+          "triangleCount": 1648,
+          "boundingBox": {
+            "min": [
+              -0.2552615702152252,
+              0.7462877035140991,
+              -0.029703032225370407
+            ],
+            "max": [
+              0.0013429771643131971,
+              1.403352975845337,
+              0.1518263816833496
+            ]
+          },
+          "centroid": [
+            -0.0911169824912972,
+            1.0914365576661151,
+            0.061041299273913156
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "ae0d0fd6",
+          "geometryRevision": "7db6a873-54fd-465d-9fa7-18ada87461fd:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.551133730971283,
+            0.08999898372578322,
+            0.8295491507523829
+          ],
+          "meanTriangleNormal": [
+            -0.530708127390901,
+            0.08983803964993212,
+            0.8427799298471106
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "tshirt-back:panel:1:fold-a",
+          "vertexCount": 1025,
+          "triangleCount": 1632,
+          "boundingBox": {
+            "min": [
+              -0.003076457418501377,
+              0.7446619272232056,
+              -0.155630424618721
+            ],
+            "max": [
+              0.2569981813430786,
+              1.402451515197754,
+              0.030902022495865822
+            ]
+          },
+          "centroid": [
+            0.09161981112497038,
+            1.0948678493499755,
+            -0.061036664916453716
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "39e416eb",
+          "geometryRevision": "51c9f462-7a6a-4cb5-89bf-0ecbf5fa5d56:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5493758669195337,
+            0.10587149346111022,
+            -0.8288409881990183
+          ],
+          "meanTriangleNormal": [
+            0.5211386666839318,
+            0.10161257431769519,
+            -0.8474015428516901
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "tshirt-back:panel:1:fold-b",
+          "vertexCount": 1025,
+          "triangleCount": 1632,
+          "boundingBox": {
+            "min": [
+              -0.25203415751457214,
+              0.7427334785461426,
+              -0.15536676347255707
+            ],
+            "max": [
+              -0.0005764022935181856,
+              1.402547836303711,
+              0.03331633284687996
+            ]
+          },
+          "centroid": [
+            -0.09161981116889453,
+            1.0946290903556637,
+            -0.05999130652905456
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "39e416eb",
+          "geometryRevision": "29f1711f-f51b-4574-a606-83e132f240c6:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5564541891957079,
+            0.09144151590388715,
+            -0.8258312082355248
+          ],
+          "meanTriangleNormal": [
+            -0.5391829373057804,
+            0.0931486290565578,
+            -0.8370215606680598
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+          "vertexCount": 505,
+          "triangleCount": 800,
+          "boundingBox": {
+            "min": [
+              -0.21868082880973816,
+              1.0833299160003662,
+              -0.03313060477375984
+            ],
+            "max": [
+              -0.1163678839802742,
+              1.337402105331421,
+              0.08934654295444489
+            ]
+          },
+          "centroid": [
+            -0.1660799049652449,
+            1.191853437801399,
+            0.023501189839553623
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "89f024f2",
+          "geometryRevision": "6483d6cd-47e9-4ad3-b6f0-2cf85a5aa0c0:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.9631500626064726,
+            -0.13185805105056878,
+            0.2344257052336488
+          ],
+          "meanTriangleNormal": [
+            -0.9839359960854679,
+            -0.1760637977157655,
+            0.029521089769861435
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+          "vertexCount": 505,
+          "triangleCount": 800,
+          "boundingBox": {
+            "min": [
+              0.08489461988210678,
+              1.1967169046401978,
+              -0.13279041647911072
+            ],
+            "max": [
+              0.3329400420188904,
+              1.300803542137146,
+              0.037534572184085846
+            ]
+          },
+          "centroid": [
+            0.22236521680756371,
+            1.2418675564303256,
+            -0.042657088766930314
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "89f024f2",
+          "geometryRevision": "5be41541-b944-41ec-9f22-47f94f7bd171:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5764164791592032,
+            0.3313192885801687,
+            0.7469749470821888
+          ],
+          "meanTriangleNormal": [
+            0.5512891765606167,
+            0.5270274361355373,
+            0.6467784206105824
+          ],
+          "materialSide": 2
+        }
+      ],
+      "simulation": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 5130,
+        "triangleCount": 8160,
+        "stretchConstraintCount": 13284,
+        "shearConstraintCount": 8160,
+        "bendConstraintCount": 11196,
+        "seamConstraintCount": 430,
+        "seamErrorAverage": 0.020949970862545454,
+        "seamErrorMaximum": 0.15804881487703137,
+        "seamErrorsByGroup": {
+          "guided-sleeve:front-armhole": {
+            "constraintCount": 42,
+            "meanError": 0.09127457612160166,
+            "maxError": 0.15804881487703137,
+            "worstConstraintIndex": 2
+          },
+          "guided-sleeve:back-armhole": {
+            "constraintCount": 40,
+            "meanError": 0.04340648671431467,
+            "maxError": 0.1348210440358184,
+            "worstConstraintIndex": 43
+          },
+          "guided-sleeve:underarm": {
+            "constraintCount": 12,
+            "meanError": 0.011798214273999663,
+            "maxError": 0.017742763218336812,
+            "worstConstraintIndex": 92
+          },
+          "guided-sleeve:body-shoulder": {
+            "constraintCount": 26,
+            "meanError": 0.041115217263352134,
+            "maxError": 0.08141207805661745,
+            "worstConstraintIndex": 95
+          },
+          "guided-sleeve:body-side": {
+            "constraintCount": 68,
+            "meanError": 0.018633125675781573,
+            "maxError": 0.05259827195418207,
+            "worstConstraintIndex": 121
+          },
+          "fold:tshirt-front:panel:1:cut-on-fold": {
+            "constraintCount": 113,
+            "meanError": 0.004098645618278509,
+            "maxError": 0.005272381566203111,
+            "worstConstraintIndex": 298
+          },
+          "fold:tshirt-back:panel:1:cut-on-fold": {
+            "constraintCount": 129,
+            "meanError": 0.0038598611183015955,
+            "maxError": 0.004618418352182241,
+            "worstConstraintIndex": 317
+          }
+        },
+        "maximumPositionMagnitude": 1.4057798688542849,
+        "maximumVelocityMagnitude": 0,
+        "structuralStretchMeanRatio": 1.005038677873296,
+        "structuralStretchMaxRatio": 1.3174812281616073,
+        "structuralCompressionMinRatio": 0.9444226696391276,
+        "shearStrainMean": 0.021605685122757564,
+        "shearStrainMax": 1.0587415316239943,
+        "triangleAreaMeanRatio": 1.1271839878621872,
+        "triangleAreaMinRatio": 0.12367087876781555,
+        "triangleAreaMaxRatio": 13.4192019333486,
+        "flippedTriangleCount": 0,
+        "garmentAabbGrowthRatio": 1,
+        "materialMetricsByPanel": {
+          "tshirt-front:panel:1:fold-a": {
+            "constraintCount": 2682,
+            "structuralStretchMeanRatio": 1.0003546582129248,
+            "structuralStretchMaxRatio": 1.0800761142032118,
+            "structuralCompressionMinRatio": 0.9574169523514381
+          },
+          "tshirt-front:panel:1:fold-b": {
+            "constraintCount": 2682,
+            "structuralStretchMeanRatio": 1.0005889547485445,
+            "structuralStretchMaxRatio": 1.0808348436850324,
+            "structuralCompressionMinRatio": 0.9779635136493966
+          },
+          "tshirt-back:panel:1:fold-a": {
+            "constraintCount": 2656,
+            "structuralStretchMeanRatio": 1.0004385714831665,
+            "structuralStretchMaxRatio": 1.0800331832420023,
+            "structuralCompressionMinRatio": 0.9714605983225552
+          },
+          "tshirt-back:panel:1:fold-b": {
+            "constraintCount": 2656,
+            "structuralStretchMeanRatio": 1.000720250624584,
+            "structuralStretchMaxRatio": 1.0854253219061074,
+            "structuralCompressionMinRatio": 0.985816305239296
+          },
+          "guided-sleeve:tshirt-front:tshirt-back:panel:1": {
+            "constraintCount": 1304,
+            "structuralStretchMeanRatio": 1.0238512329076412,
+            "structuralStretchMaxRatio": 1.2891918395175033,
+            "structuralCompressionMinRatio": 0.9444226696391276
+          },
+          "guided-sleeve:tshirt-front:tshirt-back:panel:2": {
+            "constraintCount": 1304,
+            "structuralStretchMeanRatio": 1.023177291162921,
+            "structuralStretchMaxRatio": 1.3174812281616073,
+            "structuralCompressionMinRatio": 0.9462005541080644
+          }
+        },
+        "materialMetricsByFabric": {
+          "fixture-fabric-primary": {
+            "constraintCount": 13284,
+            "structuralStretchMeanRatio": 1.005038677873296,
+            "structuralStretchMaxRatio": 1.3174812281616073,
+            "structuralCompressionMinRatio": 0.9444226696391276
+          }
+        },
+        "explicitPinCount": 0,
+        "temporarySupportCount": 0,
+        "maximumCorrectionApplied": 0,
+        "bodyColliderCount": 12,
+        "bodyContactCount": 0,
+        "bodyContactsByRegion": {},
+        "maximumBodyPenetrationM": 0,
+        "maximumBodyCorrectionM": 0,
+        "frictionContactCount": 0,
+        "sweptContactCount": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "floorContactCount": 0,
+        "floorCcdContactCount": 0,
+        "floorFrictionContactCount": 0,
+        "maximumFloorPenetrationM": 0,
+        "meanFloorPenetrationM": 0,
+        "invalid": false,
+        "invalidReason": null,
+        "droppedTimeSeconds": 0,
+        "integrationMs": 0,
+        "stretchMs": 0,
+        "shearMs": 0,
+        "bendMs": 0,
+        "seamMs": 0,
+        "velocityUpdateMs": 0,
+        "validationMs": 0,
+        "solverStepTotalMs": 0,
+        "bodyCollisionMs": 0,
+        "floorCollisionMs": 0,
+        "bodyBroadphaseMs": 0,
+        "bodyNarrowphaseMs": 0,
+        "bodyProjectionMs": 0,
+        "bodyFrictionMs": 0,
+        "bodyParticleQueries": 0,
+        "bodyColliderTests": 0,
+        "bodyCandidateColliderTests": 0,
+        "bodyBroadphaseRejected": 0,
+        "bodyBroadphaseRejectRate": 0,
+        "bodyAverageCandidatesPerParticle": 0,
+        "bodyCapsuleNarrowphaseTests": 0,
+        "bodyEllipsoidNarrowphaseTests": 0,
+        "bodyPointContactsFound": 0,
+        "bodySweptTests": 0,
+        "bodySweptContactsFound": 0,
+        "bodyDressingStepsRemaining": 0,
+        "bodyInitialDressingSteps": 0,
+        "iterations": 5,
+        "maximumSubsteps": 2,
+        "physicsStepMs": 0,
+        "workerStepTotalMs": 0
+      },
+      "settings": {
+        "gravityScale": 0,
+        "cadence": 1,
+        "autoPauseSteps": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "showBodyColliders": false,
+        "showProceduralAvatar": true,
+        "showRegistrationAxes": false
+      },
+      "spatial": {
+        "revision": "23839d78",
+        "strategy": "coarse-isometric-surface",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.31748214067186675,
+          "maxAbsoluteDistortionM": 0.0024457099311526106,
+          "evaluatedConstraintCount": 13284,
+          "byInstance": {
+            "tshirt-front:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.08006886387904537,
+              "maxAbsoluteDistortionM": 0.00015774015257023072,
+              "evaluatedConstraintCount": 2682
+            },
+            "tshirt-front:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.08082758826767428,
+              "maxAbsoluteDistortionM": 0.00021021200776406585,
+              "evaluatedConstraintCount": 2682
+            },
+            "tshirt-back:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.08002041234848578,
+              "maxAbsoluteDistortionM": 0.00022463170966144363,
+              "evaluatedConstraintCount": 2656
+            },
+            "tshirt-back:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.08542301392563098,
+              "maxAbsoluteDistortionM": 0.00017960808342112064,
+              "evaluatedConstraintCount": 2656
+            },
+            "guided-sleeve:tshirt-front:tshirt-back:panel:1": {
+              "maxRelativeDistortion": 0.2891916031508515,
+              "maxAbsoluteDistortionM": 0.0024457099311526106,
+              "evaluatedConstraintCount": 1304
+            },
+            "guided-sleeve:tshirt-front:tshirt-back:panel:2": {
+              "maxRelativeDistortion": 0.31748214067186675,
+              "maxAbsoluteDistortionM": 0.0023465053720322787,
+              "evaluatedConstraintCount": 1304
+            }
+          }
+        },
+        "initialPositionSignature": "15390:af23f054",
+        "coarseVertexCount": 1548,
+        "coarseTriangleCount": 2040,
+        "hingeCount": 2538,
+        "reductionRatio": 0.3017543859649123,
+        "fineBindingBuildMs": 19.150000002235174,
+        "fineTransferMs": 1.75,
+        "assemblySolveMs": 16907.074999999255,
+        "assemblyConfidence": [
+          {
+            "componentId": "coarse-component:1:guided-sleeve:tshirt-front:tshirt-back:panel:1+guided-sleeve:tshirt-front:tshirt-back:panel:2+tshirt-back:panel:1:fold-a+tshirt-back:panel:1:fold-b+tshirt-front:panel:1:fold-a+tshirt-front:panel:1:fold-b",
+            "state": "partially-constrained",
+            "confidence": 0.8279170026925612,
+            "reason": "global constraints admit competing or imperfect embeddings",
+            "selectedSeed": "material-preserving-shell-mirror",
+            "metrics": {
+              "metricDistortionMean": 0.007944678640192195,
+              "metricDistortionMax": 0.31747007915306225,
+              "areaDistortionMean": 0.04738158857686533,
+              "areaDistortionMax": 12.418954275931377,
+              "structuralSeamMeanMm": 9.881310534944811,
+              "structuralSeamMaxMm": 81.41207730332756,
+              "overlapScore": 0.1353627139426064,
+              "nonPlanarityRad": 1.570796126653101
+            },
+            "candidates": [
+              {
+                "name": "material-preserving-shell-mirror",
+                "score": 363.29154449538134,
+                "semanticChirality": 0.9986061646870932,
+                "metrics": {
+                  "metricDistortionMean": 0.007944678640192195,
+                  "metricDistortionMax": 0.31747007915306225,
+                  "areaDistortionMean": 0.04738158857686533,
+                  "areaDistortionMax": 12.418954275931377,
+                  "structuralSeamMeanMm": 9.881310534944811,
+                  "structuralSeamMaxMm": 81.41207730332756,
+                  "normalizedResidual": 0.012030950919111737,
+                  "overlapScore": 0.1353627139426064,
+                  "triangleCrossingProxyCount": 1136,
+                  "nonPlanarityRad": 1.570796126653101
+                }
+              },
+              {
+                "name": "developable-cycle-mirror",
+                "score": 975.3444495472534,
+                "semanticChirality": 0.999999993936188,
+                "metrics": {
+                  "metricDistortionMean": 0.014028056761165501,
+                  "metricDistortionMax": 0.31832407106751,
+                  "areaDistortionMean": 0.17729413581828773,
+                  "areaDistortionMax": 46.119083342620826,
+                  "structuralSeamMeanMm": 24.995361046791476,
+                  "structuralSeamMaxMm": 199.90429590673088,
+                  "normalizedResidual": 0.030433003891128615,
+                  "overlapScore": 0.12833406146788026,
+                  "triangleCrossingProxyCount": 1093,
+                  "nonPlanarityRad": 1.5707957024932941
+                }
+              },
+              {
+                "name": "authored-developable-seed",
+                "score": 934.7147764440185,
+                "semanticChirality": 0.004191730981783057,
+                "metrics": {
+                  "metricDistortionMean": 0.007041762873883135,
+                  "metricDistortionMax": 0.19983552178542469,
+                  "areaDistortionMean": 0.08458434151337706,
+                  "areaDistortionMax": 13.18476367128651,
+                  "structuralSeamMeanMm": 21.101157427173337,
+                  "structuralSeamMaxMm": 175.72237380383092,
+                  "normalizedResidual": 0.025691631534600932,
+                  "overlapScore": 0.8942108933960762,
+                  "triangleCrossingProxyCount": 6052,
+                  "nonPlanarityRad": 1.5707225861194622
+                }
+              },
+              {
+                "name": "material-flat-seed",
+                "score": 1897.9812337992407,
+                "semanticChirality": 0.006830437052610448,
+                "metrics": {
+                  "metricDistortionMean": 0.012975667338530299,
+                  "metricDistortionMax": 0.9059580849750964,
+                  "areaDistortionMean": 0.10674289905612275,
+                  "areaDistortionMax": 20.66362831783298,
+                  "structuralSeamMeanMm": 14.94516043351582,
+                  "structuralSeamMaxMm": 176.57395461040377,
+                  "normalizedResidual": 0.0181964215189887,
+                  "overlapScore": 2.006691658904238,
+                  "triangleCrossingProxyCount": 12924,
+                  "nonPlanarityRad": 1.5705707750478077
+                }
+              },
+              {
+                "name": "material-preserving-shell-seed",
+                "score": 383.81511070157717,
+                "semanticChirality": -0.998603773990351,
+                "metrics": {
+                  "metricDistortionMean": 0.007954919302798933,
+                  "metricDistortionMax": 0.3335988602655992,
+                  "areaDistortionMean": 0.04735982248969055,
+                  "areaDistortionMax": 13.548782080040844,
+                  "structuralSeamMeanMm": 9.884578346894203,
+                  "structuralSeamMaxMm": 81.41296180381522,
+                  "normalizedResidual": 0.012034929630744874,
+                  "overlapScore": 0.13472945978550196,
+                  "triangleCrossingProxyCount": 1131,
+                  "nonPlanarityRad": 1.5707955025233895
+                }
+              },
+              {
+                "name": "developable-metric-restored",
+                "score": 601.7809637930421,
+                "semanticChirality": -0.9999999838965579,
+                "metrics": {
+                  "metricDistortionMean": 0.007133012663643841,
+                  "metricDistortionMax": 0.2613343414104048,
+                  "areaDistortionMean": 0.12531829514242926,
+                  "areaDistortionMax": 25.609949932271885,
+                  "structuralSeamMeanMm": 26.49246415847562,
+                  "structuralSeamMaxMm": 200.2658618625983,
+                  "normalizedResidual": 0.03225579591793764,
+                  "overlapScore": 0.1392166028909274,
+                  "triangleCrossingProxyCount": 1099,
+                  "nonPlanarityRad": 1.5707958519541392
+                }
+              },
+              {
+                "name": "developable-cycle-seed",
+                "score": 975.3532222949607,
+                "semanticChirality": -0.9999999943908109,
+                "metrics": {
+                  "metricDistortionMean": 0.014027959801550298,
+                  "metricDistortionMax": 0.3184417302434842,
+                  "areaDistortionMean": 0.1772933678635882,
+                  "areaDistortionMax": 46.119227538238775,
+                  "structuralSeamMeanMm": 24.995357376997116,
+                  "structuralSeamMaxMm": 199.9043535302989,
+                  "normalizedResidual": 0.030432999422984875,
+                  "overlapScore": 0.12833838835178632,
+                  "triangleCrossingProxyCount": 1093,
+                  "nonPlanarityRad": 1.5707948054402272
+                }
+              },
+              {
+                "name": "developable-cycle-raw",
+                "score": 1282.0953850177987,
+                "semanticChirality": -0.9999999999913036,
+                "metrics": {
+                  "metricDistortionMean": 0.028563768562505264,
+                  "metricDistortionMax": 0.43176316927932423,
+                  "areaDistortionMean": 0.17873009728455314,
+                  "areaDistortionMax": 62.16237321643289,
+                  "structuralSeamMeanMm": 14.135233594765738,
+                  "structuralSeamMaxMm": 297.04979062080383,
+                  "normalizedResidual": 0.01721029827039595,
+                  "overlapScore": 0.14887376979841144,
+                  "triangleCrossingProxyCount": 1170,
+                  "nonPlanarityRad": 1.5707937567846657
+                }
+              },
+              {
+                "name": "material-preserving-shell-raw",
+                "score": 254.70935345153305,
+                "semanticChirality": -0.9985476403478049,
+                "metrics": {
+                  "metricDistortionMean": 0.01489326091546725,
+                  "metricDistortionMax": 0.43176374382434896,
+                  "areaDistortionMean": 0.037418990548565415,
+                  "areaDistortionMax": 1.3193669038585027,
+                  "structuralSeamMeanMm": 8.334053341666783,
+                  "structuralSeamMaxMm": 94.7283724538897,
+                  "normalizedResidual": 0.010147093986801036,
+                  "overlapScore": 0.2553930996970342,
+                  "triangleCrossingProxyCount": 1877,
+                  "nonPlanarityRad": 1.570775119322917
+                }
+              },
+              {
+                "name": "developable-metric-restored-raw",
+                "score": 630.2451968446632,
+                "semanticChirality": -0.9999999999913556,
+                "metrics": {
+                  "metricDistortionMean": 0.006544587815178468,
+                  "metricDistortionMax": 0.41051605789807855,
+                  "areaDistortionMean": 0.11228844662305058,
+                  "areaDistortionMax": 24.320810815146643,
+                  "structuralSeamMeanMm": 18.862249925177238,
+                  "structuralSeamMaxMm": 296.39438479367703,
+                  "normalizedResidual": 0.022965658479337916,
+                  "overlapScore": 0.2107121472724539,
+                  "triangleCrossingProxyCount": 1479,
+                  "nonPlanarityRad": 1.570796019408435
+                }
+              }
+            ]
+          }
+        ],
+        "instances": [
+          {
+            "id": "tshirt-front:panel:1:fold-a",
+            "pieceId": "tshirt-front",
+            "vertexCount": 1035,
+            "placement": {
+              "id": "tshirt-front:panel:1:fold-a",
+              "pieceId": "tshirt-front",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "right",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                -0.021223684938176248,
+                -0.9931323640740717,
+                0.1150550417247792
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "tshirt-front:panel:1:fold-b",
+            "pieceId": "tshirt-front",
+            "vertexCount": 1035,
+            "placement": {
+              "id": "tshirt-front:panel:1:fold-b",
+              "pieceId": "tshirt-front",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "left",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                0.011995205461284396,
+                -0.9934451326367603,
+                0.11367886121118376
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "tshirt-back:panel:1:fold-a",
+            "pieceId": "tshirt-back",
+            "vertexCount": 1025,
+            "placement": {
+              "id": "tshirt-back:panel:1:fold-a",
+              "pieceId": "tshirt-back",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "right",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                0.005792682829021353,
+                -0.9932741519154912,
+                -0.11564127274552168
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "tshirt-back:panel:1:fold-b",
+            "pieceId": "tshirt-back",
+            "vertexCount": 1025,
+            "placement": {
+              "id": "tshirt-back:panel:1:fold-b",
+              "pieceId": "tshirt-back",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "left",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                0.0034357988446021464,
+                -0.9935785084160175,
+                -0.11309262973377786
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+            "pieceId": "guided-sleeve:tshirt-front:tshirt-back",
+            "vertexCount": 505,
+            "placement": {
+              "id": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+              "pieceId": "guided-sleeve:tshirt-front:tshirt-back",
+              "region": "arm",
+              "surface": "side",
+              "bodySide": "left",
+              "bodyAnchorId": "arm-left",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "arm-left",
+              "outwardNormal": [
+                -1,
+                0,
+                0
+              ],
+              "axis": [
+                0.15986802358426463,
+                -0.9469483848070746,
+                0.278802746662463
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+            "pieceId": "guided-sleeve:tshirt-front:tshirt-back",
+            "vertexCount": 505,
+            "placement": {
+              "id": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+              "pieceId": "guided-sleeve:tshirt-front:tshirt-back",
+              "region": "arm",
+              "surface": "side",
+              "bodySide": "right",
+              "bodyAnchorId": "arm-right",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": true
+            },
+            "arrangement": {
+              "anchorId": "arm-right",
+              "outwardNormal": [
+                1,
+                0,
+                0
+              ],
+              "axis": [
+                0.803033590782902,
+                -0.21109802911751044,
+                -0.5572922699778111
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+            "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+            "tshirt-back:panel:1:fold-a",
+            "tshirt-back:panel:1:fold-b",
+            "tshirt-front:panel:1:fold-a",
+            "tshirt-front:panel:1:fold-b"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "fold:tshirt-back:panel:1:cut-on-fold",
+              "firstInstanceId": "tshirt-back:panel:1:fold-a",
+              "secondInstanceId": "tshirt-back:panel:1:fold-b",
+              "sampleCount": 129
+            },
+            {
+              "seamGroupId": "fold:tshirt-front:panel:1:cut-on-fold",
+              "firstInstanceId": "tshirt-front:panel:1:fold-a",
+              "secondInstanceId": "tshirt-front:panel:1:fold-b",
+              "sampleCount": 113
+            },
+            {
+              "seamGroupId": "guided-sleeve:back-armhole",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+              "secondInstanceId": "tshirt-back:panel:1:fold-b",
+              "sampleCount": 20
+            },
+            {
+              "seamGroupId": "guided-sleeve:back-armhole",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+              "secondInstanceId": "tshirt-back:panel:1:fold-a",
+              "sampleCount": 20
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-shoulder",
+              "firstInstanceId": "tshirt-back:panel:1:fold-a",
+              "secondInstanceId": "tshirt-front:panel:1:fold-a",
+              "sampleCount": 13
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-shoulder",
+              "firstInstanceId": "tshirt-back:panel:1:fold-b",
+              "secondInstanceId": "tshirt-front:panel:1:fold-b",
+              "sampleCount": 13
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-side",
+              "firstInstanceId": "tshirt-back:panel:1:fold-a",
+              "secondInstanceId": "tshirt-front:panel:1:fold-a",
+              "sampleCount": 34
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-side",
+              "firstInstanceId": "tshirt-back:panel:1:fold-b",
+              "secondInstanceId": "tshirt-front:panel:1:fold-b",
+              "sampleCount": 34
+            },
+            {
+              "seamGroupId": "guided-sleeve:front-armhole",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+              "secondInstanceId": "tshirt-front:panel:1:fold-b",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:front-armhole",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+              "secondInstanceId": "tshirt-front:panel:1:fold-a",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:underarm",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+              "secondInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:1",
+              "sampleCount": 6
+            },
+            {
+              "seamGroupId": "guided-sleeve:underarm",
+              "firstInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+              "secondInstanceId": "guided-sleeve:tshirt-front:tshirt-back:panel:2",
+              "sampleCount": 6
+            }
+          ]
+        }
+      }
+    },
+    "blouse": {
+      "registration": {
+        "status": "registered",
+        "source": "semantic-body-placement",
+        "transform": {
+          "translation": [
+            0.000007977623463568078,
+            1.426970210447923,
+            0.000275258603125177
+          ],
+          "rotation": [
+            0.000019965003716085836,
+            0.00003301401843963604,
+            -0.000006557985128154277,
+            0.999999999234233
+          ]
+        },
+        "islandTransforms": [],
+        "garmentForward": [
+          -0.00006602829868910489,
+          0.0000399295743907107,
+          0.9999999970229466
+        ],
+        "garmentUp": [
+          -0.00001311465199626312,
+          0.999999999116783,
+          -0.000039930440412478485
+        ],
+        "garmentRight": [
+          0.999999997734135,
+          0.00001311728849626643,
+          0.00006602777496831508
+        ],
+        "bodyForward": [
+          0,
+          0,
+          1
+        ],
+        "bodyUp": [
+          0,
+          1,
+          0
+        ],
+        "bodyRight": [
+          1,
+          0,
+          0
+        ],
+        "registrationRotationDeg": [
+          0.0022877960959364046,
+          0.003783142846063815,
+          -0.00075141421082822
+        ],
+        "registrationTranslationMm": [
+          0.007977623463568078,
+          1426.970210447923,
+          0.27525860312517697
+        ],
+        "registrationDeterminant": 1.0000000000000002,
+        "registeredInstanceIds": [
+          "blouse-front:panel:1:fold-a",
+          "blouse-front:panel:1:fold-b",
+          "blouse-back:panel:1:fold-a",
+          "blouse-back:panel:1:fold-b",
+          "guided-sleeve:blouse-front:blouse-back:panel:1",
+          "guided-sleeve:blouse-front:blouse-back:panel:2"
+        ],
+        "structuralIslandCount": 3,
+        "registrationIslandCount": 1,
+        "panelOutwardConsistency": 1,
+        "flippedPanelCount": 3,
+        "negativeTransformCount": 0,
+        "residualMeanM": 0.18545092798914933,
+        "residualMaxM": 0.2456297343311202,
+        "registrationAmbiguities": []
+      },
+      "meshes": [
+        {
+          "id": "blouse-front:panel:1:fold-a",
+          "vertexCount": 1105,
+          "triangleCount": 1760,
+          "boundingBox": {
+            "min": [
+              -0.0008383839740417898,
+              0.7042648196220398,
+              -0.015708133578300476
+            ],
+            "max": [
+              0.2091790735721588,
+              1.3794832229614258,
+              0.14730563759803772
+            ]
+          },
+          "centroid": [
+            0.08648125876594685,
+            1.0866213814705206,
+            0.06894306569934767
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "c71276c9",
+          "geometryRevision": "cec3fa32-62ff-4815-aa0f-dff9039ba637:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.413303467695245,
+            0.3075190008665512,
+            0.8570952734072937
+          ],
+          "meanTriangleNormal": [
+            0.5280738655821823,
+            0.1400616861830648,
+            0.837568335452486
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "blouse-front:panel:1:fold-b",
+          "vertexCount": 1105,
+          "triangleCount": 1760,
+          "boundingBox": {
+            "min": [
+              -0.20921814441680908,
+              0.7042608261108398,
+              -0.015704793855547905
+            ],
+            "max": [
+              0.0008456979994662106,
+              1.3794786930084229,
+              0.14739425480365753
+            ]
+          },
+          "centroid": [
+            -0.08648125854227885,
+            1.0866107848974376,
+            0.068935930714637
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "c71276c9",
+          "geometryRevision": "0aac90f6-0a49-4e1e-af71-bb2fa7870396:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.4126854191677269,
+            0.30799567542168776,
+            0.857221913350269
+          ],
+          "meanTriangleNormal": [
+            -0.5283114939924346,
+            0.14038652357711964,
+            0.8373640721415104
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "blouse-back:panel:1:fold-a",
+          "vertexCount": 1105,
+          "triangleCount": 1760,
+          "boundingBox": {
+            "min": [
+              -0.0006411303766071796,
+              0.7041060328483582,
+              -0.14949801564216614
+            ],
+            "max": [
+              0.20982559025287628,
+              1.4036147594451904,
+              0.015499196015298367
+            ]
+          },
+          "centroid": [
+            0.08587004127701249,
+            1.0948065847293285,
+            -0.0689285433158024
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "b9926a5a",
+          "geometryRevision": "0e9da019-356f-46a1-8559-1b013dbc9ec4:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5063274643762298,
+            0.28740672640730175,
+            -0.813037436059482
+          ],
+          "meanTriangleNormal": [
+            0.5374097079786163,
+            0.13132707619761247,
+            -0.8330330154488025
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "blouse-back:panel:1:fold-b",
+          "vertexCount": 1105,
+          "triangleCount": 1760,
+          "boundingBox": {
+            "min": [
+              -0.20976340770721436,
+              0.7040976285934448,
+              -0.14944173395633698
+            ],
+            "max": [
+              0.000608811853453517,
+              1.4036133289337158,
+              0.015305924229323864
+            ]
+          },
+          "centroid": [
+            -0.08587004137336564,
+            1.0947983687279992,
+            -0.06895045305225155
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "b9926a5a",
+          "geometryRevision": "a7686b5e-e166-4ac8-9b66-20f67077c1bc:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5077789448247679,
+            0.28714707302326337,
+            -0.8122235539842574
+          ],
+          "meanTriangleNormal": [
+            -0.5373594205421303,
+            0.13142677459158003,
+            -0.8330497320539032
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "guided-sleeve:blouse-front:blouse-back:panel:1",
+          "vertexCount": 795,
+          "triangleCount": 1264,
+          "boundingBox": {
+            "min": [
+              -0.2702936828136444,
+              1.106810212135315,
+              -0.044676512479782104
+            ],
+            "max": [
+              -0.11845975369215012,
+              1.346099853515625,
+              0.4653262197971344
+            ]
+          },
+          "centroid": [
+            -0.18598640325871652,
+            1.2078735222606538,
+            0.18141418066199388
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "284e3676",
+          "geometryRevision": "17e20333-c7bb-46ca-91fa-1d7b3ee680d6:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.8926523066663442,
+            -0.24806411217355506,
+            0.3763456598059835
+          ],
+          "meanTriangleNormal": [
+            -0.07279548400933872,
+            0.35130447621513416,
+            0.933427009732982
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "guided-sleeve:blouse-front:blouse-back:panel:2",
+          "vertexCount": 795,
+          "triangleCount": 1264,
+          "boundingBox": {
+            "min": [
+              0.11840002238750458,
+              1.1064369678497314,
+              -0.04499119892716408
+            ],
+            "max": [
+              0.2704375982284546,
+              1.3461438417434692,
+              0.4653012454509735
+            ]
+          },
+          "centroid": [
+            0.18601556548719886,
+            1.2080806693191048,
+            0.18146988407349207
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "284e3676",
+          "geometryRevision": "e0b1d3bd-c875-49b5-9c95-5de84ca10b0f:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.8922523408875663,
+            -0.24063488225519214,
+            0.3820740944145361
+          ],
+          "meanTriangleNormal": [
+            0.08497032992166938,
+            0.34811507897731797,
+            0.9335930241928857
+          ],
+          "materialSide": 2
+        }
+      ],
+      "simulation": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 6010,
+        "triangleCount": 9568,
+        "stretchConstraintCount": 15572,
+        "shearConstraintCount": 9568,
+        "bendConstraintCount": 13132,
+        "seamConstraintCount": 504,
+        "seamErrorAverage": 0.013183354958501113,
+        "seamErrorMaximum": 0.13676350763198408,
+        "seamErrorsByGroup": {
+          "guided-sleeve:front-armhole": {
+            "constraintCount": 42,
+            "meanError": 0.09353672703959744,
+            "maxError": 0.13658670632456826,
+            "worstConstraintIndex": 26
+          },
+          "guided-sleeve:back-armhole": {
+            "constraintCount": 42,
+            "meanError": 0.06230383168091193,
+            "maxError": 0.13676350763198408,
+            "worstConstraintIndex": 83
+          },
+          "guided-sleeve:underarm": {
+            "constraintCount": 60,
+            "meanError": 0.0011645585302033333,
+            "maxError": 0.006536495664787936,
+            "worstConstraintIndex": 84
+          },
+          "guided-sleeve:body-shoulder": {
+            "constraintCount": 26,
+            "meanError": 0.0003932784630372709,
+            "maxError": 0.0012425249545544729,
+            "worstConstraintIndex": 145
+          },
+          "guided-sleeve:body-side": {
+            "constraintCount": 76,
+            "meanError": 0.00015599276110552743,
+            "maxError": 0.0009417227766306688,
+            "worstConstraintIndex": 205
+          },
+          "fold:blouse-front:panel:1:cut-on-fold": {
+            "constraintCount": 117,
+            "meanError": 0.000035111257341063176,
+            "maxError": 0.0015840913665774081,
+            "worstConstraintIndex": 358
+          },
+          "fold:blouse-back:panel:1:cut-on-fold": {
+            "constraintCount": 141,
+            "meanError": 0.000021597262546681698,
+            "maxError": 0.0011499433170135893,
+            "worstConstraintIndex": 499
+          }
+        },
+        "maximumPositionMagnitude": 1.405036871047467,
+        "maximumVelocityMagnitude": 0,
+        "structuralStretchMeanRatio": 1.00286892162059,
+        "structuralStretchMaxRatio": 1.1857190581153567,
+        "structuralCompressionMinRatio": 0.9543125178172146,
+        "shearStrainMean": 0.01189914144186201,
+        "shearStrainMax": 0.7558415803668723,
+        "triangleAreaMeanRatio": 1.7773452119541635,
+        "triangleAreaMinRatio": 0.1820806510715899,
+        "triangleAreaMaxRatio": 56.02185008252313,
+        "flippedTriangleCount": 0,
+        "garmentAabbGrowthRatio": 1,
+        "materialMetricsByPanel": {
+          "blouse-front:panel:1:fold-a": {
+            "constraintCount": 2864,
+            "structuralStretchMeanRatio": 1.0019563606576891,
+            "structuralStretchMaxRatio": 1.0428778176375393,
+            "structuralCompressionMinRatio": 0.9819121506600431
+          },
+          "blouse-front:panel:1:fold-b": {
+            "constraintCount": 2864,
+            "structuralStretchMeanRatio": 1.0019572463661945,
+            "structuralStretchMaxRatio": 1.0429096351847946,
+            "structuralCompressionMinRatio": 0.9817686023313803
+          },
+          "blouse-back:panel:1:fold-a": {
+            "constraintCount": 2864,
+            "structuralStretchMeanRatio": 1.0015399711090878,
+            "structuralStretchMaxRatio": 1.0388710867117597,
+            "structuralCompressionMinRatio": 0.9862174276309811
+          },
+          "blouse-back:panel:1:fold-b": {
+            "constraintCount": 2864,
+            "structuralStretchMeanRatio": 1.001542234105651,
+            "structuralStretchMaxRatio": 1.0389479597465867,
+            "structuralCompressionMinRatio": 0.9862345615545023
+          },
+          "guided-sleeve:blouse-front:blouse-back:panel:1": {
+            "constraintCount": 2058,
+            "structuralStretchMeanRatio": 1.0060056991474675,
+            "structuralStretchMaxRatio": 1.1857190581153567,
+            "structuralCompressionMinRatio": 0.9543313995168764
+          },
+          "guided-sleeve:blouse-front:blouse-back:panel:2": {
+            "constraintCount": 2058,
+            "structuralStretchMeanRatio": 1.0059665269091003,
+            "structuralStretchMaxRatio": 1.1856032524554472,
+            "structuralCompressionMinRatio": 0.9543125178172146
+          }
+        },
+        "materialMetricsByFabric": {
+          "fixture-fabric-primary": {
+            "constraintCount": 15572,
+            "structuralStretchMeanRatio": 1.00286892162059,
+            "structuralStretchMaxRatio": 1.1857190581153567,
+            "structuralCompressionMinRatio": 0.9543125178172146
+          }
+        },
+        "explicitPinCount": 0,
+        "temporarySupportCount": 0,
+        "maximumCorrectionApplied": 0,
+        "bodyColliderCount": 12,
+        "bodyContactCount": 0,
+        "bodyContactsByRegion": {},
+        "maximumBodyPenetrationM": 0,
+        "maximumBodyCorrectionM": 0,
+        "frictionContactCount": 0,
+        "sweptContactCount": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "floorContactCount": 0,
+        "floorCcdContactCount": 0,
+        "floorFrictionContactCount": 0,
+        "maximumFloorPenetrationM": 0,
+        "meanFloorPenetrationM": 0,
+        "invalid": false,
+        "invalidReason": null,
+        "droppedTimeSeconds": 0,
+        "integrationMs": 0,
+        "stretchMs": 0,
+        "shearMs": 0,
+        "bendMs": 0,
+        "seamMs": 0,
+        "velocityUpdateMs": 0,
+        "validationMs": 0,
+        "solverStepTotalMs": 0,
+        "bodyCollisionMs": 0,
+        "floorCollisionMs": 0,
+        "bodyBroadphaseMs": 0,
+        "bodyNarrowphaseMs": 0,
+        "bodyProjectionMs": 0,
+        "bodyFrictionMs": 0,
+        "bodyParticleQueries": 0,
+        "bodyColliderTests": 0,
+        "bodyCandidateColliderTests": 0,
+        "bodyBroadphaseRejected": 0,
+        "bodyBroadphaseRejectRate": 0,
+        "bodyAverageCandidatesPerParticle": 0,
+        "bodyCapsuleNarrowphaseTests": 0,
+        "bodyEllipsoidNarrowphaseTests": 0,
+        "bodyPointContactsFound": 0,
+        "bodySweptTests": 0,
+        "bodySweptContactsFound": 0,
+        "bodyDressingStepsRemaining": 0,
+        "bodyInitialDressingSteps": 0,
+        "iterations": 5,
+        "maximumSubsteps": 2,
+        "physicsStepMs": 0,
+        "workerStepTotalMs": 0
+      },
+      "settings": {
+        "gravityScale": 0,
+        "cadence": 1,
+        "autoPauseSteps": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "showBodyColliders": false,
+        "showProceduralAvatar": true,
+        "showRegistrationAxes": false
+      },
+      "spatial": {
+        "revision": "414e6e20",
+        "strategy": "coarse-isometric-surface",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.18571780191825915,
+          "maxAbsoluteDistortionM": 0.002653896568255848,
+          "evaluatedConstraintCount": 15572,
+          "byInstance": {
+            "blouse-front:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.04287678638812743,
+              "maxAbsoluteDistortionM": 0.00032344747247969874,
+              "evaluatedConstraintCount": 2864
+            },
+            "blouse-front:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.04291090483056539,
+              "maxAbsoluteDistortionM": 0.0003229868325411861,
+              "evaluatedConstraintCount": 2864
+            },
+            "blouse-back:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.038870788185285735,
+              "maxAbsoluteDistortionM": 0.0006767654580008553,
+              "evaluatedConstraintCount": 2864
+            },
+            "blouse-back:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.03894748746150546,
+              "maxAbsoluteDistortionM": 0.0006783211612294004,
+              "evaluatedConstraintCount": 2864
+            },
+            "guided-sleeve:blouse-front:blouse-back:panel:1": {
+              "maxRelativeDistortion": 0.18571780191825915,
+              "maxAbsoluteDistortionM": 0.002652801007030893,
+              "evaluatedConstraintCount": 2058
+            },
+            "guided-sleeve:blouse-front:blouse-back:panel:2": {
+              "maxRelativeDistortion": 0.18560437646500166,
+              "maxAbsoluteDistortionM": 0.002653896568255848,
+              "evaluatedConstraintCount": 2058
+            }
+          }
+        },
+        "initialPositionSignature": "18030:387d81c3",
+        "coarseVertexCount": 1812,
+        "coarseTriangleCount": 2392,
+        "hingeCount": 2978,
+        "reductionRatio": 0.30149750415973375,
+        "fineBindingBuildMs": 26.74499999731779,
+        "fineTransferMs": 2.0150000005960464,
+        "assemblySolveMs": 23412.46499999985,
+        "assemblyConfidence": [
+          {
+            "componentId": "coarse-component:1:blouse-back:panel:1:fold-a+blouse-back:panel:1:fold-b+blouse-front:panel:1:fold-a+blouse-front:panel:1:fold-b+guided-sleeve:blouse-front:blouse-back:panel:1+guided-sleeve:blouse-front:blouse-back:panel:2",
+            "state": "partially-constrained",
+            "confidence": 0.8398013204896982,
+            "reason": "global constraints admit competing or imperfect embeddings",
+            "selectedSeed": "developable-cycle-mirror",
+            "metrics": {
+              "metricDistortionMean": 0.004901500363108311,
+              "metricDistortionMax": 0.18571884039246533,
+              "areaDistortionMean": 0.10154171447683168,
+              "areaDistortionMax": 17.851131269015553,
+              "structuralSeamMeanMm": 0.23509519977570936,
+              "structuralSeamMaxMm": 6.536500269331721,
+              "overlapScore": 0.15788583254705715,
+              "nonPlanarityRad": 1.57079613125584
+            },
+            "candidates": [
+              {
+                "name": "developable-cycle-mirror",
+                "score": 576.1014615174381,
+                "semanticChirality": 0.9999999712741037,
+                "metrics": {
+                  "metricDistortionMean": 0.011262028206521859,
+                  "metricDistortionMax": 0.2291507410301984,
+                  "areaDistortionMean": 0.1610741533326337,
+                  "areaDistortionMax": 24.272413367436116,
+                  "structuralSeamMeanMm": 26.00001032223614,
+                  "structuralSeamMaxMm": 210.41654972558456,
+                  "normalizedResidual": 0.028018806372716528,
+                  "overlapScore": 0.12083992634632931,
+                  "triangleCrossingProxyCount": 1109,
+                  "nonPlanarityRad": 1.5707952693621816
+                }
+              },
+              {
+                "name": "material-preserving-shell-raw",
+                "score": 757.689565525198,
+                "semanticChirality": 0.17570988570191642,
+                "metrics": {
+                  "metricDistortionMean": 0.016415202552594807,
+                  "metricDistortionMax": 0.4246085334986539,
+                  "areaDistortionMean": 0.0590006968549316,
+                  "areaDistortionMax": 0.674644924417362,
+                  "structuralSeamMeanMm": 7.067232817629142,
+                  "structuralSeamMaxMm": 96.5811581705527,
+                  "normalizedResidual": 0.007615974972852564,
+                  "overlapScore": 1.0306591097294286,
+                  "triangleCrossingProxyCount": 6160,
+                  "nonPlanarityRad": 1.5707906187934484
+                }
+              },
+              {
+                "name": "material-preserving-shell-seed",
+                "score": 821.4957925941696,
+                "semanticChirality": 0.15359563973876378,
+                "metrics": {
+                  "metricDistortionMean": 0.007777727364433656,
+                  "metricDistortionMax": 0.23291474882180835,
+                  "areaDistortionMean": 0.072713341601007,
+                  "areaDistortionMax": 16.994298270620728,
+                  "structuralSeamMeanMm": 12.716957338920862,
+                  "structuralSeamMaxMm": 81.49889783156982,
+                  "normalizedResidual": 0.013704377841134454,
+                  "overlapScore": 0.5188009587931581,
+                  "triangleCrossingProxyCount": 4805,
+                  "nonPlanarityRad": 1.570795899287004
+                }
+              },
+              {
+                "name": "authored-developable-seed",
+                "score": 1069.6724526734433,
+                "semanticChirality": -0.014158586450606565,
+                "metrics": {
+                  "metricDistortionMean": 0.0062728812059115735,
+                  "metricDistortionMax": 0.0951589046441686,
+                  "areaDistortionMean": 0.09294014849290012,
+                  "areaDistortionMax": 15.452686611706056,
+                  "structuralSeamMeanMm": 35.187471708971444,
+                  "structuralSeamMaxMm": 196.56106676449753,
+                  "normalizedResidual": 0.03791963712091011,
+                  "overlapScore": 0.9080450822641883,
+                  "triangleCrossingProxyCount": 7241,
+                  "nonPlanarityRad": 1.5706714970751883
+                }
+              },
+              {
+                "name": "material-flat-seed",
+                "score": 1905.0560116095342,
+                "semanticChirality": 0.0071549613280026125,
+                "metrics": {
+                  "metricDistortionMean": 0.011999611479816437,
+                  "metricDistortionMax": 0.5851928557907907,
+                  "areaDistortionMean": 0.10990682073085711,
+                  "areaDistortionMax": 13.677509410094054,
+                  "structuralSeamMeanMm": 29.22269401454416,
+                  "structuralSeamMaxMm": 198.39467554988778,
+                  "normalizedResidual": 0.03149171846991156,
+                  "overlapScore": 1.9579404431675749,
+                  "triangleCrossingProxyCount": 14895,
+                  "nonPlanarityRad": 1.5707941928921632
+                }
+              },
+              {
+                "name": "developable-metric-restored",
+                "score": 536.2824997917597,
+                "semanticChirality": -0.999999909676605,
+                "metrics": {
+                  "metricDistortionMean": 0.006811256903464558,
+                  "metricDistortionMax": 0.26642507367241425,
+                  "areaDistortionMean": 0.12376031082599306,
+                  "areaDistortionMax": 22.17952626355905,
+                  "structuralSeamMeanMm": 26.426847535981267,
+                  "structuralSeamMaxMm": 211.86543105755575,
+                  "normalizedResidual": 0.028478785776431086,
+                  "overlapScore": 0.11816480784585745,
+                  "triangleCrossingProxyCount": 1110,
+                  "nonPlanarityRad": 1.5707961650141022
+                }
+              },
+              {
+                "name": "developable-metric-restored-raw",
+                "score": 539.4395413226789,
+                "semanticChirality": -0.9999999999999685,
+                "metrics": {
+                  "metricDistortionMean": 0.0059570246063351175,
+                  "metricDistortionMax": 0.33713807826446773,
+                  "areaDistortionMean": 0.11009736887289803,
+                  "areaDistortionMax": 20.98395299906657,
+                  "structuralSeamMeanMm": 17.928589263840134,
+                  "structuralSeamMaxMm": 315.64006688531583,
+                  "normalizedResidual": 0.019320671987960093,
+                  "overlapScore": 0.14777028165309009,
+                  "triangleCrossingProxyCount": 1313,
+                  "nonPlanarityRad": 1.5707954220837101
+                }
+              },
+              {
+                "name": "developable-cycle-seed",
+                "score": 576.1012171715549,
+                "semanticChirality": -0.9999999713250075,
+                "metrics": {
+                  "metricDistortionMean": 0.011262045595681674,
+                  "metricDistortionMax": 0.2291504502541571,
+                  "areaDistortionMean": 0.16107420979925807,
+                  "areaDistortionMax": 24.272399894909782,
+                  "structuralSeamMeanMm": 26.000000819072053,
+                  "structuralSeamMaxMm": 210.41651988097675,
+                  "normalizedResidual": 0.028018796131670035,
+                  "overlapScore": 0.12083994768233909,
+                  "triangleCrossingProxyCount": 1109,
+                  "nonPlanarityRad": 1.5707953476843102
+                }
+              },
+              {
+                "name": "developable-cycle-raw",
+                "score": 583.2941680396721,
+                "semanticChirality": -0.9999999999999692,
+                "metrics": {
+                  "metricDistortionMean": 0.027127510479181695,
+                  "metricDistortionMax": 0.42460809511561837,
+                  "areaDistortionMean": 0.1781109889933526,
+                  "areaDistortionMax": 23.89430632137483,
+                  "structuralSeamMeanMm": 13.149556193012831,
+                  "structuralSeamMaxMm": 316.1468505859375,
+                  "normalizedResidual": 0.014170566253355804,
+                  "overlapScore": 0.12102749489071864,
+                  "triangleCrossingProxyCount": 1130,
+                  "nonPlanarityRad": 1.570796014848928
+                }
+              },
+              {
+                "name": "material-preserving-shell-mirror",
+                "score": 821.6721371500323,
+                "semanticChirality": -0.15311744549159756,
+                "metrics": {
+                  "metricDistortionMean": 0.007733998789200547,
+                  "metricDistortionMax": 0.22700657650543726,
+                  "areaDistortionMean": 0.0726909644749957,
+                  "areaDistortionMax": 16.98948701299246,
+                  "structuralSeamMeanMm": 12.717294001102278,
+                  "structuralSeamMaxMm": 81.49880569998923,
+                  "normalizedResidual": 0.013704740643777885,
+                  "overlapScore": 0.5186981014650616,
+                  "triangleCrossingProxyCount": 4812,
+                  "nonPlanarityRad": 1.570795122180589
+                }
+              }
+            ]
+          }
+        ],
+        "instances": [
+          {
+            "id": "blouse-front:panel:1:fold-a",
+            "pieceId": "blouse-front",
+            "vertexCount": 1105,
+            "placement": {
+              "id": "blouse-front:panel:1:fold-a",
+              "pieceId": "blouse-front",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "right",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                -0.03307756067928594,
+                -0.9953677005645012,
+                0.09027189846483526
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "blouse-front:panel:1:fold-b",
+            "pieceId": "blouse-front",
+            "vertexCount": 1105,
+            "placement": {
+              "id": "blouse-front:panel:1:fold-b",
+              "pieceId": "blouse-front",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "left",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                0.033076419107117144,
+                -0.9953683597244225,
+                0.09026504837733755
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "blouse-back:panel:1:fold-a",
+            "pieceId": "blouse-back",
+            "vertexCount": 1105,
+            "placement": {
+              "id": "blouse-back:panel:1:fold-a",
+              "pieceId": "blouse-back",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "right",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                -0.030660113976959055,
+                -0.9954483410387523,
+                -0.09023612211368387
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "blouse-back:panel:1:fold-b",
+            "pieceId": "blouse-back",
+            "vertexCount": 1105,
+            "placement": {
+              "id": "blouse-back:panel:1:fold-b",
+              "pieceId": "blouse-back",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "left",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                0.030661254535584558,
+                -0.9954424385125181,
+                -0.09030082545888332
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "guided-sleeve:blouse-front:blouse-back:panel:1",
+            "pieceId": "guided-sleeve:blouse-front:blouse-back",
+            "vertexCount": 795,
+            "placement": {
+              "id": "guided-sleeve:blouse-front:blouse-back:panel:1",
+              "pieceId": "guided-sleeve:blouse-front:blouse-back",
+              "region": "arm",
+              "surface": "side",
+              "bodySide": "left",
+              "bodyAnchorId": "arm-left",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "arm-left",
+              "outwardNormal": [
+                -1,
+                0,
+                0
+              ],
+              "axis": [
+                -0.0997640101506577,
+                -0.38260862352260044,
+                0.918508455859172
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "guided-sleeve:blouse-front:blouse-back:panel:2",
+            "pieceId": "guided-sleeve:blouse-front:blouse-back",
+            "vertexCount": 795,
+            "placement": {
+              "id": "guided-sleeve:blouse-front:blouse-back:panel:2",
+              "pieceId": "guided-sleeve:blouse-front:blouse-back",
+              "region": "arm",
+              "surface": "side",
+              "bodySide": "right",
+              "bodyAnchorId": "arm-right",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": true
+            },
+            "arrangement": {
+              "anchorId": "arm-right",
+              "outwardNormal": [
+                1,
+                0,
+                0
+              ],
+              "axis": [
+                0.10030577268757812,
+                -0.3823484382737613,
+                0.9185577955225047
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "blouse-back:panel:1:fold-a",
+            "blouse-back:panel:1:fold-b",
+            "blouse-front:panel:1:fold-a",
+            "blouse-front:panel:1:fold-b",
+            "guided-sleeve:blouse-front:blouse-back:panel:1",
+            "guided-sleeve:blouse-front:blouse-back:panel:2"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "fold:blouse-back:panel:1:cut-on-fold",
+              "firstInstanceId": "blouse-back:panel:1:fold-a",
+              "secondInstanceId": "blouse-back:panel:1:fold-b",
+              "sampleCount": 141
+            },
+            {
+              "seamGroupId": "fold:blouse-front:panel:1:cut-on-fold",
+              "firstInstanceId": "blouse-front:panel:1:fold-a",
+              "secondInstanceId": "blouse-front:panel:1:fold-b",
+              "sampleCount": 117
+            },
+            {
+              "seamGroupId": "guided-sleeve:back-armhole",
+              "firstInstanceId": "blouse-back:panel:1:fold-a",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:2",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:back-armhole",
+              "firstInstanceId": "blouse-back:panel:1:fold-b",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:1",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-shoulder",
+              "firstInstanceId": "blouse-back:panel:1:fold-a",
+              "secondInstanceId": "blouse-front:panel:1:fold-a",
+              "sampleCount": 13
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-shoulder",
+              "firstInstanceId": "blouse-back:panel:1:fold-b",
+              "secondInstanceId": "blouse-front:panel:1:fold-b",
+              "sampleCount": 13
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-side",
+              "firstInstanceId": "blouse-back:panel:1:fold-a",
+              "secondInstanceId": "blouse-front:panel:1:fold-a",
+              "sampleCount": 38
+            },
+            {
+              "seamGroupId": "guided-sleeve:body-side",
+              "firstInstanceId": "blouse-back:panel:1:fold-b",
+              "secondInstanceId": "blouse-front:panel:1:fold-b",
+              "sampleCount": 38
+            },
+            {
+              "seamGroupId": "guided-sleeve:front-armhole",
+              "firstInstanceId": "blouse-front:panel:1:fold-a",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:2",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:front-armhole",
+              "firstInstanceId": "blouse-front:panel:1:fold-b",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:1",
+              "sampleCount": 21
+            },
+            {
+              "seamGroupId": "guided-sleeve:underarm",
+              "firstInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:1",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:1",
+              "sampleCount": 30
+            },
+            {
+              "seamGroupId": "guided-sleeve:underarm",
+              "firstInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:2",
+              "secondInstanceId": "guided-sleeve:blouse-front:blouse-back:panel:2",
+              "sampleCount": 30
+            }
+          ]
+        }
+      }
+    },
+    "skirt": {
+      "registration": {
+        "status": "registered",
+        "source": "semantic-body-placement",
+        "transform": {
+          "translation": [
+            0.05285315446239738,
+            1.0624163356392613,
+            0.02621879710371139
+          ],
+          "rotation": [
+            -0.046880507743508715,
+            0.10760532368366565,
+            -0.03365297775604577,
+            0.9925174000473722
+          ]
+        },
+        "islandTransforms": [],
+        "garmentForward": [
+          -0.21044497481896668,
+          -0.10030191844569294,
+          0.9724466246172888
+        ],
+        "garmentUp": [
+          -0.07689151639295488,
+          0.9933393901637239,
+          0.08581696018825892
+        ],
+        "garmentRight": [
+          0.9745771428061691,
+          0.056713147552175484,
+          0.21675564955610438
+        ],
+        "bodyForward": [
+          0,
+          0,
+          1
+        ],
+        "bodyUp": [
+          0,
+          1,
+          0
+        ],
+        "bodyRight": [
+          1,
+          0,
+          0
+        ],
+        "registrationRotationDeg": [
+          -5.888884672165162,
+          12.148430172708833,
+          -4.511138160043462
+        ],
+        "registrationTranslationMm": [
+          52.85315446239738,
+          1062.4163356392612,
+          26.21879710371139
+        ],
+        "registrationDeterminant": 0.9999999999999999,
+        "registeredInstanceIds": [
+          "straight-skirt-front:panel:1:fold-a",
+          "straight-skirt-front:panel:1:fold-b",
+          "straight-skirt-back:panel:1:fold-a",
+          "straight-skirt-back:panel:1:fold-b"
+        ],
+        "structuralIslandCount": 1,
+        "registrationIslandCount": 1,
+        "panelOutwardConsistency": 1,
+        "flippedPanelCount": 2,
+        "negativeTransformCount": 0,
+        "residualMeanM": 0.16164700545425525,
+        "residualMaxM": 0.24198809461591891,
+        "registrationAmbiguities": []
+      },
+      "meshes": [
+        {
+          "id": "straight-skirt-front:panel:1:fold-a",
+          "vertexCount": 901,
+          "triangleCount": 1440,
+          "boundingBox": {
+            "min": [
+              -0.00011002953397110105,
+              0.4395950138568878,
+              0.011250590905547142
+            ],
+            "max": [
+              0.21761463582515717,
+              1.0313688516616821,
+              0.13849376142024994
+            ]
+          },
+          "centroid": [
+            0.10268679613932963,
+            0.7973637662240853,
+            0.07982488671993707
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "66dbbe50",
+          "geometryRevision": "a12c9f90-562f-40ef-a34d-ee2fc9d941f5:5:6",
+          "meshCount": 1,
+          "meanNormal": [
+            0.4747971196021626,
+            0.11866541972397496,
+            0.872058606619545
+          ],
+          "meanTriangleNormal": [
+            0.4887433263704428,
+            0.03154610155768816,
+            0.8718571009086677
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-front:panel:1:fold-b",
+          "vertexCount": 901,
+          "triangleCount": 1440,
+          "boundingBox": {
+            "min": [
+              -0.2176952362060547,
+              0.4396059215068817,
+              0.010995781980454922
+            ],
+            "max": [
+              0.00015032163355499506,
+              1.0313749313354492,
+              0.13847197592258453
+            ]
+          },
+          "centroid": [
+            -0.10268679642322667,
+            0.7973710723907649,
+            0.07969768321168476
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "66dbbe50",
+          "geometryRevision": "d1908c3e-033c-4695-b7a8-88b20b09bf1e:5:6",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.47574190378152664,
+            0.11852847351554241,
+            0.8715621847879841
+          ],
+          "meanTriangleNormal": [
+            -0.48932547549902394,
+            0.03160333816279945,
+            0.871528432149303
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-back:panel:1:fold-a",
+          "vertexCount": 931,
+          "triangleCount": 1488,
+          "boundingBox": {
+            "min": [
+              -0.0011020767269656062,
+              0.4396629333496094,
+              -0.14644043147563934
+            ],
+            "max": [
+              0.21761411428451538,
+              1.0403509140014648,
+              0.013275990262627602
+            ]
+          },
+          "centroid": [
+            0.10255769539307083,
+            0.797212039809734,
+            -0.07280236600323507
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "85526ee2",
+          "geometryRevision": "5048a380-cfb4-4c59-8697-540076533b3f:5:6",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5658154832406312,
+            0.12746362723018392,
+            -0.8146200725850643
+          ],
+          "meanTriangleNormal": [
+            0.5849420791592697,
+            0.036699141955708926,
+            -0.8102443686990642
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-back:panel:1:fold-b",
+          "vertexCount": 931,
+          "triangleCount": 1488,
+          "boundingBox": {
+            "min": [
+              -0.2176945060491562,
+              0.4396713674068451,
+              -0.1464078724384308
+            ],
+            "max": [
+              0.0001864152291091159,
+              1.0404000282287598,
+              0.013041620142757893
+            ]
+          },
+          "centroid": [
+            -0.10255769551820593,
+            0.7971770340530752,
+            -0.07288364750904829
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "85526ee2",
+          "geometryRevision": "40031563-9832-4360-97fb-561c1abea3f6:5:6",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.565790431022088,
+            0.1262925756318932,
+            -0.8148198411330582
+          ],
+          "meanTriangleNormal": [
+            -0.5841367795910153,
+            0.03651938479417343,
+            -0.810833248740635
+          ],
+          "materialSide": 2
+        }
+      ],
+      "simulation": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 3664,
+        "triangleCount": 5856,
+        "stretchConstraintCount": 9516,
+        "shearConstraintCount": 5856,
+        "bendConstraintCount": 8052,
+        "seamConstraintCount": 350,
+        "seamErrorAverage": 0.000015481004961472954,
+        "seamErrorMaximum": 0.00017823072562895306,
+        "seamErrorsByGroup": {
+          "template-seam:skirt-side": {
+            "constraintCount": 88,
+            "meanError": 0.00001175806778862646,
+            "maxError": 0.00008353052663601357,
+            "worstConstraintIndex": 87
+          },
+          "dart:straight-skirt-front:fixture-dart-1": {
+            "constraintCount": 8,
+            "meanError": 0.000006067729514279625,
+            "maxError": 0.000008895331766306664,
+            "worstConstraintIndex": 89
+          },
+          "dart:straight-skirt-back:fixture-dart-1": {
+            "constraintCount": 8,
+            "meanError": 0.000018473291593728812,
+            "maxError": 0.00002361574322276489,
+            "worstConstraintIndex": 100
+          },
+          "fold:straight-skirt-front:panel:1:cut-on-fold": {
+            "constraintCount": 121,
+            "meanError": 0.000014801973010270608,
+            "maxError": 0.00013896611471167852,
+            "worstConstraintIndex": 224
+          },
+          "fold:straight-skirt-back:panel:1:cut-on-fold": {
+            "constraintCount": 125,
+            "meanError": 0.000019170198944076746,
+            "maxError": 0.00017823072562895306,
+            "worstConstraintIndex": 335
+          }
+        },
+        "maximumPositionMagnitude": 1.045109786681739,
+        "maximumVelocityMagnitude": 0,
+        "structuralStretchMeanRatio": 1.000369120263016,
+        "structuralStretchMaxRatio": 1.0073268244279538,
+        "structuralCompressionMinRatio": 0.9965995010431974,
+        "shearStrainMean": 0.0010428875457009776,
+        "shearStrainMax": 0.024132556624516063,
+        "triangleAreaMeanRatio": 1.0084095307377245,
+        "triangleAreaMinRatio": 0.9838297379937448,
+        "triangleAreaMaxRatio": 1.1057988266153995,
+        "flippedTriangleCount": 0,
+        "garmentAabbGrowthRatio": 1,
+        "materialMetricsByPanel": {
+          "straight-skirt-front:panel:1:fold-a": {
+            "constraintCount": 2340,
+            "structuralStretchMeanRatio": 1.0002962763032484,
+            "structuralStretchMaxRatio": 1.005033498420308,
+            "structuralCompressionMinRatio": 0.9984742492795636
+          },
+          "straight-skirt-front:panel:1:fold-b": {
+            "constraintCount": 2340,
+            "structuralStretchMeanRatio": 1.0003000793685348,
+            "structuralStretchMaxRatio": 1.0049893957862563,
+            "structuralCompressionMinRatio": 0.9985541253595054
+          },
+          "straight-skirt-back:panel:1:fold-a": {
+            "constraintCount": 2418,
+            "structuralStretchMeanRatio": 1.0004435645656655,
+            "structuralStretchMaxRatio": 1.0073268244279538,
+            "structuralCompressionMinRatio": 0.9968974370524182
+          },
+          "straight-skirt-back:panel:1:fold-b": {
+            "constraintCount": 2418,
+            "structuralStretchMeanRatio": 1.00043198388383,
+            "structuralStretchMaxRatio": 1.0072837781407968,
+            "structuralCompressionMinRatio": 0.9965995010431974
+          }
+        },
+        "materialMetricsByFabric": {
+          "fixture-fabric-primary": {
+            "constraintCount": 9516,
+            "structuralStretchMeanRatio": 1.000369120263016,
+            "structuralStretchMaxRatio": 1.0073268244279538,
+            "structuralCompressionMinRatio": 0.9965995010431974
+          }
+        },
+        "explicitPinCount": 0,
+        "temporarySupportCount": 0,
+        "maximumCorrectionApplied": 0,
+        "bodyColliderCount": 12,
+        "bodyContactCount": 0,
+        "bodyContactsByRegion": {},
+        "maximumBodyPenetrationM": 0,
+        "maximumBodyCorrectionM": 0,
+        "frictionContactCount": 0,
+        "sweptContactCount": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "floorContactCount": 0,
+        "floorCcdContactCount": 0,
+        "floorFrictionContactCount": 0,
+        "maximumFloorPenetrationM": 0,
+        "meanFloorPenetrationM": 0,
+        "invalid": false,
+        "invalidReason": null,
+        "droppedTimeSeconds": 0,
+        "integrationMs": 0.22500000149011612,
+        "stretchMs": 7.230000000447035,
+        "shearMs": 7.33500000089407,
+        "bendMs": 4.3599999994039536,
+        "seamMs": 0.3049999997019768,
+        "velocityUpdateMs": 0.23999999836087227,
+        "validationMs": 2.730000000447035,
+        "solverStepTotalMs": 22.769999999552965,
+        "bodyCollisionMs": 0,
+        "floorCollisionMs": 0.03500000014901161,
+        "bodyBroadphaseMs": 0,
+        "bodyNarrowphaseMs": 0,
+        "bodyProjectionMs": 0,
+        "bodyFrictionMs": 0,
+        "bodyParticleQueries": 0,
+        "bodyColliderTests": 0,
+        "bodyCandidateColliderTests": 0,
+        "bodyBroadphaseRejected": 0,
+        "bodyBroadphaseRejectRate": 0,
+        "bodyAverageCandidatesPerParticle": 0,
+        "bodyCapsuleNarrowphaseTests": 0,
+        "bodyEllipsoidNarrowphaseTests": 0,
+        "bodyPointContactsFound": 0,
+        "bodySweptTests": 0,
+        "bodySweptContactsFound": 0,
+        "bodyDressingStepsRemaining": 0,
+        "bodyInitialDressingSteps": 0,
+        "iterations": 5,
+        "maximumSubsteps": 2,
+        "physicsStepMs": 0,
+        "workerStepTotalMs": 22.780000001192093
+      },
+      "settings": {
+        "gravityScale": 0,
+        "cadence": 1,
+        "autoPauseSteps": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "showBodyColliders": false,
+        "showProceduralAvatar": true,
+        "showRegistrationAxes": false
+      },
+      "spatial": {
+        "revision": "914506cd",
+        "strategy": "coarse-isometric-surface",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.007328107702976294,
+          "maxAbsoluteDistortionM": 0.00025950844633226833,
+          "evaluatedConstraintCount": 9516,
+          "byInstance": {
+            "straight-skirt-front:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.005028586447064797,
+              "maxAbsoluteDistortionM": 0.00018245690874080234,
+              "evaluatedConstraintCount": 2340
+            },
+            "straight-skirt-front:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.004989877975020934,
+              "maxAbsoluteDistortionM": 0.00018321449399258394,
+              "evaluatedConstraintCount": 2340
+            },
+            "straight-skirt-back:panel:1:fold-a": {
+              "maxRelativeDistortion": 0.007328107702976294,
+              "maxAbsoluteDistortionM": 0.00025950844633226833,
+              "evaluatedConstraintCount": 2418
+            },
+            "straight-skirt-back:panel:1:fold-b": {
+              "maxRelativeDistortion": 0.0072791497454808415,
+              "maxAbsoluteDistortionM": 0.0002515746859449719,
+              "evaluatedConstraintCount": 2418
+            }
+          }
+        },
+        "initialPositionSignature": "10992:44d415b9",
+        "coarseVertexCount": 1102,
+        "coarseTriangleCount": 1464,
+        "hingeCount": 1830,
+        "reductionRatio": 0.300764192139738,
+        "fineBindingBuildMs": 15.934999998658895,
+        "fineTransferMs": 1.6549999974668026,
+        "assemblySolveMs": 7688.129999998957,
+        "assemblyConfidence": [
+          {
+            "componentId": "coarse-component:1:straight-skirt-back:panel:1:fold-a+straight-skirt-back:panel:1:fold-b+straight-skirt-front:panel:1:fold-a+straight-skirt-front:panel:1:fold-b",
+            "state": "well-constrained",
+            "confidence": 0.6600132252553024,
+            "reason": null,
+            "selectedSeed": "material-preserving-shell-mirror",
+            "metrics": {
+              "metricDistortionMean": 0.0006811042517165897,
+              "metricDistortionMax": 0.0073211648416851,
+              "areaDistortionMean": 0.006365115043396019,
+              "areaDistortionMax": 0.10578993309095837,
+              "structuralSeamMeanMm": 0.015116711186446924,
+              "structuralSeamMaxMm": 0.17823049020781936,
+              "overlapScore": 0,
+              "nonPlanarityRad": 1.570795315508072
+            },
+            "candidates": [
+              {
+                "name": "material-preserving-shell-mirror",
+                "score": 2.1856407234598376,
+                "semanticChirality": 0.9999994517906449,
+                "metrics": {
+                  "metricDistortionMean": 0.00020211917229782874,
+                  "metricDistortionMax": 0.008336082293637664,
+                  "areaDistortionMean": 0.0014761979130444847,
+                  "areaDistortionMax": 0.08684156623885042,
+                  "structuralSeamMeanMm": 4.8520172470239915,
+                  "structuralSeamMaxMm": 19.59196450065155,
+                  "normalizedResidual": 0.00620532813700381,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707911762478193
+                }
+              },
+              {
+                "name": "developable-cycle-mirror",
+                "score": 28.63839730439336,
+                "semanticChirality": 0.9999999989952422,
+                "metrics": {
+                  "metricDistortionMean": 0.00598215028518891,
+                  "metricDistortionMax": 0.4124232825573005,
+                  "areaDistortionMean": 0.01652213235584246,
+                  "areaDistortionMax": 0.44018645781584115,
+                  "structuralSeamMeanMm": 1.8374936097343675,
+                  "structuralSeamMaxMm": 16.858075357938553,
+                  "normalizedResidual": 0.0023500021161390132,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707958841131613
+                }
+              },
+              {
+                "name": "material-flat-seed",
+                "score": 975.1170619879849,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.009435083143296217,
+                  "metricDistortionMax": 0.9657281000217829,
+                  "areaDistortionMean": 0.04078857117664784,
+                  "areaDistortionMax": 1.043965201768794,
+                  "structuralSeamMeanMm": 18.260395333156037,
+                  "structuralSeamMaxMm": 50.33653430564893,
+                  "normalizedResidual": 0.02335353301209853,
+                  "overlapScore": 1.6136488498893449,
+                  "triangleCrossingProxyCount": 6861,
+                  "nonPlanarityRad": 0
+                }
+              },
+              {
+                "name": "material-preserving-shell-raw",
+                "score": 0.14719839904780674,
+                "semanticChirality": -0.9999992607875495,
+                "metrics": {
+                  "metricDistortionMean": 0.000010532358002446647,
+                  "metricDistortionMax": 0.0003784363340816301,
+                  "areaDistortionMean": 0.000022309545158143704,
+                  "areaDistortionMax": 0.0005504162560680398,
+                  "structuralSeamMeanMm": 5.083051213678386,
+                  "structuralSeamMaxMm": 20.037207403298925,
+                  "normalizedResidual": 0.006500801442413729,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707956244184942
+                }
+              },
+              {
+                "name": "material-preserving-shell-seed",
+                "score": 2.1856407234598376,
+                "semanticChirality": -0.9999994517906449,
+                "metrics": {
+                  "metricDistortionMean": 0.00020211917229782874,
+                  "metricDistortionMax": 0.008336082293637664,
+                  "areaDistortionMean": 0.0014761979130444847,
+                  "areaDistortionMax": 0.08684156623885042,
+                  "structuralSeamMeanMm": 4.8520172470239915,
+                  "structuralSeamMaxMm": 19.59196450065155,
+                  "normalizedResidual": 0.00620532813700381,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707911762478193
+                }
+              },
+              {
+                "name": "developable-metric-restored-raw",
+                "score": 5.159482865693015,
+                "semanticChirality": -0.9999999964696702,
+                "metrics": {
+                  "metricDistortionMean": 0.0008044006933773024,
+                  "metricDistortionMax": 0.013590786358218917,
+                  "areaDistortionMean": 0.006912856257449971,
+                  "areaDistortionMax": 0.21613710067245026,
+                  "structuralSeamMeanMm": 1.947203626226758,
+                  "structuralSeamMaxMm": 20.54242428780804,
+                  "normalizedResidual": 0.0024903121392884455,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.570793634305284
+                }
+              },
+              {
+                "name": "developable-metric-restored",
+                "score": 6.310536702047015,
+                "semanticChirality": -0.9999999768526406,
+                "metrics": {
+                  "metricDistortionMean": 0.0008372552951215796,
+                  "metricDistortionMax": 0.04914875467546683,
+                  "areaDistortionMean": 0.006677691650744533,
+                  "areaDistortionMax": 0.19206662981601816,
+                  "structuralSeamMeanMm": 1.7481864661018154,
+                  "structuralSeamMaxMm": 20.77999297366877,
+                  "normalizedResidual": 0.0022357856772839317,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.570795410281979
+                }
+              },
+              {
+                "name": "developable-cycle-raw",
+                "score": 11.461839671050749,
+                "semanticChirality": -0.9999999962576797,
+                "metrics": {
+                  "metricDistortionMean": 0.009631335521175562,
+                  "metricDistortionMax": 0.1460282428876957,
+                  "areaDistortionMean": 0.010355123942155153,
+                  "areaDistortionMax": 0.14572069799919765,
+                  "structuralSeamMeanMm": 0.07488182748664589,
+                  "structuralSeamMaxMm": 0.579829738560284,
+                  "normalizedResidual": 0.00009576765444066679,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707922175145559
+                }
+              },
+              {
+                "name": "developable-cycle-seed",
+                "score": 28.63839730439336,
+                "semanticChirality": -0.9999999989952422,
+                "metrics": {
+                  "metricDistortionMean": 0.00598215028518891,
+                  "metricDistortionMax": 0.4124232825573005,
+                  "areaDistortionMean": 0.01652213235584246,
+                  "areaDistortionMax": 0.44018645781584115,
+                  "structuralSeamMeanMm": 1.8374936097343675,
+                  "structuralSeamMaxMm": 16.858075357938553,
+                  "normalizedResidual": 0.0023500021161390132,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707958841131613
+                }
+              },
+              {
+                "name": "authored-developable-seed",
+                "score": 61.860104756929275,
+                "semanticChirality": -0.9999143597178487,
+                "metrics": {
+                  "metricDistortionMean": 0.004488790457274416,
+                  "metricDistortionMax": 0.07371800755511038,
+                  "areaDistortionMean": 0.03868134509248735,
+                  "areaDistortionMax": 0.9684168668211125,
+                  "structuralSeamMeanMm": 80.07377202564486,
+                  "structuralSeamMaxMm": 346.0113764040678,
+                  "normalizedResidual": 0.10240772142587269,
+                  "overlapScore": 0.05637295999484338,
+                  "triangleCrossingProxyCount": 293,
+                  "nonPlanarityRad": 1.5707929624604877
+                }
+              }
+            ]
+          }
+        ],
+        "instances": [
+          {
+            "id": "straight-skirt-front:panel:1:fold-a",
+            "pieceId": "straight-skirt-front",
+            "vertexCount": 901,
+            "placement": {
+              "id": "straight-skirt-front:panel:1:fold-a",
+              "pieceId": "straight-skirt-front",
+              "region": "waist",
+              "surface": "front",
+              "bodySide": "right",
+              "bodyAnchorId": "waist-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "waist-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                0.030876566671205943,
+                -0.9995114536722427,
+                -0.00484681427320667
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "straight-skirt-front:panel:1:fold-b",
+            "pieceId": "straight-skirt-front",
+            "vertexCount": 901,
+            "placement": {
+              "id": "straight-skirt-front:panel:1:fold-b",
+              "pieceId": "straight-skirt-front",
+              "region": "waist",
+              "surface": "front",
+              "bodySide": "left",
+              "bodyAnchorId": "waist-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "waist-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                -0.03089756893025128,
+                -0.9995110107523723,
+                -0.004804125203551057
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "straight-skirt-back:panel:1:fold-a",
+            "pieceId": "straight-skirt-back",
+            "vertexCount": 931,
+            "placement": {
+              "id": "straight-skirt-back:panel:1:fold-a",
+              "pieceId": "straight-skirt-back",
+              "region": "waist",
+              "surface": "back",
+              "bodySide": "right",
+              "bodyAnchorId": "waist-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "waist-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                0.03162282164560915,
+                -0.9994891119099091,
+                0.004638138065129669
+              ],
+              "bodySide": "right",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "straight-skirt-back:panel:1:fold-b",
+            "pieceId": "straight-skirt-back",
+            "vertexCount": 931,
+            "placement": {
+              "id": "straight-skirt-back:panel:1:fold-b",
+              "pieceId": "straight-skirt-back",
+              "region": "waist",
+              "surface": "back",
+              "bodySide": "left",
+              "bodyAnchorId": "waist-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "waist-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                -0.031603643423190574,
+                -0.9994917574533381,
+                0.004175704158297763
+              ],
+              "bodySide": "left",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "straight-skirt-back:panel:1:fold-a",
+            "straight-skirt-back:panel:1:fold-b",
+            "straight-skirt-front:panel:1:fold-a",
+            "straight-skirt-front:panel:1:fold-b"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "dart:straight-skirt-back:fixture-dart-1",
+              "firstInstanceId": "straight-skirt-back:panel:1:fold-a",
+              "secondInstanceId": "straight-skirt-back:panel:1:fold-a",
+              "sampleCount": 4
+            },
+            {
+              "seamGroupId": "dart:straight-skirt-back:fixture-dart-1",
+              "firstInstanceId": "straight-skirt-back:panel:1:fold-b",
+              "secondInstanceId": "straight-skirt-back:panel:1:fold-b",
+              "sampleCount": 4
+            },
+            {
+              "seamGroupId": "dart:straight-skirt-front:fixture-dart-1",
+              "firstInstanceId": "straight-skirt-front:panel:1:fold-a",
+              "secondInstanceId": "straight-skirt-front:panel:1:fold-a",
+              "sampleCount": 4
+            },
+            {
+              "seamGroupId": "dart:straight-skirt-front:fixture-dart-1",
+              "firstInstanceId": "straight-skirt-front:panel:1:fold-b",
+              "secondInstanceId": "straight-skirt-front:panel:1:fold-b",
+              "sampleCount": 4
+            },
+            {
+              "seamGroupId": "fold:straight-skirt-back:panel:1:cut-on-fold",
+              "firstInstanceId": "straight-skirt-back:panel:1:fold-a",
+              "secondInstanceId": "straight-skirt-back:panel:1:fold-b",
+              "sampleCount": 125
+            },
+            {
+              "seamGroupId": "fold:straight-skirt-front:panel:1:cut-on-fold",
+              "firstInstanceId": "straight-skirt-front:panel:1:fold-a",
+              "secondInstanceId": "straight-skirt-front:panel:1:fold-b",
+              "sampleCount": 121
+            },
+            {
+              "seamGroupId": "template-seam:skirt-side",
+              "firstInstanceId": "straight-skirt-back:panel:1:fold-a",
+              "secondInstanceId": "straight-skirt-front:panel:1:fold-a",
+              "sampleCount": 44
+            },
+            {
+              "seamGroupId": "template-seam:skirt-side",
+              "firstInstanceId": "straight-skirt-back:panel:1:fold-b",
+              "secondInstanceId": "straight-skirt-front:panel:1:fold-b",
+              "sampleCount": 44
+            }
+          ]
+        }
+      }
+    },
+    "multipanel": {
+      "registration": {
+        "status": "registered",
+        "source": "semantic-body-placement",
+        "transform": {
+          "translation": [
+            0.006014043761770883,
+            1.4036129118764162,
+            0.023373942444323045
+          ],
+          "rotation": [
+            -0.0000035226060213518347,
+            0.9896190989228266,
+            3.737484639025419e-7,
+            -0.14371513154370452
+          ]
+        },
+        "islandTransforms": [],
+        "garmentForward": [
+          0.2844464779570796,
+          0.0000017522408116124974,
+          -0.9586919219304721
+        ],
+        "garmentUp": [
+          -0.0000070795030127286746,
+          0.9999999999749031,
+          -2.727663393284012e-7
+        ],
+        "garmentRight": [
+          -0.9586919219059338,
+          -0.000006864649774112629,
+          -0.28444647796234585
+        ],
+        "bodyForward": [
+          0,
+          0,
+          1
+        ],
+        "bodyUp": [
+          0,
+          1,
+          0
+        ],
+        "bodyRight": [
+          1,
+          0,
+          0
+        ],
+        "registrationRotationDeg": [
+          179.99989527813796,
+          -16.525764761648027,
+          -179.99957689677527
+        ],
+        "registrationTranslationMm": [
+          6.014043761770883,
+          1403.6129118764163,
+          23.373942444323045
+        ],
+        "registrationDeterminant": 1,
+        "registeredInstanceIds": [
+          "spatial-panel-1:panel:1",
+          "spatial-panel-2:panel:1",
+          "spatial-panel-3:panel:1",
+          "spatial-panel-4:panel:1"
+        ],
+        "structuralIslandCount": 1,
+        "registrationIslandCount": 1,
+        "panelOutwardConsistency": 1,
+        "flippedPanelCount": 2,
+        "negativeTransformCount": 0,
+        "residualMeanM": 0.15256997491141344,
+        "residualMaxM": 0.19284679308964814,
+        "registrationAmbiguities": []
+      },
+      "meshes": [
+        {
+          "id": "spatial-panel-1:panel:1",
+          "vertexCount": 325,
+          "triangleCount": 576,
+          "boundingBox": {
+            "min": [
+              -0.08770865201950073,
+              1.1636112928390503,
+              -0.0644913837313652
+            ],
+            "max": [
+              -0.02990819700062275,
+              1.4036121368408203,
+              0.040690358728170395
+            ]
+          },
+          "centroid": [
+            -0.058804478289989325,
+            1.283611697417039,
+            -0.011897705603534212
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "018f44cf",
+          "geometryRevision": "40b1c4b0-a651-4eee-a802-c8df8a9c4604:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.876308782161522,
+            0.000008419696334448097,
+            0.48174985027055206
+          ],
+          "meanTriangleNormal": [
+            0.8764058121407504,
+            0.000002419710048255884,
+            0.481573309517935
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-panel-2:panel:1",
+          "vertexCount": 325,
+          "triangleCount": 576,
+          "boundingBox": {
+            "min": [
+              -0.02991468273103237,
+              1.163612961769104,
+              -0.06449654698371887
+            ],
+            "max": [
+              0.08770186454057693,
+              1.4036145210266113,
+              -0.04067058488726616
+            ]
+          },
+          "centroid": [
+            0.02889658980573026,
+            1.2836136553837703,
+            -0.052593168180722454
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "98b4d59b",
+          "geometryRevision": "3561971e-f848-47a9-b559-471cfefb33be:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.19835136990619365,
+            0.000006123159985995772,
+            -0.9801309779916373
+          ],
+          "meanTriangleNormal": [
+            0.1984077737144319,
+            0.0000022084195058583457,
+            -0.9801195617498947
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-panel-3:panel:1",
+          "vertexCount": 325,
+          "triangleCount": 576,
+          "boundingBox": {
+            "min": [
+              0.02990550361573696,
+              1.1636137962341309,
+              -0.040678009390830994
+            ],
+            "max": [
+              0.08770730346441269,
+              1.4036147594451904,
+              0.06449086219072342
+            ]
+          },
+          "centroid": [
+            0.05880447839315121,
+            1.283614166333125,
+            0.01190585298750263
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "1659191f",
+          "geometryRevision": "6ccfe0b5-44f8-4561-8c82-6881dd60fe01:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.8764069635914857,
+            0.000004177075328441963,
+            0.4815712139973734
+          ],
+          "meanTriangleNormal": [
+            0.8763844681964167,
+            0.000002241653433080535,
+            0.4816121509047078
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "spatial-panel-4:panel:1",
+          "vertexCount": 325,
+          "triangleCount": 576,
+          "boundingBox": {
+            "min": [
+              -0.08770528435707092,
+              1.1636111736297607,
+              0.04067997634410858
+            ],
+            "max": [
+              0.02991170436143875,
+              1.4036126136779785,
+              0.06449095159769058
+            ]
+          },
+          "centroid": [
+            -0.028896589885788183,
+            1.2836121372076181,
+            0.05258502116570106
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "aebfb2eb",
+          "geometryRevision": "b3911e51-2873-40cc-8be1-2b11ac6db7ed:1:2",
+          "meshCount": 1,
+          "meanNormal": [
+            0.1983803327243507,
+            0.0000043947367328176175,
+            -0.98012511628305
+          ],
+          "meanTriangleNormal": [
+            0.19837157855394238,
+            0.0000015735806118678102,
+            -0.9801268881219108
+          ],
+          "materialSide": 2
+        }
+      ],
+      "simulation": {
+        "stepCount": 0,
+        "substeps": 0,
+        "particleCount": 1300,
+        "triangleCount": 2304,
+        "stretchConstraintCount": 3600,
+        "shearConstraintCount": 2304,
+        "bendConstraintCount": 3312,
+        "seamConstraintCount": 76,
+        "seamErrorAverage": 0.000002919219567015874,
+        "seamErrorMaximum": 0.000014804176156993005,
+        "seamErrorsByGroup": {
+          "spatial-four-panel-tube:join-1": {
+            "constraintCount": 19,
+            "meanError": 0.00000423653069725515,
+            "maxError": 0.000014804176156993005,
+            "worstConstraintIndex": 18
+          },
+          "spatial-four-panel-tube:join-2": {
+            "constraintCount": 19,
+            "meanError": 0.000002031125741569516,
+            "maxError": 0.000007283349350508733,
+            "worstConstraintIndex": 19
+          },
+          "spatial-four-panel-tube:join-3": {
+            "constraintCount": 19,
+            "meanError": 0.0000018891475340874012,
+            "maxError": 0.000006221734458023071,
+            "worstConstraintIndex": 56
+          },
+          "spatial-four-panel-tube:join-4": {
+            "constraintCount": 19,
+            "meanError": 0.0000035200742951514266,
+            "maxError": 0.000012671273632364512,
+            "worstConstraintIndex": 57
+          }
+        },
+        "maximumPositionMagnitude": 1.4069403811975874,
+        "maximumVelocityMagnitude": 0,
+        "structuralStretchMeanRatio": 1.0000001507964775,
+        "structuralStretchMaxRatio": 1.0000224278464933,
+        "structuralCompressionMinRatio": 0.9999849630075667,
+        "shearStrainMean": 0.000005314483304384622,
+        "shearStrainMax": 0.00003147210814487109,
+        "triangleAreaMeanRatio": 1.0000008624353958,
+        "triangleAreaMinRatio": 0.9999723146366263,
+        "triangleAreaMaxRatio": 1.000029482518313,
+        "flippedTriangleCount": 0,
+        "garmentAabbGrowthRatio": 1,
+        "materialMetricsByPanel": {
+          "spatial-panel-1:panel:1": {
+            "constraintCount": 900,
+            "structuralStretchMeanRatio": 1.000001691611428,
+            "structuralStretchMaxRatio": 1.0000159611242667,
+            "structuralCompressionMinRatio": 0.9999923845658764
+          },
+          "spatial-panel-2:panel:1": {
+            "constraintCount": 900,
+            "structuralStretchMeanRatio": 1.0000018333849487,
+            "structuralStretchMaxRatio": 1.0000224278464933,
+            "structuralCompressionMinRatio": 0.9999869750752738
+          },
+          "spatial-panel-3:panel:1": {
+            "constraintCount": 900,
+            "structuralStretchMeanRatio": 0.9999986585167282,
+            "structuralStretchMaxRatio": 1.0000119249502009,
+            "structuralCompressionMinRatio": 0.9999865889739159
+          },
+          "spatial-panel-4:panel:1": {
+            "constraintCount": 900,
+            "structuralStretchMeanRatio": 0.9999984196728045,
+            "structuralStretchMaxRatio": 1.0000119769403129,
+            "structuralCompressionMinRatio": 0.9999849630075667
+          }
+        },
+        "materialMetricsByFabric": {
+          "fixture-fabric-primary": {
+            "constraintCount": 3600,
+            "structuralStretchMeanRatio": 1.0000001507964775,
+            "structuralStretchMaxRatio": 1.0000224278464933,
+            "structuralCompressionMinRatio": 0.9999849630075667
+          }
+        },
+        "explicitPinCount": 0,
+        "temporarySupportCount": 0,
+        "maximumCorrectionApplied": 0,
+        "bodyColliderCount": 12,
+        "bodyContactCount": 0,
+        "bodyContactsByRegion": {},
+        "maximumBodyPenetrationM": 0,
+        "maximumBodyCorrectionM": 0,
+        "frictionContactCount": 0,
+        "sweptContactCount": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "floorContactCount": 0,
+        "floorCcdContactCount": 0,
+        "floorFrictionContactCount": 0,
+        "maximumFloorPenetrationM": 0,
+        "meanFloorPenetrationM": 0,
+        "invalid": false,
+        "invalidReason": null,
+        "droppedTimeSeconds": 0,
+        "integrationMs": 0,
+        "stretchMs": 0,
+        "shearMs": 0,
+        "bendMs": 0,
+        "seamMs": 0,
+        "velocityUpdateMs": 0,
+        "validationMs": 0,
+        "solverStepTotalMs": 0,
+        "bodyCollisionMs": 0,
+        "floorCollisionMs": 0,
+        "bodyBroadphaseMs": 0,
+        "bodyNarrowphaseMs": 0,
+        "bodyProjectionMs": 0,
+        "bodyFrictionMs": 0,
+        "bodyParticleQueries": 0,
+        "bodyColliderTests": 0,
+        "bodyCandidateColliderTests": 0,
+        "bodyBroadphaseRejected": 0,
+        "bodyBroadphaseRejectRate": 0,
+        "bodyAverageCandidatesPerParticle": 0,
+        "bodyCapsuleNarrowphaseTests": 0,
+        "bodyEllipsoidNarrowphaseTests": 0,
+        "bodyPointContactsFound": 0,
+        "bodySweptTests": 0,
+        "bodySweptContactsFound": 0,
+        "bodyDressingStepsRemaining": 0,
+        "bodyInitialDressingSteps": 0,
+        "iterations": 5,
+        "maximumSubsteps": 2,
+        "physicsStepMs": 0,
+        "workerStepTotalMs": 0
+      },
+      "settings": {
+        "gravityScale": 0,
+        "cadence": 1,
+        "autoPauseSteps": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "showBodyColliders": false,
+        "showProceduralAvatar": true,
+        "showRegistrationAxes": false
+      },
+      "spatial": {
+        "revision": "78bfbe82",
+        "strategy": "coarse-isometric-surface",
+        "intrinsicDistortion": {
+          "maxRelativeDistortion": 0.000022405494250199443,
+          "maxAbsoluteDistortionM": 2.2405494250199443e-7,
+          "evaluatedConstraintCount": 3600,
+          "byInstance": {
+            "spatial-panel-1:panel:1": {
+              "maxRelativeDistortion": 0.000015938772168246074,
+              "maxAbsoluteDistortionM": 1.5938772168246074e-7,
+              "evaluatedConstraintCount": 900
+            },
+            "spatial-panel-2:panel:1": {
+              "maxRelativeDistortion": 0.000022405494250199443,
+              "maxAbsoluteDistortionM": 2.2405494250199443e-7,
+              "evaluatedConstraintCount": 900
+            },
+            "spatial-panel-3:panel:1": {
+              "maxRelativeDistortion": 0.000012874591475385555,
+              "maxAbsoluteDistortionM": 1.2874591475385555e-7,
+              "evaluatedConstraintCount": 900
+            },
+            "spatial-panel-4:panel:1": {
+              "maxRelativeDistortion": 0.000014873082124916559,
+              "maxAbsoluteDistortionM": 1.5141043304550683e-7,
+              "evaluatedConstraintCount": 900
+            }
+          }
+        },
+        "initialPositionSignature": "3900:a8e14535",
+        "coarseVertexCount": 112,
+        "coarseTriangleCount": 144,
+        "hingeCount": 180,
+        "reductionRatio": 0.08615384615384615,
+        "fineBindingBuildMs": 12.064999997615814,
+        "fineTransferMs": 4.615000002086163,
+        "assemblySolveMs": 1638.3450000025332,
+        "assemblyConfidence": [
+          {
+            "componentId": "coarse-component:1:spatial-panel-1:panel:1+spatial-panel-2:panel:1+spatial-panel-3:panel:1+spatial-panel-4:panel:1",
+            "state": "well-constrained",
+            "confidence": 0.5676091779496516,
+            "reason": null,
+            "selectedSeed": "material-preserving-shell-raw",
+            "metrics": {
+              "metricDistortionMean": 0.0000033134425094774075,
+              "metricDistortionMax": 0.00002229460445250797,
+              "areaDistortionMean": 0.000006258728027446236,
+              "areaDistortionMax": 0.000020683700038088778,
+              "structuralSeamMeanMm": 0.0029171735428895596,
+              "structuralSeamMaxMm": 0.014807983951680216,
+              "overlapScore": 0,
+              "nonPlanarityRad": 1.2751418156386356
+            },
+            "candidates": [
+              {
+                "name": "material-preserving-shell-raw",
+                "score": 0.011906790681753444,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 4.408203710774098e-7,
+                  "metricDistortionMax": 0.000004492955785889707,
+                  "areaDistortionMean": 8.792604130558145e-7,
+                  "areaDistortionMax": 0.0000046568692954292775,
+                  "structuralSeamMeanMm": 0.21663309024804767,
+                  "structuralSeamMaxMm": 0.39702760118314495,
+                  "normalizedResidual": 0.0006382613630991327,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.2751973950789923
+                }
+              },
+              {
+                "name": "material-preserving-shell-mirror",
+                "score": 0.017043367673394712,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.000011159110354833622,
+                  "metricDistortionMax": 0.00006570077564979626,
+                  "areaDistortionMean": 0.000028707683849500222,
+                  "areaDistortionMax": 0.00006592121892912252,
+                  "structuralSeamMeanMm": 0.1716903404963792,
+                  "structuralSeamMaxMm": 0.2571219443404894,
+                  "normalizedResidual": 0.0005058475167884044,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.2751989419284488
+                }
+              },
+              {
+                "name": "material-preserving-shell-seed",
+                "score": 0.017043367673394712,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.000011159110354833622,
+                  "metricDistortionMax": 0.00006570077564979626,
+                  "areaDistortionMean": 0.000028707683849500222,
+                  "areaDistortionMax": 0.00006592121892912252,
+                  "structuralSeamMeanMm": 0.1716903404963792,
+                  "structuralSeamMaxMm": 0.2571219443404894,
+                  "normalizedResidual": 0.0005058475167884044,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.2751989419284488
+                }
+              },
+              {
+                "name": "developable-metric-restored",
+                "score": 0.026936019684571343,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.000022024905304509913,
+                  "metricDistortionMax": 0.00007007467698674774,
+                  "areaDistortionMean": 0.00005776288879745014,
+                  "areaDistortionMax": 0.00006970169659736803,
+                  "structuralSeamMeanMm": 0.282100563685116,
+                  "structuralSeamMaxMm": 0.28235365738432966,
+                  "normalizedResidual": 0.0008311467564928875,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707963267948575
+                }
+              },
+              {
+                "name": "developable-metric-restored-raw",
+                "score": 0.053406567201570554,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 1.372061873920472e-7,
+                  "metricDistortionMax": 3.948592742705759e-7,
+                  "areaDistortionMean": 1.8603430148378924e-7,
+                  "areaDistortionMax": 4.958083816013377e-7,
+                  "structuralSeamMeanMm": 1.0058810543014647,
+                  "structuralSeamMaxMm": 1.0061167560488207,
+                  "normalizedResidual": 0.0029636054773484978,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707963267948815
+                }
+              },
+              {
+                "name": "developable-cycle-mirror",
+                "score": 0.12196711108525723,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.0001284839190242685,
+                  "metricDistortionMax": 0.0003795442531992835,
+                  "areaDistortionMean": 0.00034060153003868097,
+                  "areaDistortionMax": 0.00041121930399189735,
+                  "structuralSeamMeanMm": 1.001001819155036,
+                  "structuralSeamMaxMm": 1.008916486249771,
+                  "normalizedResidual": 0.0029492298929358167,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707963265086402
+                }
+              },
+              {
+                "name": "developable-cycle-seed",
+                "score": 0.12196711108525723,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.0001284839190242685,
+                  "metricDistortionMax": 0.0003795442531992835,
+                  "areaDistortionMean": 0.00034060153003868097,
+                  "areaDistortionMax": 0.00041121930399189735,
+                  "structuralSeamMeanMm": 1.001001819155036,
+                  "structuralSeamMaxMm": 1.008916486249771,
+                  "normalizedResidual": 0.0029492298929358167,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707963265086402
+                }
+              },
+              {
+                "name": "developable-cycle-raw",
+                "score": 2.3807147072202106,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.005416377415501027,
+                  "metricDistortionMax": 0.011384160119934893,
+                  "areaDistortionMean": 0.011384121726287302,
+                  "areaDistortionMax": 0.011384366361270236,
+                  "structuralSeamMeanMm": 1.1797735618068089e-14,
+                  "structuralSeamMaxMm": 5.857984141727643e-14,
+                  "normalizedResidual": 3.4759411909091707e-17,
+                  "overlapScore": 0,
+                  "triangleCrossingProxyCount": 0,
+                  "nonPlanarityRad": 1.5707963267948966
+                }
+              },
+              {
+                "name": "material-flat-seed",
+                "score": 198.34956296535674,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.011589393665677537,
+                  "metricDistortionMax": 0.03888588074621117,
+                  "areaDistortionMean": 0.03027317951990638,
+                  "areaDistortionMax": 0.03983361060762945,
+                  "structuralSeamMeanMm": 116.25264151802735,
+                  "structuralSeamMaxMm": 126.63628558398959,
+                  "normalizedResidual": 0.342512629784358,
+                  "overlapScore": 0.732602877892528,
+                  "triangleCrossingProxyCount": 302,
+                  "nonPlanarityRad": 0.10824550527247268
+                }
+              },
+              {
+                "name": "authored-developable-seed",
+                "score": 215.52452690304125,
+                "semanticChirality": 0,
+                "metrics": {
+                  "metricDistortionMean": 0.011519406682266935,
+                  "metricDistortionMax": 0.03905761606898921,
+                  "areaDistortionMean": 0.030352795508470552,
+                  "areaDistortionMax": 0.039568932411111236,
+                  "structuralSeamMeanMm": 116.23144246420864,
+                  "structuralSeamMaxMm": 132.8913534077269,
+                  "normalizedResidual": 0.3424501714730665,
+                  "overlapScore": 0.7912854070693905,
+                  "triangleCrossingProxyCount": 308,
+                  "nonPlanarityRad": 0
+                }
+              }
+            ]
+          }
+        ],
+        "instances": [
+          {
+            "id": "spatial-panel-1:panel:1",
+            "pieceId": "spatial-panel-1",
+            "vertexCount": 325,
+            "placement": {
+              "id": "spatial-panel-1:panel:1",
+              "pieceId": "spatial-panel-1",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "center",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                -0.0000028377075069128147,
+                -0.9999999999957021,
+                7.371309208459082e-7
+              ],
+              "bodySide": "center",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          },
+          {
+            "id": "spatial-panel-2:panel:1",
+            "pieceId": "spatial-panel-2",
+            "vertexCount": 325,
+            "placement": {
+              "id": "spatial-panel-2:panel:1",
+              "pieceId": "spatial-panel-2",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "center",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                -0.0000020390436364912065,
+                -0.9999999999978734,
+                3.093747603106921e-7
+              ],
+              "bodySide": "center",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "spatial-panel-3:panel:1",
+            "pieceId": "spatial-panel-3",
+            "vertexCount": 325,
+            "placement": {
+              "id": "spatial-panel-3:panel:1",
+              "pieceId": "spatial-panel-3",
+              "region": "torso",
+              "surface": "front",
+              "bodySide": "center",
+              "bodyAnchorId": "torso-front",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-front",
+              "outwardNormal": [
+                0,
+                0,
+                1
+              ],
+              "axis": [
+                0.0000018881063106088735,
+                -0.9999999999953746,
+                -0.000002384562213096117
+              ],
+              "bodySide": "center",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": false
+            }
+          },
+          {
+            "id": "spatial-panel-4:panel:1",
+            "pieceId": "spatial-panel-4",
+            "vertexCount": 325,
+            "placement": {
+              "id": "spatial-panel-4:panel:1",
+              "pieceId": "spatial-panel-4",
+              "region": "torso",
+              "surface": "back",
+              "bodySide": "center",
+              "bodyAnchorId": "torso-back",
+              "rotationDeg": 0,
+              "offsetXMm": 0,
+              "offsetYMm": 0,
+              "offsetZMm": 25,
+              "scale": 1,
+              "mirrorX": false
+            },
+            "arrangement": {
+              "anchorId": "torso-back",
+              "outwardNormal": [
+                0,
+                0,
+                -1
+              ],
+              "axis": [
+                0.000002991102079316422,
+                -0.9999999999946321,
+                0.000001337690358355118
+              ],
+              "bodySide": "center",
+              "marginM": 0,
+              "mapping": "rigid-panel",
+              "flipWinding": true
+            }
+          }
+        ],
+        "seamGraph": {
+          "nodes": [
+            "spatial-panel-1:panel:1",
+            "spatial-panel-2:panel:1",
+            "spatial-panel-3:panel:1",
+            "spatial-panel-4:panel:1"
+          ],
+          "edges": [
+            {
+              "seamGroupId": "spatial-four-panel-tube:join-1",
+              "firstInstanceId": "spatial-panel-1:panel:1",
+              "secondInstanceId": "spatial-panel-2:panel:1",
+              "sampleCount": 19
+            },
+            {
+              "seamGroupId": "spatial-four-panel-tube:join-2",
+              "firstInstanceId": "spatial-panel-2:panel:1",
+              "secondInstanceId": "spatial-panel-3:panel:1",
+              "sampleCount": 19
+            },
+            {
+              "seamGroupId": "spatial-four-panel-tube:join-3",
+              "firstInstanceId": "spatial-panel-3:panel:1",
+              "secondInstanceId": "spatial-panel-4:panel:1",
+              "sampleCount": 19
+            },
+            {
+              "seamGroupId": "spatial-four-panel-tube:join-4",
+              "firstInstanceId": "spatial-panel-1:panel:1",
+              "secondInstanceId": "spatial-panel-4:panel:1",
+              "sampleCount": 19
+            }
+          ]
+        }
+      }
+    }
+  },
+  "floor": {
+    "skirt": {
+      "diagnostics": {
+        "stepCount": 46,
+        "substeps": 0,
+        "particleCount": 3664,
+        "triangleCount": 5856,
+        "stretchConstraintCount": 9516,
+        "shearConstraintCount": 5856,
+        "bendConstraintCount": 8052,
+        "seamConstraintCount": 350,
+        "seamErrorAverage": 0.0068890418220807145,
+        "seamErrorMaximum": 0.08701501397170004,
+        "seamErrorsByGroup": {
+          "template-seam:skirt-side": {
+            "constraintCount": 88,
+            "meanError": 0.008052941963959453,
+            "maxError": 0.07705752606408624,
+            "worstConstraintIndex": 86
+          },
+          "dart:straight-skirt-front:fixture-dart-1": {
+            "constraintCount": 8,
+            "meanError": 0.0005891929076592878,
+            "maxError": 0.0013950041749413828,
+            "worstConstraintIndex": 94
+          },
+          "dart:straight-skirt-back:fixture-dart-1": {
+            "constraintCount": 8,
+            "meanError": 0.004050350655454471,
+            "maxError": 0.007084532425986549,
+            "worstConstraintIndex": 103
+          },
+          "fold:straight-skirt-front:panel:1:cut-on-fold": {
+            "constraintCount": 121,
+            "meanError": 0.007051306238004116,
+            "maxError": 0.08701501397170004,
+            "worstConstraintIndex": 104
+          },
+          "fold:straight-skirt-back:panel:1:cut-on-fold": {
+            "constraintCount": 125,
+            "meanError": 0.0064974507327712535,
+            "maxError": 0.0806279639539602,
+            "worstConstraintIndex": 225
+          }
+        },
+        "maximumPositionMagnitude": 0.37292596971447217,
+        "maximumVelocityMagnitude": 3.4748665574137187,
+        "structuralStretchMeanRatio": 0.9967853733318215,
+        "structuralStretchMaxRatio": 7.72527784886731,
+        "structuralCompressionMinRatio": 0.03574697686959257,
+        "shearStrainMean": 0.16095385205561594,
+        "shearStrainMax": 1.972578157357994,
+        "triangleAreaMeanRatio": 1.1381048930017559,
+        "triangleAreaMinRatio": 0.005189774980529693,
+        "triangleAreaMaxRatio": 16.177180177254076,
+        "flippedTriangleCount": 88,
+        "garmentAabbGrowthRatio": 0.8987859543394094,
+        "materialMetricsByPanel": {
+          "straight-skirt-front:panel:1:fold-a": {
+            "constraintCount": 2340,
+            "structuralStretchMeanRatio": 0.9941019434608616,
+            "structuralStretchMaxRatio": 6.734865313552784,
+            "structuralCompressionMinRatio": 0.10357541159344484
+          },
+          "straight-skirt-front:panel:1:fold-b": {
+            "constraintCount": 2340,
+            "structuralStretchMeanRatio": 0.9973418106483243,
+            "structuralStretchMaxRatio": 6.636793470052996,
+            "structuralCompressionMinRatio": 0.07521974379498379
+          },
+          "straight-skirt-back:panel:1:fold-a": {
+            "constraintCount": 2418,
+            "structuralStretchMeanRatio": 0.9988510607899137,
+            "structuralStretchMaxRatio": 7.72527784886731,
+            "structuralCompressionMinRatio": 0.06468564861357884
+          },
+          "straight-skirt-back:panel:1:fold-b": {
+            "constraintCount": 2418,
+            "structuralStretchMeanRatio": 0.9967780657651177,
+            "structuralStretchMaxRatio": 6.635067589056729,
+            "structuralCompressionMinRatio": 0.03574697686959257
+          }
+        },
+        "materialMetricsByFabric": {
+          "fixture-fabric-primary": {
+            "constraintCount": 9516,
+            "structuralStretchMeanRatio": 0.9967853733318215,
+            "structuralStretchMaxRatio": 7.72527784886731,
+            "structuralCompressionMinRatio": 0.03574697686959257
+          }
+        },
+        "explicitPinCount": 0,
+        "temporarySupportCount": 0,
+        "maximumCorrectionApplied": 0.0004969179863110185,
+        "bodyColliderCount": 12,
+        "bodyContactCount": 0,
+        "bodyContactsByRegion": {},
+        "maximumBodyPenetrationM": 0,
+        "maximumBodyCorrectionM": 0,
+        "frictionContactCount": 0,
+        "sweptContactCount": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "floorContactCount": 803,
+        "floorCcdContactCount": 803,
+        "floorFrictionContactCount": 803,
+        "maximumFloorPenetrationM": 0,
+        "meanFloorPenetrationM": 0,
+        "invalid": false,
+        "invalidReason": null,
+        "droppedTimeSeconds": 0,
+        "integrationMs": 0.03500000014901161,
+        "stretchMs": 3.274999998509884,
+        "shearMs": 3.480000004172325,
+        "bendMs": 2.7299999967217445,
+        "seamMs": 0.2900000028312206,
+        "velocityUpdateMs": 0.32500000298023224,
+        "validationMs": 3.814999997615814,
+        "solverStepTotalMs": 14.07999999821186,
+        "bodyCollisionMs": 0,
+        "floorCollisionMs": 0.05999999865889549,
+        "bodyBroadphaseMs": 0,
+        "bodyNarrowphaseMs": 0,
+        "bodyProjectionMs": 0,
+        "bodyFrictionMs": 0.004999998956918716,
+        "bodyParticleQueries": 0,
+        "bodyColliderTests": 0,
+        "bodyCandidateColliderTests": 0,
+        "bodyBroadphaseRejected": 0,
+        "bodyBroadphaseRejectRate": 0,
+        "bodyAverageCandidatesPerParticle": 0,
+        "bodyCapsuleNarrowphaseTests": 0,
+        "bodyEllipsoidNarrowphaseTests": 0,
+        "bodyPointContactsFound": 0,
+        "bodySweptTests": 0,
+        "bodySweptContactsFound": 0,
+        "bodyDressingStepsRemaining": 0,
+        "bodyInitialDressingSteps": 0,
+        "iterations": 5,
+        "maximumSubsteps": 2,
+        "physicsStepMs": 14.07999999821186,
+        "workerStepTotalMs": 14.07999999821186
+      },
+      "settings": {
+        "gravityScale": 1,
+        "cadence": 1,
+        "autoPauseSteps": 0,
+        "bodyCollisionEnabled": false,
+        "floorCollisionEnabled": true,
+        "showBodyColliders": false,
+        "showProceduralAvatar": true,
+        "showRegistrationAxes": false
+      },
+      "physicalFloorY": "-0.002",
+      "visualFloorY": "-0.002",
+      "meshMinimumY": -0.0015899999998509884,
+      "meshes": [
+        {
+          "id": "straight-skirt-front:panel:1:fold-a",
+          "vertexCount": 901,
+          "triangleCount": 1440,
+          "boundingBox": {
+            "min": [
+              -0.07052801549434662,
+              -0.0015899999998509884,
+              -0.03482447937130928
+            ],
+            "max": [
+              0.27293509244918823,
+              0.33918455243110657,
+              0.13917481899261475
+            ]
+          },
+          "centroid": [
+            0.10295814420758993,
+            0.14994845820214087,
+            0.0780393252836023
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "66dbbe50",
+          "geometryRevision": "6e51fb0c-2215-47b3-b259-186eeb60340d:16:17",
+          "meshCount": 1,
+          "meanNormal": [
+            0.4927548239657225,
+            0.07187661915546618,
+            0.8671945774030704
+          ],
+          "meanTriangleNormal": [
+            0.49373539740264777,
+            -0.1848787022622467,
+            0.8497324418906677
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-front:panel:1:fold-b",
+          "vertexCount": 901,
+          "triangleCount": 1440,
+          "boundingBox": {
+            "min": [
+              -0.27225261926651,
+              -0.0015899999998509884,
+              -0.03464142233133316
+            ],
+            "max": [
+              0.06933270394802094,
+              0.339103639125824,
+              0.136789932847023
+            ]
+          },
+          "centroid": [
+            -0.10293542488460572,
+            0.1499527283912227,
+            0.0779507402015211
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "66dbbe50",
+          "geometryRevision": "3d1faffa-581f-4a87-9e6c-94edee1e9ed4:16:17",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.4933532978446374,
+            0.06216289478783835,
+            0.8676049204663472
+          ],
+          "meanTriangleNormal": [
+            -0.496480494025993,
+            -0.18446904745651874,
+            0.8482206609026868
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-back:panel:1:fold-a",
+          "vertexCount": 931,
+          "triangleCount": 1488,
+          "boundingBox": {
+            "min": [
+              -0.07338396459817886,
+              -0.0015899999998509884,
+              -0.16104920208454132
+            ],
+            "max": [
+              0.26796096563339233,
+              0.3487849235534668,
+              0.06702421605587006
+            ]
+          },
+          "centroid": [
+            0.1025871352542676,
+            0.1502516684078313,
+            -0.07070164135009527
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "85526ee2",
+          "geometryRevision": "267fc906-9bfc-4283-84cd-1ce2b098e00b:16:17",
+          "meshCount": 1,
+          "meanNormal": [
+            0.5714510256037603,
+            0.0957293917846666,
+            -0.8150335016948372
+          ],
+          "meanTriangleNormal": [
+            0.584157889860589,
+            -0.18253928796298852,
+            -0.7908469940915179
+          ],
+          "materialSide": 2
+        },
+        {
+          "id": "straight-skirt-back:panel:1:fold-b",
+          "vertexCount": 931,
+          "triangleCount": 1488,
+          "boundingBox": {
+            "min": [
+              -0.2670894265174866,
+              -0.0015899999998509884,
+              -0.15968528389930725
+            ],
+            "max": [
+              0.07270529121160507,
+              0.34896963834762573,
+              0.0663284957408905
+            ]
+          },
+          "centroid": [
+            -0.10258467223293818,
+            0.15010787860864996,
+            -0.07076413836442715
+          ],
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "matrixWorld": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "geometrySignature": "85526ee2",
+          "geometryRevision": "32d2f0ac-9a11-4059-88ae-d9c46b9b0239:16:17",
+          "meshCount": 1,
+          "meanNormal": [
+            -0.5738225783889378,
+            0.08769260131669904,
+            -0.814271242403526
+          ],
+          "meanTriangleNormal": [
+            -0.5823083762641761,
+            -0.1840231464663909,
+            -0.7918664259186571
+          ],
+          "materialSide": 2
+        }
+      ]
+    }
+  },
+  "consoleErrors": []
+}

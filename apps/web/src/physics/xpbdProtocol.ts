@@ -37,7 +37,7 @@ export type XpbdWorkerRequest =
   | ({ type: "updateGeometry"; payload: XpbdInitializationData } & XpbdCommandIdentity)
   | { type: "updateSeams"; revision: string; seamIndices: Uint32Array; seamWeights: Float32Array; seamRestDistances: Float32Array; seamCompliances: Float32Array; seamRelaxations: Float32Array; seamGroupIds: string[] }
   | { type: "updateFabric"; revision: string; distanceCompliances: Float32Array; shearCompliances: Float32Array; bendCompliances?: Float32Array; particleHalfThicknessM?: Float32Array; particleFriction?: Float32Array; config?: Partial<XpbdSolverConfig> }
-  | { type: "configureDev"; generation: number; gravity: [number, number, number]; cadence: XpbdSimulationCadence; autoPauseSteps: XpbdAutoPauseSteps; bodyCollisionEnabled?: boolean }
+  | { type: "configureDev"; generation: number; gravity: [number, number, number]; cadence: XpbdSimulationCadence; autoPauseSteps: XpbdAutoPauseSteps; bodyCollisionEnabled?: boolean; floorCollisionEnabled?: boolean }
   | ({ type: "start" } & XpbdCommandIdentity)
   | ({ type: "pause" } & XpbdCommandIdentity)
   | ({ type: "resume" } & XpbdCommandIdentity)
