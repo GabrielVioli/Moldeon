@@ -3,20 +3,33 @@ import path from "node:path";
 import { chromium } from "playwright-core";
 
 const baseURL = process.env.HUMAN_BODY_BASE_URL ?? "http://127.0.0.1:4183";
-const outputDir = process.env.HUMAN_BODY_SMOKE_DIR ?? "docs/validation/human-body-11.0.4b";
+const outputDir = process.env.HUMAN_BODY_SMOKE_DIR ?? "docs/validation/human-body-11.0.4b-calibration";
 const executablePath = process.env.CHROME_PATH
   ?? (process.platform === "win32"
     ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
     : "/usr/bin/google-chrome");
-const views = [
-  "front",
-  "side",
-  "back",
-  "front-three-quarter",
-  "back-three-quarter",
-  "front-silhouette",
-  "side-silhouette",
-  "back-silhouette",
+const jobs = [
+  { stage: "raw", view: "front", file: "raw-front.png" },
+  { stage: "raw", view: "side", file: "raw-side.png" },
+  { stage: "raw", view: "back", file: "raw-back.png" },
+  { stage: "raw", view: "front", file: "stages/stage-0-raw-glb-front.png" },
+  { stage: "raw", view: "side", file: "stages/stage-0-raw-glb-side.png" },
+  { stage: "normalized", view: "front", file: "stages/stage-1-normalized-front.png" },
+  { stage: "normalized", view: "side", file: "stages/stage-1-normalized-side.png" },
+  { stage: "posed", view: "front", file: "stages/stage-2-posed-front.png" },
+  { stage: "posed", view: "side", file: "stages/stage-2-posed-side.png" },
+  { stage: "pre-metric", view: "front", file: "stages/stage-3-deformed-before-metric-correction-front.png" },
+  { stage: "pre-metric", view: "side", file: "stages/stage-3-deformed-before-metric-correction-side.png" },
+  { stage: "final", view: "front", file: "stages/stage-4-final-front.png" },
+  { stage: "final", view: "side", file: "stages/stage-4-final-side.png" },
+  { stage: "final", view: "front", file: "front.png" },
+  { stage: "final", view: "side", file: "side.png" },
+  { stage: "final", view: "back", file: "back.png" },
+  { stage: "final", view: "front-three-quarter", file: "front-three-quarter.png" },
+  { stage: "final", view: "back-three-quarter", file: "back-three-quarter.png" },
+  { stage: "final", view: "front-silhouette", file: "front-silhouette.png" },
+  { stage: "final", view: "side-silhouette", file: "side-silhouette.png" },
+  { stage: "final", view: "back-silhouette", file: "back-silhouette.png" },
 ];
 const commonArgs = ["--no-sandbox", "--disable-dev-shm-usage", "--enable-webgl", "--ignore-gpu-blocklist"];
 const rendererCandidates = [
@@ -26,18 +39,19 @@ const rendererCandidates = [
   ["default", []],
 ];
 
-await fs.mkdir(outputDir, { recursive: true });
+await fs.mkdir(path.join(outputDir, "stages"), { recursive: true });
 const { browser, rendererProfile } = await launchBrowser();
 const report = { rendererProfile, views: [] };
 
 try {
-  for (const view of views) {
+  for (const job of jobs) {
+    const { stage, view } = job;
     const context = await browser.newContext({ viewport: { width: 720, height: 900 }, deviceScaleFactor: 1 });
     const page = await context.newPage();
     const errors = [];
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`${baseURL}/body-smoke.html?view=${encodeURIComponent(view)}`, { waitUntil: "networkidle" });
+    await page.goto(`${baseURL}/body-smoke.html?view=${encodeURIComponent(view)}&stage=${encodeURIComponent(stage)}`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => window.bodySmokeReady === true, null, { timeout: 30_000 });
     await page.waitForTimeout(150);
     const metadata = await page.evaluate(() => window.bodySmokeMetadata);
@@ -58,9 +72,18 @@ try {
     if (measurementErrors.length === 0 || measurementErrors.some((value) => Math.abs(value) > 5)) {
       throw new Error(`${view}: metric tolerance failed: ${JSON.stringify(metadata.measurementErrorsMm)}`);
     }
-    const screenshotPath = path.join(outputDir, `${view}.png`);
+    const identity = metadata.identityDeformation;
+    if (!identity || identity.rmsMm > 1 || identity.percentile95Mm > 2 || identity.maxMm > 5) {
+      throw new Error(`${view}: identity deformation failed: ${JSON.stringify(identity)}`);
+    }
+    const quality = metadata.shapeQuality;
+    if (!quality || quality.maximumEdgeStretchRatio >= 4 || quality.maximumAreaRatio >= 8
+      || quality.maximumNormalChangeDegrees >= 110) {
+      throw new Error(`${view}: shape quality failed: ${JSON.stringify(quality)}`);
+    }
+    const screenshotPath = path.join(outputDir, job.file);
     await page.screenshot({ path: screenshotPath, fullPage: true });
-    report.views.push({ view, screenshotPath, metadata });
+    report.views.push({ stage, view, screenshotPath, metadata });
     await context.close();
   }
 } finally {
@@ -68,7 +91,11 @@ try {
 }
 
 await fs.writeFile(path.join(outputDir, "smoke.json"), JSON.stringify(report, null, 2));
-console.log(JSON.stringify(report, null, 2));
+console.log(JSON.stringify({
+  renderer: report.rendererProfile.name,
+  viewCount: report.views.length,
+  outputDir,
+}, null, 2));
 
 async function launchBrowser() {
   const attempts = [];

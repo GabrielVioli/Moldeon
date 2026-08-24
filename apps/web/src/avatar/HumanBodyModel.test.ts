@@ -95,7 +95,8 @@ describe("HumanBodyModel canonical female anatomy", () => {
     const waist = body.crossSections.find((section) => section.id === "waist")!;
     const hip = body.crossSections.find((section) => section.id === "full-hip")!;
 
-    expect(bust.halfWidthM).toBeGreaterThan(waist.halfWidthM);
+    expect(bust.actualCircumferenceMm).toBeGreaterThan(waist.actualCircumferenceMm);
+    expect(bust.frontDepthM).toBeGreaterThan(waist.frontDepthM);
     expect(hip.halfWidthM).toBeGreaterThan(waist.halfWidthM);
     expect(bust.frontDepthM + bust.frontLobeM).toBeGreaterThan(bust.backDepthM);
     expect(hip.backDepthM + hip.backLobeM).toBeGreaterThan(hip.frontDepthM);
@@ -157,6 +158,15 @@ describe("HumanBodyModel canonical female anatomy", () => {
       "crotchDepth", "armLength", "inseam", "outseam",
     ];
 
+    console.log("HUMAN_BODY_PROFILE_SECTION_ERRORS", JSON.stringify(bodies.map((body, index) => ({
+      profile: FEMALE_PROFILES[index].id,
+      iterations: body.diagnostics.metricCorrectionIterations,
+      sections: Object.fromEntries(circumferenceSections.map((id) => {
+        const section = body.crossSections.find((candidate) => candidate.id === id)!;
+        return [id, section.actualCircumferenceMm - section.targetCircumferenceMm];
+      })),
+    }))));
+
     for (const body of bodies) {
       expect(body.visualMesh.topologySignature).toBe(canonical.visualMesh.topologySignature);
       expect(body.visualMesh.positions.length).toBe(canonical.visualMesh.positions.length);
@@ -182,7 +192,7 @@ describe("HumanBodyModel canonical female anatomy", () => {
         expect(section, `${id} section`).toBeDefined();
         expect(
           Math.abs(section.actualCircumferenceMm - section.targetCircumferenceMm),
-          `${id} circumference`,
+          `${body.measurements.heightMm} mm ${id} circumference ${section.actualCircumferenceMm}/${section.targetCircumferenceMm}`,
         ).toBeLessThanOrEqual(tolerance(section.targetCircumferenceMm));
       }
       for (const key of lengthKeys) {
@@ -192,7 +202,8 @@ describe("HumanBodyModel canonical female anatomy", () => {
       const bust = body.crossSections.find((section) => section.id === "bust")!;
       const waist = body.crossSections.find((section) => section.id === "waist")!;
       const hip = body.crossSections.find((section) => section.id === "full-hip")!;
-      expect(bust.halfWidthM).toBeGreaterThan(waist.halfWidthM);
+      expect(bust.actualCircumferenceMm).toBeGreaterThan(waist.actualCircumferenceMm);
+      expect(bust.frontDepthM).toBeGreaterThan(waist.frontDepthM);
       expect(hip.halfWidthM).toBeGreaterThan(waist.halfWidthM);
       expect(body.landmarks["crotch-front"].position[2]).toBeGreaterThan(body.landmarks["crotch-back"].position[2]);
       expect(body.landmarks["glute-left"].position[2]).toBeLessThan(body.landmarks["full-hip-front"].position[2]);

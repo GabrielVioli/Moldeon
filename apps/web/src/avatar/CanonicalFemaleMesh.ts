@@ -47,6 +47,12 @@ export interface CanonicalFemaleAssetAudit {
 }
 
 export interface CanonicalFemaleMeshData {
+  raw: {
+    positions: Float32Array;
+    normals: Float32Array;
+    indices: Uint32Array;
+    bounds: { min: CanonicalVector3; max: CanonicalVector3 };
+  };
   positions: Float32Array;
   normals: Float32Array;
   indices: Uint32Array;
@@ -153,6 +159,16 @@ export function canonicalFemaleMesh(): CanonicalFemaleMeshData {
   const sourceIndices = readIndexAccessor(parsed, primitive.indices);
   const transformed = transformPositions(sourcePositions, worldMatrix);
   const sourceBounds = boundsOf(transformed);
+  const sourceWindingIsPositive = signedVolume(transformed, sourceIndices) >= 0;
+  const rawIndices = sourceWindingIsPositive
+    ? Uint32Array.from(sourceIndices)
+    : Uint32Array.from(flipWinding(sourceIndices));
+  const raw = {
+    positions: new Float32Array(transformed),
+    normals: buildVertexNormals(transformed, rawIndices),
+    indices: rawIndices,
+    bounds: sourceBounds,
+  };
   const groundOffsetM = -sourceBounds.min[1];
   for (let offset = 1; offset < transformed.length; offset += 3) {
     transformed[offset] += groundOffsetM;
@@ -226,6 +242,7 @@ export function canonicalFemaleMesh(): CanonicalFemaleMeshData {
     },
   };
   cached = {
+    raw,
     positions: capped.positions,
     normals,
     indices: normalizedIndices,

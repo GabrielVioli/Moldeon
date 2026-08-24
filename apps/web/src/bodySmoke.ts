@@ -14,10 +14,21 @@ if (!host) throw new Error("body smoke host ausente");
 
 const params = new URLSearchParams(window.location.search);
 const requestedView = params.get("view") ?? "front";
+const requestedStage = params.get("stage") ?? "final";
 const silhouette = requestedView.endsWith("-silhouette");
+const showWireframe = params.get("wireframe") === "true";
 const baseView = requestedView.replace(/-silhouette$/u, "");
-const body = buildHumanBodyModel(DEFAULT_BODY_MEASUREMENTS);
-const source = body.visualMesh;
+const body = buildHumanBodyModel(DEFAULT_BODY_MEASUREMENTS, { includeCalibrationStages: true });
+const stages = body.calibrationStages!;
+const stageMeshes = {
+  raw: stages.raw,
+  normalized: stages.normalized,
+  posed: stages.posed,
+  "pre-metric": stages.deformedBeforeMetric,
+  final: stages.final,
+  "final-rest": stages.finalRestShape,
+} as const;
+const source = stageMeshes[requestedStage as keyof typeof stageMeshes] ?? stages.final;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
@@ -54,18 +65,20 @@ solid.receiveShadow = !silhouette;
 scene.add(solid);
 
 if (!silhouette) {
-  const wire = new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({
-      color: 0x747470,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-      depthWrite: false,
-    }),
-  );
-  wire.renderOrder = 2;
-  scene.add(wire);
+  if (showWireframe) {
+    const wire = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: 0x747470,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.15,
+        depthWrite: false,
+      }),
+    );
+    wire.renderOrder = 2;
+    scene.add(wire);
+  }
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(5, 5),
@@ -117,7 +130,7 @@ camera.lookAt(target);
 
 const label = document.getElementById("view-label");
 if (label) {
-  label.textContent = silhouette ? "" : `HumanBodyModel · ${baseView}`;
+  label.textContent = silhouette ? "" : `HumanBodyModel · ${requestedStage} · ${baseView}`;
   label.hidden = silhouette;
 }
 
@@ -130,6 +143,7 @@ requestAnimationFrame(() => {
   render();
   window.bodySmokeMetadata = {
     view: requestedView,
+    stage: requestedStage,
     silhouette,
     version: body.version,
     sourceAssetId: source.sourceAssetId,
@@ -139,6 +153,9 @@ requestAnimationFrame(() => {
     visualCollisionTopologyParity: body.diagnostics.visualCollisionTopologyParity,
     measurements: body.measurements,
     measurementErrorsMm: body.diagnostics.measurementErrorsMm,
+    identityDeformation: body.diagnostics.identityDeformation,
+    deformationByRegion: body.diagnostics.deformationByRegion,
+    shapeQuality: body.diagnostics.meshQuality,
     meshDiagnostics: body.diagnostics.visual,
     vertices: source.positions.length / 3,
     triangles: source.indices.length / 3,

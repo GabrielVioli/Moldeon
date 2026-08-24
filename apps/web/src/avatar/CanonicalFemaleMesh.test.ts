@@ -44,4 +44,28 @@ describe("canonical-female.glb audit and normalization", () => {
     expect(canonical.normals.length).toBe(canonical.positions.length);
     expect(canonical.topologySignature).toBe("canonical-female:16364:32508:e990129c");
   });
+
+  it("keeps raw anatomy identical after removing the documented ground translation", () => {
+    const canonical = canonicalFemaleMesh();
+    const ground = canonical.audit.normalization.groundOffsetM;
+    const byPosition = new Set<string>();
+    const unique: number[] = [];
+    for (let vertex = 0; vertex < canonical.raw.positions.length / 3; vertex += 1) {
+      const point = [
+        Math.fround(canonical.raw.positions[vertex * 3]),
+        Math.fround(canonical.raw.positions[vertex * 3 + 1] + ground),
+        Math.fround(canonical.raw.positions[vertex * 3 + 2]),
+      ];
+      const key = point.map((value) => Math.round(value / 1e-7)).join(":");
+      if (byPosition.has(key)) continue;
+      byPosition.add(key);
+      unique.push(...point);
+    }
+    expect(unique.length / 3).toBe(
+      canonical.positions.length / 3 - canonical.audit.cappedBoundaryLoopCount,
+    );
+    for (let offset = 0; offset < unique.length; offset += 1) {
+      expect(canonical.positions[offset]).toBeCloseTo(unique[offset], 6);
+    }
+  });
 });
