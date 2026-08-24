@@ -4,8 +4,20 @@ import { chromium } from "playwright-core";
 
 const baseURL = process.env.HUMAN_BODY_BASE_URL ?? "http://127.0.0.1:4183";
 const outputDir = process.env.HUMAN_BODY_SMOKE_DIR ?? "docs/validation/human-body-11.0.4b";
-const executablePath = process.env.CHROME_PATH ?? "/usr/bin/google-chrome";
-const views = ["front", "side", "back", "three-quarter"];
+const executablePath = process.env.CHROME_PATH
+  ?? (process.platform === "win32"
+    ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    : "/usr/bin/google-chrome");
+const views = [
+  "front",
+  "side",
+  "back",
+  "front-three-quarter",
+  "back-three-quarter",
+  "front-silhouette",
+  "side-silhouette",
+  "back-silhouette",
+];
 const commonArgs = ["--no-sandbox", "--disable-dev-shm-usage", "--enable-webgl", "--ignore-gpu-blocklist"];
 const rendererCandidates = [
   ["angle-swiftshader", ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]],
@@ -30,8 +42,21 @@ try {
     await page.waitForTimeout(150);
     const metadata = await page.evaluate(() => window.bodySmokeMetadata);
     if (errors.length > 0) throw new Error(`${view}: browser errors: ${JSON.stringify(errors)}`);
-    if (!metadata || metadata.version !== "human-body-female@1") {
+    if (!metadata || metadata.version !== "human-body-female@1"
+      || metadata.sourceAssetId !== "canonical-female.glb"
+      || metadata.topologyInvariant !== true
+      || metadata.visualCollisionTopologyParity !== true) {
       throw new Error(`${view}: canonical body metadata missing: ${JSON.stringify(metadata)}`);
+    }
+    const mesh = metadata.meshDiagnostics;
+    if (!mesh || mesh.finite !== true || mesh.boundaryEdgeCount !== 0
+      || mesh.nonManifoldEdgeCount !== 0 || mesh.degenerateTriangleCount !== 0
+      || mesh.invertedTriangleCount !== 0 || mesh.normalsConsistent !== true) {
+      throw new Error(`${view}: invalid runtime mesh diagnostics: ${JSON.stringify(mesh)}`);
+    }
+    const measurementErrors = Object.values(metadata.measurementErrorsMm ?? {});
+    if (measurementErrors.length === 0 || measurementErrors.some((value) => Math.abs(value) > 5)) {
+      throw new Error(`${view}: metric tolerance failed: ${JSON.stringify(metadata.measurementErrorsMm)}`);
     }
     const screenshotPath = path.join(outputDir, `${view}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });

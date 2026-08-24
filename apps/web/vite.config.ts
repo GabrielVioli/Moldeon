@@ -3,6 +3,7 @@ import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { canonicalFemaleGlbModule } from "./canonicalFemaleVitePlugin";
 
 const isolationHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -14,7 +15,7 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const wasmDirectory = resolve(currentDirectory, "public/wasm");
 
 export default defineConfig({
-  plugins: [serveGeneratedWasmPackage(), react()],
+  plugins: [canonicalFemaleGlbModule(currentDirectory), serveGeneratedWasmPackage(), react()],
   server: {
     headers: isolationHeaders,
   },

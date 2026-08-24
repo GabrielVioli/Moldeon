@@ -76,6 +76,7 @@ describe("HumanBodyModel metric report", () => {
       targets: body.measurements,
       surface,
       diagnosticErrorsMm: body.diagnostics.measurementErrorsMm,
+      crossSections: body.crossSections,
       lodSectionDeltaMm: body.diagnostics.lodSectionDeltaMm,
       maxLodSectionDeltaMm: body.diagnostics.maxLodSectionDeltaMm,
       nearestCenterXmm: nearestCenterX * 1000,

@@ -4,6 +4,10 @@ import {
   measurementProfileToBodyMeasurements,
   type MeasurementOrigin,
 } from "../domain/parametricMeasurements";
+import {
+  canonicalFemaleMesh,
+  type CanonicalFemaleAssetAudit,
+} from "./CanonicalFemaleMesh";
 
 export type HumanBodyVector3 = [number, number, number];
 export type HumanBodyMeasurementSource = MeasurementOrigin;
@@ -15,12 +19,14 @@ export type HumanBodyRegionId =
   | "bust-left"
   | "bust-right"
   | "underbust"
+  | "ribcage"
   | "chest-front"
   | "back-upper"
   | "waist"
   | "abdomen"
   | "high-hip"
   | "full-hip"
+  | "pelvis"
   | "pelvis-front"
   | "pelvis-back"
   | "glute-left"
@@ -53,10 +59,14 @@ export type HumanBodyLandmarkId =
   | "center-back-waist"
   | "side-waist-left"
   | "side-waist-right"
+  | "high-hip"
   | "high-hip-front"
   | "high-hip-back"
+  | "full-hip"
   | "full-hip-front"
   | "full-hip-back"
+  | "glute-left"
+  | "glute-right"
   | "crotch-front"
   | "crotch-back"
   | "inseam-top-left"
@@ -65,6 +75,8 @@ export type HumanBodyLandmarkId =
   | "thigh-widest-right"
   | "knee-left"
   | "knee-right"
+  | "calf-left"
+  | "calf-right"
   | "ankle-left"
   | "ankle-right"
   | "armhole-left"
@@ -117,10 +129,17 @@ export interface HumanBodyJoint {
   position: HumanBodyVector3;
 }
 
+export interface HumanBodyLandmarkBinding {
+  topologySignature: string;
+  vertexIndices: Uint32Array;
+  weights: Float32Array;
+}
+
 export interface HumanBodyLandmark {
   id: HumanBodyLandmarkId;
   position: HumanBodyVector3;
   normal: HumanBodyVector3;
+  binding: HumanBodyLandmarkBinding;
 }
 
 export interface HumanBodyCrossSection {
@@ -130,6 +149,7 @@ export interface HumanBodyCrossSection {
   centerM?: HumanBodyVector3;
   normal?: HumanBodyVector3;
   targetCircumferenceMm: number;
+  actualCircumferenceMm: number;
   halfWidthM: number;
   frontDepthM: number;
   backDepthM: number;
@@ -145,12 +165,16 @@ export interface HumanBodyMesh {
   indices: Uint32Array;
   regionIds: HumanBodyRegionId[];
   bounds: { min: HumanBodyVector3; max: HumanBodyVector3 };
+  topologySignature: string;
+  sourceAssetId: "canonical-female.glb";
 }
 
 export interface HumanBodySurfaceRegion {
   id: HumanBodyRegionId;
   visualVertexIndices: Uint32Array;
+  visualWeights: Float32Array;
   collisionVertexIndices: Uint32Array;
+  collisionWeights: Float32Array;
 }
 
 export interface HumanBodyMeshDiagnostics {
@@ -160,11 +184,14 @@ export interface HumanBodyMeshDiagnostics {
   boundaryEdgeCount: number;
   nonManifoldEdgeCount: number;
   degenerateTriangleCount: number;
+  invertedTriangleCount: number;
   signedVolumeM3: number;
   normalsConsistent: boolean;
+  topologySignature: string;
 }
 
 export interface HumanBodyDiagnostics {
+  asset: CanonicalFemaleAssetAudit;
   visual: HumanBodyMeshDiagnostics;
   collision: HumanBodyMeshDiagnostics;
   measurementErrorsMm: Record<string, number>;
@@ -173,6 +200,9 @@ export interface HumanBodyDiagnostics {
   landmarkToleranceMm: number;
   circumferenceToleranceMm: number;
   lengthToleranceMm: number;
+  topologyInvariant: boolean;
+  visualCollisionTopologyParity: boolean;
+  metricCorrectionIterations: number;
 }
 
 export interface HumanBodyModel {
@@ -199,13 +229,16 @@ export interface HumanBodyModel {
 }
 
 export interface HumanBodyBuildOptions {
+  /** Kept for API compatibility; the canonical GLB topology is always fixed. */
   visualResolution?: readonly [number, number, number];
+  /** Kept for API compatibility; 11.0.5 may derive a reduced fitting LOD. */
   collisionResolution?: readonly [number, number, number];
   disableCache?: boolean;
+  metricIterations?: number;
 }
 
-interface AnatomyFrame {
-  heightM: number;
+interface BodyStations {
+  groundY: number;
   ankleY: number;
   kneeY: number;
   crotchY: number;
@@ -214,10 +247,12 @@ interface AnatomyFrame {
   waistY: number;
   underbustY: number;
   bustY: number;
-  upperChestY: number;
   shoulderY: number;
-  neckBaseY: number;
-  headCenterY: number;
+  neckY: number;
+  headTopY: number;
+}
+
+interface LimbFrame {
   shoulderLeft: HumanBodyVector3;
   shoulderRight: HumanBodyVector3;
   elbowLeft: HumanBodyVector3;
@@ -232,18 +267,47 @@ interface AnatomyFrame {
   ankleRight: HumanBodyVector3;
 }
 
-interface AnatomyField {
-  sample(x: number, y: number, z: number): number;
-  regionAt(x: number, y: number, z: number): HumanBodyRegionId;
-  bounds: { min: HumanBodyVector3; max: HumanBodyVector3 };
+type VertexGroup = "torso" | "arm-left" | "arm-right" | "leg-left" | "leg-right";
+
+interface CanonicalReference {
+  sourcePositions: Float32Array;
+  posedPositions: Float32Array;
+  indices: Uint32Array;
+  topologySignature: string;
+  stations: BodyStations;
+  limbs: LimbFrame;
+  groupWeights: Record<VertexGroup, Float32Array>;
+  regionBindings: RegionBinding[];
+  regionIds: HumanBodyRegionId[];
+  landmarkBindings: Record<HumanBodyLandmarkId, HumanBodyLandmarkBinding>;
+  referenceTriangleNormals: Float32Array;
 }
 
-interface LatticeVertex {
-  x: number;
-  y: number;
-  z: number;
-  value: number;
-  id: number;
+interface RegionBinding {
+  id: HumanBodyRegionId;
+  indices: Uint32Array;
+  weights: Float32Array;
+}
+
+interface SectionSpec {
+  id: string;
+  diagnosticId: string;
+  region: HumanBodyRegionId;
+  targetMm: number;
+  point: HumanBodyVector3;
+  normal: HumanBodyVector3;
+  group: VertexGroup;
+  influenceM: number;
+  mode: "bust" | "torso" | "waist" | "hip" | "limb";
+}
+
+interface MeasuredSection {
+  circumferenceMm: number;
+  points: HumanBodyVector3[];
+  center: HumanBodyVector3;
+  halfWidthM: number;
+  frontDepthM: number;
+  backDepthM: number;
 }
 
 const BODY_FRAME: HumanBodyFrame = {
@@ -256,24 +320,11 @@ const BODY_FRAME: HumanBodyFrame = {
   left: [-1, 0, 0],
 };
 
-// Both LODs sample exactly the same anatomy field. The visual grid is dense
-// enough to preserve bust/glute silhouettes while the collision grid stays
-// substantially cheaper for future triangle fitting.
-// Both LODs sample the same Y stations. The calibrated surface and robust
-// topology repair let us keep the canonical silhouette while avoiding a >5s
-// first-build cost in the compatibility facade.
-const DEFAULT_VISUAL_RESOLUTION = [56, 84, 48] as const;
-const DEFAULT_COLLISION_RESOLUTION = [48, 84, 40] as const;
+const CIRCUMFERENCE_TOLERANCE_MM = 5;
+const LENGTH_TOLERANCE_MM = 5;
+const DEFAULT_METRIC_ITERATIONS = 18;
 const modelCache = new Map<string, HumanBodyModel>();
-
-const TETRAHEDRA: readonly (readonly [number, number, number, number])[] = [
-  [0, 5, 1, 6], [0, 1, 2, 6], [0, 2, 3, 6],
-  [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6],
-];
-const CUBE_OFFSETS: readonly (readonly [number, number, number])[] = [
-  [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-  [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
-];
+let referenceCache: CanonicalReference | null = null;
 
 export function buildHumanBodyModel(
   input: BodyMeasurements,
@@ -282,30 +333,61 @@ export function buildHumanBodyModel(
   const profile = createMeasurementProfile(input, "feminine");
   const resolved = measurementProfileToBodyMeasurements(profile);
   const measurements = resolveHumanMeasurements(resolved);
-  const visualResolution = options.visualResolution ?? DEFAULT_VISUAL_RESOLUTION;
-  const collisionResolution = options.collisionResolution ?? DEFAULT_COLLISION_RESOLUTION;
-  const cacheKey = JSON.stringify({ measurements, visualResolution, collisionResolution });
+  const iterations = clampInt(options.metricIterations ?? DEFAULT_METRIC_ITERATIONS, 1, 32);
+  const cacheKey = JSON.stringify({ measurements, iterations });
   if (!options.disableCache) {
     const cached = modelCache.get(cacheKey);
     if (cached) return cached;
   }
 
-  const frame = buildAnatomyFrame(measurements);
-  const torsoSections = buildTorsoCrossSections(measurements, frame);
-  const crossSections = [...torsoSections, ...buildLimbCrossSections(measurements, frame)];
-  const field = buildAnatomyField(measurements, frame, torsoSections);
-  const visualMesh = calibrateCriticalSections(
-    polygonizeAnatomy(field, visualResolution),
-    torsoSections,
+  const reference = canonicalReference();
+  const targetStations = targetStationsFor(measurements);
+  const targetLimbs = targetLimbFrame(measurements, targetStations);
+  const positions = createInitialDeformation(reference, measurements, targetStations, targetLimbs);
+  const specs = buildSectionSpecs(measurements, targetStations, targetLimbs);
+  const usedIterations = correctMetricSections(positions, reference, specs, iterations);
+  const normals = buildVertexNormals(positions, reference.indices);
+  const bounds = computeBounds(positions);
+  const visualMesh: HumanBodyMesh = {
+    positions,
+    normals,
+    indices: reference.indices,
+    regionIds: reference.regionIds,
+    bounds,
+    topologySignature: reference.topologySignature,
+    sourceAssetId: "canonical-female.glb",
+  };
+  // 11.0.5 owns final collision simplification. Until then the fitting mesh is
+  // the same final deformed truth, never a second procedural body.
+  const collisionMesh: HumanBodyMesh = {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    indices: reference.indices,
+    regionIds: reference.regionIds,
+    bounds: { min: [...bounds.min], max: [...bounds.max] },
+    topologySignature: reference.topologySignature,
+    sourceAssetId: "canonical-female.glb",
+  };
+  const landmarks = resolveLandmarks(reference, positions, normals);
+  const joints = buildJoints(targetLimbs);
+  const crossSections = buildCrossSections(positions, reference, specs, targetStations);
+  const surfaceRegions = reference.regionBindings.map((binding) => ({
+    id: binding.id,
+    visualVertexIndices: binding.indices,
+    visualWeights: binding.weights,
+    collisionVertexIndices: binding.indices,
+    collisionWeights: binding.weights,
+  }));
+  const diagnostics = buildDiagnostics(
+    measurements,
+    reference,
+    visualMesh,
+    collisionMesh,
+    crossSections,
+    landmarks,
+    joints,
+    usedIterations,
   );
-  const collisionMesh = calibrateCriticalSections(
-    polygonizeAnatomy(field, collisionResolution),
-    torsoSections,
-  );
-  const joints = buildJoints(frame);
-  const landmarks = buildLandmarks(measurements, frame, torsoSections);
-  const surfaceRegions = buildSurfaceRegions(visualMesh, collisionMesh);
-  const diagnostics = buildDiagnostics(measurements, torsoSections, visualMesh, collisionMesh, frame);
 
   const model: HumanBodyModel = {
     version: "human-body-female@1",
@@ -326,11 +408,57 @@ export function buildHumanBodyModel(
       bust: measurements.bustMm,
       shoulderWidth: measurements.shoulderWidthMm,
       waistToHip: measurements.waistToHipMm,
-      rise: measurements.hipToCrotchMm,
+      rise: measurements.crotchDepthMm,
     },
   };
   if (!options.disableCache) modelCache.set(cacheKey, model);
   return model;
+}
+
+function canonicalReference(): CanonicalReference {
+  if (referenceCache !== null) return referenceCache;
+  const canonical = canonicalFemaleMesh();
+  const sourcePositions = new Float32Array(canonical.positions);
+  const groupWeights = buildVertexGroupWeights(sourcePositions);
+  const posedPositions = lowerCanonicalArms(sourcePositions, groupWeights);
+  const height = canonical.bounds.max[1] - canonical.bounds.min[1];
+  const stations: BodyStations = {
+    groundY: 0,
+    ankleY: height * 0.045,
+    kneeY: height * 0.251,
+    crotchY: height * 0.445,
+    fullHipY: height * 0.505,
+    highHipY: height * 0.552,
+    waistY: height * 0.601,
+    underbustY: height * 0.690,
+    bustY: height * 0.735,
+    shoulderY: height * 0.824,
+    neckY: height * 0.857,
+    headTopY: height,
+  };
+  const limbs = referenceLimbFrame(stations);
+  const regionBindings = buildRegionBindings(posedPositions, stations, limbs, groupWeights);
+  const regionIds = dominantRegionIds(posedPositions.length / 3, regionBindings);
+  const landmarkBindings = createLandmarkBindings(
+    posedPositions,
+    canonical.topologySignature,
+    stations,
+    limbs,
+  );
+  referenceCache = {
+    sourcePositions,
+    posedPositions,
+    indices: canonical.indices,
+    topologySignature: canonical.topologySignature,
+    stations,
+    limbs,
+    groupWeights,
+    regionBindings,
+    regionIds,
+    landmarkBindings,
+    referenceTriangleNormals: triangleNormals(posedPositions, canonical.indices),
+  };
+  return referenceCache;
 }
 
 function resolveHumanMeasurements(resolved: BodyMeasurements): HumanBodyMeasurements {
@@ -338,11 +466,12 @@ function resolveHumanMeasurements(resolved: BodyMeasurements): HumanBodyMeasurem
   const bust = positive(resolved.bustMm, 920);
   const waist = positive(resolved.waistMm, 760);
   const hip = positive(resolved.hipMm, 1000);
-  const underbust = clamp(positive(resolved.highBustMm, bust * 0.93) * 0.94, waist * 1.04, bust * 0.96);
+  const underbust = clamp(positive(resolved.highBustMm, bust * 0.9), waist * 1.04, bust * 0.97);
   const highHip = waist + (hip - waist) * 0.56;
   const waistToHip = positive(resolved.hipHeightMm, height * 0.115);
   const inseam = positive(resolved.insideLegLengthMm ?? resolved.inseamMm, height * 0.465);
   const outseam = positive(resolved.outseamLengthMm, inseam + height * 0.155);
+  const crotchDepth = Math.max(120, outseam - inseam);
   return {
     heightMm: height,
     shoulderWidthMm: positive(resolved.shoulderWidthMm, height * 0.238),
@@ -356,8 +485,8 @@ function resolveHumanMeasurements(resolved: BodyMeasurements): HumanBodyMeasurem
     shoulderToBustMm: positive(resolved.bustHeightMm, height * 0.157),
     bustPointDistanceMm: positive(resolved.bustSpanMm, bust * 0.2),
     waistToHipMm: waistToHip,
-    hipToCrotchMm: Math.max(80, outseam - inseam - waistToHip),
-    crotchDepthMm: positive(resolved.crotchDepthMm, hip * 0.245),
+    hipToCrotchMm: Math.max(70, crotchDepth - waistToHip),
+    crotchDepthMm: crotchDepth,
     thighMm: positive(resolved.thighMm, hip * 0.58),
     kneeMm: positive(resolved.kneeCircumferenceMm, hip * 0.4),
     calfMm: positive(resolved.calfMm, hip * 0.38),
@@ -375,7 +504,8 @@ function resolveHumanMeasurements(resolved: BodyMeasurements): HumanBodyMeasurem
 function resolveMeasurementSources(
   entries: Partial<Record<keyof BodyMeasurements, { origin: MeasurementOrigin }>>,
 ): Record<keyof HumanBodyMeasurements, HumanBodyMeasurementSource> {
-  const from = (key: keyof BodyMeasurements, fallback: MeasurementOrigin = "derived") => entries[key]?.origin ?? fallback;
+  const from = (key: keyof BodyMeasurements, fallback: MeasurementOrigin = "derived") =>
+    entries[key]?.origin ?? fallback;
   return {
     heightMm: from("heightMm"),
     shoulderWidthMm: from("shoulderWidthMm"),
@@ -390,7 +520,7 @@ function resolveMeasurementSources(
     bustPointDistanceMm: from("bustSpanMm", "estimated"),
     waistToHipMm: from("hipHeightMm", "estimated"),
     hipToCrotchMm: "derived",
-    crotchDepthMm: from("crotchDepthMm", "estimated"),
+    crotchDepthMm: from("crotchDepthMm", "derived"),
     thighMm: from("thighMm", "estimated"),
     kneeMm: from("kneeCircumferenceMm", "estimated"),
     calfMm: from("calfMm", "estimated"),
@@ -405,1030 +535,1013 @@ function resolveMeasurementSources(
   };
 }
 
-function buildAnatomyFrame(m: HumanBodyMeasurements): AnatomyFrame {
-  const heightM = m.heightMm * 0.001;
-  const ankleY = Math.max(0.055, heightM * 0.038);
-  const crotchY = clamp(m.inseamMm * 0.001, heightM * 0.43, heightM * 0.51);
-  const waistY = clamp(m.outseamMm * 0.001, crotchY + 0.18, heightM * 0.66);
-  const fullHipY = clamp(waistY - m.waistToHipMm * 0.001, crotchY + 0.045, waistY - 0.09);
+function targetStationsFor(m: HumanBodyMeasurements): BodyStations {
+  const height = m.heightMm * 0.001;
+  const groundY = 0;
+  const ankleY = height * 0.045;
+  const crotchY = clamp(m.inseamMm * 0.001, height * 0.42, height * 0.51);
+  const kneeY = lerp(ankleY, crotchY, 0.52);
+  const waistY = clamp(m.outseamMm * 0.001, crotchY + 0.18, height * 0.67);
+  const fullHipY = clamp(waistY - m.waistToHipMm * 0.001, crotchY + 0.035, waistY - 0.075);
   const highHipY = lerp(waistY, fullHipY, 0.48);
-  const shoulderY = clamp(waistY + m.torsoLengthMm * 0.001 * 0.96, heightM * 0.79, heightM * 0.87);
-  const bustY = clamp(shoulderY - m.shoulderToBustMm * 0.001, waistY + 0.10, shoulderY - 0.08);
-  const underbustY = lerp(bustY, waistY, 0.38);
-  const upperChestY = lerp(bustY, shoulderY, 0.58);
-  const neckBaseY = clamp(shoulderY + heightM * 0.035, shoulderY + 0.035, heightM - 0.19);
-  const headCenterY = lerp(neckBaseY, heightM, 0.56);
-  const kneeY = clamp(crotchY * 0.53, heightM * 0.235, crotchY - 0.24);
-
-  const shoulderHalf = m.shoulderWidthMm * 0.0005;
-  const armLengthM = m.armLengthMm * 0.001;
-  const armAngle = 8 * Math.PI / 180;
-  const shoulderLeft: HumanBodyVector3 = [-shoulderHalf, shoulderY - 0.008, 0.002];
-  const shoulderRight: HumanBodyVector3 = [shoulderHalf, shoulderY - 0.008, 0.002];
-  const leftArmAxis = normalize([-Math.sin(armAngle), -Math.cos(armAngle), 0.015]);
-  const rightArmAxis = normalize([Math.sin(armAngle), -Math.cos(armAngle), 0.015]);
-  const elbowLeft = addScaled(shoulderLeft, leftArmAxis, armLengthM * 0.53);
-  const elbowRight = addScaled(shoulderRight, rightArmAxis, armLengthM * 0.53);
-  const wristLeft = addScaled(shoulderLeft, leftArmAxis, armLengthM);
-  const wristRight = addScaled(shoulderRight, rightArmAxis, armLengthM);
-
-  // Close leg roots create the reference mannequin's natural groin. The
-  // central carve below produces the real bifurcation instead of starting two
-  // capsule legs outside the pelvis.
-  const hipHalf = Math.max(0.052, Math.min(m.fullHipMm * 0.000078, m.shoulderWidthMm * 0.000205));
-  const hipLeft: HumanBodyVector3 = [-hipHalf, crotchY + 0.055, -0.010];
-  const hipRight: HumanBodyVector3 = [hipHalf, crotchY + 0.055, -0.010];
-  const kneeLeft: HumanBodyVector3 = [-hipHalf * 0.78, kneeY, 0.004];
-  const kneeRight: HumanBodyVector3 = [hipHalf * 0.78, kneeY, 0.004];
-  const ankleLeft: HumanBodyVector3 = [-hipHalf * 0.72, ankleY, 0.010];
-  const ankleRight: HumanBodyVector3 = [hipHalf * 0.72, ankleY, 0.010];
-
+  const shoulderY = clamp(waistY + m.torsoLengthMm * 0.001, height * 0.78, height * 0.88);
+  const bustY = clamp(shoulderY - m.shoulderToBustMm * 0.001, waistY + 0.09, shoulderY - 0.07);
+  const underbustY = lerp(bustY, waistY, 0.36);
+  const neckY = clamp(shoulderY + height * 0.034, shoulderY + 0.035, height - 0.14);
   return {
-    heightM, ankleY, kneeY, crotchY, fullHipY, highHipY, waistY,
-    underbustY, bustY, upperChestY, shoulderY, neckBaseY, headCenterY,
+    groundY,
+    ankleY,
+    kneeY,
+    crotchY,
+    fullHipY,
+    highHipY,
+    waistY,
+    underbustY,
+    bustY,
+    shoulderY,
+    neckY,
+    headTopY: height,
+  };
+}
+
+function referenceLimbFrame(stations: BodyStations): LimbFrame {
+  const shoulderLeft: HumanBodyVector3 = [-0.205, stations.shoulderY, -0.018];
+  const shoulderRight: HumanBodyVector3 = [0.205, stations.shoulderY, -0.018];
+  const leftDirection = normalize([-0.14, -0.99, 0.025]);
+  const rightDirection = normalize([0.14, -0.99, 0.025]);
+  const armLength = 0.59;
+  const elbowLeft = addScaled(shoulderLeft, leftDirection, armLength * 0.52);
+  const elbowRight = addScaled(shoulderRight, rightDirection, armLength * 0.52);
+  const wristLeft = addScaled(shoulderLeft, leftDirection, armLength);
+  const wristRight = addScaled(shoulderRight, rightDirection, armLength);
+  const hipHalf = 0.075;
+  const hipLeft: HumanBodyVector3 = [-hipHalf, stations.crotchY + 0.045, -0.008];
+  const hipRight: HumanBodyVector3 = [hipHalf, stations.crotchY + 0.045, -0.008];
+  const kneeLeft: HumanBodyVector3 = [-hipHalf * 0.83, stations.kneeY, 0.004];
+  const kneeRight: HumanBodyVector3 = [hipHalf * 0.83, stations.kneeY, 0.004];
+  const ankleLeft: HumanBodyVector3 = [-hipHalf * 0.72, stations.ankleY, 0.006];
+  const ankleRight: HumanBodyVector3 = [hipHalf * 0.72, stations.ankleY, 0.006];
+  return {
     shoulderLeft, shoulderRight, elbowLeft, elbowRight, wristLeft, wristRight,
     hipLeft, hipRight, kneeLeft, kneeRight, ankleLeft, ankleRight,
   };
 }
 
-function buildTorsoCrossSections(m: HumanBodyMeasurements, f: AnatomyFrame): HumanBodyCrossSection[] {
-  const shoulderCirc = Math.max(m.underbustMm * 0.98, m.bustMm * 0.88);
-  const upperChestCirc = Math.max(m.underbustMm, m.bustMm * 0.91);
-  const abdomenCirc = lerp(m.waistMm, m.highHipMm, 0.46);
-  const crotchCirc = m.fullHipMm * 0.79;
-  // These ratios encode the supplied reference silhouette only. section()
-  // rescales every station back to its target perimeter, preserving measures.
-  return [
-    section("crotch", "crotch", f.crotchY, crotchCirc, 1.42, 1.00, 1.02, 0.002, 0.00, 0.045, 0.27),
-    section("full-hip", "full-hip", f.fullHipY, m.fullHipMm, 1.58, 0.88, 1.18, -0.006, 0.035, 0.125, 0.29),
-    section("high-hip", "high-hip", f.highHipY, m.highHipMm, 1.51, 0.98, 1.08, 0.002, 0.018, 0.055, 0.27),
-    section("abdomen", "abdomen", lerp(f.highHipY, f.waistY, 0.46), abdomenCirc, 1.31, 1.09, 0.97, 0.012, 0, 0, 0.22),
-    section("waist", "waist", f.waistY, m.waistMm, 1.31, 1.03, 0.97, 0.004, 0, 0, 0.22),
-    section("underbust", "underbust", f.underbustY, m.underbustMm, 1.31, 1.04, 0.96, 0.005, 0.010, 0, 0.22),
-    // Spread the measured bust projection through the chest section instead
-    // of concentrating it in a high-curvature lobe. This preserves the same
-    // authored perimeter while reducing polygonization overshoot.
-    section("bust", "chest-front", f.bustY, m.bustMm, 1.27, 0.98, 0.89, 0.006, 0.110, 0, clamp(m.bustPointDistanceMm / m.bustMm, 0.18, 0.29)),
-    section("upper-chest", "chest-front", f.upperChestY, upperChestCirc, 1.45, 0.93, 1.04, 0, 0.018, 0, 0.23),
-    section("shoulder", "back-upper", f.shoulderY, shoulderCirc, 1.78, 0.84, 1.12, -0.005, 0, 0, 0.22),
-  ];
-}
-
-function buildLimbCrossSections(m: HumanBodyMeasurements, f: AnatomyFrame): HumanBodyCrossSection[] {
-  const make = (
-    id: string,
-    region: HumanBodyRegionId,
-    center: HumanBodyVector3,
-    normalValue: HumanBodyVector3,
-    circumferenceMm: number,
-    ratio: number,
-  ): HumanBodyCrossSection => {
-    const axes = ellipseAxesForPerimeter(circumferenceMm * 0.001, ratio);
-    return {
-      id, region, yM: center[1], centerM: [...center], normal: normalize(normalValue),
-      targetCircumferenceMm: circumferenceMm,
-      halfWidthM: axes[0], frontDepthM: axes[1], backDepthM: axes[1], centerZM: center[2],
-      frontLobeM: 0, backLobeM: 0, lobeHalfDistanceM: 0,
-    };
-  };
-  const leftArm = normalize(sub(f.elbowLeft, f.shoulderLeft));
-  const rightArm = normalize(sub(f.elbowRight, f.shoulderRight));
-  const leftForearm = normalize(sub(f.wristLeft, f.elbowLeft));
-  const rightForearm = normalize(sub(f.wristRight, f.elbowRight));
-  const leftLeg = normalize(sub(f.kneeLeft, f.hipLeft));
-  const rightLeg = normalize(sub(f.kneeRight, f.hipRight));
-  const leftCalf = normalize(sub(f.ankleLeft, f.kneeLeft));
-  const rightCalf = normalize(sub(f.ankleRight, f.kneeRight));
-  return [
-    make("upper-arm-left", "upper-arm-left", mixPoint(f.shoulderLeft, f.elbowLeft, 0.30), leftArm, m.bicepMm, 1.08),
-    make("upper-arm-right", "upper-arm-right", mixPoint(f.shoulderRight, f.elbowRight, 0.30), rightArm, m.bicepMm, 1.08),
-    make("elbow-left", "forearm-left", f.elbowLeft, leftForearm, m.elbowMm, 1.06),
-    make("elbow-right", "forearm-right", f.elbowRight, rightForearm, m.elbowMm, 1.06),
-    make("wrist-left", "wrist-left", f.wristLeft, leftForearm, m.wristMm, 1.04),
-    make("wrist-right", "wrist-right", f.wristRight, rightForearm, m.wristMm, 1.04),
-    make("thigh-left", "thigh-left", mixPoint(f.hipLeft, f.kneeLeft, 0.18), leftLeg, m.thighMm, 1.12),
-    make("thigh-right", "thigh-right", mixPoint(f.hipRight, f.kneeRight, 0.18), rightLeg, m.thighMm, 1.12),
-    make("knee-left", "knee-left", f.kneeLeft, leftCalf, m.kneeMm, 1.06),
-    make("knee-right", "knee-right", f.kneeRight, rightCalf, m.kneeMm, 1.06),
-    make("calf-left", "calf-left", mixPoint(f.kneeLeft, f.ankleLeft, 0.48), leftCalf, m.calfMm, 1.08),
-    make("calf-right", "calf-right", mixPoint(f.kneeRight, f.ankleRight, 0.48), rightCalf, m.calfMm, 1.08),
-    make("ankle-left", "ankle-left", f.ankleLeft, leftCalf, m.ankleMm, 1.04),
-    make("ankle-right", "ankle-right", f.ankleRight, rightCalf, m.ankleMm, 1.04),
-  ];
-}
-
-function section(
-  id: string,
-  region: HumanBodyRegionId,
-  yM: number,
-  circumferenceMm: number,
-  widthRatio: number,
-  frontRatio: number,
-  backRatio: number,
-  centerZM: number,
-  frontLobeRatio: number,
-  backLobeRatio: number,
-  lobeHalfDistanceRatio: number,
-): HumanBodyCrossSection {
-  const base = {
-    halfWidthM: widthRatio,
-    frontDepthM: frontRatio,
-    backDepthM: backRatio,
-    frontLobeM: frontLobeRatio,
-    backLobeM: backLobeRatio,
-    lobeHalfDistanceM: widthRatio * lobeHalfDistanceRatio,
-  };
-  const scaleValue = circumferenceMm * 0.001 / Math.max(sectionPerimeter(base, 720), 1e-9);
+function targetLimbFrame(m: HumanBodyMeasurements, stations: BodyStations): LimbFrame {
+  const shoulderHalf = m.shoulderWidthMm * 0.0005;
+  // Keep the axilla/shoulder root on the canonical depth plane. A seemingly
+  // harmless 6 mm forward shift folded two thin axilla triangles while the
+  // rest of the arm remained rigidly mapped.
+  const shoulderLeft: HumanBodyVector3 = [-shoulderHalf, stations.shoulderY, -0.018];
+  const shoulderRight: HumanBodyVector3 = [shoulderHalf, stations.shoulderY, -0.018];
+  const leftDirection = normalize([-0.14, -0.99, 0.025]);
+  const rightDirection = normalize([0.14, -0.99, 0.025]);
+  const armLength = m.armLengthMm * 0.001;
+  const elbowLeft = addScaled(shoulderLeft, leftDirection, armLength * 0.52);
+  const elbowRight = addScaled(shoulderRight, rightDirection, armLength * 0.52);
+  const wristLeft = addScaled(shoulderLeft, leftDirection, armLength);
+  const wristRight = addScaled(shoulderRight, rightDirection, armLength);
+  const hipHalf = clamp(m.fullHipMm * 0.000075, 0.062, 0.096);
+  const hipLeft: HumanBodyVector3 = [-hipHalf, stations.crotchY + 0.045, -0.008];
+  const hipRight: HumanBodyVector3 = [hipHalf, stations.crotchY + 0.045, -0.008];
+  const kneeLeft: HumanBodyVector3 = [-hipHalf * 0.83, stations.kneeY, 0.004];
+  const kneeRight: HumanBodyVector3 = [hipHalf * 0.83, stations.kneeY, 0.004];
+  const ankleLeft: HumanBodyVector3 = [-hipHalf * 0.72, stations.ankleY, 0.006];
+  const ankleRight: HumanBodyVector3 = [hipHalf * 0.72, stations.ankleY, 0.006];
   return {
-    id, region, yM, targetCircumferenceMm: circumferenceMm,
-    halfWidthM: base.halfWidthM * scaleValue,
-    frontDepthM: base.frontDepthM * scaleValue,
-    backDepthM: base.backDepthM * scaleValue,
-    centerZM,
-    frontLobeM: base.frontLobeM * scaleValue,
-    backLobeM: base.backLobeM * scaleValue,
-    lobeHalfDistanceM: base.lobeHalfDistanceM * scaleValue,
+    shoulderLeft, shoulderRight, elbowLeft, elbowRight, wristLeft, wristRight,
+    hipLeft, hipRight, kneeLeft, kneeRight, ankleLeft, ankleRight,
   };
 }
 
-function sectionPerimeter(
-  s: Pick<HumanBodyCrossSection, "halfWidthM" | "frontDepthM" | "backDepthM" | "frontLobeM" | "backLobeM" | "lobeHalfDistanceM">,
-  samples: number,
-): number {
-  let total = 0;
-  let previous = sectionPoint(s, 0);
-  for (let index = 1; index <= samples; index += 1) {
-    const current = sectionPoint(s, index / samples * Math.PI * 2);
-    total += Math.hypot(current[0] - previous[0], current[1] - previous[1]);
-    previous = current;
-  }
-  return total;
-}
-
-function sectionPoint(
-  s: Pick<HumanBodyCrossSection, "halfWidthM" | "frontDepthM" | "backDepthM" | "frontLobeM" | "backLobeM" | "lobeHalfDistanceM">,
-  angle: number,
-): readonly [number, number] {
-  const sine = Math.sin(angle);
-  const x = s.halfWidthM * Math.cos(angle);
-  const baseDepth = sine >= 0 ? s.frontDepthM : s.backDepthM;
-  const lobe = sine >= 0 ? s.frontLobeM : s.backLobeM;
-  const sigma = Math.max(s.halfWidthM * 0.18, 1e-4);
-  const normalized = (Math.abs(x) - s.lobeHalfDistanceM) / sigma;
-  const lobeWeight = Math.exp(-(normalized * normalized));
-  return [x, baseDepth * sine + Math.sign(sine) * lobe * lobeWeight * Math.pow(Math.abs(sine), 0.72)];
-}
-
-function buildAnatomyField(
-  m: HumanBodyMeasurements,
-  f: AnatomyFrame,
-  sections: readonly HumanBodyCrossSection[],
-): AnatomyField {
-  const headRadius = m.headCircumferenceMm * 0.001 / (2 * Math.PI);
-  const neckRadius = m.neckCircumferenceMm * 0.001 / (2 * Math.PI);
-  const upperArmAxes = ellipseAxesForPerimeter(m.bicepMm * 0.001, 1.08);
-  const elbowAxes = ellipseAxesForPerimeter(m.elbowMm * 0.001, 1.06);
-  const wristAxes = ellipseAxesForPerimeter(m.wristMm * 0.001, 1.04);
-  const thighAxes = ellipseAxesForPerimeter(m.thighMm * 0.001, 1.12);
-  const kneeAxes = ellipseAxesForPerimeter(m.kneeMm * 0.001, 1.06);
-  const calfAxes = ellipseAxesForPerimeter(m.calfMm * 0.001, 1.08);
-  const ankleAxes = ellipseAxesForPerimeter(m.ankleMm * 0.001, 1.04);
-  const footLength = clamp(m.heightMm * 0.000145, 0.20, 0.29);
-  const handLength = clamp(m.heightMm * 0.000108, 0.15, 0.21);
-  const widest = Math.max(...sections.map((value) => value.halfWidthM));
-  const wristX = Math.max(Math.abs(f.wristLeft[0]), Math.abs(f.wristRight[0]));
-  const xExtent = Math.max(widest + 0.08, wristX + wristAxes[0] + 0.04, m.shoulderWidthMm * 0.0005 + 0.08);
-  const zFront = Math.max(...sections.map((value) => value.centerZM + value.frontDepthM + value.frontLobeM), footLength * 0.82);
-  const zBack = Math.max(...sections.map((value) => -value.centerZM + value.backDepthM + value.backLobeM));
-
-  const torsoField = (x: number, y: number, z: number): number => {
-    if (y < sections[0].yM - 0.04 || y > sections[sections.length - 1].yM + 0.04) return 1;
-    const s = interpolateCrossSection(sections, y);
-    const absX = Math.abs(x);
-    if (absX > s.halfWidthM) return absX - s.halfWidthM;
-    const normalizedX = clamp(absX / Math.max(s.halfWidthM, 1e-6), 0, 1);
-    const vertical = Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX));
-    const sigma = Math.max(s.halfWidthM * 0.18, 1e-4);
-    const lobeX = (absX - s.lobeHalfDistanceM) / sigma;
-    const lobeWeight = Math.exp(-(lobeX * lobeX));
-    const front = s.centerZM + s.frontDepthM * vertical + s.frontLobeM * lobeWeight * Math.pow(vertical, 0.72);
-    const back = s.centerZM - s.backDepthM * vertical - s.backLobeM * lobeWeight * Math.pow(vertical, 0.72);
-    if (z > front) return z - front;
-    if (z < back) return back - z;
-    return -Math.min(front - z, z - back, s.halfWidthM - absX);
+function buildVertexGroupWeights(positions: Float32Array): Record<VertexGroup, Float32Array> {
+  const count = positions.length / 3;
+  const result: Record<VertexGroup, Float32Array> = {
+    torso: new Float32Array(count),
+    "arm-left": new Float32Array(count),
+    "arm-right": new Float32Array(count),
+    "leg-left": new Float32Array(count),
+    "leg-right": new Float32Array(count),
   };
-
-  const neckField = (x: number, y: number, z: number) => sweptEllipseField(
-    [x, y, z], [0, f.shoulderY - 0.015, -0.004], [0, f.neckBaseY + 0.035, -0.006],
-    neckRadius * 1.12, neckRadius * 0.96, neckRadius * 1.02, neckRadius * 0.92,
-  );
-  const headRY = Math.max(0.06, f.heightM - f.headCenterY);
-  const headField = (x: number, y: number, z: number) => ellipsoidField(
-    x, y, z, [0, f.headCenterY, -headRadius * 0.05], [headRadius * 0.82, headRY, headRadius * 0.96],
-  );
-
-  const armField = (side: -1 | 1, x: number, y: number, z: number): number => {
-    const shoulder = side < 0 ? f.shoulderLeft : f.shoulderRight;
-    const elbow = side < 0 ? f.elbowLeft : f.elbowRight;
-    const wrist = side < 0 ? f.wristLeft : f.wristRight;
-    const upper = sweptEllipseField([x, y, z], shoulder, elbow, upperArmAxes[0] * 1.04, upperArmAxes[1] * 1.08, elbowAxes[0], elbowAxes[1]);
-    const lower = sweptEllipseField([x, y, z], elbow, wrist, elbowAxes[0], elbowAxes[1], wristAxes[0], wristAxes[1]);
-    const deltoid = ellipsoidField(
-      x, y, z,
-      [shoulder[0] * 0.965, shoulder[1] - 0.025, shoulder[2] - 0.004],
-      [upperArmAxes[0] * 1.35, upperArmAxes[0] * 1.22, upperArmAxes[1] * 1.18],
-    );
-    const hand = ellipsoidField(
-      x, y, z,
-      [wrist[0] + side * wristAxes[0] * 0.08, wrist[1] - handLength * 0.43, wrist[2] + handLength * 0.04],
-      [wristAxes[0] * 1.15, handLength * 0.46, wristAxes[1] * 0.78],
-    );
-    return smoothMin(smoothMin(smoothMin(upper, lower, 0.012), deltoid, 0.020), hand, 0.008);
-  };
-
-  const legField = (side: -1 | 1, x: number, y: number, z: number): number => {
-    const hip = side < 0 ? f.hipLeft : f.hipRight;
-    const knee = side < 0 ? f.kneeLeft : f.kneeRight;
-    const ankle = side < 0 ? f.ankleLeft : f.ankleRight;
-    const upper = sweptEllipseField(
-      [x, y, z], hip, knee,
-      thighAxes[0] * 0.94, thighAxes[1] * 0.96, kneeAxes[0], kneeAxes[1], 0.88, thighAxes,
-    );
-    const lower = sweptEllipseField(
-      [x, y, z], knee, ankle,
-      kneeAxes[0], kneeAxes[1], ankleAxes[0], ankleAxes[1], 0.72, calfAxes,
-    );
-    const footRY = Math.max(0.025, f.ankleY * 0.50);
-    const foot = ellipsoidField(x, y, z, [ankle[0], footRY, footLength * 0.34], [ankleAxes[0] * 1.02, footRY, footLength * 0.55]);
-    return smoothMin(smoothMin(upper, lower, 0.014), foot, 0.010);
-  };
-
-  const sample = (x: number, y: number, z: number): number => {
-    let body = torsoField(x, y, z);
-    body = smoothMin(body, neckField(x, y, z), 0.024);
-    body = smoothMin(body, headField(x, y, z), 0.012);
-    body = smoothMin(body, armField(-1, x, y, z), 0.032);
-    body = smoothMin(body, armField(1, x, y, z), 0.032);
-    body = smoothMin(body, legField(-1, x, y, z), 0.020);
-    body = smoothMin(body, legField(1, x, y, z), 0.020);
-
-    // Subtractive crotch volume creates the actual leg bifurcation while
-    // retaining one continuous watertight body above the groin.
-    const separator = ellipsoidField(
-      x, y, z, [0, f.crotchY - 0.062, 0.016],
-      // The cutter must traverse the complete front/back depth of the upper
-    // legs. A shallow closed ellipsoid only created an internal dimple and left
-    // centerline surface vertices. This depth opens the bifurcation to outside.
-      [Math.max(0.018, Math.abs(f.hipRight[0]) * 0.38), 0.180, Math.max(0.180, m.crotchDepthMm * 0.00082)],
-    );
-    if (y <= f.crotchY + 0.018) body = Math.max(body, -separator);
-    return body;
-  };
-
-  return {
-    sample,
-    regionAt: (x, y, z) => classifyRegion(f, sections, x, y, z),
-    bounds: {
-// Keep the complete closed iso-surface strictly inside the lattice.
-      // In particular the head/feet must never intersect the sampling box.
-      min: [-xExtent, -0.03, -zBack - 0.055],
-      max: [xExtent, f.heightM + 0.03, zFront + 0.055],
-    },
-  };
-}
-
-function interpolateCrossSection(sections: readonly HumanBodyCrossSection[], y: number): HumanBodyCrossSection {
-  if (y <= sections[0].yM) return sections[0];
-  if (y >= sections[sections.length - 1].yM) return sections[sections.length - 1];
-  for (let index = 1; index < sections.length; index += 1) {
-    const lower = sections[index - 1];
-    const upper = sections[index];
-    if (y <= upper.yM) {
-      const t = smoothstep(clamp((y - lower.yM) / Math.max(1e-6, upper.yM - lower.yM), 0, 1));
-      return {
-        id: `${lower.id}->${upper.id}`,
-        region: t < 0.5 ? lower.region : upper.region,
-        yM: y,
-        targetCircumferenceMm: lerp(lower.targetCircumferenceMm, upper.targetCircumferenceMm, t),
-        halfWidthM: lerp(lower.halfWidthM, upper.halfWidthM, t),
-        frontDepthM: lerp(lower.frontDepthM, upper.frontDepthM, t),
-        backDepthM: lerp(lower.backDepthM, upper.backDepthM, t),
-        centerZM: lerp(lower.centerZM, upper.centerZM, t),
-        frontLobeM: lerp(lower.frontLobeM, upper.frontLobeM, t),
-        backLobeM: lerp(lower.backLobeM, upper.backLobeM, t),
-        lobeHalfDistanceM: lerp(lower.lobeHalfDistanceM, upper.lobeHalfDistanceM, t),
-      };
-    }
-  }
-  return sections[sections.length - 1];
-}
-
-function polygonizeAnatomy(field: AnatomyField, requested: readonly [number, number, number]): HumanBodyMesh {
-  const nx = clampInt(requested[0], 18, 72);
-  const ny = clampInt(requested[1], 32, 128);
-  const nz = clampInt(requested[2], 16, 72);
-  const { min, max } = field.bounds;
-  const sx = (max[0] - min[0]) / nx;
-  const sy = (max[1] - min[1]) / ny;
-  const sz = (max[2] - min[2]) / nz;
-  const gx = nx + 1;
-  const gy = ny + 1;
-  const gz = nz + 1;
-  const latticeId = (ix: number, iy: number, iz: number) => (iz * gy + iy) * gx + ix;
-  const values = new Float32Array(gx * gy * gz);
-  for (let iz = 0; iz < gz; iz += 1) {
-    for (let iy = 0; iy < gy; iy += 1) {
-      for (let ix = 0; ix < gx; ix += 1) {
-        const id = latticeId(ix, iy, iz);
-        const sampled = field.sample(min[0] + ix * sx, min[1] + iy * sy, min[2] + iz * sz);
-        values[id] = Math.abs(sampled) <= 1e-10 ? 1e-10 : sampled;
-      }
-    }
-  }
-
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const regionIds: HumanBodyRegionId[] = [];
-  const cache = new Map<string, number>();
-  const lattice = (ix: number, iy: number, iz: number): LatticeVertex => {
-    const id = latticeId(ix, iy, iz);
-    return { x: min[0] + ix * sx, y: min[1] + iy * sy, z: min[2] + iz * sz, value: values[id], id };
-  };
-  const edgeVertex = (a: LatticeVertex, b: LatticeVertex): number => {
-    const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
-    const existing = cache.get(key);
-    if (existing !== undefined) return existing;
-    const denominator = a.value - b.value;
-    const t = Math.abs(denominator) <= 1e-12 ? 0.5 : clamp(a.value / denominator, 0, 1);
-    const point: HumanBodyVector3 = [lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)];
-    const index = positions.length / 3;
-    positions.push(...point);
-    regionIds.push(field.regionAt(...point));
-    cache.set(key, index);
-    return index;
-  };
-  const emit = (a: number, b: number, c: number) => {
-    if (a === b || b === c || c === a) return;
-    const pa = arrayVertex(positions, a);
-    const pb = arrayVertex(positions, b);
-    const pc = arrayVertex(positions, c);
-    const n = cross(sub(pb, pa), sub(pc, pa));
-    const length = magnitude(n);
-    if (length <= 1e-10) return;
-    const center: HumanBodyVector3 = [(pa[0] + pb[0] + pc[0]) / 3, (pa[1] + pb[1] + pc[1]) / 3, (pa[2] + pb[2] + pc[2]) / 3];
-    const unit = scale(n, 1 / length);
-    const epsilon = Math.min(sx, sy, sz) * 0.15;
-    const outside = field.sample(center[0] + unit[0] * epsilon, center[1] + unit[1] * epsilon, center[2] + unit[2] * epsilon);
-    const inside = field.sample(center[0] - unit[0] * epsilon, center[1] - unit[1] * epsilon, center[2] - unit[2] * epsilon);
-    if (outside >= inside) indices.push(a, b, c);
-    else indices.push(a, c, b);
-  };
-
-  for (let iz = 0; iz < nz; iz += 1) {
-    for (let iy = 0; iy < ny; iy += 1) {
-      for (let ix = 0; ix < nx; ix += 1) {
-        const cube = CUBE_OFFSETS.map(([ox, oy, oz]) => lattice(ix + ox, iy + oy, iz + oz));
-        for (const tetra of TETRAHEDRA) {
-          polygonizeTetra(tetra.map((index) => cube[index]) as [LatticeVertex, LatticeVertex, LatticeVertex, LatticeVertex], edgeVertex, emit);
-        }
-      }
-    }
-  }
-
-  const welded = weldPolygonizedSurface(positions, indices, regionIds);
-  const closed = triangulateBoundaryLoops(welded.positions, welded.indices, welded.regionIds);
-  if (signedVolume(closed.positions, closed.indices) < 0) {
-    for (let offset = 0; offset < closed.indices.length; offset += 3) {
-      const swap = closed.indices[offset + 1];
-      closed.indices[offset + 1] = closed.indices[offset + 2];
-      closed.indices[offset + 2] = swap;
-    }
-  }
-  return {
-    positions: Float32Array.from(closed.positions),
-    normals: buildVertexNormals(closed.positions, closed.indices),
-    indices: Uint32Array.from(closed.indices),
-    regionIds: closed.regionIds,
-    bounds: computeBounds(closed.positions),
-  };
-}
-
-/**
- * Marching tetrahedra can emit the same zero-isosurface lattice vertex through
- * different lattice edges when the field evaluates to exactly zero. Welding
- * only numerically coincident vertices closes those topological cracks without
- * changing the body surface or its measurements.
- */
-function weldPolygonizedSurface(
-  positions: readonly number[],
-  indices: readonly number[],
-  regionIds: readonly HumanBodyRegionId[],
-): { positions: number[]; indices: number[]; regionIds: HumanBodyRegionId[] } {
-  // 0.02 mm is far below fitting tolerances. Adjacent-cell lookup avoids the
-  // quantization-boundary crack that the previous scalar rounding produced.
-  const toleranceM = 0.00002;
-  const tolerance2 = toleranceM * toleranceM;
-  const cellSize = toleranceM;
-  const weldedPositions: number[] = [];
-  const weldedRegions: HumanBodyRegionId[] = [];
-  const remap = new Uint32Array(positions.length / 3);
-  const grid = new Map<string, number[]>();
-  const cell = (value: number) => Math.floor(value / cellSize);
-  const key = (ix: number, iy: number, iz: number) => `${ix}:${iy}:${iz}`;
-
-  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+  for (let vertex = 0; vertex < count; vertex += 1) {
     const x = positions[vertex * 3];
     const y = positions[vertex * 3 + 1];
-    const z = positions[vertex * 3 + 2];
-    const ix = cell(x);
-    const iy = cell(y);
-    const iz = cell(z);
-    let target = -1;
-    let bestDistance2 = Number.POSITIVE_INFINITY;
-    for (let dz = -1; dz <= 1; dz += 1) {
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          for (const candidate of grid.get(key(ix + dx, iy + dy, iz + dz)) ?? []) {
-            const cx = weldedPositions[candidate * 3];
-            const cy = weldedPositions[candidate * 3 + 1];
-            const cz = weldedPositions[candidate * 3 + 2];
-            const distance2 = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2;
-            if (distance2 <= tolerance2 && distance2 < bestDistance2) {
-              target = candidate;
-              bestDistance2 = distance2;
-            }
-          }
-        }
-      }
+    const arm = smoothRange(Math.abs(x), 0.17, 0.30) * smoothBand(y, 1.45, 0.13, 0.28);
+    // Below the crotch the sign of X already identifies the leg. The earlier
+    // radial ramp removed medial-thigh vertices from the group, so arc-length
+    // measurement saw an open partial contour and inflated the remaining arc
+    // into a diamond. Preserve the complete anatomical loop on each side.
+    const leg = 1 - smoothstep01((y - 0.72) / 0.13);
+    if (x < 0) {
+      result["arm-left"][vertex] = arm;
+      result["leg-left"][vertex] = leg;
+    } else {
+      result["arm-right"][vertex] = arm;
+      result["leg-right"][vertex] = leg;
     }
-    if (target < 0) {
-      target = weldedPositions.length / 3;
-      weldedPositions.push(x, y, z);
-      weldedRegions.push(regionIds[vertex]);
-      const bucketKey = key(ix, iy, iz);
-      const bucket = grid.get(bucketKey) ?? [];
-      bucket.push(target);
-      grid.set(bucketKey, bucket);
-    }
-    remap[vertex] = target;
+    result.torso[vertex] = clamp(1 - arm - leg * 0.65, 0, 1);
   }
-
-  const weldedIndices: number[] = [];
-  const triangles = new Set<string>();
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    const a = remap[indices[offset]];
-    const b = remap[indices[offset + 1]];
-    const c = remap[indices[offset + 2]];
-    if (a === b || b === c || c === a) continue;
-    const pa = arrayVertex(weldedPositions, a);
-    const pb = arrayVertex(weldedPositions, b);
-    const pc = arrayVertex(weldedPositions, c);
-    if (magnitude(cross(sub(pb, pa), sub(pc, pa))) <= 1e-10) continue;
-    const canonical = [a, b, c].sort((first, second) => first - second).join(":");
-    if (triangles.has(canonical)) continue;
-    triangles.add(canonical);
-    weldedIndices.push(a, b, c);
-  }
-  return { positions: weldedPositions, indices: weldedIndices, regionIds: weldedRegions };
+  return result;
 }
 
-function triangulateBoundaryLoops(
-  sourcePositions: readonly number[],
-  sourceIndices: readonly number[],
-  sourceRegions: readonly HumanBodyRegionId[],
-): { positions: number[]; indices: number[]; regionIds: HumanBodyRegionId[] } {
-  const positions = [...sourcePositions];
-  const indices = [...sourceIndices];
-  const regionIds = [...sourceRegions];
-  const edgeRecords = new Map<string, { a: number; b: number; count: number; from: number; to: number }>();
-  const edgeKey = (a: number, b: number) => a < b ? `${a}:${b}` : `${b}:${a}`;
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    const tri = [indices[offset], indices[offset + 1], indices[offset + 2]] as const;
-    for (const [from, to] of [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]] as const) {
-      const key = edgeKey(from, to);
-      const current = edgeRecords.get(key);
-      if (current) current.count += 1;
-      else edgeRecords.set(key, { a: Math.min(from, to), b: Math.max(from, to), count: 1, from, to });
+function lowerCanonicalArms(
+  source: Float32Array,
+  groups: Record<VertexGroup, Float32Array>,
+): Float32Array {
+  const result = new Float32Array(source);
+  for (let vertex = 0; vertex < source.length / 3; vertex += 1) {
+    const x = source[vertex * 3];
+    const y = source[vertex * 3 + 1];
+    const z = source[vertex * 3 + 2];
+    const side = x < 0 ? -1 : 1;
+    const weight = side < 0 ? groups["arm-left"][vertex] : groups["arm-right"][vertex];
+    if (weight <= 0) continue;
+    const pivotX = side * 0.205;
+    const pivotY = 1.48;
+    const angle = side < 0 ? 82 * Math.PI / 180 : -82 * Math.PI / 180;
+    const dx = x - pivotX;
+    const dy = y - pivotY;
+    const rotatedX = pivotX + dx * Math.cos(angle) - dy * Math.sin(angle);
+    const rotatedY = pivotY + dx * Math.sin(angle) + dy * Math.cos(angle);
+    result[vertex * 3] = lerp(x, rotatedX, weight);
+    result[vertex * 3 + 1] = lerp(y, rotatedY, weight);
+    result[vertex * 3 + 2] = z;
+  }
+  return result;
+}
+
+function createInitialDeformation(
+  reference: CanonicalReference,
+  measurements: HumanBodyMeasurements,
+  target: BodyStations,
+  targetLimbs: LimbFrame,
+): Float32Array {
+  const result = new Float32Array(reference.posedPositions.length);
+  const sourceStations = Object.values(reference.stations);
+  const targetStationValues = Object.values(target);
+  for (let vertex = 0; vertex < result.length / 3; vertex += 1) {
+    const sourcePoint = pointAt(reference.posedPositions, vertex);
+    const mapped: HumanBodyVector3 = [
+      sourcePoint[0],
+      piecewiseMap(sourcePoint[1], sourceStations, targetStationValues),
+      sourcePoint[2],
+    ];
+    const leftArmWeight = reference.groupWeights["arm-left"][vertex];
+    const rightArmWeight = reference.groupWeights["arm-right"][vertex];
+    let finalPoint = mapped;
+    if (leftArmWeight > 0) {
+      // Preserve the canonical axilla on low-confidence transition vertices;
+      // arm length acts fully only on vertices topologically inside the arm.
+      // This is a smooth skinning falloff, not a positional shoulder offset.
+      finalPoint = mixPoint(mapped, mapLimbPoint(
+        sourcePoint,
+        reference.limbs.shoulderLeft,
+        reference.limbs.wristLeft,
+        targetLimbs.shoulderLeft,
+        targetLimbs.wristLeft,
+      ), leftArmWeight ** 5);
+    } else if (rightArmWeight > 0) {
+      finalPoint = mixPoint(mapped, mapLimbPoint(
+        sourcePoint,
+        reference.limbs.shoulderRight,
+        reference.limbs.wristRight,
+        targetLimbs.shoulderRight,
+        targetLimbs.wristRight,
+      ), rightArmWeight ** 5);
     }
+    result.set(finalPoint, vertex * 3);
   }
-  const boundary = [...edgeRecords.values()].filter((edge) => edge.count === 1);
-  if (boundary.length === 0) return { positions, indices, regionIds };
+  // Head circumference is independent from stature; scale the cranial volume
+  // around the neck while preserving the face/neck transition.
+  const referenceHeadMm = 570;
+  const headScale = clamp(measurements.headCircumferenceMm / referenceHeadMm, 0.82, 1.2);
+  for (let vertex = 0; vertex < result.length / 3; vertex += 1) {
+    const y = result[vertex * 3 + 1];
+    const weight = smoothstep01((y - target.neckY) / Math.max(0.04, target.headTopY - target.neckY) * 2.5);
+    if (weight <= 0) continue;
+    result[vertex * 3] *= 1 + (headScale - 1) * weight;
+    result[vertex * 3 + 2] *= 1 + (headScale - 1) * weight;
+  }
+  return result;
+}
 
-  const outgoing = new Map<number, number[]>();
-  const undirected = new Map<number, number[]>();
-  for (const edge of boundary) {
-    const out = outgoing.get(edge.from) ?? [];
-    out.push(edge.to);
-    outgoing.set(edge.from, out);
-    for (const [a, b] of [[edge.a, edge.b], [edge.b, edge.a]] as const) {
-      const list = undirected.get(a) ?? [];
-      list.push(b);
-      undirected.set(a, list);
+function mapLimbPoint(
+  point: HumanBodyVector3,
+  sourceStart: HumanBodyVector3,
+  sourceEnd: HumanBodyVector3,
+  targetStart: HumanBodyVector3,
+  targetEnd: HumanBodyVector3,
+): HumanBodyVector3 {
+  const sourceAxis = normalize(sub(sourceEnd, sourceStart));
+  const targetAxis = normalize(sub(targetEnd, targetStart));
+  const sourceLength = distance(sourceStart, sourceEnd);
+  const targetLength = distance(targetStart, targetEnd);
+  const local = sub(point, sourceStart);
+  const along = dot(local, sourceAxis);
+  const radial = sub(local, scale(sourceAxis, along));
+  const rotatedRadial = rotateFromTo(radial, sourceAxis, targetAxis);
+  return add(addScaled(targetStart, targetAxis, along / Math.max(1e-9, sourceLength) * targetLength), rotatedRadial);
+}
+
+function buildSectionSpecs(
+  m: HumanBodyMeasurements,
+  stations: BodyStations,
+  limbs: LimbFrame,
+): SectionSpec[] {
+  const limb = (
+    id: string,
+    diagnosticId: string,
+    region: HumanBodyRegionId,
+    targetMm: number,
+    point: HumanBodyVector3,
+    normal: HumanBodyVector3,
+    group: VertexGroup,
+    influenceM: number,
+  ): SectionSpec => ({ id, diagnosticId, region, targetMm, point, normal: normalize(normal), group, influenceM, mode: "limb" });
+  const leftArmAxis = normalize(sub(limbs.wristLeft, limbs.shoulderLeft));
+  const rightArmAxis = normalize(sub(limbs.wristRight, limbs.shoulderRight));
+  const leftThighAxis = normalize(sub(limbs.kneeLeft, limbs.hipLeft));
+  const rightThighAxis = normalize(sub(limbs.kneeRight, limbs.hipRight));
+  const leftCalfAxis = normalize(sub(limbs.ankleLeft, limbs.kneeLeft));
+  const rightCalfAxis = normalize(sub(limbs.ankleRight, limbs.kneeRight));
+  return [
+    torsoSpec("bust", "bust", "chest-front", m.bustMm, stations.bustY, 0.13, "bust"),
+    torsoSpec("underbust", "underbust", "underbust", m.underbustMm, stations.underbustY, 0.105, "torso"),
+    torsoSpec("waist", "waist", "waist", m.waistMm, stations.waistY, 0.115, "waist"),
+    torsoSpec("high-hip", "highHip", "high-hip", m.highHipMm, stations.highHipY, 0.105, "hip"),
+    torsoSpec("full-hip", "fullHip", "full-hip", m.fullHipMm, stations.fullHipY, 0.13, "hip"),
+    limb("thigh-left", "thigh", "thigh-left", m.thighMm, mixPoint(limbs.hipLeft, limbs.kneeLeft, 0.2), leftThighAxis, "leg-left", 0.14),
+    limb("thigh-right", "thigh", "thigh-right", m.thighMm, mixPoint(limbs.hipRight, limbs.kneeRight, 0.2), rightThighAxis, "leg-right", 0.14),
+    limb("knee-left", "knee", "knee-left", m.kneeMm, limbs.kneeLeft, leftCalfAxis, "leg-left", 0.105),
+    limb("knee-right", "knee", "knee-right", m.kneeMm, limbs.kneeRight, rightCalfAxis, "leg-right", 0.105),
+    limb("calf-left", "calf", "calf-left", m.calfMm, mixPoint(limbs.kneeLeft, limbs.ankleLeft, 0.48), leftCalfAxis, "leg-left", 0.12),
+    limb("calf-right", "calf", "calf-right", m.calfMm, mixPoint(limbs.kneeRight, limbs.ankleRight, 0.48), rightCalfAxis, "leg-right", 0.12),
+    limb("ankle-left", "ankle", "ankle-left", m.ankleMm, limbs.ankleLeft, leftCalfAxis, "leg-left", 0.075),
+    limb("ankle-right", "ankle", "ankle-right", m.ankleMm, limbs.ankleRight, rightCalfAxis, "leg-right", 0.075),
+    limb("upper-arm-left", "bicep", "upper-arm-left", m.bicepMm, mixPoint(limbs.shoulderLeft, limbs.elbowLeft, 0.35), leftArmAxis, "arm-left", 0.11),
+    limb("upper-arm-right", "bicep", "upper-arm-right", m.bicepMm, mixPoint(limbs.shoulderRight, limbs.elbowRight, 0.35), rightArmAxis, "arm-right", 0.11),
+    limb("elbow-left", "elbow", "forearm-left", m.elbowMm, limbs.elbowLeft, leftArmAxis, "arm-left", 0.09),
+    limb("elbow-right", "elbow", "forearm-right", m.elbowMm, limbs.elbowRight, rightArmAxis, "arm-right", 0.09),
+    limb("wrist-left", "wrist", "wrist-left", m.wristMm, mixPoint(limbs.elbowLeft, limbs.wristLeft, 0.88), leftArmAxis, "arm-left", 0.07),
+    limb("wrist-right", "wrist", "wrist-right", m.wristMm, mixPoint(limbs.elbowRight, limbs.wristRight, 0.88), rightArmAxis, "arm-right", 0.07),
+  ];
+}
+
+function torsoSpec(
+  id: string,
+  diagnosticId: string,
+  region: HumanBodyRegionId,
+  targetMm: number,
+  y: number,
+  influenceM: number,
+  mode: SectionSpec["mode"],
+): SectionSpec {
+  return {
+    id,
+    diagnosticId,
+    region,
+    targetMm,
+    point: [0, y, 0],
+    normal: [0, 1, 0],
+    group: "torso",
+    influenceM,
+    mode,
+  };
+}
+
+function correctMetricSections(
+  positions: Float32Array,
+  reference: CanonicalReference,
+  specs: readonly SectionSpec[],
+  maximumIterations: number,
+): number {
+  let used = 0;
+  for (let iteration = 0; iteration < maximumIterations; iteration += 1) {
+    let maximumErrorMm = 0;
+    for (const spec of specs) {
+      const measured = measureSection(positions, reference, spec);
+      if (measured.circumferenceMm <= 1) continue;
+      const errorMm = spec.targetMm - measured.circumferenceMm;
+      maximumErrorMm = Math.max(maximumErrorMm, Math.abs(errorMm));
+      if (Math.abs(errorMm) <= toleranceFor(spec.targetMm) * 0.35) continue;
+      const factor = clamp(spec.targetMm / measured.circumferenceMm, 0.88, 1.12);
+      applySectionCorrection(positions, reference, spec, measured.center, factor - 1);
     }
+    used = iteration + 1;
+    if (maximumErrorMm <= CIRCUMFERENCE_TOLERANCE_MM * 0.75) break;
   }
+  return used;
+}
 
-  const unused = new Set(boundary.map((edge) => edgeKey(edge.a, edge.b)));
-  const triangleKeys = new Set<string>();
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    triangleKeys.add([indices[offset], indices[offset + 1], indices[offset + 2]].sort((a, b) => a - b).join(":"));
-  }
-
-  while (unused.size > 0) {
-    const seedKey = unused.values().next().value as string;
-    const seed = edgeRecords.get(seedKey);
-    if (!seed) {
-      unused.delete(seedKey);
+function applySectionCorrection(
+  positions: Float32Array,
+  reference: CanonicalReference,
+  spec: SectionSpec,
+  measuredCenter: HumanBodyVector3,
+  delta: number,
+): void {
+  const membership = reference.groupWeights[spec.group];
+  const normal = normalize(spec.normal);
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const groupWeight = membership[vertex];
+    if (groupWeight <= 0.005) continue;
+    const point = pointAt(positions, vertex);
+    const axial = dot(sub(point, spec.point), normal);
+    const stationWeight = smoothFalloff(Math.abs(axial) / spec.influenceM);
+    const weight = groupWeight * stationWeight;
+    if (weight <= 0.001) continue;
+    if (spec.mode === "limb") {
+      const radial = sub(sub(point, spec.point), scale(normal, axial));
+      const corrected = add(point, scale(radial, delta * weight));
+      positions.set(corrected, vertex * 3);
       continue;
     }
-    const loop = [seed.from, seed.to];
-    unused.delete(seedKey);
-    let previous = seed.from;
-    let current = seed.to;
-    let closed = false;
-    for (let guard = 0; guard <= boundary.length + 2; guard += 1) {
-      if (current === loop[0]) {
-        loop.pop();
-        closed = true;
-        break;
-      }
-      const directedNext = (outgoing.get(current) ?? []).find((candidate) =>
-        candidate !== previous && unused.has(edgeKey(current, candidate))
-      );
-      const fallbackNext = (undirected.get(current) ?? []).find((candidate) =>
-        candidate !== previous && unused.has(edgeKey(current, candidate))
-      );
-      const next = directedNext ?? fallbackNext;
-      if (next === undefined) {
-        if ((undirected.get(current) ?? []).includes(loop[0])) closed = true;
-        break;
-      }
-      unused.delete(edgeKey(current, next));
-      if (next === loop[0]) {
-        closed = true;
-        break;
-      }
-      loop.push(next);
-      previous = current;
-      current = next;
-    }
-    if (!closed || loop.length < 3) continue;
-
-    // Existing surface triangles traverse the hole boundary in one direction.
-    // New faces use the opposite winding. No centroid vertex is introduced, so
-    // a tiny numerical loop cannot generate zero-area fan triangles.
-    for (let index = 1; index < loop.length - 1; index += 1) {
-      const a = loop[0];
-      const b = loop[index + 1];
-      const c = loop[index];
-      if (a === b || b === c || c === a) continue;
-      const pa = arrayVertex(positions, a);
-      const pb = arrayVertex(positions, b);
-      const pc = arrayVertex(positions, c);
-      if (magnitude(cross(sub(pb, pa), sub(pc, pa))) <= 1e-10) continue;
-      const canonical = [a, b, c].sort((first, second) => first - second).join(":");
-      if (triangleKeys.has(canonical)) continue;
-      triangleKeys.add(canonical);
-      indices.push(a, b, c);
-    }
+    const dx = point[0] - measuredCenter[0];
+    const dz = point[2] - measuredCenter[2];
+    const coefficients = torsoCorrectionCoefficients(spec.mode, point[0], dz);
+    positions[vertex * 3] += dx * delta * weight * coefficients.x;
+    positions[vertex * 3 + 2] += dz * delta * weight * coefficients.z;
   }
-  return { positions, indices, regionIds };
 }
 
-function polygonizeTetra(
-  tetra: readonly [LatticeVertex, LatticeVertex, LatticeVertex, LatticeVertex],
-  edge: (a: LatticeVertex, b: LatticeVertex) => number,
-  emit: (a: number, b: number, c: number) => void,
-): void {
-  const inside = tetra.filter((value) => value.value <= 0);
-  const outside = tetra.filter((value) => value.value > 0);
-  if (inside.length === 0 || inside.length === 4) return;
-  if (inside.length === 1) {
-    emit(edge(inside[0], outside[0]), edge(inside[0], outside[1]), edge(inside[0], outside[2]));
-    return;
+function torsoCorrectionCoefficients(
+  mode: SectionSpec["mode"],
+  x: number,
+  relativeZ: number,
+): { x: number; z: number } {
+  if (mode === "bust") {
+    const breast = relativeZ > 0 ? 1.05 + 0.3 * smoothFalloff(Math.abs(Math.abs(x) - 0.075) / 0.09) : 0.3;
+    return { x: 0.18, z: breast };
   }
-  if (inside.length === 3) {
-    emit(edge(outside[0], inside[0]), edge(outside[0], inside[2]), edge(outside[0], inside[1]));
-    return;
-  }
-  const ac = edge(inside[0], outside[0]);
-  const ad = edge(inside[0], outside[1]);
-  const bc = edge(inside[1], outside[0]);
-  const bd = edge(inside[1], outside[1]);
-  emit(ac, ad, bc);
-  emit(ad, bd, bc);
+  if (mode === "waist") return { x: 0.72, z: 0.54 };
+  if (mode === "hip") return { x: 0.72, z: relativeZ < 0 ? 1.08 : 0.5 };
+  return { x: 0.68, z: relativeZ > 0 ? 0.72 : 0.52 };
 }
 
-
-function calibrateCriticalSections(
-  mesh: HumanBodyMesh,
-  sections: readonly HumanBodyCrossSection[],
-): HumanBodyMesh {
-  const positions = new Float32Array(mesh.positions);
-  const critical = ["bust", "waist", "full-hip"] as const;
-  for (const id of critical) {
-    const sectionValue = sectionById(sections, id);
-    const currentMm = measureMeshCircumferenceAtY({ ...mesh, positions }, sectionValue.yM) * 1000;
-    if (!Number.isFinite(currentMm) || currentMm <= 1e-6) continue;
-    const factor = sectionValue.targetCircumferenceMm / currentMm;
-    const plateauM = 0.012;
-    const influenceM = id === "waist" ? 0.042 : 0.036;
-    for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
-      const y = positions[vertex * 3 + 1];
-      const distanceY = Math.abs(y - sectionValue.yM);
-      if (distanceY >= influenceM) continue;
-      const weight = distanceY <= plateauM
-        ? 1
-        : smoothstep(1 - (distanceY - plateauM) / (influenceM - plateauM));
-      const localScale = 1 + (factor - 1) * weight;
-      positions[vertex * 3] *= localScale;
-      positions[vertex * 3 + 2] = sectionValue.centerZM
-        + (positions[vertex * 3 + 2] - sectionValue.centerZM) * localScale;
-    }
+function measureSection(
+  positions: Float32Array,
+  reference: CanonicalReference,
+  spec: SectionSpec,
+): MeasuredSection {
+  const points: HumanBodyVector3[] = [];
+  let lengthM = 0;
+  const membership = reference.groupWeights[spec.group];
+  const normal = normalize(spec.normal);
+  for (let offset = 0; offset < reference.indices.length; offset += 3) {
+    const ia = reference.indices[offset];
+    const ib = reference.indices[offset + 1];
+    const ic = reference.indices[offset + 2];
+    if ((membership[ia] + membership[ib] + membership[ic]) / 3 < 0.42) continue;
+    const segment = trianglePlaneSegment(
+      pointAt(positions, ia),
+      pointAt(positions, ib),
+      pointAt(positions, ic),
+      spec.point,
+      normal,
+    );
+    if (segment === null) continue;
+    const midpoint = mixPoint(segment[0], segment[1], 0.5);
+    const relative = sub(midpoint, spec.point);
+    const radial = sub(relative, scale(normal, dot(relative, normal)));
+    // Membership is bound to the canonical topology, so a limb section cannot
+    // accidentally consume torso triangles. Do not apply a radius cutoff here:
+    // it would hide the very expansion the metric iteration is measuring.
+    lengthM += distance(segment[0], segment[1]);
+    points.push(segment[0], segment[1]);
   }
-  const positionsArray = Array.from(positions);
-  const indicesArray = Array.from(mesh.indices);
+  const center = points.length === 0
+    ? [...spec.point] as HumanBodyVector3
+    : centroid(points);
+  if (spec.mode === "limb") {
+    const radius = lengthM / (Math.PI * 4);
+    return {
+      circumferenceMm: lengthM * 1000,
+      points,
+      center,
+      halfWidthM: radius,
+      frontDepthM: radius,
+      backDepthM: radius,
+    };
+  }
+  const minX = points.length === 0 ? 0 : Math.min(...points.map((point) => point[0]));
+  const maxX = points.length === 0 ? 0 : Math.max(...points.map((point) => point[0]));
+  const minZ = points.length === 0 ? 0 : Math.min(...points.map((point) => point[2]));
+  const maxZ = points.length === 0 ? 0 : Math.max(...points.map((point) => point[2]));
   return {
-    ...mesh,
-    positions,
-    normals: buildVertexNormals(positionsArray, indicesArray),
-    bounds: computeBounds(positionsArray),
+    circumferenceMm: lengthM * 1000,
+    points,
+    // The canonical frame owns the anatomical sagittal/coronal axes. Using
+    // the bounding-box midpoint here erased the real front/back asymmetry of
+    // breasts and glutes and then fed that artificial centre back into the
+    // metric correction. Keep the section anchored to the body axes instead.
+    center: [0, spec.point[1], 0],
+    halfWidthM: (maxX - minX) * 0.5,
+    frontDepthM: Math.max(0, maxZ),
+    backDepthM: Math.max(0, -minZ),
   };
 }
 
-function buildVertexNormals(positions: readonly number[], indices: readonly number[]): Float32Array {
-  const normals = new Float32Array(positions.length);
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    const a = indices[offset];
-    const b = indices[offset + 1];
-    const c = indices[offset + 2];
-    const n = cross(sub(arrayVertex(positions, b), arrayVertex(positions, a)), sub(arrayVertex(positions, c), arrayVertex(positions, a)));
-    for (const index of [a, b, c]) {
-      normals[index * 3] += n[0];
-      normals[index * 3 + 1] += n[1];
-      normals[index * 3 + 2] += n[2];
-    }
+function trianglePlaneSegment(
+  a: HumanBodyVector3,
+  b: HumanBodyVector3,
+  c: HumanBodyVector3,
+  planePoint: HumanBodyVector3,
+  planeNormal: HumanBodyVector3,
+): readonly [HumanBodyVector3, HumanBodyVector3] | null {
+  const vertices = [a, b, c] as const;
+  const distances = vertices.map((point) => dot(sub(point, planePoint), planeNormal));
+  const intersections: HumanBodyVector3[] = [];
+  for (const [first, second] of [[0, 1], [1, 2], [2, 0]] as const) {
+    const da = distances[first];
+    const db = distances[second];
+    if ((da > 1e-9 && db > 1e-9) || (da < -1e-9 && db < -1e-9)) continue;
+    if (Math.abs(da - db) <= 1e-12) continue;
+    const t = clamp(da / (da - db), 0, 1);
+    const point = mixPoint(vertices[first], vertices[second], t);
+    if (intersections.every((candidate) => distance(candidate, point) > 1e-8)) intersections.push(point);
   }
-  for (let index = 0; index < normals.length / 3; index += 1) {
-    const n = normalize([normals[index * 3], normals[index * 3 + 1], normals[index * 3 + 2]]);
-    normals[index * 3] = n[0];
-    normals[index * 3 + 1] = n[1];
-    normals[index * 3 + 2] = n[2];
-  }
-  return normals;
+  if (intersections.length !== 2) return null;
+  return [intersections[0], intersections[1]];
 }
 
-function buildJoints(f: AnatomyFrame): Record<string, HumanBodyJoint> {
-  const pairs: Array<[string, HumanBodyVector3]> = [
-    ["shoulder-left", f.shoulderLeft], ["shoulder-right", f.shoulderRight],
-    ["elbow-left", f.elbowLeft], ["elbow-right", f.elbowRight],
-    ["wrist-left", f.wristLeft], ["wrist-right", f.wristRight],
-    ["hip-left", f.hipLeft], ["hip-right", f.hipRight],
-    ["knee-left", f.kneeLeft], ["knee-right", f.kneeRight],
-    ["ankle-left", f.ankleLeft], ["ankle-right", f.ankleRight],
+function buildCrossSections(
+  positions: Float32Array,
+  reference: CanonicalReference,
+  specs: readonly SectionSpec[],
+  stations: BodyStations,
+): HumanBodyCrossSection[] {
+  const measured = specs.map((spec) => {
+    const measured = measureSection(positions, reference, spec);
+    return {
+      id: spec.id,
+      region: spec.region,
+      yM: spec.point[1],
+      centerM: measured.center,
+      normal: spec.normal,
+      targetCircumferenceMm: spec.targetMm,
+      actualCircumferenceMm: measured.circumferenceMm,
+      halfWidthM: measured.halfWidthM,
+      frontDepthM: measured.frontDepthM,
+      backDepthM: measured.backDepthM,
+      centerZM: measured.center[2],
+      frontLobeM: spec.mode === "bust" ? Math.max(0, measured.frontDepthM - measured.backDepthM) : 0,
+      backLobeM: spec.mode === "hip" ? Math.max(0, measured.backDepthM - measured.frontDepthM) : 0,
+      lobeHalfDistanceM: spec.mode === "bust" ? measured.halfWidthM * 0.42 : 0,
+    };
+  });
+  const bust = measured.find((section) => section.id === "bust")!;
+  const hip = measured.find((section) => section.id === "full-hip")!;
+  return [
+    sectionFromNearbyVertices("crotch", "crotch", positions, stations.crotchY, hip, 0.78),
+    ...measured,
+    sectionFromNearbyVertices("shoulder", "back-upper", positions, stations.shoulderY, bust, 1.08),
   ];
-  return Object.fromEntries(pairs.map(([id, position]) => [id, { id, position: [...position] as HumanBodyVector3 }])) as Record<string, HumanBodyJoint>;
 }
 
-function buildLandmarks(
-  m: HumanBodyMeasurements,
-  f: AnatomyFrame,
-  sections: readonly HumanBodyCrossSection[],
-): Record<HumanBodyLandmarkId, HumanBodyLandmark> {
-  const waist = sectionById(sections, "waist");
-  const highHip = sectionById(sections, "high-hip");
-  const hip = sectionById(sections, "full-hip");
-  const bust = sectionById(sections, "bust");
-  const crotch = sectionById(sections, "crotch");
-  const bustX = Math.min(bust.halfWidthM * 0.58, m.bustPointDistanceMm * 0.0005);
-  const lm = (id: HumanBodyLandmarkId, position: HumanBodyVector3, normalValue: HumanBodyVector3): HumanBodyLandmark => ({ id, position, normal: normalize(normalValue) });
+function sectionFromNearbyVertices(
+  id: string,
+  region: HumanBodyRegionId,
+  positions: Float32Array,
+  yM: number,
+  fallback: HumanBodyCrossSection,
+  circumferenceScale: number,
+): HumanBodyCrossSection {
+  const points: HumanBodyVector3[] = [];
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const point = pointAt(positions, vertex);
+    if (Math.abs(point[1] - yM) <= 0.012 && Math.abs(point[0]) <= 0.32) points.push(point);
+  }
+  if (points.length < 4) {
+    return { ...fallback, id, region, yM, targetCircumferenceMm: fallback.targetCircumferenceMm * circumferenceScale, actualCircumferenceMm: fallback.actualCircumferenceMm * circumferenceScale };
+  }
+  const minX = Math.min(...points.map((point) => point[0]));
+  const maxX = Math.max(...points.map((point) => point[0]));
+  const minZ = Math.min(...points.map((point) => point[2]));
+  const maxZ = Math.max(...points.map((point) => point[2]));
+  const halfWidthM = (maxX - minX) * 0.5;
+  const halfDepthM = (maxZ - minZ) * 0.5;
+  const circumferenceMm = ellipsePerimeter(halfWidthM, halfDepthM) * 1000;
   return {
-    "ground-center": lm("ground-center", [0, 0, 0], [0, 1, 0]),
-    "head-top": lm("head-top", [0, f.heightM, -0.004], [0, 1, 0]),
-    "neck-base-center": lm("neck-base-center", [0, f.neckBaseY, -0.004], [0, 0, 1]),
-    "shoulder-left": lm("shoulder-left", f.shoulderLeft, [-1, 0.25, 0]),
-    "shoulder-right": lm("shoulder-right", f.shoulderRight, [1, 0.25, 0]),
-    "bust-apex-left": lm("bust-apex-left", [-bustX, f.bustY, bust.centerZM + bust.frontDepthM + bust.frontLobeM], [0, 0, 1]),
-    "bust-apex-right": lm("bust-apex-right", [bustX, f.bustY, bust.centerZM + bust.frontDepthM + bust.frontLobeM], [0, 0, 1]),
-    "center-front-waist": lm("center-front-waist", [0, f.waistY, waist.centerZM + waist.frontDepthM], [0, 0, 1]),
-    "center-back-waist": lm("center-back-waist", [0, f.waistY, waist.centerZM - waist.backDepthM], [0, 0, -1]),
-    "side-waist-left": lm("side-waist-left", [-waist.halfWidthM, f.waistY, waist.centerZM], [-1, 0, 0]),
-    "side-waist-right": lm("side-waist-right", [waist.halfWidthM, f.waistY, waist.centerZM], [1, 0, 0]),
-    "high-hip-front": lm("high-hip-front", [0, f.highHipY, highHip.centerZM + highHip.frontDepthM], [0, 0, 1]),
-    "high-hip-back": lm("high-hip-back", [0, f.highHipY, highHip.centerZM - highHip.backDepthM - highHip.backLobeM], [0, 0, -1]),
-    "full-hip-front": lm("full-hip-front", [0, f.fullHipY, hip.centerZM + hip.frontDepthM], [0, 0, 1]),
-    "full-hip-back": lm("full-hip-back", [0, f.fullHipY, hip.centerZM - hip.backDepthM - hip.backLobeM], [0, 0, -1]),
-    "crotch-front": lm("crotch-front", [0, f.crotchY, crotch.centerZM + crotch.frontDepthM * 0.78], [0, 0, 1]),
-    "crotch-back": lm("crotch-back", [0, f.crotchY, crotch.centerZM - crotch.backDepthM * 0.88], [0, 0, -1]),
-    "inseam-top-left": lm("inseam-top-left", [f.hipLeft[0] * 0.36, f.crotchY - 0.012, 0.012], [1, 0, 0]),
-    "inseam-top-right": lm("inseam-top-right", [f.hipRight[0] * 0.36, f.crotchY - 0.012, 0.012], [-1, 0, 0]),
-    "thigh-widest-left": lm("thigh-widest-left", mixPoint(f.hipLeft, f.kneeLeft, 0.18), [-1, 0, 0]),
-    "thigh-widest-right": lm("thigh-widest-right", mixPoint(f.hipRight, f.kneeRight, 0.18), [1, 0, 0]),
-    "knee-left": lm("knee-left", f.kneeLeft, [-1, 0, 0]),
-    "knee-right": lm("knee-right", f.kneeRight, [1, 0, 0]),
-    "ankle-left": lm("ankle-left", f.ankleLeft, [-1, 0, 0]),
-    "ankle-right": lm("ankle-right", f.ankleRight, [1, 0, 0]),
-    "armhole-left": lm("armhole-left", [f.shoulderLeft[0] * 0.82, f.shoulderY - 0.075, 0.015], [-1, 0, 0.2]),
-    "armhole-right": lm("armhole-right", [f.shoulderRight[0] * 0.82, f.shoulderY - 0.075, 0.015], [1, 0, 0.2]),
-    "elbow-left": lm("elbow-left", f.elbowLeft, [-1, 0, 0]),
-    "elbow-right": lm("elbow-right", f.elbowRight, [1, 0, 0]),
-    "wrist-left": lm("wrist-left", f.wristLeft, [-1, 0, 0]),
-    "wrist-right": lm("wrist-right", f.wristRight, [1, 0, 0]),
+    id,
+    region,
+    yM,
+    centerM: [(minX + maxX) * 0.5, yM, (minZ + maxZ) * 0.5],
+    normal: [0, 1, 0],
+    targetCircumferenceMm: circumferenceMm,
+    actualCircumferenceMm: circumferenceMm,
+    halfWidthM,
+    frontDepthM: maxZ - (minZ + maxZ) * 0.5,
+    backDepthM: (minZ + maxZ) * 0.5 - minZ,
+    centerZM: (minZ + maxZ) * 0.5,
+    frontLobeM: 0,
+    backLobeM: 0,
+    lobeHalfDistanceM: 0,
   };
 }
 
-function buildSurfaceRegions(visual: HumanBodyMesh, collision: HumanBodyMesh): HumanBodySurfaceRegion[] {
-  const ids = [...new Set([...visual.regionIds, ...collision.regionIds])].sort() as HumanBodyRegionId[];
-  return ids.map((id) => ({
-    id,
-    visualVertexIndices: Uint32Array.from(visual.regionIds.flatMap((value, index) => value === id ? [index] : [])),
-    collisionVertexIndices: Uint32Array.from(collision.regionIds.flatMap((value, index) => value === id ? [index] : [])),
-  }));
+function buildVertexNormals(positions: Float32Array, indices: Uint32Array): Float32Array {
+  const accumulated = new Float64Array(positions.length);
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const a = indices[offset]; const b = indices[offset + 1]; const c = indices[offset + 2];
+    const normal = cross(sub(pointAt(positions, b), pointAt(positions, a)), sub(pointAt(positions, c), pointAt(positions, a)));
+    for (const vertex of [a, b, c]) {
+      accumulated[vertex * 3] += normal[0];
+      accumulated[vertex * 3 + 1] += normal[1];
+      accumulated[vertex * 3 + 2] += normal[2];
+    }
+  }
+  const result = new Float32Array(positions.length);
+  for (let vertex = 0; vertex < result.length / 3; vertex += 1) {
+    result.set(normalize(pointAt(accumulated, vertex)), vertex * 3);
+  }
+  return result;
+}
+
+function buildRegionBindings(
+  positions: Float32Array,
+  stations: BodyStations,
+  limbs: LimbFrame,
+  groups: Record<VertexGroup, Float32Array>,
+): RegionBinding[] {
+  const definitions: Array<[HumanBodyRegionId, (vertex: number, point: HumanBodyVector3) => number]> = [
+    ["neck", (_, p) => smoothBand(p[1], stations.neckY, 0.045, 0.09) * groups.torso[_]],
+    ["shoulder-left", (v, p) => sideWeight(p[0], -1) * smoothBand(p[1], stations.shoulderY, 0.055, 0.11) * Math.max(groups.torso[v], groups["arm-left"][v])],
+    ["shoulder-right", (v, p) => sideWeight(p[0], 1) * smoothBand(p[1], stations.shoulderY, 0.055, 0.11) * Math.max(groups.torso[v], groups["arm-right"][v])],
+    ["bust-left", (v, p) => sideWeight(p[0], -1) * frontWeight(p[2]) * smoothBand(p[1], stations.bustY, 0.06, 0.14) * groups.torso[v]],
+    ["bust-right", (v, p) => sideWeight(p[0], 1) * frontWeight(p[2]) * smoothBand(p[1], stations.bustY, 0.06, 0.14) * groups.torso[v]],
+    ["underbust", (v, p) => smoothBand(p[1], stations.underbustY, 0.05, 0.11) * groups.torso[v]],
+    ["ribcage", (v, p) => smoothBand(p[1], lerp(stations.waistY, stations.bustY, 0.68), 0.1, 0.2) * groups.torso[v]],
+    ["chest-front", (v, p) => frontWeight(p[2]) * smoothBand(p[1], stations.bustY, 0.12, 0.22) * groups.torso[v]],
+    ["back-upper", (v, p) => backWeight(p[2]) * smoothBand(p[1], lerp(stations.bustY, stations.shoulderY, 0.45), 0.15, 0.25) * groups.torso[v]],
+    ["waist", (v, p) => smoothBand(p[1], stations.waistY, 0.055, 0.12) * groups.torso[v]],
+    ["abdomen", (v, p) => frontWeight(p[2]) * smoothBand(p[1], lerp(stations.waistY, stations.highHipY, 0.5), 0.075, 0.14) * groups.torso[v]],
+    ["high-hip", (v, p) => smoothBand(p[1], stations.highHipY, 0.055, 0.12) * groups.torso[v]],
+    ["full-hip", (v, p) => smoothBand(p[1], stations.fullHipY, 0.07, 0.14) * groups.torso[v]],
+    ["pelvis", (v, p) => smoothBand(p[1], lerp(stations.fullHipY, stations.crotchY, 0.5), 0.09, 0.18) * groups.torso[v]],
+    ["pelvis-front", (v, p) => frontWeight(p[2]) * smoothBand(p[1], lerp(stations.fullHipY, stations.crotchY, 0.5), 0.09, 0.18) * groups.torso[v]],
+    ["pelvis-back", (v, p) => backWeight(p[2]) * smoothBand(p[1], lerp(stations.fullHipY, stations.crotchY, 0.5), 0.09, 0.18) * groups.torso[v]],
+    ["glute-left", (v, p) => sideWeight(p[0], -1) * backWeight(p[2]) * smoothBand(p[1], stations.fullHipY, 0.075, 0.15) * groups.torso[v]],
+    ["glute-right", (v, p) => sideWeight(p[0], 1) * backWeight(p[2]) * smoothBand(p[1], stations.fullHipY, 0.075, 0.15) * groups.torso[v]],
+    ["crotch", (v, p) => smoothBand(p[1], stations.crotchY, 0.05, 0.11) * Math.max(groups.torso[v], groups["leg-left"][v], groups["leg-right"][v])],
+    ...limbRegionDefinitions(groups, stations, limbs),
+  ];
+  return definitions.map(([id, weightFor]) => sparseRegion(id, positions, weightFor));
+}
+
+function limbRegionDefinitions(
+  groups: Record<VertexGroup, Float32Array>,
+  stations: BodyStations,
+  limbs: LimbFrame,
+): Array<[HumanBodyRegionId, (vertex: number, point: HumanBodyVector3) => number]> {
+  const armStation = (fraction: number) => lerp(limbs.shoulderLeft[1], limbs.wristLeft[1], fraction);
+  const legStation = (fraction: number) => lerp(stations.crotchY, stations.ankleY, fraction);
+  return [
+    ["upper-arm-left", (v, p) => groups["arm-left"][v] * smoothBand(p[1], armStation(0.28), 0.13, 0.24)],
+    ["upper-arm-right", (v, p) => groups["arm-right"][v] * smoothBand(p[1], armStation(0.28), 0.13, 0.24)],
+    ["forearm-left", (v, p) => groups["arm-left"][v] * smoothBand(p[1], armStation(0.65), 0.13, 0.24)],
+    ["forearm-right", (v, p) => groups["arm-right"][v] * smoothBand(p[1], armStation(0.65), 0.13, 0.24)],
+    ["wrist-left", (v, p) => groups["arm-left"][v] * smoothBand(p[1], armStation(0.92), 0.07, 0.14)],
+    ["wrist-right", (v, p) => groups["arm-right"][v] * smoothBand(p[1], armStation(0.92), 0.07, 0.14)],
+    ["thigh-left", (v, p) => groups["leg-left"][v] * smoothBand(p[1], legStation(0.2), 0.13, 0.25)],
+    ["thigh-right", (v, p) => groups["leg-right"][v] * smoothBand(p[1], legStation(0.2), 0.13, 0.25)],
+    ["knee-left", (v, p) => groups["leg-left"][v] * smoothBand(p[1], stations.kneeY, 0.075, 0.15)],
+    ["knee-right", (v, p) => groups["leg-right"][v] * smoothBand(p[1], stations.kneeY, 0.075, 0.15)],
+    ["calf-left", (v, p) => groups["leg-left"][v] * smoothBand(p[1], legStation(0.67), 0.1, 0.19)],
+    ["calf-right", (v, p) => groups["leg-right"][v] * smoothBand(p[1], legStation(0.67), 0.1, 0.19)],
+    ["ankle-left", (v, p) => groups["leg-left"][v] * smoothBand(p[1], stations.ankleY, 0.065, 0.12)],
+    ["ankle-right", (v, p) => groups["leg-right"][v] * smoothBand(p[1], stations.ankleY, 0.065, 0.12)],
+  ];
+}
+
+function sparseRegion(
+  id: HumanBodyRegionId,
+  positions: Float32Array,
+  weightFor: (vertex: number, point: HumanBodyVector3) => number,
+): RegionBinding {
+  const indices: number[] = [];
+  const weights: number[] = [];
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const weight = clamp(weightFor(vertex, pointAt(positions, vertex)), 0, 1);
+    if (weight <= 0.005) continue;
+    indices.push(vertex);
+    weights.push(weight);
+  }
+  return { id, indices: Uint32Array.from(indices), weights: Float32Array.from(weights) };
+}
+
+function dominantRegionIds(vertexCount: number, regions: readonly RegionBinding[]): HumanBodyRegionId[] {
+  const ids = new Array<HumanBodyRegionId>(vertexCount).fill("full-hip");
+  const weights = new Float32Array(vertexCount);
+  for (const region of regions) {
+    for (let index = 0; index < region.indices.length; index += 1) {
+      const vertex = region.indices[index];
+      if (region.weights[index] <= weights[vertex]) continue;
+      weights[vertex] = region.weights[index];
+      ids[vertex] = region.id;
+    }
+  }
+  return ids;
+}
+
+function createLandmarkBindings(
+  positions: Float32Array,
+  topologySignature: string,
+  stations: BodyStations,
+  limbs: LimbFrame,
+): Record<HumanBodyLandmarkId, HumanBodyLandmarkBinding> {
+  const single = (target: HumanBodyVector3, filter?: (point: HumanBodyVector3) => boolean) =>
+    binding(topologySignature, [nearestVertex(positions, target, filter)], [1]);
+  const station = (target: HumanBodyVector3, filter?: (point: HumanBodyVector3) => boolean) =>
+    bindingAtStation(topologySignature, positions, target, filter);
+  const paired = (first: HumanBodyVector3, second: HumanBodyVector3) =>
+    binding(topologySignature, [nearestVertex(positions, first), nearestVertex(positions, second)], [0.5, 0.5]);
+  const pairedStation = (first: HumanBodyVector3, second: HumanBodyVector3) =>
+    combineBindings(
+      topologySignature,
+      [bindingAtStation(topologySignature, positions, first), bindingAtStation(topologySignature, positions, second)],
+      [0.5, 0.5],
+    );
+  const side = (value: number) => (point: HumanBodyVector3) => value < 0 ? point[0] < 0 : point[0] > 0;
+  return {
+    "ground-center": paired([-0.09, 0, 0.02], [0.09, 0, 0.02]),
+    "head-top": single([0, stations.headTopY, 0]),
+    "neck-base-center": pairedStation([0, stations.neckY, 0.045], [0, stations.neckY, -0.045]),
+    "shoulder-left": station(limbs.shoulderLeft, side(-1)),
+    "shoulder-right": station(limbs.shoulderRight, side(1)),
+    "bust-apex-left": station([-0.075, stations.bustY, 0.13], side(-1)),
+    "bust-apex-right": station([0.075, stations.bustY, 0.13], side(1)),
+    "center-front-waist": station([0, stations.waistY, 0.105]),
+    "center-back-waist": station([0, stations.waistY, -0.075]),
+    "side-waist-left": station([-0.14, stations.waistY, 0], side(-1)),
+    "side-waist-right": station([0.14, stations.waistY, 0], side(1)),
+    "high-hip": pairedStation([0, stations.highHipY, 0.09], [0, stations.highHipY, -0.1]),
+    "high-hip-front": station([0, stations.highHipY, 0.09]),
+    "high-hip-back": station([0, stations.highHipY, -0.1]),
+    "full-hip": pairedStation([0, stations.fullHipY, 0.09], [0, stations.fullHipY, -0.115]),
+    "full-hip-front": station([0, stations.fullHipY, 0.09]),
+    "full-hip-back": station([0, stations.fullHipY, -0.115]),
+    "glute-left": station([-0.085, stations.fullHipY, -0.115], side(-1)),
+    "glute-right": station([0.085, stations.fullHipY, -0.115], side(1)),
+    "crotch-front": station([0, stations.crotchY, 0.075]),
+    "crotch-back": station([0, stations.crotchY, -0.055]),
+    "inseam-top-left": station([-0.035, stations.crotchY, 0], side(-1)),
+    "inseam-top-right": station([0.035, stations.crotchY, 0], side(1)),
+    "thigh-widest-left": station([-0.17, lerp(stations.crotchY, stations.kneeY, 0.2), 0], side(-1)),
+    "thigh-widest-right": station([0.17, lerp(stations.crotchY, stations.kneeY, 0.2), 0], side(1)),
+    "knee-left": station(limbs.kneeLeft, side(-1)),
+    "knee-right": station(limbs.kneeRight, side(1)),
+    "calf-left": station([-0.15, lerp(stations.kneeY, stations.ankleY, 0.48), -0.01], side(-1)),
+    "calf-right": station([0.15, lerp(stations.kneeY, stations.ankleY, 0.48), -0.01], side(1)),
+    "ankle-left": station(limbs.ankleLeft, side(-1)),
+    "ankle-right": station(limbs.ankleRight, side(1)),
+    "armhole-left": station([-0.2, stations.shoulderY - 0.055, 0], side(-1)),
+    "armhole-right": station([0.2, stations.shoulderY - 0.055, 0], side(1)),
+    "elbow-left": station(limbs.elbowLeft, side(-1)),
+    "elbow-right": station(limbs.elbowRight, side(1)),
+    "wrist-left": station(limbs.wristLeft, side(-1)),
+    "wrist-right": station(limbs.wristRight, side(1)),
+  };
+}
+
+function binding(
+  topologySignature: string,
+  vertices: readonly number[],
+  weights: readonly number[],
+): HumanBodyLandmarkBinding {
+  return {
+    topologySignature,
+    vertexIndices: Uint32Array.from(vertices),
+    weights: Float32Array.from(weights),
+  };
+}
+
+function bindingAtStation(
+  topologySignature: string,
+  positions: Float32Array,
+  target: HumanBodyVector3,
+  filter: (point: HumanBodyVector3) => boolean = () => true,
+): HumanBodyLandmarkBinding {
+  let below = -1;
+  let above = -1;
+  let belowScore = Number.POSITIVE_INFINITY;
+  let aboveScore = Number.POSITIVE_INFINITY;
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const point = pointAt(positions, vertex);
+    if (!filter(point)) continue;
+    const planar = Math.hypot(point[0] - target[0], point[2] - target[2]);
+    const vertical = Math.abs(point[1] - target[1]);
+    const score = planar + vertical * 0.2;
+    if (point[1] <= target[1] && score < belowScore) { below = vertex; belowScore = score; }
+    if (point[1] >= target[1] && score < aboveScore) { above = vertex; aboveScore = score; }
+  }
+  if (below < 0 || above < 0 || below === above) {
+    return binding(topologySignature, [nearestVertex(positions, target, filter)], [1]);
+  }
+  const belowY = positions[below * 3 + 1];
+  const aboveY = positions[above * 3 + 1];
+  const upperWeight = clamp((target[1] - belowY) / Math.max(1e-9, aboveY - belowY), 0, 1);
+  return binding(topologySignature, [below, above], [1 - upperWeight, upperWeight]);
+}
+
+function combineBindings(
+  topologySignature: string,
+  bindings: readonly HumanBodyLandmarkBinding[],
+  bindingWeights: readonly number[],
+): HumanBodyLandmarkBinding {
+  const vertices: number[] = [];
+  const weights: number[] = [];
+  for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+    const source = bindings[bindingIndex];
+    for (let index = 0; index < source.vertexIndices.length; index += 1) {
+      vertices.push(source.vertexIndices[index]);
+      weights.push(source.weights[index] * bindingWeights[bindingIndex]);
+    }
+  }
+  return binding(topologySignature, vertices, weights);
+}
+
+function nearestVertex(
+  positions: Float32Array,
+  target: HumanBodyVector3,
+  filter: (point: HumanBodyVector3) => boolean = () => true,
+): number {
+  let selected = 0;
+  let best = Number.POSITIVE_INFINITY;
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    const point = pointAt(positions, vertex);
+    if (!filter(point)) continue;
+    const score = distance(point, target);
+    if (score < best) {
+      selected = vertex;
+      best = score;
+    }
+  }
+  return selected;
+}
+
+function resolveLandmarks(
+  reference: CanonicalReference,
+  positions: Float32Array,
+  normals: Float32Array,
+): Record<HumanBodyLandmarkId, HumanBodyLandmark> {
+  return Object.fromEntries(
+    (Object.entries(reference.landmarkBindings) as Array<[HumanBodyLandmarkId, HumanBodyLandmarkBinding]>)
+      .map(([id, landmarkBinding]) => [id, {
+        id,
+        position: evaluateBinding(positions, landmarkBinding),
+        normal: normalize(evaluateBinding(normals, landmarkBinding)),
+        binding: landmarkBinding,
+      }]),
+  ) as Record<HumanBodyLandmarkId, HumanBodyLandmark>;
+}
+
+function evaluateBinding(values: Float32Array, landmark: HumanBodyLandmarkBinding): HumanBodyVector3 {
+  const result: HumanBodyVector3 = [0, 0, 0];
+  for (let index = 0; index < landmark.vertexIndices.length; index += 1) {
+    const point = pointAt(values, landmark.vertexIndices[index]);
+    result[0] += point[0] * landmark.weights[index];
+    result[1] += point[1] * landmark.weights[index];
+    result[2] += point[2] * landmark.weights[index];
+  }
+  return result;
+}
+
+function buildJoints(frame: LimbFrame): Record<string, HumanBodyJoint> {
+  return Object.fromEntries(Object.entries({
+    "shoulder-left": frame.shoulderLeft,
+    "shoulder-right": frame.shoulderRight,
+    "elbow-left": frame.elbowLeft,
+    "elbow-right": frame.elbowRight,
+    "wrist-left": frame.wristLeft,
+    "wrist-right": frame.wristRight,
+    "hip-left": frame.hipLeft,
+    "hip-right": frame.hipRight,
+    "knee-left": frame.kneeLeft,
+    "knee-right": frame.kneeRight,
+    "ankle-left": frame.ankleLeft,
+    "ankle-right": frame.ankleRight,
+  }).map(([id, position]) => [id, { id, position }])) as Record<string, HumanBodyJoint>;
 }
 
 function buildDiagnostics(
-  m: HumanBodyMeasurements,
-  sections: readonly HumanBodyCrossSection[],
+  measurements: HumanBodyMeasurements,
+  reference: CanonicalReference,
   visual: HumanBodyMesh,
   collision: HumanBodyMesh,
-  f: AnatomyFrame,
+  sections: readonly HumanBodyCrossSection[],
+  landmarks: Record<HumanBodyLandmarkId, HumanBodyLandmark>,
+  joints: Record<string, HumanBodyJoint>,
+  iterations: number,
 ): HumanBodyDiagnostics {
-  const measurementErrorsMm: Record<string, number> = {};
-  const lodSectionDeltaMm: Record<string, number> = {};
-  for (const [id, y, target] of [
-    ["bust", f.bustY, m.bustMm], ["waist", f.waistY, m.waistMm], ["hip", f.fullHipY, m.fullHipMm],
-  ] as const) {
-    const visualCirc = measureMeshCircumferenceAtY(visual, y) * 1000;
-    const collisionCirc = measureMeshCircumferenceAtY(collision, y) * 1000;
-    measurementErrorsMm[id] = visualCirc > 0 ? visualCirc - target : Number.POSITIVE_INFINITY;
-    lodSectionDeltaMm[id] = visualCirc > 0 && collisionCirc > 0 ? collisionCirc - visualCirc : Number.POSITIVE_INFINITY;
+  const grouped = new Map<string, number[]>();
+  for (const section of sections) {
+    const errors = grouped.get(sectionDiagnosticKey(section.id)) ?? [];
+    errors.push(section.actualCircumferenceMm - section.targetCircumferenceMm);
+    grouped.set(sectionDiagnosticKey(section.id), errors);
   }
-  for (const value of sections) {
-    measurementErrorsMm[`analytic:${value.id}`] = sectionPerimeter(value, 1200) * 1000 - value.targetCircumferenceMm;
-  }
-  measurementErrorsMm.height = visual.bounds.max[1] * 1000 - m.heightMm;
-  measurementErrorsMm.shoulderWidth = distance(f.shoulderLeft, f.shoulderRight) * 1000 - m.shoulderWidthMm;
-  measurementErrorsMm.armLength = distance(f.shoulderLeft, f.wristLeft) * 1000 - m.armLengthMm;
-  measurementErrorsMm.inseam = f.crotchY * 1000 - m.inseamMm;
+  const measurementErrorsMm: Record<string, number> = Object.fromEntries(
+    [...grouped].map(([id, errors]) => [id, errors.reduce((sum, error) => sum + error, 0) / errors.length]),
+  );
+  measurementErrorsMm.height = visual.bounds.max[1] * 1000 - measurements.heightMm;
+  measurementErrorsMm.shoulderWidth = distance(joints["shoulder-left"].position, joints["shoulder-right"].position) * 1000 - measurements.shoulderWidthMm;
+  measurementErrorsMm.shoulderToBust = (joints["shoulder-left"].position[1] - landmarks["bust-apex-left"].position[1]) * 1000 - measurements.shoulderToBustMm;
+  measurementErrorsMm.waistToHip = (landmarks["center-front-waist"].position[1] - landmarks["full-hip-front"].position[1]) * 1000 - measurements.waistToHipMm;
+  measurementErrorsMm.crotchDepth = (landmarks["center-front-waist"].position[1] - landmarks["inseam-top-left"].position[1]) * 1000 - measurements.crotchDepthMm;
+  measurementErrorsMm.armLength = distance(joints["shoulder-left"].position, joints["wrist-left"].position) * 1000 - measurements.armLengthMm;
+  measurementErrorsMm.inseam = landmarks["inseam-top-left"].position[1] * 1000 - measurements.inseamMm;
+  measurementErrorsMm.outseam = landmarks["center-front-waist"].position[1] * 1000 - measurements.outseamMm;
+  const visualDiagnostics = inspectMesh(visual, reference.referenceTriangleNormals);
+  const collisionDiagnostics = inspectMesh(collision, reference.referenceTriangleNormals);
+  const lodSectionDeltaMm = Object.fromEntries(sections.map((section) => [section.id, 0]));
   return {
-    visual: inspectMesh(visual),
-    collision: inspectMesh(collision),
+    asset: canonicalFemaleMesh().audit,
+    visual: visualDiagnostics,
+    collision: collisionDiagnostics,
     measurementErrorsMm,
     lodSectionDeltaMm,
-    maxLodSectionDeltaMm: Math.max(...Object.values(lodSectionDeltaMm).map(Math.abs)),
-    landmarkToleranceMm: 5,
-    circumferenceToleranceMm: 5,
-    lengthToleranceMm: 5,
+    maxLodSectionDeltaMm: 0,
+    landmarkToleranceMm: 4,
+    circumferenceToleranceMm: CIRCUMFERENCE_TOLERANCE_MM,
+    lengthToleranceMm: LENGTH_TOLERANCE_MM,
+    topologyInvariant: visual.topologySignature === reference.topologySignature,
+    visualCollisionTopologyParity: visual.topologySignature === collision.topologySignature
+      && visual.indices === collision.indices,
+    metricCorrectionIterations: iterations,
   };
+}
+
+function sectionDiagnosticKey(id: string): string {
+  return id.replace(/-(left|right)$/u, "").replace("upper-arm", "bicep");
 }
 
 export function inspectHumanBodyMesh(mesh: HumanBodyMesh): HumanBodyMeshDiagnostics {
   return inspectMesh(mesh);
 }
 
-function inspectMesh(mesh: HumanBodyMesh): HumanBodyMeshDiagnostics {
-  const edgeCounts = new Map<string, number>();
+function inspectMesh(mesh: HumanBodyMesh, referenceNormals?: Float32Array): HumanBodyMeshDiagnostics {
+  const edges = new Map<string, number>();
   let degenerateTriangleCount = 0;
+  let invertedTriangleCount = 0;
+  const directedEdges = new Map<string, number>();
   for (let offset = 0; offset < mesh.indices.length; offset += 3) {
-    const a = mesh.indices[offset];
-    const b = mesh.indices[offset + 1];
-    const c = mesh.indices[offset + 2];
-    if (magnitude(cross(sub(typedVertex(mesh.positions, b), typedVertex(mesh.positions, a)), sub(typedVertex(mesh.positions, c), typedVertex(mesh.positions, a)))) <= 1e-10) {
-      degenerateTriangleCount += 1;
+    const triangle = [mesh.indices[offset], mesh.indices[offset + 1], mesh.indices[offset + 2]] as const;
+    for (const [a, b] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]] as const) {
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      edges.set(key, (edges.get(key) ?? 0) + 1);
+      directedEdges.set(key, (directedEdges.get(key) ?? 0) + (a < b ? 1 : -1));
     }
-    for (const [first, second] of [[a, b], [b, c], [c, a]] as const) {
-      const key = first < second ? `${first}:${second}` : `${second}:${first}`;
-      edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
+    const face = cross(
+      sub(pointAt(mesh.positions, triangle[1]), pointAt(mesh.positions, triangle[0])),
+      sub(pointAt(mesh.positions, triangle[2]), pointAt(mesh.positions, triangle[0])),
+    );
+    if (magnitude(face) <= 1e-12) degenerateTriangleCount += 1;
+    const faceNormal = normalize(face);
+    if (referenceNormals) {
+      const reference = pointAt(referenceNormals, offset / 3);
+      if (dot(faceNormal, reference) < -0.2) invertedTriangleCount += 1;
     }
   }
-  let boundaryEdgeCount = 0;
-  let nonManifoldEdgeCount = 0;
-  for (const count of edgeCounts.values()) {
-    if (count === 1) boundaryEdgeCount += 1;
-    else if (count !== 2) nonManifoldEdgeCount += 1;
-  }
-  const volume = signedVolume([...mesh.positions], [...mesh.indices]);
   return {
     vertexCount: mesh.positions.length / 3,
     triangleCount: mesh.indices.length / 3,
-    finite: mesh.positions.every(Number.isFinite) && mesh.normals.every(Number.isFinite),
-    boundaryEdgeCount,
-    nonManifoldEdgeCount,
+    finite: [...mesh.positions, ...mesh.normals].every(Number.isFinite),
+    boundaryEdgeCount: [...edges.values()].filter((count) => count === 1).length,
+    nonManifoldEdgeCount: [...edges.values()].filter((count) => count > 2).length,
     degenerateTriangleCount,
-    signedVolumeM3: volume,
-    normalsConsistent: volume > 0 && degenerateTriangleCount === 0,
+    invertedTriangleCount,
+    signedVolumeM3: signedVolume(mesh.positions, mesh.indices),
+    normalsConsistent: [...directedEdges.values()].every((balance) => balance === 0),
+    topologySignature: mesh.topologySignature,
   };
 }
 
 export function measureHumanBodyMeshCircumferenceAtY(mesh: HumanBodyMesh, yM: number): number {
-  return measureMeshCircumferenceAtY(mesh, yM) * 1000;
+  const reference = canonicalReference();
+  return measureSection(mesh.positions, reference, {
+    id: "horizontal",
+    diagnosticId: "horizontal",
+    region: "waist",
+    targetMm: 1000,
+    point: [0, yM, 0],
+    normal: [0, 1, 0],
+    group: "torso",
+    influenceM: 0.1,
+    mode: "torso",
+  }).circumferenceMm;
 }
 
-/** Returns the longest closed intersection loop, excluding arm loops. */
-function measureMeshCircumferenceAtY(mesh: HumanBodyMesh, yM: number): number {
-  const segments: Array<readonly [HumanBodyVector3, HumanBodyVector3]> = [];
-  for (let offset = 0; offset < mesh.indices.length; offset += 3) {
-    const triangle = [
-      typedVertex(mesh.positions, mesh.indices[offset]),
-      typedVertex(mesh.positions, mesh.indices[offset + 1]),
-      typedVertex(mesh.positions, mesh.indices[offset + 2]),
-    ] as const;
-    const hits: HumanBodyVector3[] = [];
-    for (const [a, b] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]] as const) {
-      const da = a[1] - yM;
-      const db = b[1] - yM;
-      if (Math.abs(da) <= 1e-9 && Math.abs(db) <= 1e-9) continue;
-      if ((da > 0) === (db > 0)) continue;
-      const t = clamp(da / (da - db), 0, 1);
-      hits.push([lerp(a[0], b[0], t), yM, lerp(a[2], b[2], t)]);
-    }
-    const unique = uniquePoints(hits);
-    if (unique.length === 2) segments.push([unique[0], unique[1]]);
+function triangleNormals(positions: Float32Array, indices: Uint32Array): Float32Array {
+  const result = new Float32Array(indices.length);
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const normal = normalize(cross(
+      sub(pointAt(positions, indices[offset + 1]), pointAt(positions, indices[offset])),
+      sub(pointAt(positions, indices[offset + 2]), pointAt(positions, indices[offset])),
+    ));
+    result.set(normal, offset);
   }
-  if (segments.length === 0) return 0;
-
-  const key = (p: HumanBodyVector3) => `${Math.round(p[0] * 1e6)}:${Math.round(p[2] * 1e6)}`;
-  const adjacency = new Map<string, Array<{ segment: number; point: HumanBodyVector3 }>>();
-  for (let index = 0; index < segments.length; index += 1) {
-    const [a, b] = segments[index];
-    for (const [from, to] of [[a, b], [b, a]] as const) {
-      const k = key(from);
-      const values = adjacency.get(k) ?? [];
-      values.push({ segment: index, point: to });
-      adjacency.set(k, values);
-    }
-  }
-  const visited = new Set<number>();
-  let maximum = 0;
-  for (let start = 0; start < segments.length; start += 1) {
-    if (visited.has(start)) continue;
-    let length = 0;
-    const stack = [start];
-    while (stack.length > 0) {
-      const current = stack.pop()!;
-      if (visited.has(current)) continue;
-      visited.add(current);
-      const [a, b] = segments[current];
-      length += distance(a, b);
-      for (const endpoint of [a, b]) {
-        for (const next of adjacency.get(key(endpoint)) ?? []) {
-          if (!visited.has(next.segment)) stack.push(next.segment);
-        }
-      }
-    }
-    maximum = Math.max(maximum, length);
-  }
-  return maximum;
-}
-
-function uniquePoints(points: readonly HumanBodyVector3[]): HumanBodyVector3[] {
-  const result: HumanBodyVector3[] = [];
-  for (const point of points) if (!result.some((other) => distance(other, point) <= 1e-7)) result.push(point);
   return result;
 }
 
-function classifyRegion(f: AnatomyFrame, sections: readonly HumanBodyCrossSection[], x: number, y: number, z: number): HumanBodyRegionId {
-  const side = x < 0 ? "left" : "right";
-  const shoulderWidth = sections[sections.length - 1].halfWidthM;
-  if (y >= f.neckBaseY - 0.025) return "neck";
-  if (y >= f.shoulderY - 0.09 && Math.abs(x) > shoulderWidth * 0.72) return side === "left" ? "shoulder-left" : "shoulder-right";
-  if (distance2D(x, y, f.wristLeft[0], f.wristLeft[1]) < 0.075 || distance2D(x, y, f.wristRight[0], f.wristRight[1]) < 0.075) return side === "left" ? "wrist-left" : "wrist-right";
-  if (y < f.shoulderY && y > f.wristLeft[1] - 0.13 && Math.abs(x) > shoulderWidth * 0.95) {
-    const elbowY = side === "left" ? f.elbowLeft[1] : f.elbowRight[1];
-    return y > elbowY ? (side === "left" ? "upper-arm-left" : "upper-arm-right") : (side === "left" ? "forearm-left" : "forearm-right");
+function signedVolume(positions: Float32Array, indices: Uint32Array): number {
+  let result = 0;
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const a = pointAt(positions, indices[offset]);
+    const b = pointAt(positions, indices[offset + 1]);
+    const c = pointAt(positions, indices[offset + 2]);
+    result += dot(a, cross(b, c));
   }
-  if (Math.abs(x) < Math.abs(f.hipRight[0]) * 0.72 && Math.abs(y - f.crotchY) < 0.055) return "crotch";
-  if (y <= f.crotchY + 0.06) {
-    if (y > f.kneeY + 0.06) return side === "left" ? "thigh-left" : "thigh-right";
-    if (Math.abs(y - f.kneeY) <= 0.06) return side === "left" ? "knee-left" : "knee-right";
-    if (y > f.ankleY + 0.08) return side === "left" ? "calf-left" : "calf-right";
-    return side === "left" ? "ankle-left" : "ankle-right";
-  }
-  if (y <= f.fullHipY + 0.06) {
-    if (z < 0 && Math.abs(x) > Math.abs(f.hipRight[0]) * 0.55) return side === "left" ? "glute-left" : "glute-right";
-    return z < 0 ? "pelvis-back" : "pelvis-front";
-  }
-  if (y <= f.highHipY + 0.035) return "full-hip";
-  if (y <= f.waistY - 0.02) return "high-hip";
-  if (Math.abs(y - f.waistY) < 0.045) return "waist";
-  if (y < f.underbustY) return "abdomen";
-  if (y < f.bustY - 0.035) return "underbust";
-  if (y <= f.bustY + 0.055 && z >= 0) return side === "left" ? "bust-left" : "bust-right";
-  return z >= 0 ? "chest-front" : "back-upper";
-}
-
-function sweptEllipseField(
-  p: HumanBodyVector3,
-  start: HumanBodyVector3,
-  end: HumanBodyVector3,
-  a0: number,
-  b0: number,
-  a1: number,
-  b1: number,
-  middleBulge = 0,
-  middleAxes?: readonly [number, number],
-): number {
-  const axis = sub(end, start);
-  const length2 = dot(axis, axis);
-  const t = length2 <= 1e-12 ? 0 : clamp(dot(sub(p, start), axis) / length2, 0, 1);
-  const center = addScaled(start, axis, t);
-  let a = lerp(a0, a1, t);
-  let b = lerp(b0, b1, t);
-  if (middleAxes && middleBulge > 0) {
-    const weight = Math.sin(Math.PI * t) ** 2 * middleBulge;
-    a = lerp(a, middleAxes[0], weight);
-    b = lerp(b, middleAxes[1], weight);
-  }
-  const direction = normalize(axis);
-  let transverse = cross([0, 0, 1], direction);
-  if (magnitude(transverse) <= 1e-6) transverse = [1, 0, 0];
-  transverse = normalize(transverse);
-  const front = normalize(cross(direction, transverse));
-  const delta = sub(p, center);
-  const u = dot(delta, transverse);
-  const v = dot(delta, front);
-  const before = -dot(sub(p, start), direction);
-  const after = dot(sub(p, end), direction);
-  const axialOutside = t <= 0 ? Math.max(0, before) : t >= 1 ? Math.max(0, after) : 0;
-  const radial = (Math.hypot(u / Math.max(a, 1e-6), v / Math.max(b, 1e-6)) - 1) * Math.min(a, b);
-  return axialOutside > 0 ? Math.hypot(Math.max(radial, 0), axialOutside) : radial;
-}
-
-function ellipsoidField(x: number, y: number, z: number, center: HumanBodyVector3, radii: HumanBodyVector3): number {
-  const dx = (x - center[0]) / Math.max(radii[0], 1e-6);
-  const dy = (y - center[1]) / Math.max(radii[1], 1e-6);
-  const dz = (z - center[2]) / Math.max(radii[2], 1e-6);
-  return (Math.hypot(dx, dy, dz) - 1) * Math.min(radii[0], radii[1], radii[2]);
-}
-
-function smoothMin(a: number, b: number, k: number): number {
-  if (k <= 1e-9) return Math.min(a, b);
-  const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
-  return lerp(b, a, h) - k * h * (1 - h);
-}
-
-function ellipseAxesForPerimeter(perimeterM: number, ratio: number): readonly [number, number] {
-  const a = Math.max(1.001, ratio);
-  const base = ellipsePerimeter(a, 1);
-  const scaleValue = perimeterM / Math.max(base, 1e-9);
-  return [a * scaleValue, scaleValue];
+  return result / 6;
 }
 
 function ellipsePerimeter(a: number, b: number): number {
-  const h = ((a - b) ** 2) / ((a + b) ** 2);
-  return Math.PI * (a + b) * (1 + 3 * h / (10 + Math.sqrt(4 - 3 * h)));
+  const h = ((a - b) * (a - b)) / Math.max(1e-12, (a + b) * (a + b));
+  return Math.PI * (a + b) * (1 + (3 * h) / (10 + Math.sqrt(Math.max(1e-12, 4 - 3 * h))));
 }
 
-function sectionById(sections: readonly HumanBodyCrossSection[], id: string): HumanBodyCrossSection {
-  const value = sections.find((candidate) => candidate.id === id);
-  if (!value) throw new Error(`HumanBody cross-section ausente: ${id}`);
-  return value;
-}
-
-function computeBounds(positions: readonly number[]): { min: HumanBodyVector3; max: HumanBodyVector3 } {
-  const min: HumanBodyVector3 = [Infinity, Infinity, Infinity];
-  const max: HumanBodyVector3 = [-Infinity, -Infinity, -Infinity];
-  for (let index = 0; index < positions.length; index += 3) {
-    min[0] = Math.min(min[0], positions[index]); min[1] = Math.min(min[1], positions[index + 1]); min[2] = Math.min(min[2], positions[index + 2]);
-    max[0] = Math.max(max[0], positions[index]); max[1] = Math.max(max[1], positions[index + 1]); max[2] = Math.max(max[2], positions[index + 2]);
+function computeBounds(positions: Float32Array): HumanBodyMesh["bounds"] {
+  const min: HumanBodyVector3 = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+  const max: HumanBodyVector3 = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      min[axis] = Math.min(min[axis], positions[offset + axis]);
+      max[axis] = Math.max(max[axis], positions[offset + axis]);
+    }
   }
   return { min, max };
 }
 
-function signedVolume(positions: readonly number[], indices: readonly number[]): number {
-  let volume = 0;
-  for (let offset = 0; offset < indices.length; offset += 3) {
-    const a = arrayVertex(positions, indices[offset]);
-    const b = arrayVertex(positions, indices[offset + 1]);
-    const c = arrayVertex(positions, indices[offset + 2]);
-    volume += dot(a, cross(b, c)) / 6;
+function piecewiseMap(value: number, source: readonly number[], target: readonly number[]): number {
+  if (value <= source[0]) return target[0] + value - source[0];
+  for (let index = 1; index < source.length; index += 1) {
+    if (value > source[index]) continue;
+    const t = (value - source[index - 1]) / Math.max(1e-9, source[index] - source[index - 1]);
+    return lerp(target[index - 1], target[index], t);
   }
-  return volume;
+  return target[target.length - 1] + value - source[source.length - 1];
 }
 
-function typedVertex(values: Float32Array, index: number): HumanBodyVector3 {
-  return [values[index * 3], values[index * 3 + 1], values[index * 3 + 2]];
+function rotateFromTo(
+  vector: HumanBodyVector3,
+  from: HumanBodyVector3,
+  to: HumanBodyVector3,
+): HumanBodyVector3 {
+  const axis = cross(from, to);
+  const sine = magnitude(axis);
+  const cosine = clamp(dot(from, to), -1, 1);
+  if (sine <= 1e-9) return cosine >= 0 ? vector : scale(vector, -1);
+  const unit = scale(axis, 1 / sine);
+  return add(
+    add(scale(vector, cosine), scale(cross(unit, vector), sine)),
+    scale(unit, dot(unit, vector) * (1 - cosine)),
+  );
 }
-function arrayVertex(values: readonly number[], index: number): HumanBodyVector3 {
-  return [values[index * 3], values[index * 3 + 1], values[index * 3 + 2]];
+
+function pointAt(values: ArrayLike<number>, vertex: number): HumanBodyVector3 {
+  return [values[vertex * 3], values[vertex * 3 + 1], values[vertex * 3 + 2]];
 }
-function mixPoint(a: HumanBodyVector3, b: HumanBodyVector3, t: number): HumanBodyVector3 {
-  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+
+function centroid(points: readonly HumanBodyVector3[]): HumanBodyVector3 {
+  const result: HumanBodyVector3 = [0, 0, 0];
+  for (const point of points) {
+    result[0] += point[0]; result[1] += point[1]; result[2] += point[2];
+  }
+  return scale(result, 1 / Math.max(1, points.length));
 }
-function addScaled(a: HumanBodyVector3, b: HumanBodyVector3, value: number): HumanBodyVector3 {
-  return [a[0] + b[0] * value, a[1] + b[1] * value, a[2] + b[2] * value];
+
+function smoothBand(value: number, center: number, fullRadius: number, outerRadius: number): number {
+  const distance = Math.abs(value - center);
+  if (distance <= fullRadius) return 1;
+  if (distance >= outerRadius) return 0;
+  return 1 - smoothstep01((distance - fullRadius) / Math.max(1e-9, outerRadius - fullRadius));
 }
-function sub(a: HumanBodyVector3, b: HumanBodyVector3): HumanBodyVector3 { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
-function scale(a: HumanBodyVector3, value: number): HumanBodyVector3 { return [a[0] * value, a[1] * value, a[2] * value]; }
-function dot(a: HumanBodyVector3, b: HumanBodyVector3): number { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
-function cross(a: HumanBodyVector3, b: HumanBodyVector3): HumanBodyVector3 {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+function smoothRange(value: number, start: number, end: number): number {
+  return smoothstep01((value - start) / Math.max(1e-9, end - start));
 }
-function magnitude(a: HumanBodyVector3): number { return Math.hypot(a[0], a[1], a[2]); }
-function normalize(a: HumanBodyVector3): HumanBodyVector3 { const length = magnitude(a); return length <= 1e-12 ? [0, 1, 0] : scale(a, 1 / length); }
-function distance(a: HumanBodyVector3, b: HumanBodyVector3): number { return magnitude(sub(a, b)); }
-function distance2D(ax: number, ay: number, bx: number, by: number): number { return Math.hypot(ax - bx, ay - by); }
+
+function smoothFalloff(value: number): number {
+  return value >= 1 ? 0 : 1 - smoothstep01(value);
+}
+
+function sideWeight(x: number, side: -1 | 1): number {
+  return smoothstep01((side * x + 0.025) / 0.08);
+}
+
+function frontWeight(z: number): number { return smoothstep01((z + 0.045) / 0.11); }
+function backWeight(z: number): number { return smoothstep01((-z + 0.045) / 0.11); }
+function smoothstep01(value: number): number { const t = clamp(value, 0, 1); return t * t * (3 - 2 * t); }
+function toleranceFor(targetMm: number): number { return Math.max(CIRCUMFERENCE_TOLERANCE_MM, targetMm * 0.01); }
+function positive(value: number | undefined, fallback: number): number { return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback; }
 function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, value)); }
 function clampInt(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, Math.round(value))); }
 function lerp(a: number, b: number, t: number): number { return a + (b - a) * t; }
-function smoothstep(t: number): number { return t * t * (3 - 2 * t); }
-function positive(value: number | undefined, fallback: number): number { return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback; }
+function add(a: HumanBodyVector3, b: HumanBodyVector3): HumanBodyVector3 { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function sub(a: HumanBodyVector3, b: HumanBodyVector3): HumanBodyVector3 { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function scale(a: HumanBodyVector3, value: number): HumanBodyVector3 { return [a[0] * value, a[1] * value, a[2] * value]; }
+function dot(a: HumanBodyVector3, b: HumanBodyVector3): number { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function cross(a: HumanBodyVector3, b: HumanBodyVector3): HumanBodyVector3 { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+function magnitude(a: HumanBodyVector3): number { return Math.hypot(a[0], a[1], a[2]); }
+function normalize(a: HumanBodyVector3): HumanBodyVector3 { const length = magnitude(a); return length <= 1e-12 ? [0, 1, 0] : scale(a, 1 / length); }
+function distance(a: HumanBodyVector3, b: HumanBodyVector3): number { return magnitude(sub(a, b)); }
+function mixPoint(a: HumanBodyVector3, b: HumanBodyVector3, t: number): HumanBodyVector3 { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+function addScaled(a: HumanBodyVector3, b: HumanBodyVector3, value: number): HumanBodyVector3 { return [a[0] + b[0] * value, a[1] + b[1] * value, a[2] + b[2] * value]; }

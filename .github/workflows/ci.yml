@@ -32,15 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply HumanBody P0 geometry prototype
-        run: |
-          python3 scripts/recovery11_0_4b_p0_geometry.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round2.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round3.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round4.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round5_probe.py
-          python3 scripts/recovery11_0_4b_p0_geometry_round6.py
-
       - name: Typecheck
         run: npm run typecheck
 
@@ -48,7 +39,7 @@ jobs:
         run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
 
       - name: HumanBody P0 gate
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose
+        run: npm run test --workspace @moldeon/web -- src/avatar/CanonicalFemaleMesh.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
 
       - name: Run tests
         run: npm run test

@@ -29,7 +29,7 @@ jobs:
       - name: Geometry metrics
         run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
       - name: HumanBody gates
-        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.test.ts --reporter=verbose
+        run: npm run test --workspace @moldeon/web -- src/avatar/CanonicalFemaleMesh.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
       - name: Avatar integration
         run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
       - name: Build
