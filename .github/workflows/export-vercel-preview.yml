@@ -1,0 +1,29 @@
+name: export-vercel-preview
+
+on:
+  pull_request:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.4b-canonical-female-human-body
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moldeon-11.0.4b-dist
+          path: apps/web/dist
+          if-no-files-found: error

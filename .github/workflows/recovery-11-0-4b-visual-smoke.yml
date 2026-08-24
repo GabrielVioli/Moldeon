@@ -1,0 +1,42 @@
+name: recovery-11.0.4b-visual-smoke
+
+on:
+  pull_request:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
+
+permissions:
+  contents: read
+
+jobs:
+  visual-evidence-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.4b-canonical-female-human-body
+      - name: Verify screenshots
+        run: |
+          test -f docs/validation/human-body-11.0.4b/front.png
+          test -f docs/validation/human-body-11.0.4b/side.png
+          test -f docs/validation/human-body-11.0.4b/back.png
+          test -f docs/validation/human-body-11.0.4b/front-three-quarter.png
+          test -f docs/validation/human-body-11.0.4b/back-three-quarter.png
+          test -f docs/validation/human-body-11.0.4b/front-silhouette.png
+          test -f docs/validation/human-body-11.0.4b/side-silhouette.png
+          test -f docs/validation/human-body-11.0.4b/back-silhouette.png
+      - name: Upload visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-body-11.0.4b-screenshots
+          path: |
+            docs/validation/human-body-11.0.4b/front.png
+            docs/validation/human-body-11.0.4b/side.png
+            docs/validation/human-body-11.0.4b/back.png
+            docs/validation/human-body-11.0.4b/front-three-quarter.png
+            docs/validation/human-body-11.0.4b/back-three-quarter.png
+            docs/validation/human-body-11.0.4b/front-silhouette.png
+            docs/validation/human-body-11.0.4b/side-silhouette.png
+            docs/validation/human-body-11.0.4b/back-silhouette.png
+          retention-days: 7

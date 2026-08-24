@@ -1,0 +1,36 @@
+name: recovery-11.0.4b-human-body
+
+on:
+  pull_request:
+    branches:
+      - recovery/11.0.4a-waistband-zero-energy
+
+permissions:
+  contents: read
+
+jobs:
+  human-body-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.4b-canonical-female-human-body
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Diff check
+        run: git diff --check origin/recovery/11.0.4a-waistband-zero-energy...HEAD
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Geometry metrics
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
+      - name: HumanBody gates
+        run: npm run test --workspace @moldeon/web -- src/avatar/CanonicalFemaleMesh.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
+      - name: Avatar integration
+        run: npm run test --workspace @moldeon/web -- src/avatar/AvatarParametricModel.test.ts src/viewport/AvatarVisual.test.ts
+      - name: Build
+        run: npm run build

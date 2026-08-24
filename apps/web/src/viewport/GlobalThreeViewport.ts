@@ -10,6 +10,7 @@ import { buildAvatarParametricModel, type AvatarParametricModel } from "../avata
 import { buildAvatarCollisionModel } from "../avatar/AvatarCollisionModel";
 import { createAvatarVisual } from "./AvatarVisual";
 import { createAvatarCollisionDebugVisual } from "./AvatarCollisionDebugVisual";
+import { resolveAvatarFloorPosition } from "./AvatarGroundPlane";
 import { packAvatarCollisionModel, type SimulationBodyTransform } from "../physics/bodyCollision";
 import { resolveSimulationBodyRegistration, type BodyRegistrationStatus } from "../physics/BodyCollisionRegistration";
 import type { BodyType } from "../domain/pattern";
@@ -63,6 +64,7 @@ export class ThreeViewport {
   private readonly avatarGroup = new THREE.Group();
   private readonly proceduralAvatarGroup = new THREE.Group();
   private readonly bodyColliderDebugGroup = new THREE.Group();
+  private readonly floor: THREE.Mesh;
   private readonly resizeObserver: ResizeObserver;
   private readonly profile: PerformanceProfile;
   private readonly renderer: ViewportRenderer;
@@ -104,6 +106,7 @@ export class ThreeViewport {
   ) {
     this.renderer = renderer;
     this.profile = profile;
+    this.floor = createFloor(profile.shadows);
     this.host.dataset.simulationWorker = "created";
     this.simulation = new XpbdWorkerClient({
       onFrame: (frame) => {
@@ -171,7 +174,7 @@ export class ThreeViewport {
     this.scene.add(this.proceduralAvatarGroup);
     this.scene.add(this.bodyColliderDebugGroup);
     this.scene.add(this.garmentGroup);
-    this.scene.add(createFloor(profile.shadows));
+    this.scene.add(this.floor);
 
     this.resizeObserver = new ResizeObserver(() => {
       this.refresh();
@@ -213,7 +216,14 @@ export class ThreeViewport {
 
   updateGarment(input: ResolvedAssemblyInput): string[] {
     const garment = input.garmentProjection;
-    const avatarModel = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
+    const avatarModel = buildAvatarParametricModel(
+      input.document.measurements.values,
+      input.document.body.type,
+      {
+        profile: input.document.measurements.profile,
+        origins: measurementOriginsFromDocument(input.document.measurements),
+      },
+    );
     this.currentAvatarModel = avatarModel;
     const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);
     const settings = input.document.simulationSettings;
@@ -261,6 +271,7 @@ export class ThreeViewport {
         : { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] as string[] };
       this.host.dataset.bodyRegistration = JSON.stringify(registration);
       this.host.dataset.avatarMeasurementOrigins = JSON.stringify(avatarModel.measurementOrigins ?? {});
+      this.host.dataset.avatarResolvedMeasurements = JSON.stringify(avatarModel.measurements);
       this.host.dataset.bodyColliderCount = String(collisionModel.proxies.length);
       if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, collisionModel, registration.transform);
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
@@ -453,6 +464,8 @@ export class ThreeViewport {
     delete this.host.dataset.initialSeamResidualAudit;
     delete this.host.dataset.bodyRegistration;
     delete this.host.dataset.avatarMeasurementOrigins;
+    delete this.host.dataset.avatarResolvedMeasurements;
+    delete this.host.dataset.avatarFloorPosition;
     delete this.host.dataset.bodyColliderCount;
   }
 
@@ -557,6 +570,9 @@ export class ThreeViewport {
     const visual = createAvatarVisual(avatarModel, { radialSegments: 18, castShadow: false, receiveShadow: false });
     visual.position.set(...transform.translation);
     visual.quaternion.set(...transform.rotation);
+    const floorPosition = resolveAvatarFloorPosition(avatarModel, transform);
+    this.floor.position.set(...floorPosition);
+    this.host.dataset.avatarFloorPosition = JSON.stringify(floorPosition);
     this.proceduralAvatarGroup.add(visual);
     this.bodyColliderDebugGroup.add(createAvatarCollisionDebugVisual(collisionModel, transform));
     this.proceduralAvatarGroup.visible = this.devSettings.showProceduralAvatar;
@@ -906,6 +922,16 @@ function createFloor(shadows: boolean): THREE.Mesh {
   floor.position.y = 0;
   floor.receiveShadow = shadows;
   return floor;
+}
+
+function measurementOriginsFromDocument(
+  measurements: ResolvedAssemblyInput["document"]["measurements"],
+): Record<string, "supplied" | "estimated" | "derived"> {
+  return Object.fromEntries([
+    ...(measurements.derivedKeys ?? []).map((key) => [key, "derived"] as const),
+    ...measurements.estimatedKeys.map((key) => [key, "estimated"] as const),
+    ...(measurements.suppliedKeys ?? []).map((key) => [key, "supplied"] as const),
+  ]);
 }
 
 function disposeObject(root: THREE.Object3D): void {

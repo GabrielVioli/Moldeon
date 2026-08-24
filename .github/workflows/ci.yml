@@ -35,6 +35,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: HumanBody generated mesh metrics
+        run: npm run test --workspace @moldeon/web -- src/avatar/HumanBodyModel.metrics.test.ts --reporter=verbose
+
+      - name: HumanBody P0 gate
+        run: npm run test --workspace @moldeon/web -- src/avatar/CanonicalFemaleMesh.test.ts src/avatar/HumanBodyModel.test.ts --reporter=verbose
+
       - name: Run tests
         run: npm run test
 
