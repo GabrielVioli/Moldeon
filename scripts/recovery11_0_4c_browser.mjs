@@ -83,6 +83,7 @@ async function captureOrientationCase(fixtureId, label) {
       && Boolean(revision)
       && (!prior || revision !== prior);
   }, previousRevision, { timeout: 60_000 });
+  await ensurePhysicsDevOpen();
   const pause = page.getByRole("button", { name: "Pausar", exact: true });
   if (await pause.isVisible().catch(() => false)) await pause.click();
   await page.locator(".viewport-physics-dev select").first().selectOption("0");
@@ -100,6 +101,7 @@ async function captureOrientationCase(fixtureId, label) {
     settings: JSON.parse(element.getAttribute("data-simulation-dev-settings") ?? "{}"),
     spatial: JSON.parse(element.getAttribute("data-spatial-assembly-diagnostics") ?? "{}"),
   }));
+  await ensurePhysicsDevClosed();
   await page.screenshot({ path: resolve(outputDir, `${label}-front.png`), fullPage: true });
   await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.cameraView("side"));
   await page.waitForTimeout(250);
@@ -108,9 +110,11 @@ async function captureOrientationCase(fixtureId, label) {
   await page.waitForTimeout(250);
   await page.screenshot({ path: resolve(outputDir, `${label}-back.png`), fullPage: true });
 
+  await ensurePhysicsDevOpen();
   const avatar = page.getByLabel("Show procedural avatar");
   if (await avatar.isChecked().catch(() => false)) await avatar.uncheck();
   await page.getByRole("button", { name: "Enquadrar roupa", exact: true }).click();
+  await ensurePhysicsDevClosed();
   await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.cameraView("front"));
   await page.waitForTimeout(250);
   await page.screenshot({ path: resolve(outputDir, `${label}-garment-only-front.png`), fullPage: true });
@@ -120,13 +124,13 @@ async function captureOrientationCase(fixtureId, label) {
   await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.cameraView("back"));
   await page.waitForTimeout(250);
   await page.screenshot({ path: resolve(outputDir, `${label}-garment-only-back.png`), fullPage: true });
+  await ensurePhysicsDevOpen();
   await avatar.check();
+  await ensurePhysicsDevClosed();
   return snapshot;
 }
 
 async function captureFloorCase() {
-  const previousRevision = await page.locator("[data-testid='dressed-avatar-viewport']")
-    .getAttribute("data-simulation-geometry-revision").catch(() => null);
   await page.evaluate(() => window.__moldeonPhase0?.loadFixture("straight-skirt-standard"));
   const prove = page.getByRole("button", { name: "Provar", exact: true });
   if (await prove.isVisible()) await prove.click();
@@ -139,13 +143,13 @@ async function captureFloorCase() {
   }
   const host = page.locator("[data-testid='dressed-avatar-viewport']");
   await host.waitFor({ state: "visible", timeout: 15_000 });
-  await page.waitForFunction((prior) => {
+  await page.waitForFunction(() => {
     const element = document.querySelector("[data-testid='dressed-avatar-viewport']");
     const revision = element?.getAttribute("data-simulation-geometry-revision");
     return element?.getAttribute("data-assembly-status") === "ready"
-      && Boolean(revision)
-      && (!prior || revision !== prior);
-  }, previousRevision, { timeout: 60_000 });
+      && Boolean(revision);
+  }, undefined, { timeout: 60_000 });
+  await ensurePhysicsDevOpen();
   const bodyCollision = page.getByLabel("Body collision");
   if (await bodyCollision.isChecked()) await bodyCollision.uncheck();
   const floorCollision = page.getByLabel("Floor collision");
@@ -173,6 +177,21 @@ async function captureFloorCase() {
       meshes,
     };
   });
+  await ensurePhysicsDevClosed();
   await page.screenshot({ path: resolve(outputDir, "floor-skirt-resting.png"), fullPage: true });
   return snapshot;
+}
+
+async function ensurePhysicsDevOpen() {
+  const panel = page.locator("[data-testid='physics-dev-panel']");
+  if (!await panel.count()) return;
+  const open = await panel.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+  if (!open) await panel.locator("summary").first().click();
+}
+
+async function ensurePhysicsDevClosed() {
+  const panel = page.locator("[data-testid='physics-dev-panel']");
+  if (!await panel.count()) return;
+  const open = await panel.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+  if (open) await panel.locator("summary").first().click();
 }

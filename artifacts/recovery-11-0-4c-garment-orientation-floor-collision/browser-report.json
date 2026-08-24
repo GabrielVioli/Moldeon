@@ -1,6 +1,6 @@
 {
   "page": {
-    "contentLength": 692,
+    "contentLength": 649,
     "errorOverlay": false
   },
   "orientation": {
@@ -138,7 +138,7 @@
             ]
           },
           "geometrySignature": "ae0d0fd6",
-          "geometryRevision": "6a379f43-b93a-4c00-8dc3-c307912dedaa:1:2",
+          "geometryRevision": "222aa9a3-585b-4197-9fb9-3205976c74ca:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.5565178285065433,
@@ -209,7 +209,7 @@
             ]
           },
           "geometrySignature": "ae0d0fd6",
-          "geometryRevision": "7db6a873-54fd-465d-9fa7-18ada87461fd:1:2",
+          "geometryRevision": "b4efb2a7-27df-495e-8322-fa0f83f018fe:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.551133730971283,
@@ -280,7 +280,7 @@
             ]
           },
           "geometrySignature": "39e416eb",
-          "geometryRevision": "51c9f462-7a6a-4cb5-89bf-0ecbf5fa5d56:1:2",
+          "geometryRevision": "293b9eb8-9886-4ade-9465-4c95ee482680:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.5493758669195337,
@@ -351,7 +351,7 @@
             ]
           },
           "geometrySignature": "39e416eb",
-          "geometryRevision": "29f1711f-f51b-4574-a606-83e132f240c6:1:2",
+          "geometryRevision": "2ef5ce24-d1ac-4fa6-a78d-43fa60410efd:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.5564541891957079,
@@ -422,7 +422,7 @@
             ]
           },
           "geometrySignature": "89f024f2",
-          "geometryRevision": "6483d6cd-47e9-4ad3-b6f0-2cf85a5aa0c0:1:2",
+          "geometryRevision": "21057d1d-0779-470a-8adf-067c21ef5fe5:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.9631500626064726,
@@ -493,7 +493,7 @@
             ]
           },
           "geometrySignature": "89f024f2",
-          "geometryRevision": "5be41541-b944-41ec-9f22-47f94f7bd171:1:2",
+          "geometryRevision": "fe7f1ec9-f347-46f4-b4c9-662a58934b2b:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.5764164791592032,
@@ -728,9 +728,9 @@
         "coarseTriangleCount": 2040,
         "hingeCount": 2538,
         "reductionRatio": 0.3017543859649123,
-        "fineBindingBuildMs": 19.150000002235174,
-        "fineTransferMs": 1.75,
-        "assemblySolveMs": 16907.074999999255,
+        "fineBindingBuildMs": 18.855000000447035,
+        "fineTransferMs": 1.925000000745058,
+        "assemblySolveMs": 16863.745000001043,
         "assemblyConfidence": [
           {
             "componentId": "coarse-component:1:guided-sleeve:tshirt-front:tshirt-back:panel:1+guided-sleeve:tshirt-front:tshirt-back:panel:2+tshirt-back:panel:1:fold-a+tshirt-back:panel:1:fold-b+tshirt-front:panel:1:fold-a+tshirt-front:panel:1:fold-b",
@@ -1360,7 +1360,7 @@
             ]
           },
           "geometrySignature": "c71276c9",
-          "geometryRevision": "cec3fa32-62ff-4815-aa0f-dff9039ba637:1:2",
+          "geometryRevision": "08829e5a-2c60-40e5-99cc-b48e6fc73ac0:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.413303467695245,
@@ -1431,7 +1431,7 @@
             ]
           },
           "geometrySignature": "c71276c9",
-          "geometryRevision": "0aac90f6-0a49-4e1e-af71-bb2fa7870396:1:2",
+          "geometryRevision": "572a0c72-c71a-4261-b233-160cad3f304e:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.4126854191677269,
@@ -1502,7 +1502,7 @@
             ]
           },
           "geometrySignature": "b9926a5a",
-          "geometryRevision": "0e9da019-356f-46a1-8559-1b013dbc9ec4:1:2",
+          "geometryRevision": "9d7559b3-0045-430d-b86c-db893774dbfe:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.5063274643762298,
@@ -1573,7 +1573,7 @@
             ]
           },
           "geometrySignature": "b9926a5a",
-          "geometryRevision": "a7686b5e-e166-4ac8-9b66-20f67077c1bc:1:2",
+          "geometryRevision": "4496b223-2193-4272-a864-95721c601a92:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.5077789448247679,
@@ -1644,7 +1644,7 @@
             ]
           },
           "geometrySignature": "284e3676",
-          "geometryRevision": "17e20333-c7bb-46ca-91fa-1d7b3ee680d6:1:2",
+          "geometryRevision": "4a456bc4-33b4-4734-ba0a-8f9232ac5d48:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.8926523066663442,
@@ -1715,7 +1715,7 @@
             ]
           },
           "geometrySignature": "284e3676",
-          "geometryRevision": "e0b1d3bd-c875-49b5-9c95-5de84ca10b0f:1:2",
+          "geometryRevision": "b80522b5-66a1-432f-a9e9-b4db1ba21c80:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.8922523408875663,
@@ -1950,9 +1950,9 @@
         "coarseTriangleCount": 2392,
         "hingeCount": 2978,
         "reductionRatio": 0.30149750415973375,
-        "fineBindingBuildMs": 26.74499999731779,
-        "fineTransferMs": 2.0150000005960464,
-        "assemblySolveMs": 23412.46499999985,
+        "fineBindingBuildMs": 24.945000000298023,
+        "fineTransferMs": 2.044999998062849,
+        "assemblySolveMs": 24227.765000000596,
         "assemblyConfidence": [
           {
             "componentId": "coarse-component:1:blouse-back:panel:1:fold-a+blouse-back:panel:1:fold-b+blouse-front:panel:1:fold-a+blouse-front:panel:1:fold-b+guided-sleeve:blouse-front:blouse-back:panel:1+guided-sleeve:blouse-front:blouse-back:panel:2",
@@ -2580,7 +2580,7 @@
             ]
           },
           "geometrySignature": "66dbbe50",
-          "geometryRevision": "a12c9f90-562f-40ef-a34d-ee2fc9d941f5:5:6",
+          "geometryRevision": "497f74f7-37b1-4575-861d-9debefe32a12:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.4747971196021626,
@@ -2651,7 +2651,7 @@
             ]
           },
           "geometrySignature": "66dbbe50",
-          "geometryRevision": "d1908c3e-033c-4695-b7a8-88b20b09bf1e:5:6",
+          "geometryRevision": "5af2faaa-ea0d-4738-be79-13c20bcb4a8f:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.47574190378152664,
@@ -2722,7 +2722,7 @@
             ]
           },
           "geometrySignature": "85526ee2",
-          "geometryRevision": "5048a380-cfb4-4c59-8697-540076533b3f:5:6",
+          "geometryRevision": "fbf10f8c-42d1-4f83-8951-1cf1ef6f790e:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.5658154832406312,
@@ -2793,7 +2793,7 @@
             ]
           },
           "geometrySignature": "85526ee2",
-          "geometryRevision": "40031563-9832-4360-97fb-561c1abea3f6:5:6",
+          "geometryRevision": "f150fee5-bc11-4326-8468-1d97cd9a1443:1:2",
           "meshCount": 1,
           "meanNormal": [
             -0.565790431022088,
@@ -2917,16 +2917,16 @@
         "invalid": false,
         "invalidReason": null,
         "droppedTimeSeconds": 0,
-        "integrationMs": 0.22500000149011612,
-        "stretchMs": 7.230000000447035,
-        "shearMs": 7.33500000089407,
-        "bendMs": 4.3599999994039536,
-        "seamMs": 0.3049999997019768,
-        "velocityUpdateMs": 0.23999999836087227,
-        "validationMs": 2.730000000447035,
-        "solverStepTotalMs": 22.769999999552965,
+        "integrationMs": 0,
+        "stretchMs": 0,
+        "shearMs": 0,
+        "bendMs": 0,
+        "seamMs": 0,
+        "velocityUpdateMs": 0,
+        "validationMs": 0,
+        "solverStepTotalMs": 0,
         "bodyCollisionMs": 0,
-        "floorCollisionMs": 0.03500000014901161,
+        "floorCollisionMs": 0,
         "bodyBroadphaseMs": 0,
         "bodyNarrowphaseMs": 0,
         "bodyProjectionMs": 0,
@@ -2947,7 +2947,7 @@
         "iterations": 5,
         "maximumSubsteps": 2,
         "physicsStepMs": 0,
-        "workerStepTotalMs": 22.780000001192093
+        "workerStepTotalMs": 0
       },
       "settings": {
         "gravityScale": 0,
@@ -2994,9 +2994,9 @@
         "coarseTriangleCount": 1464,
         "hingeCount": 1830,
         "reductionRatio": 0.300764192139738,
-        "fineBindingBuildMs": 15.934999998658895,
-        "fineTransferMs": 1.6549999974668026,
-        "assemblySolveMs": 7688.129999998957,
+        "fineBindingBuildMs": 22.864999998360872,
+        "fineTransferMs": 1.6050000004470348,
+        "assemblySolveMs": 6885.214999999851,
         "assemblyConfidence": [
           {
             "componentId": "coarse-component:1:straight-skirt-back:panel:1:fold-a+straight-skirt-back:panel:1:fold-b+straight-skirt-front:panel:1:fold-a+straight-skirt-front:panel:1:fold-b",
@@ -3526,7 +3526,7 @@
             ]
           },
           "geometrySignature": "018f44cf",
-          "geometryRevision": "40b1c4b0-a651-4eee-a802-c8df8a9c4604:1:2",
+          "geometryRevision": "68b3d387-4551-4f9e-8bf9-0fa3d4f831a7:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.876308782161522,
@@ -3597,7 +3597,7 @@
             ]
           },
           "geometrySignature": "98b4d59b",
-          "geometryRevision": "3561971e-f848-47a9-b559-471cfefb33be:1:2",
+          "geometryRevision": "46e5def6-3a23-4508-8b5d-8436fc561710:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.19835136990619365,
@@ -3668,7 +3668,7 @@
             ]
           },
           "geometrySignature": "1659191f",
-          "geometryRevision": "6ccfe0b5-44f8-4561-8c82-6881dd60fe01:1:2",
+          "geometryRevision": "f23d7cfa-1b05-4df0-9520-15fcbd532c7e:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.8764069635914857,
@@ -3739,7 +3739,7 @@
             ]
           },
           "geometrySignature": "aebfb2eb",
-          "geometryRevision": "b3911e51-2873-40cc-8be1-2b11ac6db7ed:1:2",
+          "geometryRevision": "863a7a8c-a9a7-4f6e-bd61-7b9d225ae7e1:1:2",
           "meshCount": 1,
           "meanNormal": [
             0.1983803327243507,
@@ -3934,9 +3934,9 @@
         "coarseTriangleCount": 144,
         "hingeCount": 180,
         "reductionRatio": 0.08615384615384615,
-        "fineBindingBuildMs": 12.064999997615814,
-        "fineTransferMs": 4.615000002086163,
-        "assemblySolveMs": 1638.3450000025332,
+        "fineBindingBuildMs": 3.599999997764826,
+        "fineTransferMs": 1.9149999991059303,
+        "assemblySolveMs": 2193.904999997467,
         "assemblyConfidence": [
           {
             "componentId": "coarse-component:1:spatial-panel-1:panel:1+spatial-panel-2:panel:1+spatial-panel-3:panel:1+spatial-panel-4:panel:1",
@@ -4314,7 +4314,7 @@
   "floor": {
     "skirt": {
       "diagnostics": {
-        "stepCount": 46,
+        "stepCount": 43,
         "substeps": 0,
         "particleCount": 3664,
         "triangleCount": 5856,
@@ -4322,84 +4322,84 @@
         "shearConstraintCount": 5856,
         "bendConstraintCount": 8052,
         "seamConstraintCount": 350,
-        "seamErrorAverage": 0.0068890418220807145,
-        "seamErrorMaximum": 0.08701501397170004,
+        "seamErrorAverage": 0.0021427203905273265,
+        "seamErrorMaximum": 0.03307593072256746,
         "seamErrorsByGroup": {
           "template-seam:skirt-side": {
             "constraintCount": 88,
-            "meanError": 0.008052941963959453,
-            "maxError": 0.07705752606408624,
+            "meanError": 0.0028649856475122222,
+            "maxError": 0.03307593072256746,
             "worstConstraintIndex": 86
           },
           "dart:straight-skirt-front:fixture-dart-1": {
             "constraintCount": 8,
-            "meanError": 0.0005891929076592878,
-            "maxError": 0.0013950041749413828,
-            "worstConstraintIndex": 94
+            "meanError": 0.0004156087824935152,
+            "maxError": 0.0006388018406461849,
+            "worstConstraintIndex": 95
           },
           "dart:straight-skirt-back:fixture-dart-1": {
             "constraintCount": 8,
-            "meanError": 0.004050350655454471,
-            "maxError": 0.007084532425986549,
+            "meanError": 0.001969193667720319,
+            "maxError": 0.0035775633600407595,
             "worstConstraintIndex": 103
           },
           "fold:straight-skirt-front:panel:1:cut-on-fold": {
             "constraintCount": 121,
-            "meanError": 0.007051306238004116,
-            "maxError": 0.08701501397170004,
-            "worstConstraintIndex": 104
+            "meanError": 0.002002223980030477,
+            "maxError": 0.026098985167979153,
+            "worstConstraintIndex": 105
           },
           "fold:straight-skirt-back:panel:1:cut-on-fold": {
             "constraintCount": 125,
-            "meanError": 0.0064974507327712535,
-            "maxError": 0.0806279639539602,
+            "meanError": 0.0018918870281447204,
+            "maxError": 0.02486911639787339,
             "worstConstraintIndex": 225
           }
         },
-        "maximumPositionMagnitude": 0.37292596971447217,
-        "maximumVelocityMagnitude": 3.4748665574137187,
-        "structuralStretchMeanRatio": 0.9967853733318215,
-        "structuralStretchMaxRatio": 7.72527784886731,
-        "structuralCompressionMinRatio": 0.03574697686959257,
-        "shearStrainMean": 0.16095385205561594,
-        "shearStrainMax": 1.972578157357994,
-        "triangleAreaMeanRatio": 1.1381048930017559,
-        "triangleAreaMinRatio": 0.005189774980529693,
-        "triangleAreaMaxRatio": 16.177180177254076,
-        "flippedTriangleCount": 88,
-        "garmentAabbGrowthRatio": 0.8987859543394094,
+        "maximumPositionMagnitude": 0.449752959312728,
+        "maximumVelocityMagnitude": 3.5144264325860246,
+        "structuralStretchMeanRatio": 0.9715119129270852,
+        "structuralStretchMaxRatio": 3.620617588948051,
+        "structuralCompressionMinRatio": 0.03423049945669722,
+        "shearStrainMean": 0.10091294344221523,
+        "shearStrainMax": 1.9742424393631033,
+        "triangleAreaMeanRatio": 1.0462147100734458,
+        "triangleAreaMinRatio": 0.012655012708061903,
+        "triangleAreaMaxRatio": 15.311660775123725,
+        "flippedTriangleCount": 57,
+        "garmentAabbGrowthRatio": 0.9017759444618991,
         "materialMetricsByPanel": {
           "straight-skirt-front:panel:1:fold-a": {
             "constraintCount": 2340,
-            "structuralStretchMeanRatio": 0.9941019434608616,
-            "structuralStretchMaxRatio": 6.734865313552784,
-            "structuralCompressionMinRatio": 0.10357541159344484
+            "structuralStretchMeanRatio": 0.9707014537369616,
+            "structuralStretchMaxRatio": 3.620617588948051,
+            "structuralCompressionMinRatio": 0.0898537055725946
           },
           "straight-skirt-front:panel:1:fold-b": {
             "constraintCount": 2340,
-            "structuralStretchMeanRatio": 0.9973418106483243,
-            "structuralStretchMaxRatio": 6.636793470052996,
-            "structuralCompressionMinRatio": 0.07521974379498379
+            "structuralStretchMeanRatio": 0.9705485193523365,
+            "structuralStretchMaxRatio": 3.337781332002717,
+            "structuralCompressionMinRatio": 0.09890776774469072
           },
           "straight-skirt-back:panel:1:fold-a": {
             "constraintCount": 2418,
-            "structuralStretchMeanRatio": 0.9988510607899137,
-            "structuralStretchMaxRatio": 7.72527784886731,
-            "structuralCompressionMinRatio": 0.06468564861357884
+            "structuralStretchMeanRatio": 0.9724988851164249,
+            "structuralStretchMaxRatio": 3.4738310202611027,
+            "structuralCompressionMinRatio": 0.03423049945669722
           },
           "straight-skirt-back:panel:1:fold-b": {
             "constraintCount": 2418,
-            "structuralStretchMeanRatio": 0.9967780657651177,
-            "structuralStretchMaxRatio": 6.635067589056729,
-            "structuralCompressionMinRatio": 0.03574697686959257
+            "structuralStretchMeanRatio": 0.9722415724456904,
+            "structuralStretchMaxRatio": 3.506674138629257,
+            "structuralCompressionMinRatio": 0.08103529038024149
           }
         },
         "materialMetricsByFabric": {
           "fixture-fabric-primary": {
             "constraintCount": 9516,
-            "structuralStretchMeanRatio": 0.9967853733318215,
-            "structuralStretchMaxRatio": 7.72527784886731,
-            "structuralCompressionMinRatio": 0.03574697686959257
+            "structuralStretchMeanRatio": 0.9715119129270852,
+            "structuralStretchMaxRatio": 3.620617588948051,
+            "structuralCompressionMinRatio": 0.03423049945669722
           }
         },
         "explicitPinCount": 0,
@@ -4414,28 +4414,28 @@
         "sweptContactCount": 0,
         "bodyCollisionEnabled": false,
         "floorCollisionEnabled": true,
-        "floorContactCount": 803,
-        "floorCcdContactCount": 803,
-        "floorFrictionContactCount": 803,
+        "floorContactCount": 520,
+        "floorCcdContactCount": 520,
+        "floorFrictionContactCount": 520,
         "maximumFloorPenetrationM": 0,
         "meanFloorPenetrationM": 0,
         "invalid": false,
         "invalidReason": null,
         "droppedTimeSeconds": 0,
-        "integrationMs": 0.03500000014901161,
-        "stretchMs": 3.274999998509884,
-        "shearMs": 3.480000004172325,
-        "bendMs": 2.7299999967217445,
-        "seamMs": 0.2900000028312206,
-        "velocityUpdateMs": 0.32500000298023224,
-        "validationMs": 3.814999997615814,
-        "solverStepTotalMs": 14.07999999821186,
+        "integrationMs": 0.06000000238418579,
+        "stretchMs": 4.040000002831221,
+        "shearMs": 5.589999996125698,
+        "bendMs": 4.355000004172325,
+        "seamMs": 0.4400000013411045,
+        "velocityUpdateMs": 0.2850000001490116,
+        "validationMs": 4,
+        "solverStepTotalMs": 18.91000000014901,
         "bodyCollisionMs": 0,
-        "floorCollisionMs": 0.05999999865889549,
+        "floorCollisionMs": 0.054999999701976776,
         "bodyBroadphaseMs": 0,
         "bodyNarrowphaseMs": 0,
         "bodyProjectionMs": 0,
-        "bodyFrictionMs": 0.004999998956918716,
+        "bodyFrictionMs": 0.010000001639127731,
         "bodyParticleQueries": 0,
         "bodyColliderTests": 0,
         "bodyCandidateColliderTests": 0,
@@ -4451,8 +4451,8 @@
         "bodyInitialDressingSteps": 0,
         "iterations": 5,
         "maximumSubsteps": 2,
-        "physicsStepMs": 14.07999999821186,
-        "workerStepTotalMs": 14.07999999821186
+        "physicsStepMs": 18.91000000014901,
+        "workerStepTotalMs": 18.91000000014901
       },
       "settings": {
         "gravityScale": 1,
@@ -4474,20 +4474,20 @@
           "triangleCount": 1440,
           "boundingBox": {
             "min": [
-              -0.07052801549434662,
+              -0.02406872995197773,
               -0.0015899999998509884,
-              -0.03482447937130928
+              -0.00868665799498558
             ],
             "max": [
-              0.27293509244918823,
-              0.33918455243110657,
-              0.13917481899261475
+              0.24638353288173676,
+              0.4234922230243683,
+              0.13644416630268097
             ]
           },
           "centroid": [
-            0.10295814420758993,
-            0.14994845820214087,
-            0.0780393252836023
+            0.10243074367522982,
+            0.2098424044348893,
+            0.0794698001388419
           ],
           "transform": {
             "position": [
@@ -4525,17 +4525,17 @@
             ]
           },
           "geometrySignature": "66dbbe50",
-          "geometryRevision": "6e51fb0c-2215-47b3-b259-186eeb60340d:16:17",
+          "geometryRevision": "d5f6b9df-6364-40de-9cf5-1594c2ee187b:29:30",
           "meshCount": 1,
           "meanNormal": [
-            0.4927548239657225,
-            0.07187661915546618,
-            0.8671945774030704
+            0.482451318647601,
+            0.050874466093813055,
+            0.8744441170451432
           ],
           "meanTriangleNormal": [
-            0.49373539740264777,
-            -0.1848787022622467,
-            0.8497324418906677
+            0.49656315193359296,
+            0.0034124342776964806,
+            0.8679938890534172
           ],
           "materialSide": 2
         },
@@ -4545,20 +4545,20 @@
           "triangleCount": 1440,
           "boundingBox": {
             "min": [
-              -0.27225261926651,
+              -0.24778185784816742,
               -0.0015899999998509884,
-              -0.03464142233133316
+              -0.008530134335160255
             ],
             "max": [
-              0.06933270394802094,
-              0.339103639125824,
-              0.136789932847023
+              0.02537267655134201,
+              0.42350471019744873,
+              0.1365119367837906
             ]
           },
           "centroid": [
-            -0.10293542488460572,
-            0.1499527283912227,
-            0.0779507402015211
+            -0.10242017129170533,
+            0.20988809776833975,
+            0.07937673172840103
           ],
           "transform": {
             "position": [
@@ -4596,17 +4596,17 @@
             ]
           },
           "geometrySignature": "66dbbe50",
-          "geometryRevision": "3d1faffa-581f-4a87-9e6c-94edee1e9ed4:16:17",
+          "geometryRevision": "260b71c7-e94d-4f0b-9e76-dab72dd68867:29:30",
           "meshCount": 1,
           "meanNormal": [
-            -0.4933532978446374,
-            0.06216289478783835,
-            0.8676049204663472
+            -0.48124766187317536,
+            0.045978258251792685,
+            0.8753780256036435
           ],
           "meanTriangleNormal": [
-            -0.496480494025993,
-            -0.18446904745651874,
-            0.8482206609026868
+            -0.49835457940543565,
+            0.0031994105843897447,
+            0.8669674024769003
           ],
           "materialSide": 2
         },
@@ -4616,20 +4616,20 @@
           "triangleCount": 1488,
           "boundingBox": {
             "min": [
-              -0.07338396459817886,
+              -0.028667548671364784,
               -0.0015899999998509884,
-              -0.16104920208454132
+              -0.14792123436927795
             ],
             "max": [
-              0.26796096563339233,
-              0.3487849235534668,
-              0.06702421605587006
+              0.24468763172626495,
+              0.43263930082321167,
+              0.039524730294942856
             ]
           },
           "centroid": [
-            0.1025871352542676,
-            0.1502516684078313,
-            -0.07070164135009527
+            0.1022992040915644,
+            0.20994347506425645,
+            -0.07231922302543657
           ],
           "transform": {
             "position": [
@@ -4667,17 +4667,17 @@
             ]
           },
           "geometrySignature": "85526ee2",
-          "geometryRevision": "267fc906-9bfc-4283-84cd-1ce2b098e00b:16:17",
+          "geometryRevision": "6222d6f8-794a-4415-b269-216b408c6c13:29:30",
           "meshCount": 1,
           "meanNormal": [
-            0.5714510256037603,
-            0.0957293917846666,
-            -0.8150335016948372
+            0.5671271827739517,
+            0.0676073107769117,
+            -0.8208507843015043
           ],
           "meanTriangleNormal": [
-            0.584157889860589,
-            -0.18253928796298852,
-            -0.7908469940915179
+            0.5898595602097397,
+            0.006022027150626533,
+            -0.8074833957538504
           ],
           "materialSide": 2
         },
@@ -4687,20 +4687,20 @@
           "triangleCount": 1488,
           "boundingBox": {
             "min": [
-              -0.2670894265174866,
+              -0.24356044828891754,
               -0.0015899999998509884,
-              -0.15968528389930725
+              -0.14727067947387695
             ],
             "max": [
-              0.07270529121160507,
-              0.34896963834762573,
-              0.0663284957408905
+              0.027254581451416016,
+              0.4325959384441376,
+              0.039055150002241135
             ]
           },
           "centroid": [
-            -0.10258467223293818,
-            0.15010787860864996,
-            -0.07076413836442715
+            -0.10232866416815518,
+            0.20983197859224867,
+            -0.07235853491107423
           ],
           "transform": {
             "position": [
@@ -4738,17 +4738,17 @@
             ]
           },
           "geometrySignature": "85526ee2",
-          "geometryRevision": "32d2f0ac-9a11-4059-88ae-d9c46b9b0239:16:17",
+          "geometryRevision": "a71c6106-d1dd-49d8-ba9b-fb7d2a8827c0:29:30",
           "meshCount": 1,
           "meanNormal": [
-            -0.5738225783889378,
-            0.08769260131669904,
-            -0.814271242403526
+            -0.5693784882460858,
+            0.06479659356743968,
+            -0.8195178695944695
           ],
           "meanTriangleNormal": [
-            -0.5823083762641761,
-            -0.1840231464663909,
-            -0.7918664259186571
+            -0.5887528428905441,
+            0.005649086327317274,
+            -0.8082933736038967
           ],
           "materialSide": 2
         }

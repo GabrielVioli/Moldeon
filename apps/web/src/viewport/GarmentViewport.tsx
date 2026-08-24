@@ -180,8 +180,9 @@ export const GarmentViewport = memo(function GarmentViewport({
         }}>Reiniciar</button>
       </div>
       {import.meta.env.DEV ? (
-        <aside className="viewport-physics-dev" aria-label="Diagnóstico físico DEV">
-          <strong>Física DEV</strong>
+        <details className="viewport-physics-dev" data-testid="physics-dev-panel">
+          <summary>Física DEV</summary>
+          <div className="viewport-physics-dev-body">
           <label>
             Gravidade
             <select
@@ -336,7 +337,8 @@ export const GarmentViewport = memo(function GarmentViewport({
                 ))}
             </details>
           ) : null}
-        </aside>
+          </div>
+        </details>
       ) : null}
     </div>
   );

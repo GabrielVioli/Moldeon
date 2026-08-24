@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
 import "./recovery.css";
+import "./responsive-workspace.css";
+import "./responsive-workspace-polish.css";
 
 if (import.meta.env.DEV) {
   void import("./dev/phase0AuditBridge").then(({ installPhase0AuditBridge }) =>

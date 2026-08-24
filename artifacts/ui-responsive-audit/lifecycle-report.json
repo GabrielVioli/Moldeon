@@ -1,0 +1,111 @@
+{
+  "stable": {
+    "workerCount": true,
+    "resizeObserverCount": true,
+    "canvasCount": true,
+    "rafCount": true,
+    "console": true
+  },
+  "baseline": {
+    "label": "baseline-1366x768",
+    "workersCreated": 2,
+    "workersActive": 2,
+    "workersTerminated": 0,
+    "resizeObserversCreated": 8,
+    "resizeObserversActive": 3,
+    "rafPending": 1,
+    "viewportCanvases": 1,
+    "allCanvases": 2
+  },
+  "final": {
+    "label": "1366x768",
+    "workersCreated": 2,
+    "workersActive": 2,
+    "workersTerminated": 0,
+    "resizeObserversCreated": 8,
+    "resizeObserversActive": 3,
+    "rafPending": 1,
+    "viewportCanvases": 1,
+    "allCanvases": 2
+  },
+  "snapshots": [
+    {
+      "label": "baseline-1366x768",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "390x844",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "1920x1080",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "768x1024",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "1366x768",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "390x844",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    },
+    {
+      "label": "1366x768",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2
+    }
+  ],
+  "consoleErrors": []
+}

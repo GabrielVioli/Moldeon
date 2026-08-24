@@ -1,0 +1,114 @@
+name: UI Responsive Workspace
+
+on:
+  push:
+    branches:
+      - "feat/ui-responsive-cleanup"
+    paths:
+      - "apps/web/src/components/Toolbar.tsx"
+      - "apps/web/src/components/FittingRoomDialog.tsx"
+      - "apps/web/src/viewport/GarmentViewport.tsx"
+      - "apps/web/src/main.tsx"
+      - "apps/web/src/responsive-workspace.css"
+      - "apps/web/src/responsive-workspace-polish.css"
+      - "apps/web/src/responsiveWorkspace.test.ts"
+      - "scripts/ui-responsive-audit.mjs"
+      - ".github/workflows/ui-responsive-validation.yml"
+  pull_request:
+    paths:
+      - "apps/web/src/components/Toolbar.tsx"
+      - "apps/web/src/components/FittingRoomDialog.tsx"
+      - "apps/web/src/viewport/GarmentViewport.tsx"
+      - "apps/web/src/main.tsx"
+      - "apps/web/src/responsive-workspace.css"
+      - "apps/web/src/responsive-workspace-polish.css"
+      - "apps/web/src/responsiveWorkspace.test.ts"
+      - "scripts/ui-responsive-audit.mjs"
+      - ".github/workflows/ui-responsive-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-responsive-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  responsive-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MOLDEON_UI_AUDIT_URL: http://127.0.0.1:4182
+      MOLDEON_UI_AUDIT_DIR: artifacts/ui-responsive-audit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Responsive source contracts
+        run: npm run test --workspace @moldeon/web -- src/responsiveWorkspace.test.ts
+
+      - name: Build fallback application
+        run: npm run build
+
+      - name: Install browser controller in isolation
+        shell: bash
+        run: |
+          rm -rf /tmp/moldeon-playwright
+          mkdir -p /tmp/moldeon-playwright
+          cd /tmp/moldeon-playwright
+          npm init -y >/dev/null
+          npm install --no-package-lock --no-audit --no-fund playwright-core@1.55.0
+          rm -rf "$GITHUB_WORKSPACE/node_modules/playwright-core"
+          ln -s /tmp/moldeon-playwright/node_modules/playwright-core "$GITHUB_WORKSPACE/node_modules/playwright-core"
+
+      - name: Start fallback application
+        shell: bash
+        run: |
+          mkdir -p "$MOLDEON_UI_AUDIT_DIR"
+          (
+            cd apps/web
+            npx vite --mode fallback --host 127.0.0.1 --port 4182 --strictPort
+          ) > "$MOLDEON_UI_AUDIT_DIR/server.log" 2>&1 &
+          echo $! > "$MOLDEON_UI_AUDIT_DIR/server.pid"
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail "$MOLDEON_UI_AUDIT_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$MOLDEON_UI_AUDIT_DIR/server.log"
+          exit 1
+
+      - name: Audit mandatory viewports and browser zoom
+        run: node scripts/ui-responsive-audit.mjs | tee "$MOLDEON_UI_AUDIT_DIR/audit.json"
+
+      - name: Stop fallback application
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$MOLDEON_UI_AUDIT_DIR/server.pid"; then
+            kill "$(cat "$MOLDEON_UI_AUDIT_DIR/server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-responsive-${{ github.sha }}
+          path: artifacts/ui-responsive-audit
+          retention-days: 21
+          if-no-files-found: warn

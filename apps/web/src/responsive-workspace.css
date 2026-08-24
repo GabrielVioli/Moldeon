@@ -1,0 +1,933 @@
+/*
+ * Responsive workspace layer.
+ *
+ * This file intentionally sits after the historical stylesheets so the
+ * responsive contract can evolve without rewriting modeling, assembly or
+ * simulation code. Layout responds to available space, not operating system.
+ */
+
+:root {
+  --ui-toolbar-height: 58px;
+  --ui-status-height: 24px;
+  --ui-panel-width: clamp(300px, 27vw, 430px);
+  --ui-z-toolbar: 30;
+  --ui-z-popover: 60;
+  --ui-z-drawer: 70;
+  --ui-z-dev: 80;
+  --ui-z-dialog: 1000;
+}
+
+html,
+body,
+#root,
+.app-shell,
+.workspace,
+.editor-panel,
+.editor-body,
+.canvas-stack,
+.preview-panel,
+.viewport-host {
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-shell {
+  grid-template-rows: auto minmax(0, 1fr) var(--ui-status-height);
+  overflow: hidden;
+}
+
+.toolbar {
+  position: relative;
+  z-index: var(--ui-z-toolbar);
+  display: grid;
+  grid-template-columns: minmax(112px, auto) auto minmax(270px, 1fr) auto;
+  grid-template-rows: minmax(var(--ui-toolbar-height), auto);
+  align-items: center;
+  gap: clamp(6px, 1.1vw, 18px);
+  min-width: 0;
+  padding: 6px clamp(8px, 1.2vw, 18px);
+  overflow: visible;
+}
+
+.brand,
+.brand-copy,
+.workspace-mode-switch,
+.tool-buttons,
+.toolbar-actions,
+.history-actions {
+  min-width: 0;
+}
+
+.brand-copy {
+  max-width: clamp(86px, 11vw, 180px);
+}
+
+.brand-copy span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-mode-switch {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.workspace-mode-switch button {
+  min-width: 0;
+  padding-inline: clamp(7px, 0.8vw, 12px);
+  white-space: nowrap;
+}
+
+.tool-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: visible;
+}
+
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 38px;
+  height: 36px;
+  padding: 0 clamp(8px, 0.7vw, 12px);
+  white-space: nowrap;
+}
+
+.tool-glyph {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.toolbar-preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 66px;
+  height: 36px;
+  padding-inline: 11px;
+}
+
+.preview-button-compact {
+  display: none;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.toolbar-overflow {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.toolbar-overflow > summary {
+  display: grid;
+  width: 38px;
+  height: 36px;
+  place-items: center;
+  color: #e5e5e2;
+  background: #292b2f;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  list-style: none;
+  user-select: none;
+}
+
+.toolbar-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.toolbar-overflow[open] > summary,
+.toolbar-overflow > summary:hover {
+  background: #37393e;
+}
+
+.toolbar-overflow > summary:focus-visible,
+.tool-button:focus-visible,
+.toolbar-actions button:focus-visible,
+.workspace-mode-switch button:focus-visible {
+  outline: 2px solid #d9b866;
+  outline-offset: 2px;
+}
+
+.toolbar-overflow-menu {
+  position: absolute;
+  z-index: var(--ui-z-popover);
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  gap: 4px;
+  width: min(220px, calc(100vw - 16px));
+  padding: 6px;
+  color: #ecebe6;
+  background: #1c1d20;
+  border: 1px solid #3d3f44;
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.3);
+}
+
+.toolbar-overflow-menu button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  color: #ecebe6;
+  background: transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+  text-align: left;
+}
+
+.toolbar-overflow-menu button:hover,
+.toolbar-overflow-menu button:focus-visible {
+  background: #303237;
+}
+
+/* SleeveWizard stays implemented, but it is deliberately absent from normal UI. */
+.toolbar .sleeve-button,
+.toolbar [data-testid="open-sleeve-wizard"] {
+  display: none !important;
+}
+
+.status-bar {
+  min-width: 0;
+  min-height: var(--ui-status-height);
+  padding-inline: clamp(8px, 1vw, 14px);
+  overflow: hidden;
+}
+
+.status-bar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-panel {
+  grid-template-rows: clamp(42px, 4vw, 54px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.editor-body {
+  grid-template-columns: clamp(150px, 12vw, 190px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.canvas-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  container-type: size;
+}
+
+.pattern-canvas,
+.three-canvas,
+.viewport-host {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.panel-titlebar {
+  min-width: 0;
+  gap: 10px;
+  padding-inline: clamp(10px, 1vw, 16px);
+  overflow: hidden;
+}
+
+.panel-titlebar > div:first-child,
+.panel-title-actions {
+  min-width: 0;
+}
+
+.panel-titlebar strong,
+.panel-titlebar .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-title-actions {
+  flex: 1 1 auto;
+}
+
+.right-panel-toggle,
+.right-panel-close {
+  flex: 0 0 auto;
+}
+
+.inspector,
+.assembly-panel,
+.placement-panel {
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Desktop: auxiliary panels get a bounded column, canvas gets everything else. */
+@media (min-width: 1181px) {
+  .mobile-workspace-tabs {
+    display: none !important;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--ui-panel-width);
+    grid-template-rows: minmax(170px, 0.42fr) minmax(0, 0.58fr);
+  }
+
+  .workspace.mode-modeling .editor-panel,
+  .workspace.mode-assembly .editor-panel,
+  .workspace.mode-fitting .editor-panel,
+  .workspace.mode-preparation .editor-panel {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .workspace.mode-modeling .preview-panel,
+  .workspace.mode-assembly .preview-panel,
+  .workspace.mode-fitting .preview-panel,
+  .workspace.mode-preparation .preview-panel {
+    grid-column: 2;
+    grid-row: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .workspace.mode-modeling .inspector,
+  .workspace.mode-assembly .assembly-panel,
+  .workspace.mode-fitting .placement-panel,
+  .workspace.mode-preparation .inspector {
+    grid-column: 2;
+    grid-row: 2;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    resize: none;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .workspace.is-right-panel-closed .editor-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+/* Laptop/tablet: one owner at a time. This matches the existing JS compact query. */
+@media (max-width: 1180px) {
+  :root {
+    --ui-toolbar-height: 44px;
+    --ui-status-height: 22px;
+  }
+
+  .toolbar {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-rows: 44px 42px;
+    gap: 3px 6px;
+    min-height: 86px;
+    padding: 2px 7px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .brand-copy {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .workspace-mode-switch {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .toolbar-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .tool-buttons {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .tool-button {
+    flex: 0 1 108px;
+    max-width: 108px;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 42px minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .mobile-workspace-tabs {
+    z-index: 4;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-column: 1;
+    grid-row: 1;
+    gap: 4px;
+    min-width: 0;
+    padding: 3px 4px;
+    background: #dfdcd5;
+    border-bottom: 1px solid #c3c0ba;
+  }
+
+  .workspace-tab {
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace.mode-modeling .workspace-view,
+  .workspace.mode-assembly .workspace-view,
+  .workspace.mode-fitting .workspace-view,
+  .workspace.mode-preparation .workspace-view,
+  .workspace.is-right-panel-closed .workspace-view {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .workspace.mode-modeling .workspace-view.is-mobile-active,
+  .workspace.mode-assembly .workspace-view.is-mobile-active,
+  .workspace.mode-fitting .workspace-view.is-mobile-active,
+  .workspace.mode-preparation .workspace-view.is-mobile-active,
+  .workspace.is-right-panel-closed .editor-panel.is-mobile-active {
+    z-index: 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .workspace.is-right-panel-closed .editor-panel {
+    grid-column: 1;
+    grid-row: 2;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .inspector.workspace-view,
+  .assembly-panel.workspace-view,
+  .placement-panel.workspace-view {
+    padding: clamp(10px, 2vw, 18px);
+    border-left: 0;
+    resize: none;
+  }
+
+  .editor-body {
+    grid-template-columns: clamp(138px, 18vw, 178px) minmax(0, 1fr);
+  }
+
+  .desktop-hint {
+    display: none;
+  }
+
+  .mobile-hint {
+    display: block;
+    max-width: min(42vw, 270px);
+  }
+
+  .right-panel-toggle > span:last-child,
+  .right-panel-close > span:last-child {
+    display: none;
+  }
+}
+
+/* Tool names stop consuming horizontal space before font metrics can break the row. */
+@media (max-width: 1480px) {
+  .tool-button {
+    width: 38px;
+    flex-basis: 38px;
+    padding-inline: 0;
+  }
+
+  .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* Mobile keeps the canvas as the main surface and turns panels into switchable drawers. */
+@media (max-width: 760px) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 44px 42px;
+    min-height: 86px;
+    padding-inline: max(6px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-right));
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .workspace-mode-switch {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .workspace-mode-switch button {
+    min-height: 34px;
+    padding-inline: clamp(5px, 2vw, 9px);
+    font-size: 10px;
+  }
+
+  .toolbar-actions {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 3px;
+  }
+
+  .history-actions {
+    gap: 2px;
+  }
+
+  .history-button {
+    width: 30px;
+    height: 34px;
+  }
+
+  .toolbar-preview-button {
+    min-width: 42px;
+    height: 34px;
+    padding-inline: 6px;
+  }
+
+  .preview-button-label {
+    display: none;
+  }
+
+  .preview-button-compact {
+    display: inline;
+  }
+
+  .toolbar-overflow > summary {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tool-buttons {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: clamp(2px, 1vw, 5px);
+  }
+
+  .tool-button {
+    width: clamp(38px, 12.5vw, 46px);
+    max-width: 46px;
+    height: 36px;
+    flex: 0 1 clamp(38px, 12.5vw, 46px);
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 40px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 40px;
+    padding: 3px;
+  }
+
+  .workspace-tab {
+    min-height: 32px;
+    font-size: 10px;
+  }
+
+  .editor-panel {
+    grid-template-rows: 42px minmax(0, 1fr);
+  }
+
+  .panel-titlebar {
+    padding-inline: 8px;
+  }
+
+  .panel-titlebar .section-eyebrow,
+  .panel-titlebar .mobile-hint {
+    display: none;
+  }
+
+  .panel-titlebar strong {
+    max-width: 58vw;
+    font-size: 11px;
+  }
+
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .pieces-panel {
+    max-height: 82px;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid #cbc8c1;
+  }
+
+  .pieces-panel header {
+    height: 30px;
+  }
+
+  .pieces-list {
+    display: flex;
+    gap: 5px;
+    min-width: 0;
+    padding: 3px 5px 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .pieces-item {
+    flex: 0 0 min(150px, 43vw);
+    min-height: 40px;
+  }
+
+  .context-bar {
+    bottom: 48px;
+    max-width: calc(100% - 12px);
+    max-height: min(42dvh, 280px);
+    overflow: auto;
+  }
+
+  .canvas-navigation {
+    right: 5px;
+    bottom: 5px;
+    max-width: calc(100% - 10px);
+    overflow-x: auto;
+  }
+
+  .right-panel-close {
+    top: calc(7px + env(safe-area-inset-top));
+    right: calc(7px + env(safe-area-inset-right));
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .status-bar {
+    gap: 8px;
+    font-size: 9px;
+  }
+
+  .status-bar span:nth-child(n + 2) {
+    display: none;
+  }
+}
+
+/* Short notebooks: vertical space is more valuable than descriptive chrome. */
+@media (max-height: 760px) {
+  :root {
+    --ui-status-height: 20px;
+  }
+
+  .toolbar {
+    --ui-toolbar-height: 42px;
+  }
+
+  .panel-titlebar {
+    min-height: 40px;
+  }
+
+  .panel-titlebar .hint,
+  .panel-titlebar .section-eyebrow {
+    display: none;
+  }
+
+  .pieces-panel header {
+    min-height: 30px;
+  }
+
+  .inspector,
+  .assembly-panel,
+  .placement-panel {
+    padding-block: 10px;
+  }
+
+  .viewport-placeholder {
+    padding: 12px;
+  }
+}
+
+@media (max-height: 640px) and (min-width: 761px) {
+  .toolbar {
+    grid-template-rows: 40px 38px;
+    min-height: 78px;
+    padding-block: 1px;
+  }
+
+  .tool-button {
+    height: 32px;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 36px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 36px;
+    padding-block: 2px;
+  }
+
+  .workspace-tab {
+    min-height: 30px;
+  }
+
+  .editor-panel {
+    grid-template-rows: 38px minmax(0, 1fr);
+  }
+}
+
+/* Dialog contract: never exceed viewport, content scrolls inside the dialog. */
+.dialog-backdrop {
+  z-index: var(--ui-z-dialog) !important;
+  padding: clamp(8px, 2.2vw, 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.dialog-backdrop > [role="dialog"],
+.pattern-library-dialog,
+.fitting-dialog,
+.sleeve-wizard-dialog,
+.dressing-preflight-dialog {
+  width: min(1040px, 100%);
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fitting-content,
+.pattern-library-scroll,
+.dialog-scroll-region,
+.sleeve-wizard-content,
+.dressing-preflight-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.fitting-footer,
+.library-actions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .dialog-backdrop {
+    padding: 0;
+  }
+
+  .dialog-backdrop > [role="dialog"],
+  .pattern-library-dialog,
+  .fitting-dialog,
+  .sleeve-wizard-dialog,
+  .dressing-preflight-dialog {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .dialog-header {
+    gap: 8px;
+  }
+
+  .dialog-header h1 {
+    font-size: clamp(20px, 7vw, 25px);
+  }
+
+  .dialog-header p {
+    font-size: 10px;
+  }
+}
+
+/* Physics diagnostics are development-only in JSX and collapsed by default. */
+.viewport-physics-dev {
+  position: absolute;
+  z-index: var(--ui-z-dev);
+  top: 98px;
+  right: 10px;
+  width: min(340px, calc(100% - 20px));
+  max-height: min(62dvh, 520px);
+  color: #ecebe7;
+  background: rgba(24, 25, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.viewport-physics-dev > summary {
+  min-height: 34px;
+  padding: 9px 11px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+  list-style-position: inside;
+  user-select: none;
+}
+
+.viewport-physics-dev-body {
+  display: grid;
+  gap: 7px;
+  max-height: min(calc(62dvh - 36px), 484px);
+  padding: 0 10px 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.viewport-physics-dev-body label {
+  min-width: 0;
+}
+
+.viewport-physics-dev-body select,
+.viewport-physics-dev-body button {
+  max-width: 100%;
+}
+
+.viewport-physics-dev-body dl {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.viewport-simulation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: calc(100% - 20px);
+}
+
+@media (max-width: 760px), (max-height: 640px) {
+  .viewport-physics-dev {
+    top: auto;
+    right: 8px;
+    bottom: 52px;
+    width: min(310px, calc(100% - 16px));
+    max-height: min(46dvh, 360px);
+  }
+
+  .viewport-physics-dev-body {
+    max-height: min(calc(46dvh - 36px), 324px);
+  }
+}
+
+/* Container-aware micro-compression for very narrow editor ownership. */
+@container (max-width: 520px) {
+  .draft-banner,
+  .draft-error,
+  .dimension-error,
+  .rotation-feedback {
+    max-width: calc(100% - 12px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-overflow-menu {
+    scroll-behavior: auto;
+  }
+}
