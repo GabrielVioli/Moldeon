@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
+import {
+  createDefaultMeasurementProfile,
+  measurementProfileToBodyMeasurements,
+  overrideMeasurement,
+} from "../domain/parametricMeasurements";
 import { buildAvatarCollisionModel } from "./AvatarCollisionModel";
 import { buildAvatarParametricModel, resolveAvatarAnchor, sampleTorsoAxes } from "./AvatarParametricModel";
 
@@ -54,5 +59,37 @@ describe("AvatarParametricModel", () => {
     expect(largerBust.landmarks.headTopY).toBeCloseTo(baseline.landmarks.headTopY, 6);
     expect(largerBust.joints.ankleLeft[1]).toBeCloseTo(baseline.joints.ankleLeft[1], 6);
     expect(largerBust.measurements.inseamMm).toBe(baseline.measurements.inseamMm);
+  });
+
+  it("preserves estimated versus supplied limb measurements from PatternDocumentV3", () => {
+    const estimatedProfile = createDefaultMeasurementProfile("feminine");
+    const flattened = measurementProfileToBodyMeasurements(estimatedProfile);
+    const flattenedThigh = flattened.thighMm!;
+    const estimated = buildAvatarParametricModel(flattened, "feminine", { profile: estimatedProfile });
+
+    expect(flattenedThigh).toBeCloseTo(580, 6);
+    expect(estimated.measurementOrigins?.thighMm).toBe("estimated");
+    expect(estimated.measurements.thighMm).toBeLessThan(flattenedThigh - 80);
+
+    const suppliedProfile = overrideMeasurement(estimatedProfile, "thighMm", 580).profile;
+    const supplied = buildAvatarParametricModel(
+      measurementProfileToBodyMeasurements(suppliedProfile),
+      "feminine",
+      { profile: suppliedProfile },
+    );
+    expect(supplied.measurementOrigins?.thighMm).toBe("supplied");
+    expect(supplied.measurements.thighMm).toBeCloseTo(580, 6);
+  });
+
+  it("retains estimated origins from legacy V3 measurement key lists without a profile", () => {
+    const profile = createDefaultMeasurementProfile("feminine");
+    const flattened = measurementProfileToBodyMeasurements(profile);
+    const avatar = buildAvatarParametricModel(flattened, "feminine", {
+      origins: { thighMm: "estimated" },
+    });
+
+    expect(flattened.thighMm).toBeCloseTo(580, 6);
+    expect(avatar.measurementOrigins?.thighMm).toBe("estimated");
+    expect(avatar.measurements.thighMm).toBeLessThan(500);
   });
 });

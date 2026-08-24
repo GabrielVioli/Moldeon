@@ -2,6 +2,7 @@ import type { BodyMeasurements } from "../domain/pattern";
 import {
   createMeasurementProfile,
   measurementProfileToBodyMeasurements,
+  type MeasurementProfile,
   type MeasurementOrigin,
 } from "../domain/parametricMeasurements";
 import {
@@ -262,6 +263,14 @@ export interface HumanBodyBuildOptions {
   disableCache?: boolean;
   metricIterations?: number;
   includeCalibrationStages?: boolean;
+  /**
+   * Preserves the canonical origin of each document measurement. The flattened
+   * values alone cannot distinguish a user-supplied thigh from an estimated
+   * formula result, and treating both as supplied over-deforms the body.
+   */
+  measurementProfile?: MeasurementProfile;
+  /** Origin metadata retained by older PatternDocumentV3 files without a full profile. */
+  measurementOrigins?: Partial<Record<keyof BodyMeasurements, MeasurementOrigin>>;
 }
 
 interface BodyStations {
@@ -365,12 +374,15 @@ export function buildHumanBodyModel(
   input: BodyMeasurements,
   options: HumanBodyBuildOptions = {},
 ): HumanBodyModel {
-  const profile = createMeasurementProfile(input, "feminine");
+  const profile = createMeasurementProfile(input, "feminine", options.measurementProfile);
+  const entries = applyMeasurementOriginOverrides(profile.entries, options.measurementOrigins);
   const resolved = measurementProfileToBodyMeasurements(profile);
-  const measurements = resolveHumanMeasurements(resolved, profile.entries);
+  const measurements = resolveHumanMeasurements(resolved, entries);
+  const measurementSources = resolveMeasurementSources(entries);
   const iterations = clampInt(options.metricIterations ?? DEFAULT_METRIC_ITERATIONS, 1, 32);
   const cacheKey = JSON.stringify({
     measurements,
+    measurementSources,
     iterations,
     includeCalibrationStages: options.includeCalibrationStages === true,
   });
@@ -460,7 +472,7 @@ export function buildHumanBodyModel(
     version: "human-body-female@1",
     sex: "female",
     measurements,
-    measurementSources: resolveMeasurementSources(profile.entries),
+    measurementSources,
     bodyFrame: BODY_FRAME,
     joints,
     landmarks,
@@ -483,6 +495,21 @@ export function buildHumanBodyModel(
   };
   if (!options.disableCache) modelCache.set(cacheKey, model);
   return model;
+}
+
+function applyMeasurementOriginOverrides(
+  entries: MeasurementProfile["entries"],
+  origins: Partial<Record<keyof BodyMeasurements, MeasurementOrigin>> | undefined,
+): MeasurementProfile["entries"] {
+  if (!origins) return entries;
+  const result = structuredClone(entries);
+  for (const [rawKey, origin] of Object.entries(origins)) {
+    const key = rawKey as keyof BodyMeasurements;
+    const entry = result[key];
+    if (!entry || !origin) continue;
+    result[key] = { ...entry, origin };
+  }
+  return result;
 }
 
 function buildCalibrationStages(

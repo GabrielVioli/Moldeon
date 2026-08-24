@@ -7,7 +7,7 @@ import type {
   PreviewRegion,
   PreviewSurface,
 } from "../domain/pattern";
-import type { MeasurementOrigin } from "../domain/parametricMeasurements";
+import type { MeasurementOrigin, MeasurementProfile } from "../domain/parametricMeasurements";
 import { buildHumanBodyModel, type HumanBodyModel } from "./HumanBodyModel";
 
 export type AvatarVector3 = [number, number, number];
@@ -94,14 +94,23 @@ export interface AvatarParametricModel {
   legPoseAngleDeg: number;
 }
 
+export interface AvatarMeasurementContext {
+  profile?: MeasurementProfile;
+  origins?: Partial<Record<keyof BodyMeasurements, MeasurementOrigin>>;
+}
+
 export function buildAvatarParametricModel(
   input: BodyMeasurements,
   bodyType: BodyType,
+  measurementContext: AvatarMeasurementContext = {},
 ): AvatarParametricModel {
   // 11.0.4B is intentionally the canonical female implementation. Keeping the
   // bodyType in the facade preserves the document API while the female body is
   // the single geometric source for the implemented path.
-  const humanBody = buildHumanBodyModel(input);
+  const humanBody = buildHumanBodyModel(input, {
+    measurementProfile: measurementContext.profile,
+    measurementOrigins: measurementContext.origins,
+  });
   const body = humanBody.measurements;
   const measurements: AvatarResolvedMeasurements = {
     heightMm: body.heightMm,
