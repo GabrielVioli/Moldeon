@@ -140,6 +140,24 @@ export function App() {
     }
     openDressedViewport("fitting");
   }, [dressingPreflight.canDress, openDressedViewport]);
+  const handleWorkspaceModeChange = useCallback((mode: WorkspaceMode) => {
+    if (mode === "fitting") {
+      if (!dressingPreflight.canDress) {
+        setDressingPreflightOpen(true);
+        return;
+      }
+      if (previewRequested) {
+        setWorkspaceMode("fitting");
+        setIsRightPanelOpen(true);
+        if (isCompactWorkspace) setMobileView("preview");
+        return;
+      }
+      handleDressBody();
+      return;
+    }
+    setWorkspaceMode(mode);
+    if (isCompactWorkspace) setMobileView("editor");
+  }, [dressingPreflight.canDress, handleDressBody, isCompactWorkspace, previewRequested]);
   useEffect(() => {
     if (!dressingPreflightOpen || !dressingPreflight.canDress) return;
     setDressingPreflightOpen(false);
@@ -492,8 +510,7 @@ export function App() {
         onSimulate={handleDressBody}
         canAssemble3D={eligibility.canPreviewGarment}
         workspaceMode={workspaceMode}
-        canDressBody={eligibility.canDressBody}
-        onWorkspaceModeChange={(mode) => mode === "fitting" ? handleDressBody() : setWorkspaceMode(mode)}
+        onWorkspaceModeChange={handleWorkspaceModeChange}
         onReset={resetPattern}
         onExportSvg={handleExportSvg}
         onUndo={undo}
@@ -658,6 +675,7 @@ export function App() {
                 assemblyInput={assemblyInput}
                 simulateVersion={simulateVersion}
                 active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
+                displayMode={workspaceMode === "fitting" ? "full-fitting" : "side-preview"}
                 onBackendChange={setRenderBackend}
               />
             </Suspense>
@@ -671,16 +689,21 @@ export function App() {
           mobileActive={mobileView === "inspector"}
           onRequestPreview={handleSimulate}
           onDressBody={handleDressBody}
-        /> : workspaceMode === "fitting" ? <PreviewPlacementPanel
-          onChangeRegion={() => {
-            setGarmentDressing({ region: undefined });
-            setDressingPreflightOpen(true);
-          }}
-          onBackToAssembly={() => {
-            setWorkspaceMode("assembly");
-            if (isCompactWorkspace) setMobileView("editor");
-          }}
-        /> : hasPieces ? <Inspector
+        /> : workspaceMode === "fitting" ? (
+          <details className="fitting-summary-drawer">
+            <summary>Detalhes da prova</summary>
+            <PreviewPlacementPanel
+              onChangeRegion={() => {
+                setGarmentDressing({ region: undefined });
+                setDressingPreflightOpen(true);
+              }}
+              onBackToAssembly={() => {
+                setWorkspaceMode("assembly");
+                if (isCompactWorkspace) setMobileView("editor");
+              }}
+            />
+          </details>
+        ) : hasPieces ? <Inspector
           id="inspector-panel"
           labelledBy="inspector-tab"
           mobileActive={mobileView === "inspector"}

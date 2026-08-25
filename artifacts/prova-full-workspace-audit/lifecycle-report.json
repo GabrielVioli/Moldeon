@@ -1,0 +1,250 @@
+{
+  "stable": {
+    "workerCount": true,
+    "resizeObserverCount": true,
+    "canvasCount": true,
+    "layoutSequence": true,
+    "simulationGeneration": true,
+    "canvasSizing": true,
+    "rafCount": true,
+    "console": true
+  },
+  "baseline": {
+    "label": "baseline-prova",
+    "expectedLayout": "full-fitting",
+    "workersCreated": 2,
+    "workersActive": 2,
+    "workersTerminated": 0,
+    "resizeObserversCreated": 8,
+    "resizeObserversActive": 3,
+    "rafPending": 1,
+    "viewportCanvases": 1,
+    "allCanvases": 2,
+    "hostLayout": "full-fitting",
+    "simulationGeneration": "1",
+    "simulationStatus": "paused",
+    "hostSize": {
+      "width": 1366,
+      "height": 661
+    },
+    "canvasSize": {
+      "cssWidth": 1366,
+      "cssHeight": 661,
+      "bufferWidth": 1366,
+      "bufferHeight": 661
+    },
+    "canvasMatchesHost": true
+  },
+  "final": {
+    "label": "prova",
+    "expectedLayout": "full-fitting",
+    "workersCreated": 2,
+    "workersActive": 2,
+    "workersTerminated": 0,
+    "resizeObserversCreated": 8,
+    "resizeObserversActive": 3,
+    "rafPending": 1,
+    "viewportCanvases": 1,
+    "allCanvases": 2,
+    "hostLayout": "full-fitting",
+    "simulationGeneration": "1",
+    "simulationStatus": "paused",
+    "hostSize": {
+      "width": 1366,
+      "height": 661
+    },
+    "canvasSize": {
+      "cssWidth": 1366,
+      "cssHeight": 661,
+      "bufferWidth": 1366,
+      "bufferHeight": 661
+    },
+    "canvasMatchesHost": true
+  },
+  "snapshots": [
+    {
+      "label": "baseline-prova",
+      "expectedLayout": "full-fitting",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "full-fitting",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 1366,
+        "height": 661
+      },
+      "canvasSize": {
+        "cssWidth": 1366,
+        "cssHeight": 661,
+        "bufferWidth": 1366,
+        "bufferHeight": 661
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "modelar",
+      "expectedLayout": "side-preview",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "side-preview",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 368.8125,
+        "height": 381.796875
+      },
+      "canvasSize": {
+        "cssWidth": 368.8125,
+        "cssHeight": 381.796875,
+        "bufferWidth": 369,
+        "bufferHeight": 382
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "prova",
+      "expectedLayout": "full-fitting",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "full-fitting",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 1366,
+        "height": 661
+      },
+      "canvasSize": {
+        "cssWidth": 1366,
+        "cssHeight": 661,
+        "bufferWidth": 1366,
+        "bufferHeight": 661
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "modelar",
+      "expectedLayout": "side-preview",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "side-preview",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 368.8125,
+        "height": 381.796875
+      },
+      "canvasSize": {
+        "cssWidth": 368.8125,
+        "cssHeight": 381.796875,
+        "bufferWidth": 369,
+        "bufferHeight": 382
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "prova",
+      "expectedLayout": "full-fitting",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "full-fitting",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 1366,
+        "height": 661
+      },
+      "canvasSize": {
+        "cssWidth": 1366,
+        "cssHeight": 661,
+        "bufferWidth": 1366,
+        "bufferHeight": 661
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "montar",
+      "expectedLayout": "side-preview",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "side-preview",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 368.8125,
+        "height": 381.796875
+      },
+      "canvasSize": {
+        "cssWidth": 368.8125,
+        "cssHeight": 381.796875,
+        "bufferWidth": 369,
+        "bufferHeight": 382
+      },
+      "canvasMatchesHost": true
+    },
+    {
+      "label": "prova",
+      "expectedLayout": "full-fitting",
+      "workersCreated": 2,
+      "workersActive": 2,
+      "workersTerminated": 0,
+      "resizeObserversCreated": 8,
+      "resizeObserversActive": 3,
+      "rafPending": 1,
+      "viewportCanvases": 1,
+      "allCanvases": 2,
+      "hostLayout": "full-fitting",
+      "simulationGeneration": "1",
+      "simulationStatus": "paused",
+      "hostSize": {
+        "width": 1366,
+        "height": 661
+      },
+      "canvasSize": {
+        "cssWidth": 1366,
+        "cssHeight": 661,
+        "bufferWidth": 1366,
+        "bufferHeight": 661
+      },
+      "canvasMatchesHost": true
+    }
+  ],
+  "consoleErrors": [],
+  "failedResponses": []
+}

@@ -15,6 +15,7 @@ interface GarmentViewportProps {
   assemblyInput: ResolvedAssemblyInput;
   simulateVersion: number;
   active: boolean;
+  displayMode: "side-preview" | "full-fitting";
   onBackendChange(backend: "webgpu" | "webgl2"): void;
 }
 
@@ -22,6 +23,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   assemblyInput,
   simulateVersion,
   active,
+  displayMode,
   onBackendChange,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -129,7 +131,7 @@ export const GarmentViewport = memo(function GarmentViewport({
     if (!active) return;
     const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());
     return () => window.cancelAnimationFrame(frame);
-  }, [active]);
+  }, [active, displayMode]);
 
   useEffect(() => {
     if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
@@ -148,7 +150,13 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [wireframe]);
 
   return (
-    <div className="viewport-host" ref={hostRef} data-testid="dressed-avatar-viewport" data-simulation-ui-state={simulationState}>
+    <div
+      className="viewport-host"
+      ref={hostRef}
+      data-testid="dressed-avatar-viewport"
+      data-simulation-ui-state={simulationState}
+      data-viewport-layout={displayMode}
+    >
       {error ? <div className="viewport-error">{error}</div> : null}
       {warnings.length > 0 ? (
         <div className="viewport-warnings" role="alert">
@@ -179,7 +187,7 @@ export const GarmentViewport = memo(function GarmentViewport({
           viewportRef.current?.resetSimulation();
         }}>Reiniciar</button>
       </div>
-      {import.meta.env.DEV ? (
+      {import.meta.env.DEV && displayMode === "full-fitting" ? (
         <details className="viewport-physics-dev" data-testid="physics-dev-panel">
           <summary>Física DEV</summary>
           <div className="viewport-physics-dev-body">

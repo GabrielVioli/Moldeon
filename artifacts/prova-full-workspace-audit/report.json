@@ -1,0 +1,1874 @@
+{
+  "sidePreview": {
+    "label": "A-1366x768-modelar-preview",
+    "inspection": {
+      "innerWidth": 1366,
+      "innerHeight": 768,
+      "devicePixelRatio": 1,
+      "documentWidth": 1366,
+      "workspace": {
+        "left": 0,
+        "right": 1366,
+        "top": 83,
+        "bottom": 744,
+        "width": 1366,
+        "height": 661
+      },
+      "workspaceMode": "workspace mode-modeling",
+      "editor": {
+        "rect": {
+          "left": 0,
+          "right": 996.1875,
+          "top": 83,
+          "bottom": 743.984375,
+          "width": 996.1875,
+          "height": 660.984375
+        },
+        "style": {
+          "display": "grid",
+          "visibility": "visible",
+          "pointerEvents": "auto"
+        }
+      },
+      "mobileTabs": {
+        "rect": {
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0,
+          "width": 0,
+          "height": 0
+        },
+        "style": {
+          "display": "none",
+          "visibility": "visible",
+          "pointerEvents": "auto"
+        }
+      },
+      "preview": {
+        "left": 997.1875,
+        "right": 1366,
+        "top": 83,
+        "bottom": 465.796875,
+        "width": 368.8125,
+        "height": 382.796875
+      },
+      "host": {
+        "left": 997.1875,
+        "right": 1366,
+        "top": 83,
+        "bottom": 464.796875,
+        "width": 368.8125,
+        "height": 381.796875
+      },
+      "simulationControls": {
+        "rect": {
+          "left": 1195.359375,
+          "right": 1358,
+          "top": 129,
+          "bottom": 169,
+          "width": 162.640625,
+          "height": 40
+        },
+        "style": {
+          "top": "46px",
+          "right": "8px",
+          "bottom": "295.797px"
+        }
+      },
+      "hostLayout": "side-preview",
+      "assemblyStatus": "ready",
+      "canvas": {
+        "css": {
+          "width": 368.8125,
+          "height": 381.796875
+        },
+        "buffer": {
+          "width": 369,
+          "height": 382
+        }
+      },
+      "viewportCanvasCount": 1,
+      "physics": {
+        "count": 0,
+        "open": null,
+        "rect": null
+      },
+      "summary": {
+        "count": 0,
+        "open": null,
+        "rect": null
+      }
+    },
+    "errors": {
+      "consoleErrors": [],
+      "failedResponses": []
+    },
+    "screenshot": "artifacts/prova-full-workspace-audit/A-1366x768-modelar-preview.png"
+  },
+  "fullViewports": [
+    {
+      "label": "360x640",
+      "width": 360,
+      "height": 640,
+      "inspection": {
+        "innerWidth": 360,
+        "innerHeight": 640,
+        "devicePixelRatio": 1,
+        "documentWidth": 360,
+        "workspace": {
+          "left": 0,
+          "right": 360,
+          "top": 94,
+          "bottom": 620,
+          "width": 360,
+          "height": 526
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 360,
+          "top": 94,
+          "bottom": 620,
+          "width": 360,
+          "height": 526
+        },
+        "host": {
+          "left": 0,
+          "right": 360,
+          "top": 94,
+          "bottom": 620,
+          "width": 360,
+          "height": 526
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 156.34375,
+            "right": 352,
+            "top": 146,
+            "bottom": 188,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "8px",
+            "bottom": "432px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 360,
+            "height": 526
+          },
+          "buffer": {
+            "width": 360,
+            "height": 526
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 236,
+            "right": 352,
+            "top": 510,
+            "bottom": 568,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 200,
+            "right": 352,
+            "top": 572,
+            "bottom": 612,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-360x640.png"
+    },
+    {
+      "label": "390x844",
+      "width": 390,
+      "height": 844,
+      "inspection": {
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "devicePixelRatio": 1,
+        "documentWidth": 390,
+        "workspace": {
+          "left": 0,
+          "right": 390,
+          "top": 94,
+          "bottom": 822,
+          "width": 390,
+          "height": 728
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 390,
+          "top": 94,
+          "bottom": 822,
+          "width": 390,
+          "height": 728
+        },
+        "host": {
+          "left": 0,
+          "right": 390,
+          "top": 94,
+          "bottom": 822,
+          "width": 390,
+          "height": 728
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 186.34375,
+            "right": 382,
+            "top": 146,
+            "bottom": 188,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "8px",
+            "bottom": "634px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 390,
+            "height": 728
+          },
+          "buffer": {
+            "width": 390,
+            "height": 728
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 266,
+            "right": 382,
+            "top": 712,
+            "bottom": 770,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 230,
+            "right": 382,
+            "top": 774,
+            "bottom": 814,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/D-390x844-prova.png"
+    },
+    {
+      "label": "768x1024",
+      "width": 768,
+      "height": 1024,
+      "inspection": {
+        "innerWidth": 768,
+        "innerHeight": 1024,
+        "devicePixelRatio": 1,
+        "documentWidth": 768,
+        "workspace": {
+          "left": 0,
+          "right": 768,
+          "top": 94,
+          "bottom": 1002,
+          "width": 768,
+          "height": 908
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 768,
+          "top": 94,
+          "bottom": 1002,
+          "width": 768,
+          "height": 908
+        },
+        "host": {
+          "left": 0,
+          "right": 768,
+          "top": 94,
+          "bottom": 1002,
+          "width": 768,
+          "height": 908
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 562.34375,
+            "right": 758,
+            "top": 146,
+            "bottom": 188,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "814px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 768,
+            "height": 908
+          },
+          "buffer": {
+            "width": 768,
+            "height": 908
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 642,
+            "right": 758,
+            "top": 192,
+            "bottom": 250,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 605.25,
+            "right": 757.25,
+            "top": 951.25,
+            "bottom": 991.25,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-768x1024.png"
+    },
+    {
+      "label": "1024x600",
+      "width": 1024,
+      "height": 600,
+      "inspection": {
+        "innerWidth": 1024,
+        "innerHeight": 600,
+        "devicePixelRatio": 1,
+        "documentWidth": 1024,
+        "workspace": {
+          "left": 0,
+          "right": 1024,
+          "top": 84,
+          "bottom": 580,
+          "width": 1024,
+          "height": 496
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1024,
+          "top": 84,
+          "bottom": 580,
+          "width": 1024,
+          "height": 496
+        },
+        "host": {
+          "left": 0,
+          "right": 1024,
+          "top": 84,
+          "bottom": 580,
+          "width": 1024,
+          "height": 496
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 818.34375,
+            "right": 1014,
+            "top": 136,
+            "bottom": 178,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "402px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1024,
+            "height": 496
+          },
+          "buffer": {
+            "width": 1024,
+            "height": 496
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 900,
+            "right": 1016,
+            "top": 470,
+            "bottom": 528,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 857.671875,
+            "right": 1009.671875,
+            "top": 525.671875,
+            "bottom": 565.671875,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/C-1024x600-prova.png"
+    },
+    {
+      "label": "1280x720",
+      "width": 1280,
+      "height": 720,
+      "inspection": {
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "devicePixelRatio": 1,
+        "documentWidth": 1280,
+        "workspace": {
+          "left": 0,
+          "right": 1280,
+          "top": 83,
+          "bottom": 700,
+          "width": 1280,
+          "height": 617
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1280,
+          "top": 83,
+          "bottom": 700,
+          "width": 1280,
+          "height": 617
+        },
+        "host": {
+          "left": 0,
+          "right": 1280,
+          "top": 83,
+          "bottom": 700,
+          "width": 1280,
+          "height": 617
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1074.34375,
+            "right": 1270,
+            "top": 135,
+            "bottom": 177,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "523px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1280,
+            "height": 617
+          },
+          "buffer": {
+            "width": 1280,
+            "height": 617
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1154,
+            "right": 1270,
+            "top": 181,
+            "bottom": 239,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1110.09375,
+            "right": 1262.09375,
+            "top": 642.09375,
+            "bottom": 682.09375,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-1280x720.png"
+    },
+    {
+      "label": "1366x768",
+      "width": 1366,
+      "height": 768,
+      "inspection": {
+        "innerWidth": 1366,
+        "innerHeight": 768,
+        "devicePixelRatio": 1,
+        "documentWidth": 1366,
+        "workspace": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "host": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1160.34375,
+            "right": 1356,
+            "top": 135,
+            "bottom": 177,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "567px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1366,
+            "height": 661
+          },
+          "buffer": {
+            "width": 1366,
+            "height": 661
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1240,
+            "right": 1356,
+            "top": 181,
+            "bottom": 239,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1194.890625,
+            "right": 1346.890625,
+            "top": 684.890625,
+            "bottom": 724.890625,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": {
+        "physicsOpen": true,
+        "telemetryVisible": true,
+        "summaryOpen": true,
+        "assembledTextVisible": true
+      },
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/B-1366x768-prova.png"
+    },
+    {
+      "label": "1440x900",
+      "width": 1440,
+      "height": 900,
+      "inspection": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "devicePixelRatio": 1,
+        "documentWidth": 1440,
+        "workspace": {
+          "left": 0,
+          "right": 1440,
+          "top": 83,
+          "bottom": 876,
+          "width": 1440,
+          "height": 793
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1440,
+          "top": 83,
+          "bottom": 876,
+          "width": 1440,
+          "height": 793
+        },
+        "host": {
+          "left": 0,
+          "right": 1440,
+          "top": 83,
+          "bottom": 876,
+          "width": 1440,
+          "height": 793
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1234.34375,
+            "right": 1430,
+            "top": 135,
+            "bottom": 177,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "699px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1440,
+            "height": 793
+          },
+          "buffer": {
+            "width": 1440,
+            "height": 793
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1314,
+            "right": 1430,
+            "top": 181,
+            "bottom": 239,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1267.84375,
+            "right": 1419.84375,
+            "top": 815.84375,
+            "bottom": 855.84375,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-1440x900.png"
+    },
+    {
+      "label": "1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "inspection": {
+        "innerWidth": 1920,
+        "innerHeight": 1080,
+        "devicePixelRatio": 1,
+        "documentWidth": 1920,
+        "workspace": {
+          "left": 0,
+          "right": 1920,
+          "top": 71,
+          "bottom": 1056,
+          "width": 1920,
+          "height": 985
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1920,
+          "top": 71,
+          "bottom": 1056,
+          "width": 1920,
+          "height": 985
+        },
+        "host": {
+          "left": 0,
+          "right": 1920,
+          "top": 71,
+          "bottom": 1056,
+          "width": 1920,
+          "height": 985
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1714.34375,
+            "right": 1910,
+            "top": 123,
+            "bottom": 165,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "891px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1920,
+            "height": 985
+          },
+          "buffer": {
+            "width": 1920,
+            "height": 985
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1794,
+            "right": 1910,
+            "top": 169,
+            "bottom": 227,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1746,
+            "right": 1898,
+            "top": 994,
+            "bottom": 1034,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/E-1920x1080-prova.png"
+    },
+    {
+      "label": "2560x1440",
+      "width": 2560,
+      "height": 1440,
+      "inspection": {
+        "innerWidth": 2560,
+        "innerHeight": 1440,
+        "devicePixelRatio": 1,
+        "documentWidth": 2560,
+        "workspace": {
+          "left": 0,
+          "right": 2560,
+          "top": 71,
+          "bottom": 1416,
+          "width": 2560,
+          "height": 1345
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 2560,
+          "top": 71,
+          "bottom": 1416,
+          "width": 2560,
+          "height": 1345
+        },
+        "host": {
+          "left": 0,
+          "right": 2560,
+          "top": 71,
+          "bottom": 1416,
+          "width": 2560,
+          "height": 1345
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 2354.34375,
+            "right": 2550,
+            "top": 123,
+            "bottom": 165,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "1251px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 2560,
+            "height": 1345
+          },
+          "buffer": {
+            "width": 2560,
+            "height": 1345
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 2434,
+            "right": 2550,
+            "top": 169,
+            "bottom": 227,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 2386,
+            "right": 2538,
+            "top": 1354,
+            "bottom": 1394,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-2560x1440.png"
+    },
+    {
+      "label": "3840x2160",
+      "width": 3840,
+      "height": 2160,
+      "inspection": {
+        "innerWidth": 3840,
+        "innerHeight": 2160,
+        "devicePixelRatio": 1,
+        "documentWidth": 3840,
+        "workspace": {
+          "left": 0,
+          "right": 3840,
+          "top": 71,
+          "bottom": 2136,
+          "width": 3840,
+          "height": 2065
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 3840,
+          "top": 71,
+          "bottom": 2136,
+          "width": 3840,
+          "height": 2065
+        },
+        "host": {
+          "left": 0,
+          "right": 3840,
+          "top": 71,
+          "bottom": 2136,
+          "width": 3840,
+          "height": 2065
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 3634.34375,
+            "right": 3830,
+            "top": 123,
+            "bottom": 165,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "1971px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 3840,
+            "height": 2065
+          },
+          "buffer": {
+            "width": 3840,
+            "height": 2065
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 3714,
+            "right": 3830,
+            "top": 169,
+            "bottom": 227,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 3666,
+            "right": 3818,
+            "top": 2074,
+            "bottom": 2114,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-3840x2160.png"
+    }
+  ],
+  "zoom": [
+    {
+      "label": "zoom-80",
+      "width": 1708,
+      "height": 960,
+      "zoom": 80,
+      "referenceViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "inspection": {
+        "innerWidth": 1708,
+        "innerHeight": 960,
+        "devicePixelRatio": 1,
+        "documentWidth": 1708,
+        "workspace": {
+          "left": 0,
+          "right": 1708,
+          "top": 71,
+          "bottom": 936,
+          "width": 1708,
+          "height": 865
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1708,
+          "top": 71,
+          "bottom": 936,
+          "width": 1708,
+          "height": 865
+        },
+        "host": {
+          "left": 0,
+          "right": 1708,
+          "top": 71,
+          "bottom": 936,
+          "width": 1708,
+          "height": 865
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1502.34375,
+            "right": 1698,
+            "top": 123,
+            "bottom": 165,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "771px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1708,
+            "height": 865
+          },
+          "buffer": {
+            "width": 1708,
+            "height": 865
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1582,
+            "right": 1698,
+            "top": 169,
+            "bottom": 227,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1534,
+            "right": 1686,
+            "top": 874,
+            "bottom": 914,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-zoom-80.png"
+    },
+    {
+      "label": "zoom-100",
+      "width": 1366,
+      "height": 768,
+      "zoom": 100,
+      "referenceViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "inspection": {
+        "innerWidth": 1366,
+        "innerHeight": 768,
+        "devicePixelRatio": 1,
+        "documentWidth": 1366,
+        "workspace": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "host": {
+          "left": 0,
+          "right": 1366,
+          "top": 83,
+          "bottom": 744,
+          "width": 1366,
+          "height": 661
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 1160.34375,
+            "right": 1356,
+            "top": 135,
+            "bottom": 177,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "567px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1366,
+            "height": 661
+          },
+          "buffer": {
+            "width": 1366,
+            "height": 661
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1240,
+            "right": 1356,
+            "top": 181,
+            "bottom": 239,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 1194.890625,
+            "right": 1346.890625,
+            "top": 684.890625,
+            "bottom": 724.890625,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-zoom-100.png"
+    },
+    {
+      "label": "zoom-125",
+      "width": 1093,
+      "height": 614,
+      "zoom": 125,
+      "referenceViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "inspection": {
+        "innerWidth": 1093,
+        "innerHeight": 614,
+        "devicePixelRatio": 1,
+        "documentWidth": 1093,
+        "workspace": {
+          "left": 0,
+          "right": 1093,
+          "top": 84,
+          "bottom": 594,
+          "width": 1093,
+          "height": 510
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 1093,
+          "top": 84,
+          "bottom": 594,
+          "width": 1093,
+          "height": 510
+        },
+        "host": {
+          "left": 0,
+          "right": 1093,
+          "top": 84,
+          "bottom": 594,
+          "width": 1093,
+          "height": 510
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 887.34375,
+            "right": 1083,
+            "top": 136,
+            "bottom": 178,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "416px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 1093,
+            "height": 510
+          },
+          "buffer": {
+            "width": 1093,
+            "height": 510
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 969,
+            "right": 1085,
+            "top": 484,
+            "bottom": 542,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 925.703125,
+            "right": 1077.703125,
+            "top": 538.703125,
+            "bottom": 578.703125,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-zoom-125.png"
+    },
+    {
+      "label": "zoom-150",
+      "width": 911,
+      "height": 512,
+      "zoom": 150,
+      "referenceViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "inspection": {
+        "innerWidth": 911,
+        "innerHeight": 512,
+        "devicePixelRatio": 1,
+        "documentWidth": 911,
+        "workspace": {
+          "left": 0,
+          "right": 911,
+          "top": 84,
+          "bottom": 492,
+          "width": 911,
+          "height": 408
+        },
+        "workspaceMode": "workspace mode-fitting",
+        "editor": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "hidden",
+            "pointerEvents": "none"
+          }
+        },
+        "mobileTabs": {
+          "rect": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0,
+            "width": 0,
+            "height": 0
+          },
+          "style": {
+            "display": "none",
+            "visibility": "visible",
+            "pointerEvents": "auto"
+          }
+        },
+        "preview": {
+          "left": 0,
+          "right": 911,
+          "top": 84,
+          "bottom": 492,
+          "width": 911,
+          "height": 408
+        },
+        "host": {
+          "left": 0,
+          "right": 911,
+          "top": 84,
+          "bottom": 492,
+          "width": 911,
+          "height": 408
+        },
+        "simulationControls": {
+          "rect": {
+            "left": 705.34375,
+            "right": 901,
+            "top": 136,
+            "bottom": 178,
+            "width": 195.65625,
+            "height": 42
+          },
+          "style": {
+            "top": "52px",
+            "right": "10px",
+            "bottom": "314px"
+          }
+        },
+        "hostLayout": "full-fitting",
+        "assemblyStatus": "ready",
+        "canvas": {
+          "css": {
+            "width": 911,
+            "height": 408
+          },
+          "buffer": {
+            "width": 911,
+            "height": 408
+          }
+        },
+        "viewportCanvasCount": 1,
+        "physics": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 787,
+            "right": 903,
+            "top": 382,
+            "bottom": 440,
+            "width": 116,
+            "height": 58
+          }
+        },
+        "summary": {
+          "count": 1,
+          "open": false,
+          "rect": {
+            "left": 746.25,
+            "right": 898.25,
+            "top": 439.25,
+            "bottom": 479.25,
+            "width": 152,
+            "height": 40
+          }
+        }
+      },
+      "drawers": null,
+      "errors": {
+        "consoleErrors": [],
+        "failedResponses": []
+      },
+      "screenshot": "artifacts/prova-full-workspace-audit/full-zoom-150.png"
+    }
+  ]
+}

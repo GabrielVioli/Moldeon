@@ -5,6 +5,160 @@
 }
 
 /*
+ * The right-hand preview is a visual tool first. Its lower information region
+ * scrolls independently instead of reducing the mannequin to a thumbnail.
+ */
+@media (min-width: 1181px) {
+  .workspace.mode-modeling,
+  .workspace.mode-assembly {
+    grid-template-rows: minmax(260px, 0.58fr) minmax(0, 0.42fr);
+  }
+}
+
+/*
+ * Fitting reuses the mounted preview viewport as a full workspace. Keeping the
+ * same DOM owner is intentional: layout changes must not recreate Three.js,
+ * its ResizeObserver, animation loop, or physics Worker.
+ */
+.workspace.mode-fitting,
+.workspace.is-right-panel-closed.mode-fitting {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.workspace.mode-fitting > .mobile-workspace-tabs,
+.workspace.mode-fitting > .editor-panel {
+  display: none !important;
+}
+
+.workspace.mode-fitting > .workspace-right-panel {
+  position: relative;
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace.mode-fitting .preview-panel {
+  z-index: 1;
+  display: block;
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.workspace.mode-fitting .right-panel-close {
+  display: none;
+}
+
+.fitting-summary-drawer {
+  position: absolute;
+  z-index: 12;
+  right: clamp(10px, 1.4vw, 22px);
+  bottom: clamp(10px, 1.4vw, 22px);
+  width: min(320px, calc(100% - 20px));
+  max-height: calc(100% - 92px);
+  border: 1px solid rgba(112, 105, 93, 0.55);
+  border-radius: 9px;
+  color: #353630;
+  background: rgba(248, 246, 241, 0.94);
+  box-shadow: 0 10px 32px rgba(40, 35, 28, 0.2);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.fitting-summary-drawer > summary {
+  min-height: 38px;
+  padding: 10px 13px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  list-style-position: inside;
+}
+
+.fitting-summary-drawer:not([open]) {
+  width: auto;
+  min-width: 152px;
+}
+
+.fitting-summary-drawer[open] {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.fitting-summary-drawer .placement-panel {
+  width: auto;
+  max-width: none;
+  max-height: none;
+  padding: 4px 14px 14px;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.fitting-summary-drawer .placement-panel h2 {
+  margin-top: 2px;
+}
+
+/* Side preview controls remain available without becoming a toolbar band. */
+.viewport-host[data-viewport-layout="side-preview"] .viewport-simulation-controls {
+  top: 46px;
+  right: 8px;
+  gap: 4px;
+}
+
+.viewport-host[data-viewport-layout="side-preview"] .viewport-simulation-controls button {
+  min-height: 28px;
+  padding: 0 7px;
+  font-size: 9px;
+}
+
+.viewport-host[data-viewport-layout="full-fitting"] .viewport-physics-dev:not([open]) {
+  width: auto;
+  min-width: 116px;
+}
+
+@media (max-width: 760px) {
+  .fitting-summary-drawer {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(52%, 380px);
+  }
+
+  .fitting-summary-drawer:not([open]) {
+    left: auto;
+    width: auto;
+    min-width: 152px;
+  }
+
+  .workspace.mode-fitting .viewport-label {
+    max-width: calc(100% - 126px);
+  }
+
+  .viewport-host[data-viewport-layout="full-fitting"] .viewport-simulation-controls {
+    top: 52px;
+    right: 8px;
+    bottom: auto;
+  }
+}
+
+/*
  * Mid-size desktops and notebooks have enough width for the whole product,
  * but not enough for a verbose single-row toolbar. Keep actions on one compact
  * row and the six essential tools on a second 38px row instead of allowing an

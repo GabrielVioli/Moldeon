@@ -40,13 +40,34 @@ describe("responsive workspace UI contract", () => {
     expect(fitting).toContain('useState<FittingSection>("body")');
   });
 
-  it("keeps physics diagnostics development-only and collapsed by default", () => {
+  it("keeps physics diagnostics development-only, fitting-only and collapsed by default", () => {
     const viewport = readSource("viewport/GarmentViewport.tsx");
 
-    expect(viewport).toContain("{import.meta.env.DEV ? (");
+    expect(viewport).toContain('displayMode: "side-preview" | "full-fitting"');
+    expect(viewport).toContain('import.meta.env.DEV && displayMode === "full-fitting"');
     expect(viewport).toContain('<details className="viewport-physics-dev"');
     expect(viewport).toContain('<summary>Física DEV</summary>');
     expect(viewport).not.toContain('<aside className="viewport-physics-dev"');
+  });
+
+  it("promotes fitting to the full workspace without mounting another viewport", () => {
+    const app = readSource("App.tsx");
+    const polish = readSource("responsive-workspace-polish.css");
+
+    expect(app.match(/<LazyGarmentViewport/g)).toHaveLength(1);
+    expect(app).toContain('displayMode={workspaceMode === "fitting" ? "full-fitting" : "side-preview"}');
+    expect(app).toContain('<details className="fitting-summary-drawer">');
+    expect(polish).toContain(".workspace.mode-fitting > .editor-panel");
+    expect(polish).toContain("display: none !important");
+    expect(polish).toContain(".workspace.mode-fitting > .workspace-right-panel");
+    expect(polish).toContain("grid-template-columns: minmax(0, 1fr) !important");
+  });
+
+  it("frames the visible development avatar without changing body geometry", () => {
+    const viewport = readSource("viewport/GlobalThreeViewport.ts");
+
+    expect(viewport).toContain("this.proceduralAvatarGroup.updateMatrixWorld(true)");
+    expect(viewport).toContain("if (this.proceduralAvatarGroup.visible) box.expandByObject(this.proceduralAvatarGroup)");
   });
 
   it("declares behavioral workspace and short-height breakpoints without horizontal tool scrolling", () => {

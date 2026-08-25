@@ -90,14 +90,18 @@ await context.addInitScript(() => {
 
 const page = await context.newPage();
 const consoleErrors = [];
+const failedResponses = [];
 page.on("console", (message) => message.type() === "error" && consoleErrors.push(message.text()));
 page.on("pageerror", (error) => consoleErrors.push(error.message));
+page.on("response", (response) => {
+  if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() });
+});
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 20_000 });
   await page.waitForFunction(() => Boolean(window.__moldeonPhase0), undefined, { timeout: 15_000 });
   await page.evaluate(() => window.__moldeonPhase0?.loadFixture("straight-skirt-standard"));
-  await page.getByRole("button", { name: "Provar", exact: true }).click();
+  await page.getByRole("button", { name: "Prova", exact: true }).click();
   const region = page.getByRole("button", { name: /Parte inferior/ });
   if (await region.isVisible().catch(() => false)) await region.click();
   const host = page.locator("[data-testid='dressed-avatar-viewport']");
@@ -109,29 +113,24 @@ try {
   }, undefined, { timeout: 60_000 });
   await page.waitForTimeout(500);
 
-  const snapshots = [{ label: "baseline-1366x768", ...(await snapshot()) }];
-  const sizes = [
-    [390, 844],
-    [1920, 1080],
-    [768, 1024],
-    [1366, 768],
-    [390, 844],
-    [1366, 768],
+  const snapshots = [{ label: "baseline-prova", expectedLayout: "full-fitting", ...(await snapshot()) }];
+  const sequence = [
+    ["Modelar", "side-preview"],
+    ["Prova", "full-fitting"],
+    ["Modelar", "side-preview"],
+    ["Prova", "full-fitting"],
+    ["Montar", "side-preview"],
+    ["Prova", "full-fitting"],
   ];
 
-  for (const [width, height] of sizes) {
-    await page.setViewportSize({ width, height });
-    await page.waitForTimeout(250);
-    if (width <= 1180) {
-      const editorTab = page.getByRole("tab", { name: "Molde 2D" });
-      const previewTab = page.getByRole("tab", { name: "Manequim 3D" });
-      await editorTab.click();
-      await previewTab.click();
-      await editorTab.click();
-      await previewTab.click();
-    }
+  for (const [mode, expectedLayout] of sequence) {
+    await page.getByRole("button", { name: mode, exact: true }).click();
+    await page.waitForFunction(
+      (layout) => document.querySelector("[data-testid='dressed-avatar-viewport']")?.getAttribute("data-viewport-layout") === layout,
+      expectedLayout,
+    );
     await page.waitForTimeout(350);
-    snapshots.push({ label: `${width}x${height}`, ...(await snapshot()) });
+    snapshots.push({ label: mode.toLowerCase(), expectedLayout, ...(await snapshot()) });
   }
 
   const baseline = snapshots[0];
@@ -142,10 +141,13 @@ try {
       final.resizeObserversCreated === baseline.resizeObserversCreated
       && final.resizeObserversActive === baseline.resizeObserversActive,
     canvasCount: snapshots.every((entry) => entry.viewportCanvases === 1),
+    layoutSequence: snapshots.every((entry) => entry.hostLayout === entry.expectedLayout),
+    simulationGeneration: snapshots.every((entry) => entry.simulationGeneration === baseline.simulationGeneration),
+    canvasSizing: snapshots.every((entry) => entry.canvasMatchesHost),
     rafCount: final.rafPending <= baseline.rafPending + 1,
-    console: consoleErrors.length === 0,
+    console: consoleErrors.length === 0 && failedResponses.length === 0,
   };
-  const report = { stable, baseline, final, snapshots, consoleErrors };
+  const report = { stable, baseline, final, snapshots, consoleErrors, failedResponses };
   if (Object.values(stable).some((value) => !value)) {
     throw new Error(`Lifecycle instável: ${JSON.stringify(report)}`);
   }
@@ -158,5 +160,33 @@ try {
 }
 
 async function snapshot() {
-  return page.evaluate(() => window.__moldeonLifecycleAudit?.());
+  return page.evaluate(() => {
+    const lifecycle = window.__moldeonLifecycleAudit?.();
+    const host = document.querySelector("[data-testid='dressed-avatar-viewport']");
+    const canvas = host?.querySelector("canvas");
+    const hostRect = host?.getBoundingClientRect();
+    const canvasRect = canvas?.getBoundingClientRect();
+    return {
+      ...lifecycle,
+      hostLayout: host?.getAttribute("data-viewport-layout") ?? null,
+      simulationGeneration: host?.getAttribute("data-simulation-generation") ?? null,
+      simulationStatus: host?.getAttribute("data-simulation-status") ?? null,
+      hostSize: hostRect ? { width: hostRect.width, height: hostRect.height } : null,
+      canvasSize: canvasRect && canvas instanceof HTMLCanvasElement ? {
+        cssWidth: canvasRect.width,
+        cssHeight: canvasRect.height,
+        bufferWidth: canvas.width,
+        bufferHeight: canvas.height,
+      } : null,
+      canvasMatchesHost: Boolean(
+        hostRect
+        && canvasRect
+        && canvas instanceof HTMLCanvasElement
+        && Math.abs(hostRect.width - canvasRect.width) <= 2
+        && Math.abs(hostRect.height - canvasRect.height) <= 2
+        && canvas.width >= canvasRect.width * window.devicePixelRatio * 0.75
+        && canvas.height >= canvasRect.height * window.devicePixelRatio * 0.75
+      ),
+    };
+  });
 }

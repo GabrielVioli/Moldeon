@@ -13,7 +13,6 @@ interface ToolbarProps {
   onSimulate(): void;
   canAssemble3D: boolean;
   workspaceMode: WorkspaceMode;
-  canDressBody: boolean;
   onWorkspaceModeChange(mode: WorkspaceMode): void;
   onReset(): void;
   onExportSvg(): void;
@@ -51,7 +50,6 @@ export const Toolbar = memo(function Toolbar({
   onSimulate,
   canAssemble3D,
   workspaceMode,
-  canDressBody,
   onWorkspaceModeChange,
   onReset,
   onExportSvg,
@@ -101,7 +99,7 @@ export const Toolbar = memo(function Toolbar({
       <nav className="workspace-mode-switch" aria-label="Modo do espaço de trabalho">
         <button type="button" className={workspaceMode === "modeling" ? "active" : ""} onClick={() => onWorkspaceModeChange("modeling")}>Modelar</button>
         <button type="button" className={workspaceMode === "assembly" ? "active" : ""} onClick={() => onWorkspaceModeChange("assembly")}>Montar</button>
-        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} aria-disabled={!canDressBody} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
+        <button type="button" className={workspaceMode === "fitting" ? "active" : ""} onClick={() => onWorkspaceModeChange("fitting")}>Prova</button>
       </nav>
 
       <nav className="tool-buttons" aria-label="Ferramentas principais" data-testid="primary-tools">

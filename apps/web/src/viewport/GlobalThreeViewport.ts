@@ -511,11 +511,14 @@ export class ThreeViewport {
 
   private frameDressedScene(): void {
     this.avatarGroup.updateMatrixWorld(true);
+    this.proceduralAvatarGroup.updateMatrixWorld(true);
     this.garmentGroup.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.avatarGroup);
+    if (this.proceduralAvatarGroup.visible) box.expandByObject(this.proceduralAvatarGroup);
     box.expandByObject(this.garmentGroup);
     if (box.isEmpty()) return;
-    const hasVisualAvatar = this.avatarGroup.children.length > 0;
+    const hasVisualAvatar = this.avatarGroup.children.length > 0
+      || (this.proceduralAvatarGroup.visible && this.proceduralAvatarGroup.children.length > 0);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const verticalRadius = Math.max(size.y * 0.57, hasVisualAvatar ? 0.75 : 0.12);
