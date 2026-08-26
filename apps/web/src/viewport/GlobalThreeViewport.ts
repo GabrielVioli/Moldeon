@@ -7,15 +7,14 @@ import {
 } from "../avatar/ApprovedAvatarAsset";
 import { loadApprovedAvatar } from "../avatar/ApprovedAvatarLoader";
 import { buildAvatarParametricModel, type AvatarParametricModel } from "../avatar/AvatarParametricModel";
-import { buildAvatarCollisionModel } from "../avatar/AvatarCollisionModel";
 import { createAvatarVisual } from "./AvatarVisual";
 import { createAvatarCollisionDebugVisual } from "./AvatarCollisionDebugVisual";
 import { resolveAvatarFloorPosition } from "./AvatarGroundPlane";
 import {
   IDENTITY_BODY_TRANSFORM,
-  packAvatarCollisionModel,
   type SimulationBodyTransform,
 } from "../physics/bodyCollision";
+import { packHumanBodyMesh, type PackedBodyMesh } from "../physics/exactBodySurface";
 import {
   applyGarmentBodyRegistration,
   resolveGarmentBodyRegistration,
@@ -281,21 +280,24 @@ export class ThreeViewport {
 
       this.bodyRegistrationStatus = registration.status;
       this.currentBodyTransform = IDENTITY_BODY_TRANSFORM;
-      const collisionModel = buildAvatarCollisionModel(avatarModel);
-      const packedColliders = registration.status === "registered"
-        ? packAvatarCollisionModel(collisionModel, IDENTITY_BODY_TRANSFORM)
-        : { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] as string[] };
+      const exactBodyMesh = registration.status === "registered"
+        ? packHumanBodyMesh(avatarModel.humanBody.visualMesh)
+        : undefined;
       this.host.dataset.bodyRegistration = JSON.stringify(registration);
       this.host.dataset.garmentRegistration = JSON.stringify(registration);
       this.host.dataset.avatarMeasurementOrigins = JSON.stringify(avatarModel.measurementOrigins ?? {});
       this.host.dataset.avatarResolvedMeasurements = JSON.stringify(avatarModel.measurements);
       this.host.dataset.physicalFloorY = String(this.floor.position.y);
       this.host.dataset.visualFloorY = String(this.floor.position.y);
-      this.host.dataset.bodyColliderCount = String(collisionModel.proxies.length);
-      if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, collisionModel, IDENTITY_BODY_TRANSFORM);
+      this.host.dataset.bodyColliderCount = String(exactBodyMesh?.indices.length ? exactBodyMesh.indices.length / 3 : 0);
+      this.host.dataset.bodyCollisionPrimitive = exactBodyMesh ? "exact-human-surface" : "none";
+      this.host.dataset.bodyVisualCollisionTopologyParity = String(
+        exactBodyMesh?.topologySignature === avatarModel.humanBody.visualMesh.topologySignature,
+      );
+      if (import.meta.env.DEV) this.configureDevBodyVisuals(avatarModel, exactBodyMesh, IDENTITY_BODY_TRANSFORM);
       if (import.meta.env.DEV) this.configureRegistrationAxes(state, registration);
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
-        bodyColliders: packedColliders,
+        exactBodyMesh,
         bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
         config: {
           gravity: this.scaledGravity(),
@@ -606,7 +608,7 @@ export class ThreeViewport {
 
   private configureDevBodyVisuals(
     avatarModel: AvatarParametricModel,
-    collisionModel: ReturnType<typeof buildAvatarCollisionModel>,
+    exactBodyMesh: PackedBodyMesh | undefined,
     transform: SimulationBodyTransform,
   ): void {
     this.clearDevBodyVisuals();
@@ -617,7 +619,7 @@ export class ThreeViewport {
     this.floor.position.set(...floorPosition);
     this.host.dataset.avatarFloorPosition = JSON.stringify(floorPosition);
     this.proceduralAvatarGroup.add(visual);
-    this.bodyColliderDebugGroup.add(createAvatarCollisionDebugVisual(collisionModel, transform));
+    if (exactBodyMesh) this.bodyColliderDebugGroup.add(createAvatarCollisionDebugVisual(exactBodyMesh));
     this.proceduralAvatarGroup.visible = this.devSettings.showProceduralAvatar;
     this.bodyColliderDebugGroup.visible = this.devSettings.showBodyColliders;
     this.host.dataset.proceduralAvatarVisible = String(this.proceduralAvatarGroup.visible);

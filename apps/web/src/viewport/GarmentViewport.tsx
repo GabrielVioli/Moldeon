@@ -256,7 +256,7 @@ export const GarmentViewport = memo(function GarmentViewport({
               checked={devSettings.showBodyColliders}
               onChange={(event) => setDevSettings((current) => ({ ...current, showBodyColliders: event.target.checked }))}
             />
-            Show body colliders
+            Mostrar malha exata de colisão
           </label>
           <label className="viewport-physics-toggle">
             <input
@@ -296,7 +296,7 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
             <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
             <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
-            <dt>Body colliders</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
+            <dt>Body surface triangles</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
             <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
             <dt>Floor contacts</dt><dd>{telemetry?.floorContactCount ?? 0}</dd>
             <dt>Floor CCD contacts</dt><dd>{telemetry?.floorCcdContactCount ?? 0}</dd>
@@ -316,6 +316,20 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>Body tests (all / narrow)</dt><dd>{telemetry?.bodyColliderTests ?? 0} / {telemetry?.bodyCandidateColliderTests ?? 0}</dd>
             <dt>Body narrow (capsule / ellipsoid)</dt><dd>{telemetry?.bodyCapsuleNarrowphaseTests ?? 0} / {telemetry?.bodyEllipsoidNarrowphaseTests ?? 0}</dd>
             <dt>Body swept (tests / hits)</dt><dd>{telemetry?.bodySweptTests ?? 0} / {telemetry?.bodySweptContactsFound ?? 0}</dd>
+            <dt>Exact body surface</dt><dd>{telemetry?.bodyExactSurface ? "yes" : "no"}</dd>
+            <dt>Body BVH build ms</dt><dd>{formatMetric(telemetry?.bodyBvhBuildMs)}</dd>
+            <dt>Body BVH node visits</dt><dd>{telemetry?.bodyBvhNodeVisits ?? 0}</dd>
+            <dt>Body triangle tests</dt><dd>{telemetry?.bodyTriangleTests ?? 0}</dd>
+            <dt>Body inside / CCD tests</dt><dd>{telemetry?.bodyInsideTests ?? 0} / {telemetry?.bodyCcdTests ?? 0}</dd>
+            <dt>Body CCD ms</dt><dd>{formatMetric(telemetry?.bodyCcdMs)}</dd>
+            <dt>Body contacts V / E / T</dt><dd>{telemetry?.bodyVertexContacts ?? 0} / {telemetry?.bodyEdgeContacts ?? 0} / {telemetry?.bodyTriangleContacts ?? 0}</dd>
+            <dt>Residual intersections / crossings</dt><dd>{telemetry?.bodyResidualIntersections ?? 0} / {telemetry?.bodyResidualCrossings ?? 0}</dd>
+            <dt>Max signed penetration mm</dt><dd>{formatMetric((telemetry?.maximumSignedBodyPenetrationM ?? 0) * 1000)}</dd>
+            <dt>Invalid cloth primitives skipped</dt><dd>{telemetry?.bodyInvalidClothPrimitiveSkips ?? 0}</dd>
+            <dt>Structural contact deferred</dt><dd>{telemetry?.bodyStructuralContactDeferred ? "yes" : "no"}</dd>
+            <dt>Assembly contact blocked</dt><dd>{telemetry?.bodyAssemblyContactBlocked ? "yes" : "no"}</dd>
+            <dt>Deep initial overlaps</dt><dd>{telemetry?.bodyDeepOverlapCount ?? 0}</dd>
+            <dt>Initial intersections</dt><dd>{telemetry?.bodyInitialIntersectionCount ?? 0}</dd>
             <dt>Dressing steps</dt><dd>{telemetry?.bodyDressingStepsRemaining ?? 0} / {telemetry?.bodyInitialDressingSteps ?? 0}</dd>
             <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
             <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>

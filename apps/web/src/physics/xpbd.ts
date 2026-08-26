@@ -209,6 +209,24 @@ export interface XpbdStepDiagnostics {
   bodyPointContactsFound?: number;
   bodySweptTests?: number;
   bodySweptContactsFound?: number;
+  bodyExactSurface?: boolean;
+  bodyBvhBuildMs?: number;
+  bodyBvhNodeVisits?: number;
+  bodyTriangleTests?: number;
+  bodyInsideTests?: number;
+  bodyCcdTests?: number;
+  bodyCcdMs?: number;
+  bodyVertexContacts?: number;
+  bodyEdgeContacts?: number;
+  bodyTriangleContacts?: number;
+  bodyResidualIntersections?: number;
+  bodyResidualCrossings?: number;
+  maximumSignedBodyPenetrationM?: number;
+  bodyInvalidClothPrimitiveSkips?: number;
+  bodyStructuralContactDeferred?: boolean;
+  bodyAssemblyContactBlocked?: boolean;
+  bodyDeepOverlapCount?: number;
+  bodyInitialIntersectionCount?: number;
   bodyDressingStepsRemaining?: number;
   bodyInitialDressingSteps?: number;
   iterations?: number;
@@ -398,6 +416,26 @@ export function stepXpbd(state: XpbdState): void {
       phaseStarted = performance.now(); solveSeamSet(state, dt); profile.seamMs += performance.now() - phaseStarted;
     }
     enforcePins(state);
+    if (state.body.exactSurface && (
+      iteration === 0
+      || iteration === Math.floor(effectiveIterations / 2)
+      || iteration === effectiveIterations - 1
+    )) {
+      phaseStarted = performance.now();
+      solveBodyCollisions({
+        predictedPositions: state.predictedPositions,
+        previousPositions: state.previousPositions,
+        velocities: state.velocities,
+        inverseMasses: state.inverseMasses,
+        correctionLimits: state.correctionLimits,
+        maximumCorrectionM: state.config.maximumCorrection,
+        fixedTimeStep: dt,
+        body: state.body,
+        allowSwept: iteration === 0,
+        clothMaterialCoordinates: state.materialCoordinates,
+      });
+      profile.bodyCollisionMs += performance.now() - phaseStarted;
+    }
   }
 
   // Constraint order must not let the final seam sweep purchase closure by
@@ -411,8 +449,8 @@ export function stepXpbd(state: XpbdState): void {
   enforcePins(state);
 
   phaseStarted = performance.now();
-  solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true });
-  profile.bodyCollisionMs = performance.now() - phaseStarted;
+  solveBodyCollisions({ predictedPositions: state.predictedPositions, previousPositions: state.previousPositions, velocities: state.velocities, inverseMasses: state.inverseMasses, correctionLimits: state.correctionLimits, maximumCorrectionM: state.config.maximumCorrection, fixedTimeStep: dt, body: state.body, allowSwept: true, clothTriangles: state.triangles, clothMaterialCoordinates: state.materialCoordinates, finalReconciliation: true });
+  profile.bodyCollisionMs += performance.now() - phaseStarted;
   phaseStarted = performance.now();
   solveFloorCollisions(state);
   profile.floorCollisionMs = performance.now() - phaseStarted;
@@ -556,7 +594,7 @@ export function measureXpbdDiagnostics(
     explicitPinCount: state.pins.indices.length,
     temporarySupportCount: 0,
     maximumCorrectionApplied: state.maximumCorrectionApplied,
-    bodyColliderCount: state.body.colliders.kinds.length,
+    bodyColliderCount: state.body.exactSurface?.validation.triangleCount ?? state.body.colliders.kinds.length,
     bodyContactCount: state.body.bodyContactCount,
     bodyContactsByRegion: { ...state.body.bodyContactsByRegion },
     maximumBodyPenetrationM: state.body.maximumBodyPenetrationM,
@@ -602,6 +640,24 @@ export function measureXpbdDiagnostics(
     bodyPointContactsFound: state.body.bodyPointContactsFound,
     bodySweptTests: state.body.bodySweptTests,
     bodySweptContactsFound: state.body.bodySweptContactsFound,
+    bodyExactSurface: state.body.exactSurface !== null,
+    bodyBvhBuildMs: state.body.bvhBuildMs,
+    bodyBvhNodeVisits: state.body.exactSurface?.bvhNodeVisits ?? 0,
+    bodyTriangleTests: state.body.exactSurface?.triangleTests ?? state.body.bodyTriangleTests,
+    bodyInsideTests: state.body.exactSurface?.insideTests ?? 0,
+    bodyCcdTests: state.body.exactSurface?.ccdTests ?? 0,
+    bodyCcdMs: state.body.ccdMs,
+    bodyVertexContacts: state.body.bodyVertexContacts,
+    bodyEdgeContacts: state.body.bodyEdgeContacts,
+    bodyTriangleContacts: state.body.bodyTriangleContacts,
+    bodyResidualIntersections: state.body.residualBodyIntersections,
+    bodyResidualCrossings: state.body.residualBodyCrossings,
+    maximumSignedBodyPenetrationM: state.body.maximumSignedPenetrationM,
+    bodyInvalidClothPrimitiveSkips: state.body.invalidClothPrimitiveSkips,
+    bodyStructuralContactDeferred: state.body.structuralContactDeferred,
+    bodyAssemblyContactBlocked: state.body.assemblyContactBlocked,
+    bodyDeepOverlapCount: state.body.deepOverlapCount,
+    bodyInitialIntersectionCount: state.body.initialIntersectionCount,
     bodyDressingStepsRemaining: state.body.dressingStepsRemaining,
     bodyInitialDressingSteps: state.body.initialDressingSteps,
     iterations: state.config.iterations,

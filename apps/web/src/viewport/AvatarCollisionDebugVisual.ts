@@ -1,42 +1,28 @@
 import * as THREE from "three";
-import type { AvatarCollisionModel } from "../avatar/AvatarCollisionModel";
-import { transformAvatarCollisionProxy, type SimulationBodyTransform } from "../physics/bodyCollision";
+import type { PackedBodyMesh } from "../physics/exactBodySurface";
 
 export function createAvatarCollisionDebugVisual(
-  model: AvatarCollisionModel,
-  transform: SimulationBodyTransform,
+  surface: PackedBodyMesh,
 ): THREE.Group {
   const group = new THREE.Group();
-  group.name = "avatar:collision-debug";
+  group.name = "avatar:exact-collision-ghost";
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(surface.positions), 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(surface.normals), 3));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(surface.indices), 1));
   const material = new THREE.MeshBasicMaterial({
+    color: 0x00d9ff,
     wireframe: true,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.28,
     depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
   });
-  for (const original of model.proxies) {
-    const proxy = transformAvatarCollisionProxy(original, transform);
-    if (proxy.kind === "ellipsoid") {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), material.clone());
-      mesh.name = `body-collider:${proxy.id}`;
-      mesh.position.set(...proxy.center);
-      mesh.scale.set(...proxy.radii);
-      group.add(mesh);
-      continue;
-    }
-    const start = new THREE.Vector3(...proxy.start);
-    const end = new THREE.Vector3(...proxy.end);
-    const axis = end.clone().sub(start);
-    const length = axis.length();
-    const mesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(proxy.radius, length, 8, 16),
-      material.clone(),
-    );
-    mesh.name = `body-collider:${proxy.id}`;
-    mesh.position.copy(start).add(end).multiplyScalar(0.5);
-    if (length > 1e-8) mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
-    group.add(mesh);
-  }
-  material.dispose();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = "body-collider:exact-human-surface";
+  mesh.renderOrder = 100;
+  mesh.userData.topologySignature = surface.topologySignature;
+  group.add(mesh);
   return group;
 }

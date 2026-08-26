@@ -11,6 +11,7 @@ import {
   type AdapterSeamResidualAudit,
 } from "../garment3d/InitialSeamResidual";
 import type { PackedBodyColliders } from "./bodyCollision";
+import type { PackedBodyMesh } from "./exactBodySurface";
 import {
   DEFAULT_XPBD_CONFIG,
   XPBD_MISSING_PARTICLE,
@@ -54,6 +55,10 @@ export interface XpbdInitializationData {
   bodyColliderKinds?: Uint8Array;
   bodyColliderData?: Float32Array;
   bodyColliderRegions?: string[];
+  bodyMeshPositions?: Float32Array;
+  bodyMeshNormals?: Float32Array;
+  bodyMeshIndices?: Uint32Array;
+  bodyMeshTopologySignature?: string;
   particleHalfThicknessM?: Float32Array;
   particleFriction?: Float32Array;
   bodyCollisionEnabled?: boolean;
@@ -91,6 +96,7 @@ export interface GarmentXpbdAdapterOptions {
   pinAssemblyAnchors?: boolean;
   config?: Partial<XpbdSolverConfig>;
   bodyColliders?: PackedBodyColliders;
+  exactBodyMesh?: PackedBodyMesh;
   bodyCollisionEnabled?: boolean;
   bodyContactSkinM?: number;
 }
@@ -294,7 +300,8 @@ export function buildXpbdInitialization(
     );
   }
   const bodyColliders = options.bodyColliders ?? { kinds: new Uint8Array(0), data: new Float32Array(0), regions: [] };
-  const bodyContactSkinM = options.bodyContactSkinM ?? 0.0004;
+  const exactBodyMesh = options.exactBodyMesh;
+  const bodyContactSkinM = options.bodyContactSkinM ?? 0.00005;
   return {
     revision,
     topologyDiagnostics,
@@ -332,9 +339,13 @@ export function buildXpbdInitialization(
     bodyColliderKinds: new Uint8Array(bodyColliders.kinds),
     bodyColliderData: new Float32Array(bodyColliders.data),
     bodyColliderRegions: [...bodyColliders.regions],
+    bodyMeshPositions: exactBodyMesh ? new Float32Array(exactBodyMesh.positions) : undefined,
+    bodyMeshNormals: exactBodyMesh ? new Float32Array(exactBodyMesh.normals) : undefined,
+    bodyMeshIndices: exactBodyMesh ? new Uint32Array(exactBodyMesh.indices) : undefined,
+    bodyMeshTopologySignature: exactBodyMesh?.topologySignature,
     particleHalfThicknessM,
     particleFriction,
-    bodyCollisionEnabled: options.bodyCollisionEnabled ?? bodyColliders.kinds.length > 0,
+    bodyCollisionEnabled: options.bodyCollisionEnabled ?? Boolean(exactBodyMesh || bodyColliders.kinds.length > 0),
     bodyContactSkinM,
     config,
   };
@@ -429,6 +440,9 @@ export function xpbdInitializationTransferables(data: XpbdInitializationData): T
     data.pinTargets.buffer,
     ...(data.bodyColliderKinds ? [data.bodyColliderKinds.buffer] : []),
     ...(data.bodyColliderData ? [data.bodyColliderData.buffer] : []),
+    ...(data.bodyMeshPositions ? [data.bodyMeshPositions.buffer] : []),
+    ...(data.bodyMeshNormals ? [data.bodyMeshNormals.buffer] : []),
+    ...(data.bodyMeshIndices ? [data.bodyMeshIndices.buffer] : []),
     ...(data.particleHalfThicknessM ? [data.particleHalfThicknessM.buffer] : []),
     ...(data.particleFriction ? [data.particleFriction.buffer] : []),
   ];

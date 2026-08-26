@@ -83,6 +83,9 @@ export function initializationTransferables(payload: XpbdInitializationData): Tr
     payload.pinTargets.buffer,
     ...(payload.bodyColliderKinds ? [payload.bodyColliderKinds.buffer] : []),
     ...(payload.bodyColliderData ? [payload.bodyColliderData.buffer] : []),
+    ...(payload.bodyMeshPositions ? [payload.bodyMeshPositions.buffer] : []),
+    ...(payload.bodyMeshNormals ? [payload.bodyMeshNormals.buffer] : []),
+    ...(payload.bodyMeshIndices ? [payload.bodyMeshIndices.buffer] : []),
     ...(payload.particleHalfThicknessM ? [payload.particleHalfThicknessM.buffer] : []),
     ...(payload.particleFriction ? [payload.particleFriction.buffer] : []),
   ];

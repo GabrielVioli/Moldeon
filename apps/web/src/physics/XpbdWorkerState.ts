@@ -4,6 +4,7 @@ import {
   createBodyCollisionRuntimeState,
 } from "./bodyCollision";
 import { buildTriangleMaterialReference, createXpbdState, type XpbdState } from "./xpbd";
+import type { PackedBodyMesh } from "./exactBodySurface";
 
 /**
  * Canonical typed-array boundary between GarmentXpbdAdapter and the Worker.
@@ -12,6 +13,14 @@ import { buildTriangleMaterialReference, createXpbdState, type XpbdState } from 
  */
 export function createXpbdWorkerState(payload: XpbdInitializationData): XpbdState {
   const particleCount = payload.positions.length / 3;
+  const exactBodyMesh: PackedBodyMesh | undefined = payload.bodyMeshPositions && payload.bodyMeshNormals && payload.bodyMeshIndices
+    ? {
+        positions: payload.bodyMeshPositions,
+        normals: payload.bodyMeshNormals,
+        indices: payload.bodyMeshIndices,
+        topologySignature: payload.bodyMeshTopologySignature ?? "unspecified-body-surface",
+      }
+    : undefined;
   const body = createBodyCollisionRuntimeState(
     {
       kinds: payload.bodyColliderKinds ?? new Uint8Array(0),
@@ -22,6 +31,7 @@ export function createXpbdWorkerState(payload: XpbdInitializationData): XpbdStat
     payload.particleFriction ?? new Float32Array(particleCount),
     payload.bodyCollisionEnabled ?? false,
     payload.bodyContactSkinM ?? DEFAULT_BODY_CONTACT_SKIN_M,
+    exactBodyMesh,
   );
 
   return createXpbdState({

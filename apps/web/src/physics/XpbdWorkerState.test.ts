@@ -38,7 +38,57 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect(diagnostics.bodyContactCount).toBe(0);
     expect([...state.positions]).toEqual(before);
   });
+
+  it("builds one exact-surface BVH from transferable visual mesh buffers", () => {
+    const payload = initialization(true);
+    payload.bodyColliderKinds = new Uint8Array();
+    payload.bodyColliderData = new Float32Array();
+    payload.bodyColliderRegions = [];
+    const cube = exactCube();
+    payload.bodyMeshPositions = cube.positions;
+    payload.bodyMeshNormals = cube.normals;
+    payload.bodyMeshIndices = cube.indices;
+    payload.bodyMeshTopologySignature = "visual:exact-cube";
+    const state = createXpbdWorkerState(payload);
+
+    expect(state.body.exactSurface?.mesh.topologySignature).toBe("visual:exact-cube");
+    expect(state.body.exactSurface?.validation.valid).toBe(true);
+    expect(state.body.exactSurface?.bvh.nodeCount).toBeGreaterThan(0);
+    stepXpbd(state);
+
+    const diagnostics = measureXpbdDiagnostics(state);
+    expect(diagnostics.bodyExactSurface).toBe(true);
+    expect(diagnostics.bodyColliderCount).toBe(12);
+    expect(diagnostics.bodyBvhBuildMs).toBeGreaterThanOrEqual(0);
+    expect(diagnostics.bodyAssemblyContactBlocked).toBe(true);
+    expect(diagnostics.bodyDeepOverlapCount).toBe(1);
+    expect(diagnostics.bodyInitialIntersectionCount).toBe(1);
+    expect(diagnostics.bodyTriangleTests).toBe(0);
+  });
 });
+
+function exactCube() {
+  const positions = Float32Array.from([
+    -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1,
+    -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1,
+  ]);
+  const normals = new Float32Array(positions.length);
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const length = Math.hypot(positions[offset], positions[offset + 1], positions[offset + 2]);
+    normals[offset] = positions[offset] / length;
+    normals[offset + 1] = positions[offset + 1] / length;
+    normals[offset + 2] = positions[offset + 2] / length;
+  }
+  return {
+    positions,
+    normals,
+    indices: Uint32Array.from([
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+      0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2,
+      0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5,
+    ]),
+  };
+}
 
 function initialization(bodyCollisionEnabled: boolean): XpbdInitializationData {
   const positions = new Float32Array([0, 0, 0]);
@@ -117,6 +167,7 @@ function initialization(bodyCollisionEnabled: boolean): XpbdInitializationData {
       maximumCorrection: 0.035,
       maximumVelocity: 12,
       seamTolerance: 0.0025,
+      floorCollisionEnabled: false,
     },
   };
 }

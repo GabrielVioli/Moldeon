@@ -1,12 +1,22 @@
 import type { AvatarCollisionModel, AvatarCollisionProxy } from "../avatar/AvatarCollisionModel";
+import {
+  closestPointOnExactBody,
+  createExactBodySurfaceRuntime,
+  segmentCrossingExactBody,
+  triangleCrossingsExactBody,
+  type ExactBodySurfaceRuntime,
+  type PackedBodyMesh,
+} from "./exactBodySurface";
 
 export const BODY_COLLIDER_ELLIPSOID = 1;
 export const BODY_COLLIDER_CAPSULE = 2;
 export const BODY_COLLIDER_STRIDE = 10;
 export const BODY_COLLIDER_AABB_STRIDE = 6;
-export const DEFAULT_BODY_CONTACT_SKIN_M = 0.0004;
+export const DEFAULT_BODY_CONTACT_SKIN_M = 0.00005;
 const EPSILON = 1e-9;
 const BODY_BROADPHASE_BIN_COUNT = 32;
+const MAX_EXACT_LOCAL_OVERLAP_M = 0.005;
+const MAX_EXACT_CORRECTION_PER_PASS_M = 0.002;
 
 export interface SimulationBodyTransform {
   translation: readonly [number, number, number];
@@ -59,6 +69,10 @@ export interface BodyContactQuery {
 export interface BodyCollisionRuntimeState {
   enabled: boolean;
   colliders: PackedBodyColliders;
+  exactSurface: ExactBodySurfaceRuntime | null;
+  exactCandidateMask: Uint8Array;
+  exactSignedDistances: Float32Array;
+  exactPassCount: number;
   particleHalfThicknessM: Float32Array;
   particleFriction: Float32Array;
   contactNormals: Float32Array;
@@ -100,6 +114,20 @@ export interface BodyCollisionRuntimeState {
   bodyPointContactsFound: number;
   bodySweptTests: number;
   bodySweptContactsFound: number;
+  bodyTriangleTests: number;
+  bodyVertexContacts: number;
+  bodyEdgeContacts: number;
+  bodyTriangleContacts: number;
+  residualBodyIntersections: number;
+  residualBodyCrossings: number;
+  maximumSignedPenetrationM: number;
+  bvhBuildMs: number;
+  ccdMs: number;
+  invalidClothPrimitiveSkips: number;
+  structuralContactDeferred: boolean;
+  assemblyContactBlocked: boolean;
+  deepOverlapCount: number;
+  initialIntersectionCount: number;
 }
 
 export interface BodyCollisionSolveInput {
@@ -112,6 +140,9 @@ export interface BodyCollisionSolveInput {
   velocities?: Float32Array;
   body: BodyCollisionRuntimeState;
   allowSwept: boolean;
+  clothTriangles?: Uint32Array;
+  clothMaterialCoordinates?: Float32Array;
+  finalReconciliation?: boolean;
 }
 
 export function packAvatarCollisionModel(
@@ -181,11 +212,13 @@ export function createBodyCollisionRuntimeState(
   particleFriction: Float32Array,
   enabled = true,
   contactSkinM = DEFAULT_BODY_CONTACT_SKIN_M,
+  exactBodyMesh?: PackedBodyMesh,
 ): BodyCollisionRuntimeState {
   validatePackedBodyColliders(colliders);
   colliders.cache ??= buildPackedBodyColliderCache(colliders);
   if (particleHalfThicknessM.length !== particleFriction.length) throw new RangeError("Body contact material buffers possuem tamanhos incompatíveis.");
-  if (!Number.isFinite(contactSkinM) || contactSkinM < 0 || contactSkinM > 0.01) throw new RangeError("Body contact skin precisa ser finita e pequena.");
+  if (!Number.isFinite(contactSkinM) || contactSkinM < 0 || contactSkinM > 0.00015) throw new RangeError("Body contact skin precisa estar entre 0 e 0.15 mm.");
+  const exactSurface = exactBodyMesh ? createExactBodySurfaceRuntime(exactBodyMesh) : null;
   for (let index = 0; index < particleHalfThicknessM.length; index += 1) {
     if (!Number.isFinite(particleHalfThicknessM[index]) || particleHalfThicknessM[index] < 0) throw new RangeError("Espessura de contato inválida.");
     if (!Number.isFinite(particleFriction[index]) || particleFriction[index] < 0) throw new RangeError("Atrito de contato inválido.");
@@ -193,6 +226,10 @@ export function createBodyCollisionRuntimeState(
   return {
     enabled,
     colliders,
+    exactSurface,
+    exactCandidateMask: new Uint8Array(particleHalfThicknessM.length),
+    exactSignedDistances: new Float32Array(particleHalfThicknessM.length).fill(Number.POSITIVE_INFINITY),
+    exactPassCount: 0,
     particleHalfThicknessM,
     particleFriction,
     contactNormals: new Float32Array(particleHalfThicknessM.length * 3),
@@ -238,6 +275,20 @@ export function createBodyCollisionRuntimeState(
     bodyPointContactsFound: 0,
     bodySweptTests: 0,
     bodySweptContactsFound: 0,
+    bodyTriangleTests: 0,
+    bodyVertexContacts: 0,
+    bodyEdgeContacts: 0,
+    bodyTriangleContacts: 0,
+    residualBodyIntersections: 0,
+    residualBodyCrossings: 0,
+    maximumSignedPenetrationM: 0,
+    bvhBuildMs: exactSurface?.bvh.buildMs ?? 0,
+    ccdMs: 0,
+    invalidClothPrimitiveSkips: 0,
+    structuralContactDeferred: false,
+    assemblyContactBlocked: false,
+    deepOverlapCount: 0,
+    initialIntersectionCount: 0,
   };
 }
 
@@ -249,20 +300,40 @@ export function initializeBodyDressing(
   body.dressingStepsRemaining = 0;
   body.initialDressingSteps = 0;
   body.grossDepenetrationEnabled = false;
-  if (!body.enabled || body.colliders.kinds.length === 0 || !Number.isFinite(maximumCorrectionM) || maximumCorrectionM <= 0) return;
+  body.assemblyContactBlocked = false;
+  body.deepOverlapCount = 0;
+  body.initialIntersectionCount = 0;
+  if (!body.enabled || (!body.exactSurface && body.colliders.kinds.length === 0) || !Number.isFinite(maximumCorrectionM) || maximumCorrectionM <= 0) return;
 
   let maximumPenetrationM = 0;
+  let deepOverlapCount = 0;
+  let initialIntersectionCount = 0;
   const particleCount = positions.length / 3;
   for (let particle = 0; particle < particleCount; particle += 1) {
     const offset = particle * 3;
-    const contact = deepestBodyContact(
-      [positions[offset], positions[offset + 1], positions[offset + 2]],
-      body.colliders,
-      body.particleHalfThicknessM[particle] + body.contactSkinM,
-    );
-    if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
+    const point: [number, number, number] = [positions[offset], positions[offset + 1], positions[offset + 2]];
+    const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
+    const contact = body.exactSurface
+      ? closestPointOnExactBody(body.exactSurface, point, false)
+      : deepestBodyContact(point, body.colliders, clearance);
+    if (contact) {
+      if ("signedDistanceM" in contact) {
+        body.exactSignedDistances[particle] = contact.signedDistanceM;
+        if (contact.signedDistanceM < 0) initialIntersectionCount += 1;
+      }
+      const penetration = "signedDistanceM" in contact ? clearance - contact.signedDistanceM : contact.penetrationM;
+      maximumPenetrationM = Math.max(maximumPenetrationM, penetration);
+      if (body.exactSurface && penetration > MAX_EXACT_LOCAL_OVERLAP_M) deepOverlapCount += 1;
+    }
   }
+  body.initialIntersectionCount = initialIntersectionCount;
   if (maximumPenetrationM <= EPSILON) return;
+  if (body.exactSurface && deepOverlapCount > 0) {
+    body.assemblyContactBlocked = true;
+    body.deepOverlapCount = deepOverlapCount;
+    body.initialIntersectionCount = initialIntersectionCount;
+    return;
+  }
 
   // Each gross projection is capped by maximumCorrectionM. Two passes per
   // theoretical minimum leave room for structural constraints to relax between
@@ -304,11 +375,35 @@ export function resetBodyContactStep(body: BodyCollisionRuntimeState): void {
   body.bodyPointContactsFound = 0;
   body.bodySweptTests = 0;
   body.bodySweptContactsFound = 0;
+  body.bodyTriangleTests = 0;
+  body.bodyVertexContacts = 0;
+  body.bodyEdgeContacts = 0;
+  body.bodyTriangleContacts = 0;
+  body.residualBodyIntersections = 0;
+  body.residualBodyCrossings = 0;
+  body.exactCandidateMask.fill(0);
+  body.exactPassCount = 0;
+  body.maximumSignedPenetrationM = 0;
+  body.ccdMs = 0;
+  body.invalidClothPrimitiveSkips = 0;
+  body.structuralContactDeferred = false;
+  if (body.exactSurface) {
+    body.exactSurface.queries = 0;
+    body.exactSurface.bvhNodeVisits = 0;
+    body.exactSurface.triangleTests = 0;
+    body.exactSurface.insideTests = 0;
+    body.exactSurface.ccdTests = 0;
+  }
 }
 
 export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
   const { body } = input;
-  if (!body.enabled || body.colliders.kinds.length === 0) return;
+  if (!body.enabled) return;
+  if (body.exactSurface) {
+    solveExactBodySurfaceCollisions(input);
+    return;
+  }
+  if (body.colliders.kinds.length === 0) return;
   const particleCount = input.predictedPositions.length / 3;
   const colliderCount = body.colliders.kinds.length;
   if (body.particleHalfThicknessM.length !== particleCount || body.particleFriction.length !== particleCount) {
@@ -494,6 +589,338 @@ export function solveBodyCollisions(input: BodyCollisionSolveInput): void {
     );
   }
   body.projectionMs = performance.now() - phaseStarted;
+}
+
+function solveExactBodySurfaceCollisions(input: BodyCollisionSolveInput): void {
+  const { body } = input;
+  const runtime = body.exactSurface!;
+  const particleCount = input.predictedPositions.length / 3;
+  const firstPass = body.exactPassCount === 0;
+  body.exactPassCount += 1;
+  if (body.assemblyContactBlocked) {
+    body.structuralContactDeferred = true;
+    body.residualBodyIntersections = body.initialIntersectionCount;
+    return;
+  }
+  if (body.particleHalfThicknessM.length !== particleCount || body.particleFriction.length !== particleCount) {
+    throw new RangeError("Body contact material buffers não correspondem ao garment state.");
+  }
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    if (input.inverseMasses[particle] <= 0) continue;
+    if (!firstPass && body.exactCandidateMask[particle] === 0) continue;
+    const offset = particle * 3;
+    const point: [number, number, number] = [
+      input.predictedPositions[offset],
+      input.predictedPositions[offset + 1],
+      input.predictedPositions[offset + 2],
+    ];
+    const previous: [number, number, number] = [
+      input.previousPositions[offset],
+      input.previousPositions[offset + 1],
+      input.previousPositions[offset + 2],
+    ];
+    const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
+    let phaseStarted = performance.now();
+    const query = closestPointOnExactBody(runtime, point, false);
+    body.exactSignedDistances[particle] = query.signedDistanceM;
+    body.narrowphaseMs += performance.now() - phaseStarted;
+    body.bodyParticleQueries += 1;
+    body.bodyCandidateColliderTests += 1;
+    body.bodyTriangleTests = runtime.triangleTests;
+    let target: [number, number, number] | null = null;
+    let normal = query.normal;
+    let swept = false;
+    let penetrationM = clearance - query.signedDistanceM;
+    if (body.assemblyContactBlocked) {
+      if (query.signedDistanceM < 0) body.residualBodyIntersections += 1;
+      continue;
+    }
+    const movementSquared = (point[0] - previous[0]) ** 2 + (point[1] - previous[1]) ** 2 + (point[2] - previous[2]) ** 2;
+    phaseStarted = performance.now();
+    const hit = input.allowSwept && movementSquared > 1e-10
+      ? segmentCrossingExactBody(runtime, previous, point)
+      : null;
+    body.ccdMs += performance.now() - phaseStarted;
+    if (input.allowSwept && movementSquared > 1e-10) {
+      body.bodySweptTests += 1;
+      runtime.ccdTests += 1;
+    }
+    if (query.signedDistanceM <= clearance + 0.01 || hit) body.exactCandidateMask[particle] = 1;
+    if (hit && hit.t < 1) {
+      target = [
+        hit.point[0] + hit.normal[0] * clearance,
+        hit.point[1] + hit.normal[1] * clearance,
+        hit.point[2] + hit.normal[2] * clearance,
+      ];
+      normal = hit.normal;
+      penetrationM = Math.max(clearance, -query.signedDistanceM);
+      swept = true;
+      body.bodySweptContactsFound += 1;
+    } else if (penetrationM > 0) {
+      target = [
+        query.point[0] + normal[0] * clearance,
+        query.point[1] + normal[1] * clearance,
+        query.point[2] + normal[2] * clearance,
+      ];
+      body.bodyPointContactsFound += 1;
+    }
+    if (!target) continue;
+    phaseStarted = performance.now();
+    registerExactParticleContact(input, particle, target, normal, penetrationM, swept);
+    body.projectionMs += performance.now() - phaseStarted;
+    body.bodyVertexContacts += 1;
+  }
+
+  if (input.finalReconciliation && input.clothTriangles && input.clothTriangles.length > 0) {
+    const reconciliationStarted = performance.now();
+    const integrity = inspectClothContactMetric(input, input.clothTriangles);
+    body.invalidClothPrimitiveSkips += integrity.invalidEdgeCount;
+    body.structuralContactDeferred = body.assemblyContactBlocked || !integrity.valid;
+    if (!body.assemblyContactBlocked && integrity.valid) {
+      solveExactClothEdgeAndTriangleContacts(input, input.clothTriangles);
+      auditExactBodyResiduals(input, input.clothTriangles);
+    } else {
+      auditExactBodyResiduals(input, new Uint32Array(0));
+    }
+    body.narrowphaseMs += performance.now() - reconciliationStarted;
+  }
+  body.bodyTriangleTests = runtime.triangleTests;
+}
+
+function registerExactParticleContact(
+  input: BodyCollisionSolveInput,
+  particle: number,
+  target: readonly [number, number, number],
+  normal: readonly [number, number, number],
+  penetrationM: number,
+  swept: boolean,
+): void {
+  const { body } = input;
+  const offset = particle * 3;
+  const pointX = input.predictedPositions[offset];
+  const pointY = input.predictedPositions[offset + 1];
+  const pointZ = input.predictedPositions[offset + 2];
+  let correctionX = target[0] - pointX;
+  let correctionY = target[1] - pointY;
+  let correctionZ = target[2] - pointZ;
+  let correction = Math.hypot(correctionX, correctionY, correctionZ);
+  const localLimit = Math.max(1e-6, Math.min(input.maximumCorrectionM, input.correctionLimits[particle] || input.maximumCorrectionM));
+  const localExactLimit = Math.min(localLimit, MAX_EXACT_CORRECTION_PER_PASS_M);
+  const limit = swept
+    ? Math.min(input.maximumCorrectionM, localLimit)
+    : input.finalReconciliation
+      ? Math.min(input.maximumCorrectionM, localExactLimit * 2)
+      : localExactLimit;
+  if (correction > limit) {
+    const factor = limit / correction;
+    correctionX *= factor;
+    correctionY *= factor;
+    correctionZ *= factor;
+    correction = limit;
+  }
+  const velocityX = input.velocities ? input.velocities[offset] : (pointX - input.previousPositions[offset]) / Math.max(input.fixedTimeStep, EPSILON);
+  const velocityY = input.velocities ? input.velocities[offset + 1] : (pointY - input.previousPositions[offset + 1]) / Math.max(input.fixedTimeStep, EPSILON);
+  const velocityZ = input.velocities ? input.velocities[offset + 2] : (pointZ - input.previousPositions[offset + 2]) / Math.max(input.fixedTimeStep, EPSILON);
+  const inwardSpeed = Math.max(0, -(velocityX * normal[0] + velocityY * normal[1] + velocityZ * normal[2]));
+  input.predictedPositions[offset] += correctionX;
+  input.predictedPositions[offset + 1] += correctionY;
+  input.predictedPositions[offset + 2] += correctionZ;
+  body.contactMask[particle] = 1;
+  body.contactRegionIndex[particle] = -1;
+  body.contactNormals[offset] = normal[0];
+  body.contactNormals[offset + 1] = normal[1];
+  body.contactNormals[offset + 2] = normal[2];
+  body.contactSurfacePoints[offset] = target[0];
+  body.contactSurfacePoints[offset + 1] = target[1];
+  body.contactSurfacePoints[offset + 2] = target[2];
+  body.contactPenetrations[particle] = Math.max(body.contactPenetrations[particle], penetrationM);
+  body.contactSwept[particle] = swept ? 1 : body.contactSwept[particle];
+  body.contactCorrections[offset] += correctionX;
+  body.contactCorrections[offset + 1] += correctionY;
+  body.contactCorrections[offset + 2] += correctionZ;
+  body.normalImpulseSpeed[particle] = Math.max(body.normalImpulseSpeed[particle], inwardSpeed, correction / Math.max(input.fixedTimeStep, EPSILON));
+  body.maximumBodyPenetrationM = Math.max(body.maximumBodyPenetrationM, penetrationM);
+  body.maximumSignedPenetrationM = Math.max(body.maximumSignedPenetrationM, penetrationM);
+  body.maximumBodyCorrectionM = Math.max(body.maximumBodyCorrectionM, correction);
+  if (swept) body.sweptContactCount += 1;
+}
+
+function solveExactClothEdgeAndTriangleContacts(input: BodyCollisionSolveInput, triangles: Uint32Array): void {
+  const runtime = input.body.exactSurface!;
+  const uniqueEdges = new Set<string>();
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    const indices = [triangles[offset], triangles[offset + 1], triangles[offset + 2]] as const;
+    for (let edge = 0; edge < 3; edge += 1) {
+      const a = indices[edge]; const b = indices[(edge + 1) % 3];
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (uniqueEdges.has(key)) continue;
+      uniqueEdges.add(key);
+      if (!clothEdgeMetricIsUsable(input, a, b)) {
+        input.body.invalidClothPrimitiveSkips += 1;
+        continue;
+      }
+      const start = particlePoint(input.predictedPositions, a);
+      const end = particlePoint(input.predictedPositions, b);
+      const edgeLength = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
+      if (input.body.exactCandidateMask[a] === 0 && input.body.exactCandidateMask[b] === 0 && edgeLength < 0.05) continue;
+      const clearance = Math.max(input.body.particleHalfThicknessM[a], input.body.particleHalfThicknessM[b]) + input.body.contactSkinM;
+      const hit = segmentCrossingExactBody(runtime, start, end);
+      if (!hit || hit.t <= 1e-4 || hit.t >= 1 - 1e-4) continue;
+      const correctionMagnitude = Math.min(input.maximumCorrectionM, Math.max(clearance, 1e-5));
+      applyWeightedExactCorrection(input, [a, b], [1 - hit.t, hit.t], hit.normal, correctionMagnitude);
+      input.body.bodyEdgeContacts += 1;
+    }
+
+    const a = particlePoint(input.predictedPositions, indices[0]);
+    const b = particlePoint(input.predictedPositions, indices[1]);
+    const c = particlePoint(input.predictedPositions, indices[2]);
+    if (indices.every((particle) => input.body.exactCandidateMask[particle] === 0)) continue;
+    if (!clothEdgeMetricIsUsable(input, indices[0], indices[1])
+      || !clothEdgeMetricIsUsable(input, indices[1], indices[2])
+      || !clothEdgeMetricIsUsable(input, indices[2], indices[0])) {
+      input.body.invalidClothPrimitiveSkips += 1;
+      continue;
+    }
+    const centroid: [number, number, number] = [
+      (a[0] + b[0] + c[0]) / 3,
+      (a[1] + b[1] + c[1]) / 3,
+      (a[2] + b[2] + c[2]) / 3,
+    ];
+    const query = closestPointOnExactBody(runtime, centroid, false);
+    const clearance = Math.max(
+      input.body.particleHalfThicknessM[indices[0]],
+      input.body.particleHalfThicknessM[indices[1]],
+      input.body.particleHalfThicknessM[indices[2]],
+    ) + input.body.contactSkinM;
+    const penetration = clearance - query.signedDistanceM;
+    const signedA = input.body.exactSignedDistances[indices[0]];
+    const signedB = input.body.exactSignedDistances[indices[1]];
+    const signedC = input.body.exactSignedDistances[indices[2]];
+    const minimumSigned = Math.min(signedA, signedB, signedC, query.signedDistanceM);
+    const maximumSigned = Math.max(signedA, signedB, signedC, query.signedDistanceM);
+    if (minimumSigned <= clearance && maximumSigned >= -clearance) {
+      const triangleCrossings = triangleCrossingsExactBody(runtime, a, b, c, 1);
+      for (const crossing of triangleCrossings) {
+        applyWeightedExactCorrection(
+          input,
+          [...indices],
+          crossing.clothBarycentric,
+          crossing.normal,
+          Math.min(input.maximumCorrectionM, Math.max(input.body.contactSkinM, 1e-5)),
+        );
+        input.body.bodyTriangleContacts += 1;
+      }
+    }
+    if (penetration > 0) {
+      applyWeightedExactCorrection(input, [...indices], [1 / 3, 1 / 3, 1 / 3], query.normal, Math.min(input.maximumCorrectionM, penetration));
+      input.body.bodyTriangleContacts += 1;
+    }
+  }
+}
+
+function applyWeightedExactCorrection(
+  input: BodyCollisionSolveInput,
+  particles: readonly number[],
+  weights: readonly number[],
+  normal: readonly [number, number, number],
+  magnitude: number,
+): void {
+  let denominator = 0;
+  for (let index = 0; index < particles.length; index += 1) denominator += input.inverseMasses[particles[index]] * weights[index] * weights[index];
+  if (denominator <= EPSILON) return;
+  for (let index = 0; index < particles.length; index += 1) {
+    const particle = particles[index];
+    if (input.inverseMasses[particle] <= 0) continue;
+    const factor = magnitude * input.inverseMasses[particle] * weights[index] / denominator;
+    const offset = particle * 3;
+    input.predictedPositions[offset] += normal[0] * factor;
+    input.predictedPositions[offset + 1] += normal[1] * factor;
+    input.predictedPositions[offset + 2] += normal[2] * factor;
+    input.body.contactMask[particle] = 1;
+    input.body.exactCandidateMask[particle] = 1;
+    input.body.contactNormals[offset] = normal[0];
+    input.body.contactNormals[offset + 1] = normal[1];
+    input.body.contactNormals[offset + 2] = normal[2];
+    input.body.contactCorrections[offset] += normal[0] * factor;
+    input.body.contactCorrections[offset + 1] += normal[1] * factor;
+    input.body.contactCorrections[offset + 2] += normal[2] * factor;
+    input.body.maximumBodyCorrectionM = Math.max(input.body.maximumBodyCorrectionM, Math.abs(factor));
+  }
+}
+
+function auditExactBodyResiduals(input: BodyCollisionSolveInput, triangles: Uint32Array): void {
+  const runtime = input.body.exactSurface!;
+  let intersections = 0;
+  for (let particle = 0; particle < input.predictedPositions.length / 3; particle += 1) {
+    if (input.body.exactCandidateMask[particle] === 0) continue;
+    const query = closestPointOnExactBody(runtime, particlePoint(input.predictedPositions, particle), false);
+    if (query.signedDistanceM < -1e-7) intersections += 1;
+  }
+  let crossings = 0;
+  const edges = new Set<string>();
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    for (let edge = 0; edge < 3; edge += 1) {
+      const a = triangles[offset + edge]; const b = triangles[offset + ((edge + 1) % 3)];
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (edges.has(key)) continue;
+      edges.add(key);
+      if (!clothEdgeMetricIsUsable(input, a, b)) continue;
+      const start = particlePoint(input.predictedPositions, a);
+      const end = particlePoint(input.predictedPositions, b);
+      const edgeLength = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
+      if (input.body.exactCandidateMask[a] === 0 && input.body.exactCandidateMask[b] === 0 && edgeLength < 0.05) continue;
+      const hit = segmentCrossingExactBody(runtime, start, end);
+      if (hit && hit.t > 1e-4 && hit.t < 1 - 1e-4) crossings += 1;
+    }
+  }
+  input.body.residualBodyIntersections = intersections;
+  input.body.residualBodyCrossings = crossings;
+}
+
+function particlePoint(positions: Float32Array, particle: number): [number, number, number] {
+  const offset = particle * 3;
+  return [positions[offset], positions[offset + 1], positions[offset + 2]];
+}
+
+function clothEdgeMetricIsUsable(input: BodyCollisionSolveInput, a: number, b: number): boolean {
+  const material = input.clothMaterialCoordinates;
+  if (!material) return true;
+  const materialOffsetA = a * 2;
+  const materialOffsetB = b * 2;
+  const rest = Math.hypot(
+    material[materialOffsetB] - material[materialOffsetA],
+    material[materialOffsetB + 1] - material[materialOffsetA + 1],
+  );
+  if (!Number.isFinite(rest) || rest <= EPSILON) return false;
+  const spatialA = particlePoint(input.predictedPositions, a);
+  const spatialB = particlePoint(input.predictedPositions, b);
+  const current = Math.hypot(
+    spatialB[0] - spatialA[0],
+    spatialB[1] - spatialA[1],
+    spatialB[2] - spatialA[2],
+  );
+  const ratio = current / rest;
+  return Number.isFinite(ratio) && ratio >= 0.5 && ratio <= 2;
+}
+
+function inspectClothContactMetric(input: BodyCollisionSolveInput, triangles: Uint32Array): { valid: boolean; invalidEdgeCount: number } {
+  if (!input.clothMaterialCoordinates) return { valid: true, invalidEdgeCount: 0 };
+  const edges = new Set<string>();
+  let invalidEdgeCount = 0;
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    for (let edge = 0; edge < 3; edge += 1) {
+      const a = triangles[offset + edge];
+      const b = triangles[offset + ((edge + 1) % 3)];
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (edges.has(key)) continue;
+      edges.add(key);
+      if (!clothEdgeMetricIsUsable(input, a, b)) invalidEdgeCount += 1;
+    }
+  }
+  return {
+    valid: invalidEdgeCount === 0,
+    invalidEdgeCount,
+  };
 }
 
 function solveBodyCollisionsBitmask(
@@ -696,7 +1123,9 @@ export function finalizeBodyContactDiagnostics(body: BodyCollisionRuntimeState):
     if (!body.contactMask[particle]) continue;
     body.bodyContactCount += 1;
     const colliderIndex = body.contactRegionIndex[particle];
-    const region = colliderIndex >= 0 ? body.colliders.regions[colliderIndex] ?? "unknown" : "unknown";
+    const region = body.exactSurface
+      ? "exact-human-surface"
+      : colliderIndex >= 0 ? body.colliders.regions[colliderIndex] ?? "unknown" : "unknown";
     body.bodyContactsByRegion[region] = (body.bodyContactsByRegion[region] ?? 0) + 1;
   }
 }
