@@ -60,9 +60,10 @@ describe("11.0.5 real garment exact-body gates", () => {
       if (diagnostics.bodyAssemblyContactBlocked) {
         expect(diagnostics.bodyDeepOverlapCount).toBeGreaterThan(0);
         expect(diagnostics.bodyInitialIntersectionCount).toBeGreaterThan(0);
-        expect(diagnostics.bodyResidualIntersections).toBe(diagnostics.bodyInitialIntersectionCount);
-        expect(diagnostics.bodyContactCount).toBe(0);
-        expect(diagnostics.maximumBodyCorrectionM).toBe(0);
+        expect(diagnostics.bodyParticleQueries).toBeGreaterThan(0);
+        expect(diagnostics.bodyBvhNodeVisits).toBeGreaterThan(0);
+        expect(diagnostics.bodyGlobalCollisionEarlyReturnCount).toBe(0);
+        expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBeGreaterThan(0);
         expect(diagnostics.bodyStructuralContactDeferred).toBe(true);
         expect(diagnostics.structuralStretchMaxRatio).toBeLessThan(1.08);
         expect(diagnostics.structuralCompressionMinRatio).toBeGreaterThan(0.92);

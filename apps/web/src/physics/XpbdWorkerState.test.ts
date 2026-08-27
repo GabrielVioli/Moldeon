@@ -39,7 +39,7 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect([...state.positions]).toEqual(before);
   });
 
-  it("builds one exact-surface BVH from transferable visual mesh buffers", () => {
+  it("builds one exact-surface BVH and reuses its robust initialization witness", () => {
     const payload = initialization(true);
     payload.bodyColliderKinds = new Uint8Array();
     payload.bodyColliderData = new Float32Array();
@@ -63,7 +63,11 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect(diagnostics.bodyAssemblyContactBlocked).toBe(true);
     expect(diagnostics.bodyDeepOverlapCount).toBe(1);
     expect(diagnostics.bodyInitialIntersectionCount).toBe(1);
+    expect(diagnostics.bodyGlobalCollisionEarlyReturnCount).toBe(0);
+    expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBeGreaterThan(0);
+    expect(diagnostics.bodyBvhNodeVisits).toBe(0);
     expect(diagnostics.bodyTriangleTests).toBe(0);
+    expect(diagnostics.bodyContactSkipReasons?.["initial-overlap-too-deep"]).toBeGreaterThanOrEqual(1);
   });
 });
 

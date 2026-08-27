@@ -18,7 +18,11 @@ describe("11.0.5 exact human surface core", () => {
       boundaryEdgeCount: 0,
       nonManifoldEdgeCount: 0,
       degenerateTriangleCount: 0,
+      inconsistentWindingEdgeCount: 0,
+      invertedTriangleCount: 0,
+      outwardNormalViolationCount: 0,
       outward: true,
+      outwardNormals: true,
       watertight: true,
       valid: true,
     });
@@ -59,6 +63,9 @@ describe("11.0.5 exact human surface core", () => {
     expect(validatePackedBodyMesh(packed)).toMatchObject({
       vertexCount: 16_364,
       triangleCount: 32_508,
+      inconsistentWindingEdgeCount: 0,
+      invertedTriangleCount: 0,
+      outwardNormalViolationCount: 0,
       valid: true,
     });
   }, 30_000);

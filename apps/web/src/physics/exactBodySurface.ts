@@ -2,7 +2,11 @@ import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
 
 const EPSILON = 1e-10;
 const LEAF_TRIANGLE_COUNT = 8;
-const RAY_DIRECTION: Vec3 = normalize([1, 0.37139067, 0.23911762]);
+const RAY_DIRECTIONS: readonly Vec3[] = [
+  normalize([1, 0.37139067, 0.23911762]),
+  normalize([0.19371917, 1, 0.41739103]),
+  normalize([0.31791173, 0.21173119, 1]),
+];
 
 type Vec3 = [number, number, number];
 
@@ -20,9 +24,13 @@ export interface PackedBodyMeshValidation {
   finite: boolean;
   boundaryEdgeCount: number;
   nonManifoldEdgeCount: number;
+  inconsistentWindingEdgeCount: number;
   degenerateTriangleCount: number;
+  invertedTriangleCount: number;
+  outwardNormalViolationCount: number;
   signedVolumeM3: number;
   outward: boolean;
+  outwardNormals: boolean;
   watertight: boolean;
   valid: boolean;
 }
@@ -88,7 +96,7 @@ export function packHumanBodyMesh(mesh: HumanBodyMesh): PackedBodyMesh {
   const validation = validatePackedBodyMesh(packed);
   if (!validation.valid) {
     throw new RangeError(
-      `Malha corporal inválida: boundary=${validation.boundaryEdgeCount}, nonManifold=${validation.nonManifoldEdgeCount}, degenerate=${validation.degenerateTriangleCount}, outward=${validation.outward}.`,
+      `Malha corporal inválida: boundary=${validation.boundaryEdgeCount}, nonManifold=${validation.nonManifoldEdgeCount}, windingEdges=${validation.inconsistentWindingEdgeCount}, degenerate=${validation.degenerateTriangleCount}, inverted=${validation.invertedTriangleCount}, normalViolations=${validation.outwardNormalViolationCount}, outward=${validation.outward}.`,
     );
   }
   return packed;
@@ -100,8 +108,11 @@ export function validatePackedBodyMesh(mesh: PackedBodyMesh): PackedBodyMeshVali
   }
   const vertexCount = mesh.positions.length / 3;
   const edgeUse = new Map<string, number>();
+  const directedEdgeBalance = new Map<string, number>();
   let finite = true;
   let degenerateTriangleCount = 0;
+  let invertedTriangleCount = 0;
+  let outwardNormalViolationCount = 0;
   let volume6 = 0;
   for (const value of mesh.positions) finite = finite && Number.isFinite(value);
   for (const value of mesh.normals) finite = finite && Number.isFinite(value);
@@ -115,19 +126,34 @@ export function validatePackedBodyMesh(mesh: PackedBodyMesh): PackedBodyMeshVali
     const c = pointAt(mesh.positions, ic);
     const face = cross(sub(b, a), sub(c, a));
     if (lengthSquared(face) <= EPSILON * EPSILON) degenerateTriangleCount += 1;
+    const averageNormal: Vec3 = [
+      mesh.normals[ia * 3] + mesh.normals[ib * 3] + mesh.normals[ic * 3],
+      mesh.normals[ia * 3 + 1] + mesh.normals[ib * 3 + 1] + mesh.normals[ic * 3 + 1],
+      mesh.normals[ia * 3 + 2] + mesh.normals[ib * 3 + 2] + mesh.normals[ic * 3 + 2],
+    ];
+    if (lengthSquared(averageNormal) <= EPSILON * EPSILON) outwardNormalViolationCount += 1;
     volume6 += dot(a, cross(b, c));
     addEdge(edgeUse, ia, ib);
     addEdge(edgeUse, ib, ic);
     addEdge(edgeUse, ic, ia);
+    addDirectedEdge(directedEdgeBalance, ia, ib);
+    addDirectedEdge(directedEdgeBalance, ib, ic);
+    addDirectedEdge(directedEdgeBalance, ic, ia);
   }
   let boundaryEdgeCount = 0;
   let nonManifoldEdgeCount = 0;
+  let inconsistentWindingEdgeCount = 0;
   for (const count of edgeUse.values()) {
     if (count === 1) boundaryEdgeCount += 1;
     else if (count !== 2) nonManifoldEdgeCount += 1;
   }
+  for (const balance of directedEdgeBalance.values()) {
+    if (balance !== 0) inconsistentWindingEdgeCount += 1;
+  }
+  invertedTriangleCount = inconsistentWindingEdgeCount;
   const signedVolumeM3 = volume6 / 6;
   const outward = signedVolumeM3 > 0;
+  const outwardNormals = outwardNormalViolationCount === 0;
   const watertight = boundaryEdgeCount === 0 && nonManifoldEdgeCount === 0;
   return {
     vertexCount,
@@ -135,11 +161,15 @@ export function validatePackedBodyMesh(mesh: PackedBodyMesh): PackedBodyMeshVali
     finite,
     boundaryEdgeCount,
     nonManifoldEdgeCount,
+    inconsistentWindingEdgeCount,
     degenerateTriangleCount,
+    invertedTriangleCount,
+    outwardNormalViolationCount,
     signedVolumeM3,
     outward,
+    outwardNormals,
     watertight,
-    valid: finite && watertight && degenerateTriangleCount === 0 && outward,
+    valid: finite && watertight && inconsistentWindingEdgeCount === 0 && degenerateTriangleCount === 0 && invertedTriangleCount === 0 && outward && outwardNormals,
   };
 }
 
@@ -258,26 +288,43 @@ export function closestPointOnExactBody(
 
 export function pointInsideExactBody(runtime: ExactBodySurfaceRuntime, point: readonly number[]): boolean {
   runtime.insideTests += 1;
-  let intersections = 0;
+  const first = rayIntersectionCount(runtime, point, RAY_DIRECTIONS[0]) % 2 === 1;
+  const second = rayIntersectionCount(runtime, point, RAY_DIRECTIONS[1]) % 2 === 1;
+  if (first === second) return first;
+  return rayIntersectionCount(runtime, point, RAY_DIRECTIONS[2]) % 2 === 1;
+}
+
+function rayIntersectionCount(runtime: ExactBodySurfaceRuntime, point: readonly number[], direction: Vec3): number {
+  const distances: number[] = [];
   const stack = [0];
   while (stack.length > 0) {
     const node = stack.pop()!;
     runtime.bvhNodeVisits += 1;
     const offset = node * 6;
-    if (!rayIntersectsAabb(point, RAY_DIRECTION, runtime.bvh.bounds, offset)) continue;
+    if (!rayIntersectsAabb(point, direction, runtime.bvh.bounds, offset)) continue;
     const leafCount = runtime.bvh.count[node];
     if (leafCount > 0) {
       const first = runtime.bvh.start[node];
       for (let index = 0; index < leafCount; index += 1) {
         const triangleIndex = runtime.bvh.triangleOrder[first + index];
         runtime.triangleTests += 1;
-        if (rayTriangleDistance(runtime.mesh, triangleIndex, point, RAY_DIRECTION) > EPSILON) intersections += 1;
+        const distance = rayTriangleDistance(runtime.mesh, triangleIndex, point, direction);
+        if (distance > EPSILON) distances.push(distance);
       }
     } else {
       stack.push(runtime.bvh.left[node], runtime.bvh.right[node]);
     }
   }
-  return intersections % 2 === 1;
+  distances.sort((a, b) => a - b);
+  let distinct = 0;
+  let previous = Number.NEGATIVE_INFINITY;
+  for (const distance of distances) {
+    const tolerance = Math.max(1e-8, Math.abs(distance) * 1e-7);
+    if (Math.abs(distance - previous) <= tolerance) continue;
+    distinct += 1;
+    previous = distance;
+  }
+  return distinct;
 }
 
 /** Conservative particle-trajectory CCD against the exact closed surface. */
@@ -442,9 +489,11 @@ function pseudoNormal(mesh: PackedBodyMesh, triangleIndex: number, barycentric: 
     mesh.normals[ia * 3 + 1] * barycentric[0] + mesh.normals[ib * 3 + 1] * barycentric[1] + mesh.normals[ic * 3 + 1] * barycentric[2],
     mesh.normals[ia * 3 + 2] * barycentric[0] + mesh.normals[ib * 3 + 2] * barycentric[1] + mesh.normals[ic * 3 + 2] * barycentric[2],
   ];
-  if (lengthSquared(interpolated) > EPSILON * EPSILON) return normalize(interpolated);
   const a = pointAt(mesh.positions, ia); const b = pointAt(mesh.positions, ib); const c = pointAt(mesh.positions, ic);
-  return normalize(cross(sub(b, a), sub(c, a)));
+  const geometric = normalize(cross(sub(b, a), sub(c, a)));
+  if (lengthSquared(interpolated) <= EPSILON * EPSILON) return geometric;
+  const smooth = normalize(interpolated);
+  return dot(smooth, geometric) > 0 ? smooth : geometric;
 }
 
 function rayTriangleDistance(mesh: PackedBodyMesh, triangleIndex: number, origin: readonly number[], direction: Vec3): number {
@@ -579,6 +628,11 @@ function triangleCentroidAxis(mesh: PackedBodyMesh, triangle: number, axis: numb
 function addEdge(edges: Map<string, number>, a: number, b: number): void {
   const key = a < b ? `${a}:${b}` : `${b}:${a}`;
   edges.set(key, (edges.get(key) ?? 0) + 1);
+}
+
+function addDirectedEdge(edges: Map<string, number>, a: number, b: number): void {
+  const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+  edges.set(key, (edges.get(key) ?? 0) + (a < b ? 1 : -1));
 }
 
 function pointAt(values: Float32Array, index: number): Vec3 { return [values[index * 3], values[index * 3 + 1], values[index * 3 + 2]]; }

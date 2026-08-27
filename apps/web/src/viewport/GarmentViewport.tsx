@@ -296,6 +296,9 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>bend</dt><dd>{telemetry?.bendConstraintCount ?? 0}</dd>
             <dt>seams</dt><dd>{telemetry?.seamConstraintCount ?? 0}</dd>
             <dt>body registration</dt><dd>{telemetry?.bodyRegistrationStatus ?? "body-placement-required"}</dd>
+            <dt>Body collision mode</dt><dd>{telemetry?.bodyCollisionMode ?? "disabled"}</dd>
+            <dt>Body mesh V / T / BVH</dt><dd>{telemetry?.bodyMeshVertices ?? 0} / {telemetry?.bodyMeshTriangles ?? 0} / {telemetry?.bodyBvhNodes ?? 0}</dd>
+            <dt>Visual/collision delta mm</dt><dd>{formatMetric(telemetry?.bodyVisualCollisionMaxDeltaMm)}</dd>
             <dt>Body surface triangles</dt><dd>{telemetry?.bodyColliderCount ?? 0}</dd>
             <dt>Body contacts</dt><dd>{telemetry?.bodyContactCount ?? 0}</dd>
             <dt>Floor contacts</dt><dd>{telemetry?.floorContactCount ?? 0}</dd>
@@ -319,18 +322,29 @@ export const GarmentViewport = memo(function GarmentViewport({
             <dt>Exact body surface</dt><dd>{telemetry?.bodyExactSurface ? "yes" : "no"}</dd>
             <dt>Body BVH build ms</dt><dd>{formatMetric(telemetry?.bodyBvhBuildMs)}</dd>
             <dt>Body BVH node visits</dt><dd>{telemetry?.bodyBvhNodeVisits ?? 0}</dd>
+            <dt>Body BVH query ms</dt><dd>{formatMetric(telemetry?.bodyBvhQueryMs)}</dd>
+            <dt>Body contact solve ms</dt><dd>{formatMetric(telemetry?.bodyContactSolveMs)}</dd>
+            <dt>Body intersection audit ms</dt><dd>{formatMetric(telemetry?.bodyIntersectionAuditMs)}</dd>
+            <dt>Body candidates/query</dt><dd>{formatMetric(telemetry?.bodyCandidatesPerQuery)}</dd>
             <dt>Body triangle tests</dt><dd>{telemetry?.bodyTriangleTests ?? 0}</dd>
             <dt>Body inside / CCD tests</dt><dd>{telemetry?.bodyInsideTests ?? 0} / {telemetry?.bodyCcdTests ?? 0}</dd>
             <dt>Body CCD ms</dt><dd>{formatMetric(telemetry?.bodyCcdMs)}</dd>
             <dt>Body contacts V / E / T</dt><dd>{telemetry?.bodyVertexContacts ?? 0} / {telemetry?.bodyEdgeContacts ?? 0} / {telemetry?.bodyTriangleContacts ?? 0}</dd>
             <dt>Residual intersections / crossings</dt><dd>{telemetry?.bodyResidualIntersections ?? 0} / {telemetry?.bodyResidualCrossings ?? 0}</dd>
+            <dt>Triangle intersections / complete crossings</dt><dd>{telemetry?.bodyTriangleIntersectionCount ?? 0} / {telemetry?.bodyCompleteCrossings ?? 0}</dd>
             <dt>Max signed penetration mm</dt><dd>{formatMetric((telemetry?.maximumSignedBodyPenetrationM ?? 0) * 1000)}</dd>
+            <dt>Signed penetration max / mean mm</dt><dd>{formatMetric(telemetry?.bodySignedPenetrationMaxMm)} / {formatMetric(telemetry?.bodySignedPenetrationMeanMm)}</dd>
+            <dt>Clearance error max / mean mm</dt><dd>{formatMetric(telemetry?.bodyClearanceErrorMaxMm)} / {formatMetric(telemetry?.bodyClearanceErrorMeanMm)}</dd>
             <dt>Invalid cloth primitives skipped</dt><dd>{telemetry?.bodyInvalidClothPrimitiveSkips ?? 0}</dd>
+            <dt>Local overlap skips</dt><dd>{telemetry?.bodyLocalInitialOverlapSkipCount ?? 0}</dd>
+            <dt>Global collision early returns</dt><dd>{telemetry?.bodyGlobalCollisionEarlyReturnCount ?? 0}</dd>
+            <dt>Contact skip reasons</dt><dd>{JSON.stringify(telemetry?.bodyContactSkipReasons ?? {})}</dd>
             <dt>Structural contact deferred</dt><dd>{telemetry?.bodyStructuralContactDeferred ? "yes" : "no"}</dd>
             <dt>Assembly contact blocked</dt><dd>{telemetry?.bodyAssemblyContactBlocked ? "yes" : "no"}</dd>
             <dt>Deep initial overlaps</dt><dd>{telemetry?.bodyDeepOverlapCount ?? 0}</dd>
             <dt>Initial intersections</dt><dd>{telemetry?.bodyInitialIntersectionCount ?? 0}</dd>
             <dt>Dressing steps</dt><dd>{telemetry?.bodyDressingStepsRemaining ?? 0} / {telemetry?.bodyInitialDressingSteps ?? 0}</dd>
+            <dt>Initial overlap recovery</dt><dd>{telemetry?.initialOverlapRecoveryStatus ?? "not-needed"} ({telemetry?.initialOverlapRecoverySteps ?? 0})</dd>
             <dt>Friction contacts</dt><dd>{telemetry?.frictionContactCount ?? 0}</dd>
             <dt>Swept contacts</dt><dd>{telemetry?.sweptContactCount ?? 0}</dd>
             <dt>seamMeanErrorMm</dt><dd>{formatMetric((telemetry?.seamErrorAverage ?? 0) * 1000)}</dd>

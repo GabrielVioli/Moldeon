@@ -175,6 +175,11 @@ export interface XpbdStepDiagnostics {
   frictionContactCount?: number;
   sweptContactCount?: number;
   bodyCollisionEnabled?: boolean;
+  bodyCollisionMode?: "disabled" | "exact-human-surface" | "legacy-proxy";
+  bodyMeshVertices?: number;
+  bodyMeshTriangles?: number;
+  bodyBvhNodes?: number;
+  bodyVisualCollisionMaxDeltaMm?: number;
   floorCollisionEnabled?: boolean;
   floorContactCount?: number;
   floorCcdContactCount?: number;
@@ -215,20 +220,36 @@ export interface XpbdStepDiagnostics {
   bodyTriangleTests?: number;
   bodyInsideTests?: number;
   bodyCcdTests?: number;
+  bodyCcdHits?: number;
   bodyCcdMs?: number;
   bodyVertexContacts?: number;
   bodyEdgeContacts?: number;
   bodyTriangleContacts?: number;
   bodyResidualIntersections?: number;
   bodyResidualCrossings?: number;
+  bodyTriangleIntersectionCount?: number;
+  bodyCompleteCrossings?: number;
   maximumSignedBodyPenetrationM?: number;
+  bodySignedPenetrationMaxMm?: number;
+  bodySignedPenetrationMeanMm?: number;
+  bodyClearanceErrorMaxMm?: number;
+  bodyClearanceErrorMeanMm?: number;
+  bodyCandidatesPerQuery?: number;
+  bodyBvhQueryMs?: number;
+  bodyContactSolveMs?: number;
+  bodyIntersectionAuditMs?: number;
   bodyInvalidClothPrimitiveSkips?: number;
+  bodyLocalInitialOverlapSkipCount?: number;
+  bodyGlobalCollisionEarlyReturnCount?: number;
+  bodyContactSkipReasons?: Record<string, number>;
   bodyStructuralContactDeferred?: boolean;
   bodyAssemblyContactBlocked?: boolean;
   bodyDeepOverlapCount?: number;
   bodyInitialIntersectionCount?: number;
   bodyDressingStepsRemaining?: number;
   bodyInitialDressingSteps?: number;
+  initialOverlapRecoveryStatus?: "not-needed" | "recovering" | "recovered" | "initial-overlap-too-deep";
+  initialOverlapRecoverySteps?: number;
   iterations?: number;
   maximumSubsteps?: number;
 }
@@ -317,7 +338,7 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
     invalidReason: null,
     profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0, floorCollisionMs: 0 },
   };
-  initializeBodyDressing(body, state.positions, state.config.maximumCorrection);
+  initializeBodyDressing(body, state.positions, state.config.maximumCorrection, state.triangles);
   return state;
 }
 
@@ -509,7 +530,7 @@ export function resetXpbdState(state: XpbdState): void {
   state.invalidReason = null;
   resetBodyContactStep(state.body);
   resetFloorContactStep(state);
-  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection);
+  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection, state.triangles);
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
   enforcePinsOn(state.previousPositions, state.pins);
@@ -602,6 +623,15 @@ export function measureXpbdDiagnostics(
     frictionContactCount: state.body.frictionContactCount,
     sweptContactCount: state.body.sweptContactCount,
     bodyCollisionEnabled: state.body.enabled,
+    bodyCollisionMode: !state.body.enabled
+      ? "disabled"
+      : state.body.exactSurface
+        ? "exact-human-surface"
+        : "legacy-proxy",
+    bodyMeshVertices: state.body.exactSurface?.validation.vertexCount ?? 0,
+    bodyMeshTriangles: state.body.exactSurface?.validation.triangleCount ?? 0,
+    bodyBvhNodes: state.body.exactSurface?.bvh.nodeCount ?? 0,
+    bodyVisualCollisionMaxDeltaMm: state.body.exactSurface ? 0 : undefined,
     floorCollisionEnabled: state.config.floorCollisionEnabled !== false,
     floorContactCount: state.floorContactCount,
     floorCcdContactCount: state.floorCcdContactCount,
@@ -646,20 +676,48 @@ export function measureXpbdDiagnostics(
     bodyTriangleTests: state.body.exactSurface?.triangleTests ?? state.body.bodyTriangleTests,
     bodyInsideTests: state.body.exactSurface?.insideTests ?? 0,
     bodyCcdTests: state.body.exactSurface?.ccdTests ?? 0,
+    bodyCcdHits: state.body.bodySweptContactsFound,
     bodyCcdMs: state.body.ccdMs,
     bodyVertexContacts: state.body.bodyVertexContacts,
     bodyEdgeContacts: state.body.bodyEdgeContacts,
     bodyTriangleContacts: state.body.bodyTriangleContacts,
     bodyResidualIntersections: state.body.residualBodyIntersections,
     bodyResidualCrossings: state.body.residualBodyCrossings,
+    bodyTriangleIntersectionCount: state.body.residualBodyTriangleIntersections + state.body.residualBodyCrossings,
+    bodyCompleteCrossings: state.body.residualBodyCrossings,
     maximumSignedBodyPenetrationM: state.body.maximumSignedPenetrationM,
+    bodySignedPenetrationMaxMm: state.body.maximumSignedPenetrationM * 1000,
+    bodySignedPenetrationMeanMm: state.body.signedPenetrationSampleCount > 0
+      ? state.body.signedPenetrationSumM / state.body.signedPenetrationSampleCount * 1000
+      : 0,
+    bodyClearanceErrorMaxMm: state.body.clearanceErrorMaximumM * 1000,
+    bodyClearanceErrorMeanMm: state.body.clearanceErrorSampleCount > 0
+      ? state.body.clearanceErrorSumM / state.body.clearanceErrorSampleCount * 1000
+      : 0,
+    bodyCandidatesPerQuery: state.body.exactSurface && state.body.exactSurface.queries > 0
+      ? state.body.exactSurface.triangleTests / state.body.exactSurface.queries
+      : 0,
+    bodyBvhQueryMs: state.body.bvhQueryMs,
+    bodyContactSolveMs: state.body.contactSolveMs,
+    bodyIntersectionAuditMs: state.body.intersectionAuditMs,
     bodyInvalidClothPrimitiveSkips: state.body.invalidClothPrimitiveSkips,
+    bodyLocalInitialOverlapSkipCount: state.body.localInitialOverlapSkipCount,
+    bodyGlobalCollisionEarlyReturnCount: state.body.globalCollisionEarlyReturnCount,
+    bodyContactSkipReasons: { ...state.body.contactSkipReasons },
     bodyStructuralContactDeferred: state.body.structuralContactDeferred,
     bodyAssemblyContactBlocked: state.body.assemblyContactBlocked,
     bodyDeepOverlapCount: state.body.deepOverlapCount,
     bodyInitialIntersectionCount: state.body.initialIntersectionCount,
     bodyDressingStepsRemaining: state.body.dressingStepsRemaining,
     bodyInitialDressingSteps: state.body.initialDressingSteps,
+    initialOverlapRecoveryStatus: state.body.assemblyContactBlocked
+      ? "initial-overlap-too-deep"
+      : state.body.dressingStepsRemaining > 0
+        ? "recovering"
+        : state.body.initialDressingSteps > 0
+          ? "recovered"
+          : "not-needed",
+    initialOverlapRecoverySteps: state.body.initialDressingSteps - state.body.dressingStepsRemaining,
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };

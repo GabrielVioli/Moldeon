@@ -7,14 +7,16 @@ import {
 import type { PackedBodyMesh } from "./exactBodySurface";
 
 describe("11.0.5 exact surface XPBD contacts", () => {
-  it("projects an inside vertex to the exact surface plus material clearance", () => {
+  it.each([0.0005, 0.002])("projects a %.4f m local overlap to exact surface plus material clearance", (depth) => {
     const body = runtime(1, 0, 0.00005);
-    const predicted = Float32Array.from([0.999, 0, 0]);
+    const predicted = Float32Array.from([1 - depth, 0, 0]);
+    initializeBodyDressing(body, predicted, 0.035);
     solveBodyCollisions(input(body, predicted, predicted.slice(), undefined, 0.5));
     expect(predicted[0]).toBeCloseTo(1.00005, 5);
     expect(body.bodyVertexContacts).toBe(1);
     expect(body.contactMask[0]).toBe(1);
-    expect(body.maximumSignedPenetrationM).toBeGreaterThan(0.001);
+    expect(body.maximumSignedPenetrationM).toBeGreaterThanOrEqual(depth);
+    expect(body.assemblyContactBlocked).toBe(false);
   });
 
   it("keeps an outside vertex unchanged without shrink-wrap attraction", () => {
@@ -37,13 +39,20 @@ describe("11.0.5 exact surface XPBD contacts", () => {
 
   it("detects cloth edge and triangle interior contacts barycentrically", () => {
     const body = runtime(3, 0, 0.00005);
-    const predicted = Float32Array.from([-2, 0, 0, 2, 0, 0, -2, 2, 0]);
+    const predicted = Float32Array.from([
+      0.9999, -1.1, -1.1,
+      0.9999, 1.1, -1.1,
+      0.9999, 0, 1.1,
+    ]);
     solveBodyCollisions({
       ...input(body, predicted, predicted.slice(), Uint32Array.from([0, 1, 2]), 0.05),
       finalReconciliation: true,
     });
     expect(body.bodyEdgeContacts).toBeGreaterThan(0);
     expect(body.bodyTriangleContacts).toBeGreaterThan(0);
+    expect(body.residualBodyIntersections).toBe(0);
+    expect(body.residualBodyCrossings).toBe(0);
+    expect(body.residualBodyTriangleIntersections).toBe(0);
     expect([...predicted].every(Number.isFinite)).toBe(true);
   });
 
@@ -51,16 +60,42 @@ describe("11.0.5 exact surface XPBD contacts", () => {
     expect(() => runtime(1, 0, 0.000151)).toThrow(/0.15 mm/);
   });
 
-  it("reports deep step-0 penetration as an assembly blocker instead of dressing it", () => {
-    const body = runtime(1, 0, 0.00005);
-    const positions = Float32Array.from([0, 0, 0]);
+  it("isolates a deep step-0 overlap without disabling a recoverable contact", () => {
+    const body = runtime(2, 0, 0.00005);
+    const positions = Float32Array.from([0, 0, 0, 0.999, 0, 0]);
     initializeBodyDressing(body, positions, 0.035);
     const before = [...positions];
     solveBodyCollisions(input(body, positions, positions.slice(), undefined, 0.035));
     expect(body.assemblyContactBlocked).toBe(true);
     expect(body.deepOverlapCount).toBe(1);
     expect(body.dressingStepsRemaining).toBe(0);
-    expect([...positions]).toEqual(before);
+    expect(positions[0]).toBe(before[0]);
+    expect(positions[3]).toBeCloseTo(1.00005, 5);
+    expect(body.bodyVertexContacts).toBe(1);
+    expect(body.bodyParticleQueries).toBe(1);
+    expect(body.localInitialOverlapSkipCount).toBe(1);
+    expect(body.globalCollisionEarlyReturnCount).toBe(0);
+    expect(body.contactSkipReasons).toEqual({ "initial-overlap-too-deep": 1 });
+    expect(body.exactSurface!.bvhNodeVisits).toBeGreaterThan(0);
+  });
+
+  it("does not promote a transient deep penetration to an initial-overlap guard", () => {
+    const body = runtime(1, 0, 0.00005);
+    initializeBodyDressing(body, Float32Array.from([1.1, 0, 0]), 0.035);
+    const predicted = Float32Array.from([0.98, 0, 0]);
+
+    for (let pass = 0; pass < 12; pass += 1) {
+      solveBodyCollisions(input(body, predicted, predicted.slice(), undefined, 0.003));
+    }
+
+    expect(predicted[0]).toBeGreaterThanOrEqual(1.00004);
+    expect(body.bodyVertexContacts).toBeGreaterThan(0);
+    expect(body.assemblyContactBlocked).toBe(false);
+    expect(body.deepOverlapCount).toBe(0);
+    expect(body.deepInitialOverlapMask[0]).toBe(0);
+    expect(body.initialOverlapGuardMask[0]).toBe(0);
+    expect(body.localInitialOverlapSkipCount).toBe(0);
+    expect(body.globalCollisionEarlyReturnCount).toBe(0);
   });
 
   it("ends a bounded local overlap with zero residual vertex intersections and edge crossings", () => {

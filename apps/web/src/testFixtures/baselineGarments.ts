@@ -34,6 +34,7 @@ export const BASELINE_FIXTURE_IDS = [
   "equal-length-seam",
   "length-mismatch-seam",
   "self-seam-tube",
+  "exact-contact-tube",
   "xpbd-tube-with-flap",
   "xpbd-four-panel-composite",
   "spatial-two-panel-tube",
@@ -79,6 +80,8 @@ export function createBaselineFixture(id: BaselineFixtureId): GarmentDraft {
       return pairedSeamFixture(id, 240, 310);
     case "self-seam-tube":
       return selfSeamFixture(id);
+    case "exact-contact-tube":
+      return exactContactTubeFixture(id);
     case "xpbd-tube-with-flap":
       return tubeWithFlapFixture(id);
     case "xpbd-four-panel-composite":
@@ -308,8 +311,8 @@ function pairedSeamFixture(
   return garmentFixture(fixtureId, [first, second], [seam]);
 }
 
-function selfSeamFixture(fixtureId: string): GarmentDraft {
-  const piece = rectanglePiece("tube-piece", 360, 260);
+function selfSeamFixture(fixtureId: string, circumferenceMm = 360): GarmentDraft {
+  const piece = rectanglePiece("tube-piece", circumferenceMm, 260);
   const sideEdges = getPatternEdges(piece).filter(
     (edge) => edge.role === "sideSeam",
   );
@@ -336,6 +339,17 @@ function selfSeamFixture(fixtureId: string): GarmentDraft {
   return {
     ...garmentFixture(fixtureId, [piece], [seam]),
     dressing: { region: "upper", frontReferencePieceId: piece.id },
+  };
+}
+
+function exactContactTubeFixture(fixtureId: string): GarmentDraft {
+  // The canonical body measures 1000 mm at the full hip. A 40 mm wearing
+  // ease keeps the shell valid at step zero while gravity establishes a
+  // shallow, recoverable contact on the real (non-ellipsoidal) hip surface.
+  const tube = selfSeamFixture(fixtureId, 1040);
+  return {
+    ...tube,
+    dressing: { region: "lower", frontReferencePieceId: tube.pieces[0].id },
   };
 }
 
