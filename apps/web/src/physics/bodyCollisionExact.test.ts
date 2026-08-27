@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createBodyCollisionRuntimeState,
   initializeBodyDressing,
+  resetBodyContactStep,
   solveBodyCollisions,
 } from "./bodyCollision";
 import type { PackedBodyMesh } from "./exactBodySurface";
@@ -60,23 +61,82 @@ describe("11.0.5 exact surface XPBD contacts", () => {
     expect(() => runtime(1, 0, 0.000151)).toThrow(/0.15 mm/);
   });
 
-  it("isolates a deep step-0 overlap without disabling a recoverable contact", () => {
-    const body = runtime(2, 0, 0.00005);
-    const positions = Float32Array.from([0, 0, 0, 0.999, 0, 0]);
-    initializeBodyDressing(body, positions, 0.035);
-    const before = [...positions];
-    solveBodyCollisions(input(body, positions, positions.slice(), undefined, 0.035));
-    expect(body.assemblyContactBlocked).toBe(true);
-    expect(body.deepOverlapCount).toBe(1);
-    expect(body.dressingStepsRemaining).toBe(0);
-    expect(positions[0]).toBe(before[0]);
-    expect(positions[3]).toBeCloseTo(1.00005, 5);
-    expect(body.bodyVertexContacts).toBe(1);
-    expect(body.bodyParticleQueries).toBe(1);
-    expect(body.localInitialOverlapSkipCount).toBe(1);
+  it("rigidly recovers a connected 20 mm STEP-0 overlap without changing its material metric", () => {
+    const body = runtime(4, 0, 0.00005);
+    const positions = Float32Array.from([
+      0.98, -0.1, -0.1,
+      0.98, 0.1, -0.1,
+      0.98, -0.1, 0.1,
+      0.98, 0.1, 0.1,
+    ]);
+    const triangles = Uint32Array.from([0, 1, 2, 2, 1, 3]);
+    const before = edgeLengths(positions, triangles);
+    initializeBodyDressing(body, positions, 0.035, triangles);
+    const afterRecovery = edgeLengths(positions, triangles);
+    expect(body.initialOverlapUnresolved).toBe(false);
+    expect(body.initialDepenetrationPasses).toBeGreaterThan(0);
+    expect(body.initialDepenetrationMaximumTranslationM).toBeLessThanOrEqual(0.035);
+    expect([...body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
+    expect([...positions].every(Number.isFinite)).toBe(true);
+    expect(maximumAbsoluteDelta(before, afterRecovery)).toBeLessThan(2e-6);
+    for (let pass = 0; pass < 3; pass += 1) {
+      solveBodyCollisions(input(body, positions, positions.slice(), triangles, 0.035));
+    }
+    expect(positions[0]).toBeCloseTo(1.00005, 5);
+    expect(body.bodyVertexContacts).toBeGreaterThan(0);
+    expect(body.localInitialOverlapSkipCount).toBe(0);
+  });
+
+  it("does not propagate a deep STEP-0 overlap into a connected six-ring collision hole", () => {
+    const { positions, triangles, deepParticles, shallowParticles } = connectedDeepShallowPatch();
+    const body = runtime(positions.length / 3, 0, 0.00005);
+    const before = edgeLengths(positions, triangles);
+    initializeBodyDressing(body, positions, 0.035, triangles);
+
+    expect(deepParticles.every((particle) => body.deepInitialOverlapMask[particle] === 1)).toBe(true);
+    expect([...body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
+    expect(body.initialOverlapUnresolved).toBe(false);
+    expect(maximumAbsoluteDelta(before, edgeLengths(positions, triangles))).toBeLessThan(2e-6);
+
+    solveBodyCollisions(input(body, positions, positions.slice(), triangles, 0.035));
+    for (const particle of shallowParticles) {
+      expect(body.contactMask[particle]).toBe(1);
+      expect(positions[particle * 3]).toBeCloseTo(1.00005, 5);
+    }
+    expect(body.bodyVertexContacts).toBeGreaterThanOrEqual(shallowParticles.length);
+    expect(body.localInitialOverlapSkipCount).toBe(0);
+    expect(body.contactSkipReasons["initial-overlap-too-deep"]).toBeUndefined();
     expect(body.globalCollisionEarlyReturnCount).toBe(0);
-    expect(body.contactSkipReasons).toEqual({ "initial-overlap-too-deep": 1 });
-    expect(body.exactSurface!.bvhNodeVisits).toBeGreaterThan(0);
+  });
+
+  it("reactivates ordinary contact when a formerly deep STEP-0 particle hits the body again", () => {
+    const { positions, triangles, deepParticles } = connectedDeepShallowPatch();
+    const body = runtime(positions.length / 3, 0, 0.00005);
+    initializeBodyDressing(body, positions, 0.035, triangles);
+    for (let pass = 0; pass < 3; pass += 1) solveBodyCollisions(input(body, positions, positions.slice(), triangles, 0.035));
+
+    resetBodyContactStep(body);
+    const particle = deepParticles[0];
+    positions[particle * 3 + 1] = 0.999;
+    solveBodyCollisions(input(body, positions, positions.slice(), triangles, 0.035));
+    expect(body.initialOverlapGuardMask[particle]).toBe(0);
+    expect(body.contactMask[particle]).toBe(1);
+    expect(positions[particle * 3 + 1]).toBeCloseTo(1.00005, 5);
+    expect(body.localInitialOverlapSkipCount).toBe(0);
+  });
+
+  it("reports an unrecoverable STEP-0 overlap explicitly without leaving a collision guard installed", () => {
+    const body = runtime(1, 0, 0.00005);
+    const positions = Float32Array.from([0, 0, 0]);
+    const before = [...positions];
+    initializeBodyDressing(body, positions, 0.035);
+    expect(body.initialOverlapUnresolved).toBe(true);
+    expect(body.initialDepenetrationPasses).toBeGreaterThan(0);
+    expect(body.initialDepenetrationMaximumTranslationM).toBeLessThanOrEqual(0.12 + 1e-7);
+    expect([...positions]).toEqual(before);
+    expect(body.initialOverlapGuardMask[0]).toBe(0);
+    expect(body.assemblyContactBlocked).toBe(false);
+    expect(body.dressingStepsRemaining).toBe(0);
   });
 
   it("does not promote a transient deep penetration to an initial-overlap guard", () => {
@@ -142,6 +202,62 @@ function input(
     allowSwept: true,
     clothTriangles,
   };
+}
+
+function connectedDeepShallowPatch() {
+  // One connected strip walks from a 30 mm deep top-face overlap to a 1 mm
+  // side-face contact through exterior vertices. The old six-ring expansion
+  // reached the whole strip and disabled the shallow end.
+  const columns = [
+    [0, 0.97],
+    [0, 1.05],
+    [0.5, 1.05],
+    [1.05, 1.05],
+    [1.05, 0.5],
+    [0.999, 0],
+  ] as const;
+  const values: number[] = [];
+  for (const [x, y] of columns) values.push(x, y, -0.02, x, y, 0.02);
+  const triangleValues: number[] = [];
+  for (let column = 0; column < columns.length - 1; column += 1) {
+    const a = column * 2;
+    const b = a + 1;
+    const d = (column + 1) * 2;
+    const e = d + 1;
+    triangleValues.push(a, d, b, b, d, e);
+  }
+  return {
+    positions: Float32Array.from(values),
+    triangles: Uint32Array.from(triangleValues),
+    deepParticles: [0, 1] as const,
+    shallowParticles: [10, 11] as const,
+  };
+}
+
+function edgeLengths(positions: Float32Array, triangles: Uint32Array): number[] {
+  const edges = new Set<string>();
+  const lengths: number[] = [];
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    for (let edge = 0; edge < 3; edge += 1) {
+      const a = triangles[offset + edge];
+      const b = triangles[offset + ((edge + 1) % 3)];
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (edges.has(key)) continue;
+      edges.add(key);
+      lengths.push(Math.hypot(
+        positions[b * 3] - positions[a * 3],
+        positions[b * 3 + 1] - positions[a * 3 + 1],
+        positions[b * 3 + 2] - positions[a * 3 + 2],
+      ));
+    }
+  }
+  return lengths;
+}
+
+function maximumAbsoluteDelta(a: readonly number[], b: readonly number[]): number {
+  let maximum = 0;
+  for (let index = 0; index < a.length; index += 1) maximum = Math.max(maximum, Math.abs(a[index] - b[index]));
+  return maximum;
 }
 
 function cubeMesh(): PackedBodyMesh {

@@ -60,14 +60,20 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect(diagnostics.bodyExactSurface).toBe(true);
     expect(diagnostics.bodyColliderCount).toBe(12);
     expect(diagnostics.bodyBvhBuildMs).toBeGreaterThanOrEqual(0);
-    expect(diagnostics.bodyAssemblyContactBlocked).toBe(true);
+    expect(state.invalid).toBe(true);
+    expect(state.invalidReason).toBe("initial-overlap-unresolved");
+    expect(diagnostics.initialOverlapRecoveryStatus).toBe("initial-overlap-unresolved");
+    expect(diagnostics.bodyInitialOverlapUnresolved).toBe(true);
+    expect(diagnostics.bodyInitialDepenetrationPasses).toBeGreaterThan(0);
+    expect(diagnostics.bodyAssemblyContactBlocked).toBe(false);
     expect(diagnostics.bodyDeepOverlapCount).toBe(1);
     expect(diagnostics.bodyInitialIntersectionCount).toBe(1);
     expect(diagnostics.bodyGlobalCollisionEarlyReturnCount).toBe(0);
-    expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBeGreaterThan(0);
-    expect(diagnostics.bodyBvhNodeVisits).toBe(0);
-    expect(diagnostics.bodyTriangleTests).toBe(0);
-    expect(diagnostics.bodyContactSkipReasons?.["initial-overlap-too-deep"]).toBeGreaterThanOrEqual(1);
+    expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBe(0);
+    expect(diagnostics.bodyBvhNodeVisits).toBeGreaterThan(0);
+    expect(diagnostics.bodyTriangleTests).toBeGreaterThan(0);
+    expect(diagnostics.bodyContactSkipReasons?.["initial-overlap-too-deep"]).toBeUndefined();
+    expect([...state.body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
   });
 });
 

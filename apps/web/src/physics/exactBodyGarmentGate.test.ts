@@ -55,20 +55,21 @@ describe("11.0.5 real garment exact-body gates", () => {
       expect([...state.positions].every(Number.isFinite)).toBe(true);
       expect(diagnostics.bodyExactSurface).toBe(true);
       expect(diagnostics.bodyColliderCount).toBe(32_508);
-      expect(diagnostics.bodyResidualIntersections).toBeGreaterThanOrEqual(0);
-      expect(diagnostics.bodyResidualCrossings).toBeGreaterThanOrEqual(0);
-      if (diagnostics.bodyAssemblyContactBlocked) {
-        expect(diagnostics.bodyDeepOverlapCount).toBeGreaterThan(0);
-        expect(diagnostics.bodyInitialIntersectionCount).toBeGreaterThan(0);
-        expect(diagnostics.bodyParticleQueries).toBeGreaterThan(0);
-        expect(diagnostics.bodyBvhNodeVisits).toBeGreaterThan(0);
-        expect(diagnostics.bodyGlobalCollisionEarlyReturnCount).toBe(0);
-        expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBeGreaterThan(0);
-        expect(diagnostics.bodyStructuralContactDeferred).toBe(true);
-        expect(diagnostics.structuralStretchMaxRatio).toBeLessThan(1.08);
-        expect(diagnostics.structuralCompressionMinRatio).toBeGreaterThan(0.92);
-        expect(diagnostics.flippedTriangleCount).toBe(0);
+      expect(diagnostics.bodyInitialOverlapUnresolved).toBe(false);
+      expect(diagnostics.bodyAssemblyContactBlocked).toBe(false);
+      expect(diagnostics.bodyGlobalCollisionEarlyReturnCount).toBe(0);
+      expect(diagnostics.bodyLocalInitialOverlapSkipCount).toBe(0);
+      expect(diagnostics.bodyContactSkipReasons?.["initial-overlap-too-deep"]).toBeUndefined();
+      expect(diagnostics.bodyResidualIntersections).toBe(0);
+      expect(diagnostics.bodyResidualCrossings).toBe(0);
+      expect(diagnostics.bodyTriangleIntersectionCount).toBe(0);
+      if (template === "straight-skirt") {
+        expect(diagnostics.bodyContactCount).toBeGreaterThan(0);
+        expect(diagnostics.bodyContactSolveMs).toBeGreaterThan(0);
       }
+      expect(diagnostics.structuralStretchMaxRatio).toBeLessThan(1.08);
+      expect(diagnostics.structuralCompressionMinRatio).toBeGreaterThan(0.92);
+      expect(diagnostics.flippedTriangleCount).toBe(0);
     }, 60_000);
   }
 });

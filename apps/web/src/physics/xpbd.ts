@@ -120,7 +120,7 @@ export interface XpbdState {
   accumulator: number;
   stepCount: number;
   invalid: boolean;
-  invalidReason: "non-finite" | "metric-instability" | null;
+  invalidReason: "non-finite" | "metric-instability" | "initial-overlap-unresolved" | null;
   profile: XpbdProfileTimings;
 }
 
@@ -188,7 +188,7 @@ export interface XpbdStepDiagnostics {
   meanFloorPenetrationM?: number;
   floorCollisionMs?: number;
   invalid: boolean;
-  invalidReason: "non-finite" | "metric-instability" | null;
+  invalidReason: "non-finite" | "metric-instability" | "initial-overlap-unresolved" | null;
   droppedTimeSeconds: number;
   integrationMs?: number;
   stretchMs?: number;
@@ -246,9 +246,12 @@ export interface XpbdStepDiagnostics {
   bodyAssemblyContactBlocked?: boolean;
   bodyDeepOverlapCount?: number;
   bodyInitialIntersectionCount?: number;
+  bodyInitialOverlapUnresolved?: boolean;
+  bodyInitialDepenetrationPasses?: number;
+  bodyInitialDepenetrationMaxTranslationMm?: number;
   bodyDressingStepsRemaining?: number;
   bodyInitialDressingSteps?: number;
-  initialOverlapRecoveryStatus?: "not-needed" | "recovering" | "recovered" | "initial-overlap-too-deep";
+  initialOverlapRecoveryStatus?: "not-needed" | "recovering" | "recovered" | "initial-overlap-unresolved";
   initialOverlapRecoverySteps?: number;
   iterations?: number;
   maximumSubsteps?: number;
@@ -338,7 +341,18 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
     invalidReason: null,
     profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0, floorCollisionMs: 0 },
   };
-  initializeBodyDressing(body, state.positions, state.config.maximumCorrection, state.triangles);
+  initializeBodyDressing(body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses);
+  // Initial depenetration is a rigid placement correction. The other world-
+  // space buffers must start from that recovered placement, while rest/material
+  // coordinates remain untouched.
+  state.previousPositions.set(state.positions);
+  state.predictedPositions.set(state.positions);
+  state.stablePositions.set(state.positions);
+  if (body.initialOverlapUnresolved) {
+    state.velocities.fill(0);
+    state.invalid = true;
+    state.invalidReason = "initial-overlap-unresolved";
+  }
   return state;
 }
 
@@ -479,8 +493,10 @@ export function stepXpbd(state: XpbdState): void {
   finalizeBodyContactDiagnostics(state.body);
   phaseStarted = performance.now();
   updateVelocitiesAndPositions(state, dt);
-  applyBodyContactVelocities(state.velocities, state.body, dt);
-  applyFloorContactVelocities(state);
+  if (!dressingActive) {
+    applyBodyContactVelocities(state.velocities, state.body, dt);
+    applyFloorContactVelocities(state);
+  }
   if (dressingActive) {
     state.velocities.fill(0);
     state.previousPositions.set(state.positions);
@@ -530,7 +546,14 @@ export function resetXpbdState(state: XpbdState): void {
   state.invalidReason = null;
   resetBodyContactStep(state.body);
   resetFloorContactStep(state);
-  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection, state.triangles);
+  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses);
+  state.previousPositions.set(state.positions);
+  state.predictedPositions.set(state.positions);
+  state.stablePositions.set(state.positions);
+  if (state.body.initialOverlapUnresolved) {
+    state.invalid = true;
+    state.invalidReason = "initial-overlap-unresolved";
+  }
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
   enforcePinsOn(state.previousPositions, state.pins);
@@ -708,16 +731,20 @@ export function measureXpbdDiagnostics(
     bodyAssemblyContactBlocked: state.body.assemblyContactBlocked,
     bodyDeepOverlapCount: state.body.deepOverlapCount,
     bodyInitialIntersectionCount: state.body.initialIntersectionCount,
+    bodyInitialOverlapUnresolved: state.body.initialOverlapUnresolved,
+    bodyInitialDepenetrationPasses: state.body.initialDepenetrationPasses,
+    bodyInitialDepenetrationMaxTranslationMm: state.body.initialDepenetrationMaximumTranslationM * 1000,
     bodyDressingStepsRemaining: state.body.dressingStepsRemaining,
     bodyInitialDressingSteps: state.body.initialDressingSteps,
-    initialOverlapRecoveryStatus: state.body.assemblyContactBlocked
-      ? "initial-overlap-too-deep"
+    initialOverlapRecoveryStatus: state.body.initialOverlapUnresolved
+      ? "initial-overlap-unresolved"
       : state.body.dressingStepsRemaining > 0
         ? "recovering"
         : state.body.initialDressingSteps > 0
           ? "recovered"
           : "not-needed",
-    initialOverlapRecoverySteps: state.body.initialDressingSteps - state.body.dressingStepsRemaining,
+    initialOverlapRecoverySteps: state.body.initialDepenetrationPasses
+      + state.body.initialDressingSteps - state.body.dressingStepsRemaining,
     iterations: state.config.iterations,
     maximumSubsteps: state.config.maximumSubsteps,
   };

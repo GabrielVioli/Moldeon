@@ -4,7 +4,8 @@ import { chromium } from "playwright-core";
 const baseUrl = process.env.MOLDEON_BASE_URL ?? "http://127.0.0.1:4185";
 const fixtureId = process.env.MOLDEON_FIXTURE ?? "exact-contact-tube";
 const validContactGate = fixtureId === "exact-contact-tube";
-const stepCount = Number(process.env.MOLDEON_STEPS ?? (validContactGate ? 20 : 1));
+const realGarmentGate = fixtureId === "straight-skirt-standard";
+const stepCount = Number(process.env.MOLDEON_STEPS ?? (validContactGate || realGarmentGate ? 20 : 1));
 const outputDir = `artifacts/recovery-11-0-5-exact-human-surface-contact/${fixtureId}`;
 const executablePath = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 await mkdir(outputDir, { recursive: true });
@@ -73,13 +74,13 @@ try {
   if (report.canvasCount !== 1) throw new Error(`Esperado um canvas; encontrado ${report.canvasCount}.`);
   if (!report.diagnostics.bodyExactSurface || report.diagnostics.bodyBvhNodeVisits <= 0) throw new Error("Worker não consultou a BVH exata.");
   if (report.diagnostics.bodyGlobalCollisionEarlyReturnCount !== 0) throw new Error("Initial overlap desligou globalmente a colisão corporal.");
-  if (report.diagnostics.bodyAssemblyContactBlocked && report.diagnostics.bodyLocalInitialOverlapSkipCount <= 0) {
-    throw new Error("Montagem inicial inválida não foi isolada localmente.");
-  }
+  if (report.diagnostics.bodyInitialOverlapUnresolved) throw new Error("Initial overlap rígido não pôde ser recuperado dentro dos bounds.");
+  if (report.diagnostics.bodyAssemblyContactBlocked) throw new Error("Initial overlap deixou collision block persistente.");
+  if (report.diagnostics.bodyLocalInitialOverlapSkipCount !== 0) throw new Error("Initial overlap ainda criou collision hole local.");
   if (validContactGate && report.diagnostics.bodyAssemblyContactBlocked) {
     throw new Error(`Fixture controlado nasceu com overlap profundo: count=${report.diagnostics.bodyDeepOverlapCount}, maxMm=${report.diagnostics.bodySignedPenetrationMaxMm}.`);
   }
-  if (validContactGate && report.diagnostics.bodyContactCount <= 0) {
+  if ((validContactGate || realGarmentGate) && report.diagnostics.bodyContactCount <= 0) {
     const contactProbe = {
       bodyContactCount: report.diagnostics.bodyContactCount,
       bodyVertexContacts: report.diagnostics.bodyVertexContacts,
@@ -96,7 +97,7 @@ try {
     };
     throw new Error(`Fixture controlado não produziu contato corporal: ${JSON.stringify(contactProbe)}.`);
   }
-  if (validContactGate && (report.diagnostics.bodyTriangleIntersectionCount !== 0 || report.diagnostics.bodyCompleteCrossings !== 0)) {
+  if ((validContactGate || realGarmentGate) && (report.diagnostics.bodyTriangleIntersectionCount !== 0 || report.diagnostics.bodyCompleteCrossings !== 0)) {
     throw new Error("Fixture controlado terminou com interseção corporal residual.");
   }
   if (consoleErrors.length || failedResponses.length) throw new Error("Erros de console/rede no fluxo Prova.");

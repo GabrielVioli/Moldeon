@@ -19,6 +19,9 @@ const BODY_BROADPHASE_BIN_COUNT = 32;
 const MAX_EXACT_LOCAL_OVERLAP_M = 0.005;
 const MAX_EXACT_CORRECTION_PER_PASS_M = 0.00215;
 const EXACT_LOCAL_SIGN_BAND_M = 0.001;
+const INITIAL_DEPENETRATION_MAX_PASSES = 8;
+const INITIAL_DEPENETRATION_MAX_TOTAL_TRANSLATION_M = 0.12;
+const INITIAL_DEPENETRATION_EPSILON_M = 1e-6;
 
 export interface SimulationBodyTransform {
   translation: readonly [number, number, number];
@@ -79,8 +82,13 @@ export interface BodyCollisionRuntimeState {
   exactSignKnownMask: Uint8Array;
   exactSignWitnessPositions: Float32Array;
   exactSignWitnessDistanceM: Float32Array;
+  /** Historical STEP-0 diagnostic. Never used to suppress dynamic contact. */
   deepInitialOverlapMask: Uint8Array;
+  /** Temporary only while synchronous STEP-0 rigid depenetration is running. */
   initialOverlapGuardMask: Uint8Array;
+  initialOverlapUnresolved: boolean;
+  initialDepenetrationPasses: number;
+  initialDepenetrationMaximumTranslationM: number;
   exactPassCount: number;
   particleHalfThicknessM: Float32Array;
   particleFriction: Float32Array;
@@ -257,6 +265,9 @@ export function createBodyCollisionRuntimeState(
     exactSignWitnessDistanceM: new Float32Array(particleHalfThicknessM.length).fill(0),
     deepInitialOverlapMask: new Uint8Array(particleHalfThicknessM.length),
     initialOverlapGuardMask: new Uint8Array(particleHalfThicknessM.length),
+    initialOverlapUnresolved: false,
+    initialDepenetrationPasses: 0,
+    initialDepenetrationMaximumTranslationM: 0,
     exactPassCount: 0,
     particleHalfThicknessM,
     particleFriction,
@@ -337,67 +348,59 @@ export function initializeBodyDressing(
   positions: Float32Array,
   maximumCorrectionM: number,
   clothTriangles?: Uint32Array,
+  inverseMasses?: Float32Array,
 ): void {
   body.dressingStepsRemaining = 0;
   body.initialDressingSteps = 0;
   body.grossDepenetrationEnabled = false;
   body.assemblyContactBlocked = false;
+  body.structuralContactDeferred = false;
+  body.exactPassCount = 0;
   body.deepOverlapCount = 0;
   body.initialIntersectionCount = 0;
   body.deepInitialOverlapMask.fill(0);
   body.initialOverlapGuardMask.fill(0);
-  body.exactCandidateMask.fill(0);
-  body.exactInsideMask.fill(0);
-  body.exactSignKnownMask.fill(0);
+  body.initialOverlapUnresolved = false;
+  body.initialDepenetrationPasses = 0;
+  body.initialDepenetrationMaximumTranslationM = 0;
+  resetExactContactCache(body);
   if (!body.enabled || (!body.exactSurface && body.colliders.kinds.length === 0) || !Number.isFinite(maximumCorrectionM) || maximumCorrectionM <= 0) return;
 
   let maximumPenetrationM = 0;
-  let deepOverlapCount = 0;
-  let initialIntersectionCount = 0;
   const particleCount = positions.length / 3;
-  for (let particle = 0; particle < particleCount; particle += 1) {
-    const offset = particle * 3;
-    const point: [number, number, number] = [positions[offset], positions[offset + 1], positions[offset + 2]];
-    const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
-    const contact = body.exactSurface
-      ? closestPointOnExactBody(body.exactSurface, point, false)
-      : deepestBodyContact(point, body.colliders, clearance);
-    if (contact) {
-      if ("signedDistanceM" in contact) {
-        const inside = pointInsideExactBody(body.exactSurface!, point);
-        const signedDistanceM = inside ? -contact.distanceM : contact.distanceM;
-        body.exactSignedDistances[particle] = signedDistanceM;
-        body.exactQueryPositions[offset] = point[0];
-        body.exactQueryPositions[offset + 1] = point[1];
-        body.exactQueryPositions[offset + 2] = point[2];
-        body.exactInsideMask[particle] = inside ? 1 : 0;
-        body.exactSignKnownMask[particle] = 1;
-        body.exactSignWitnessPositions[offset] = point[0];
-        body.exactSignWitnessPositions[offset + 1] = point[1];
-        body.exactSignWitnessPositions[offset + 2] = point[2];
-        body.exactSignWitnessDistanceM[particle] = contact.distanceM;
-        if (signedDistanceM <= clearance + 0.01) body.exactCandidateMask[particle] = 1;
-        if (signedDistanceM < 0) initialIntersectionCount += 1;
-        contact.signedDistanceM = signedDistanceM;
-      }
-      const penetration = "signedDistanceM" in contact ? clearance - contact.signedDistanceM : contact.penetrationM;
-      maximumPenetrationM = Math.max(maximumPenetrationM, penetration);
-      if (body.exactSurface && penetration > MAX_EXACT_LOCAL_OVERLAP_M) {
-        body.deepInitialOverlapMask[particle] = 1;
-        body.initialOverlapGuardMask[particle] = 1;
-        deepOverlapCount += 1;
+  if (body.exactSurface) {
+    const initial = primeExactInitialContacts(body, positions, true);
+    maximumPenetrationM = initial.maximumPenetrationM;
+    body.deepOverlapCount = initial.deepOverlapCount;
+    body.initialIntersectionCount = initial.intersectionCount;
+    if (initial.deepOverlapCount > 0) {
+      const recovered = recoverDeepInitialExactOverlap(
+        body,
+        positions,
+        maximumCorrectionM,
+        clothTriangles,
+        inverseMasses,
+      );
+      // Rigid recovery moves the query points, so every temporal witness must
+      // be re-primed before ordinary exact contact takes ownership.
+      resetExactContactCache(body);
+      const afterRecovery = primeExactInitialContacts(body, positions, false);
+      maximumPenetrationM = afterRecovery.maximumPenetrationM;
+      if (!recovered) {
+        body.structuralContactDeferred = true;
+        return;
       }
     }
+  } else {
+    for (let particle = 0; particle < particleCount; particle += 1) {
+      const offset = particle * 3;
+      const point: [number, number, number] = [positions[offset], positions[offset + 1], positions[offset + 2]];
+      const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
+      const contact = deepestBodyContact(point, body.colliders, clearance);
+      if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
+    }
   }
-  body.initialIntersectionCount = initialIntersectionCount;
   if (maximumPenetrationM <= EPSILON) return;
-  if (body.exactSurface && deepOverlapCount > 0) {
-    expandInitialOverlapGuard(body.initialOverlapGuardMask, clothTriangles, 6);
-    body.assemblyContactBlocked = true;
-    body.deepOverlapCount = deepOverlapCount;
-    body.initialIntersectionCount = initialIntersectionCount;
-    return;
-  }
 
   // Each gross projection is capped by maximumCorrectionM. Two passes per
   // theoretical minimum leave room for structural constraints to relax between
@@ -694,18 +697,6 @@ function solveExactBodySurfaceCollisions(input: BodyCollisionSolveInput): void {
       point[1] - body.exactQueryPositions[offset + 1],
       point[2] - body.exactQueryPositions[offset + 2],
     );
-    const cachedSignedDistance = body.exactSignedDistances[particle];
-    const guaranteedDeepPenetration = body.initialOverlapGuardMask[particle] !== 0
-      && Number.isFinite(cachedSignedDistance)
-      && cachedSignedDistance < 0
-      && -cachedSignedDistance - travelledSinceQuery + clearance > MAX_EXACT_LOCAL_OVERLAP_M;
-    if (guaranteedDeepPenetration) {
-      body.exactCandidateMask[particle] = 1;
-      body.localInitialOverlapSkipCount += 1;
-      body.contactSkipReasons["initial-overlap-too-deep"] = (body.contactSkipReasons["initial-overlap-too-deep"] ?? 0) + 1;
-      body.structuralContactDeferred = true;
-      continue;
-    }
     if (!firstPass && body.exactCandidateMask[particle] === 0) continue;
     if (firstPass && body.exactCandidateMask[particle] === 0) {
       const cachedDistance = body.exactSignedDistances[particle];
@@ -748,18 +739,6 @@ function solveExactBodySurfaceCollisions(input: BodyCollisionSolveInput): void {
     if (input.allowSwept && movementSquared > 1e-10 && sweptCanReachSurface) {
       body.bodySweptTests += 1;
       runtime.ccdTests += 1;
-    }
-    // Only the immutable mask captured by initializeBodyDressing represents an
-    // invalid *initial* arrangement. A penetration produced later by dynamics
-    // must stay recoverable through bounded local corrections; promoting it to
-    // this mask would turn a transient miss into a permanent collision hole.
-    const guardedInitialRegion = body.initialOverlapGuardMask[particle] !== 0 && penetrationM > 0;
-    if (guardedInitialRegion) {
-      body.exactCandidateMask[particle] = 1;
-      body.localInitialOverlapSkipCount += 1;
-      body.contactSkipReasons["initial-overlap-too-deep"] = (body.contactSkipReasons["initial-overlap-too-deep"] ?? 0) + 1;
-      body.structuralContactDeferred = true;
-      continue;
     }
     body.exactCandidateMask[particle] = query.signedDistanceM <= clearance + 0.01 || hit ? 1 : 0;
     if (hit && hit.t < 1) {
@@ -873,10 +852,6 @@ function solveExactClothEdgeAndTriangleContacts(input: BodyCollisionSolveInput, 
       const key = a < b ? `${a}:${b}` : `${b}:${a}`;
       if (uniqueEdges.has(key)) continue;
       uniqueEdges.add(key);
-      if (input.body.initialOverlapGuardMask[a] !== 0 || input.body.initialOverlapGuardMask[b] !== 0) {
-        recordLocalContactSkip(input.body, "initial-overlap-too-deep");
-        continue;
-      }
       if (!clothEdgeMetricIsUsable(input, a, b)) {
         recordLocalContactSkip(input.body, "material-metric-invalid");
         continue;
@@ -907,10 +882,6 @@ function solveExactClothEdgeAndTriangleContacts(input: BodyCollisionSolveInput, 
     const a = particlePoint(input.predictedPositions, indices[0]);
     const b = particlePoint(input.predictedPositions, indices[1]);
     const c = particlePoint(input.predictedPositions, indices[2]);
-    if (indices.some((particle) => input.body.initialOverlapGuardMask[particle] !== 0)) {
-      recordLocalContactSkip(input.body, "initial-overlap-too-deep");
-      continue;
-    }
     if (!clothEdgeMetricIsUsable(input, indices[0], indices[1])
       || !clothEdgeMetricIsUsable(input, indices[1], indices[2])
       || !clothEdgeMetricIsUsable(input, indices[2], indices[0])) {
@@ -985,9 +956,8 @@ function applyWeightedExactCorrection(
   input.body.contactSolveMs += performance.now() - solveStarted;
 }
 
-function recordLocalContactSkip(body: BodyCollisionRuntimeState, reason: "initial-overlap-too-deep" | "material-metric-invalid"): void {
+function recordLocalContactSkip(body: BodyCollisionRuntimeState, reason: "material-metric-invalid"): void {
   body.invalidClothPrimitiveSkips += 1;
-  if (reason === "initial-overlap-too-deep") body.localInitialOverlapSkipCount += 1;
   body.contactSkipReasons[reason] = (body.contactSkipReasons[reason] ?? 0) + 1;
   body.structuralContactDeferred = true;
 }
@@ -1162,23 +1132,213 @@ function inspectClothContactMetric(input: BodyCollisionSolveInput, triangles: Ui
   };
 }
 
-function expandInitialOverlapGuard(mask: Uint8Array, triangles: Uint32Array | undefined, rings: number): void {
-  if (!triangles || triangles.length === 0 || rings <= 0) return;
-  let frontier = new Uint8Array(mask);
-  for (let ring = 0; ring < rings; ring += 1) {
-    const next = new Uint8Array(mask.length);
+function resetExactContactCache(body: BodyCollisionRuntimeState): void {
+  body.exactCandidateMask.fill(0);
+  body.exactSignedDistances.fill(Number.POSITIVE_INFINITY);
+  body.exactQueryPositions.fill(Number.NaN);
+  body.exactInsideMask.fill(0);
+  body.exactSignKnownMask.fill(0);
+  body.exactSignWitnessPositions.fill(Number.NaN);
+  body.exactSignWitnessDistanceM.fill(0);
+}
+
+function primeExactInitialContacts(
+  body: BodyCollisionRuntimeState,
+  positions: Float32Array,
+  markInitialDeepOverlap: boolean,
+): { maximumPenetrationM: number; deepOverlapCount: number; intersectionCount: number } {
+  const runtime = body.exactSurface!;
+  let maximumPenetrationM = 0;
+  let deepOverlapCount = 0;
+  let intersectionCount = 0;
+  for (let particle = 0; particle < positions.length / 3; particle += 1) {
+    const offset = particle * 3;
+    const point = particlePoint(positions, particle);
+    const query = closestPointOnExactBody(runtime, point, false);
+    const inside = pointInsideExactBody(runtime, point);
+    const signedDistanceM = inside ? -query.distanceM : query.distanceM;
+    const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
+    const penetrationM = clearance - signedDistanceM;
+    body.exactSignedDistances[particle] = signedDistanceM;
+    body.exactQueryPositions[offset] = point[0];
+    body.exactQueryPositions[offset + 1] = point[1];
+    body.exactQueryPositions[offset + 2] = point[2];
+    body.exactInsideMask[particle] = inside ? 1 : 0;
+    body.exactSignKnownMask[particle] = 1;
+    body.exactSignWitnessPositions[offset] = point[0];
+    body.exactSignWitnessPositions[offset + 1] = point[1];
+    body.exactSignWitnessPositions[offset + 2] = point[2];
+    body.exactSignWitnessDistanceM[particle] = query.distanceM;
+    if (signedDistanceM <= clearance + 0.01) body.exactCandidateMask[particle] = 1;
+    if (signedDistanceM < 0) intersectionCount += 1;
+    maximumPenetrationM = Math.max(maximumPenetrationM, penetrationM);
+    if (markInitialDeepOverlap && penetrationM > MAX_EXACT_LOCAL_OVERLAP_M) {
+      body.deepInitialOverlapMask[particle] = 1;
+      deepOverlapCount += 1;
+    }
+  }
+  return { maximumPenetrationM, deepOverlapCount, intersectionCount };
+}
+
+function recoverDeepInitialExactOverlap(
+  body: BodyCollisionRuntimeState,
+  positions: Float32Array,
+  maximumCorrectionM: number,
+  clothTriangles: Uint32Array | undefined,
+  inverseMasses: Float32Array | undefined,
+): boolean {
+  const components = buildClothConnectedComponents(positions.length / 3, clothTriangles);
+  const originalPositions = new Float32Array(positions);
+  const perPassLimit = Math.max(INITIAL_DEPENETRATION_EPSILON_M, maximumCorrectionM);
+  const totalLimit = Math.max(perPassLimit, Math.min(
+    INITIAL_DEPENETRATION_MAX_TOTAL_TRANSLATION_M,
+    perPassLimit * INITIAL_DEPENETRATION_MAX_PASSES,
+  ));
+  let resolved = true;
+  let totalPasses = 0;
+  let maximumComponentTranslationM = 0;
+
+  for (const component of components) {
+    if (!component.some((particle) => body.deepInitialOverlapMask[particle] !== 0)) continue;
+    // The guard exists only inside this synchronous setup transaction. It is
+    // deliberately cleared before any XPBD contact solve is allowed to run.
+    for (const particle of component) body.initialOverlapGuardMask[particle] = 1;
+    if (inverseMasses && component.some((particle) => inverseMasses[particle] <= 0)) {
+      resolved = false;
+      continue;
+    }
+
+    let componentResolved = false;
+    let componentTranslationM = 0;
+    for (let pass = 0; pass < INITIAL_DEPENETRATION_MAX_PASSES; pass += 1) {
+      const probe = probeInitialDepenetrationComponent(body, positions, component);
+      if (probe.maximumPenetrationM <= MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M) {
+        componentResolved = true;
+        break;
+      }
+      const remainingTranslationM = totalLimit - componentTranslationM;
+      if (remainingTranslationM <= INITIAL_DEPENETRATION_EPSILON_M) break;
+      const requestedTranslationM = Math.max(
+        INITIAL_DEPENETRATION_EPSILON_M,
+        probe.maximumPenetrationM - MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M,
+      );
+      const translationM = Math.min(perPassLimit, remainingTranslationM, requestedTranslationM);
+      if (translationM <= 0) break;
+      translateClothComponent(positions, component, probe.direction, translationM);
+      componentTranslationM += translationM;
+      totalPasses += 1;
+    }
+    if (!componentResolved) {
+      componentResolved = probeInitialDepenetrationComponent(body, positions, component).maximumPenetrationM
+        <= MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M;
+    }
+    resolved &&= componentResolved;
+    maximumComponentTranslationM = Math.max(maximumComponentTranslationM, componentTranslationM);
+  }
+
+  // A failed bounded recovery is a diagnostic, not a half-applied placement.
+  // Restore the exact STEP-0 geometry and let the caller mark the state failed.
+  if (!resolved) positions.set(originalPositions);
+  body.initialOverlapGuardMask.fill(0);
+  body.initialOverlapUnresolved = !resolved;
+  body.initialDepenetrationPasses = totalPasses;
+  body.initialDepenetrationMaximumTranslationM = maximumComponentTranslationM;
+  return resolved;
+}
+
+function probeInitialDepenetrationComponent(
+  body: BodyCollisionRuntimeState,
+  positions: Float32Array,
+  component: readonly number[],
+): { maximumPenetrationM: number; direction: [number, number, number] } {
+  const runtime = body.exactSurface!;
+  let maximumPenetrationM = 0;
+  let seedParticle = -1;
+  let seedNormal: [number, number, number] = [1, 0, 0];
+  for (const particle of component) {
+    const point = particlePoint(positions, particle);
+    const query = closestPointOnExactBody(runtime, point, false);
+    const inside = pointInsideExactBody(runtime, point);
+    const signedDistanceM = inside ? -query.distanceM : query.distanceM;
+    const penetrationM = body.particleHalfThicknessM[particle] + body.contactSkinM - signedDistanceM;
+    if (penetrationM > maximumPenetrationM + INITIAL_DEPENETRATION_EPSILON_M
+      || (Math.abs(penetrationM - maximumPenetrationM) <= INITIAL_DEPENETRATION_EPSILON_M
+        && penetrationM > 0 && (seedParticle < 0 || particle < seedParticle))) {
+      maximumPenetrationM = penetrationM;
+      seedParticle = particle;
+      seedNormal = query.normal;
+    }
+  }
+
+  if (maximumPenetrationM <= MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M) {
+    return { maximumPenetrationM, direction: seedNormal };
+  }
+  const accumulated: [number, number, number] = [0, 0, 0];
+  for (const particle of component) {
+    const point = particlePoint(positions, particle);
+    const query = closestPointOnExactBody(runtime, point, false);
+    const inside = pointInsideExactBody(runtime, point);
+    const signedDistanceM = inside ? -query.distanceM : query.distanceM;
+    const penetrationM = body.particleHalfThicknessM[particle] + body.contactSkinM - signedDistanceM;
+    if (penetrationM <= MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M) continue;
+    if (dot3(query.normal, seedNormal) < 0) continue;
+    accumulated[0] += query.normal[0] * penetrationM;
+    accumulated[1] += query.normal[1] * penetrationM;
+    accumulated[2] += query.normal[2] * penetrationM;
+  }
+  return { maximumPenetrationM, direction: normalize3(accumulated, seedNormal) };
+}
+
+function buildClothConnectedComponents(particleCount: number, triangles: Uint32Array | undefined): number[][] {
+  const parent = Int32Array.from({ length: particleCount }, (_, particle) => particle);
+  const find = (particle: number): number => {
+    let root = particle;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[particle] !== particle) {
+      const next = parent[particle];
+      parent[particle] = root;
+      particle = next;
+    }
+    return root;
+  };
+  const union = (a: number, b: number): void => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA === rootB) return;
+    if (rootA < rootB) parent[rootB] = rootA;
+    else parent[rootA] = rootB;
+  };
+  if (triangles) {
     for (let offset = 0; offset < triangles.length; offset += 3) {
       const a = triangles[offset];
       const b = triangles[offset + 1];
       const c = triangles[offset + 2];
-      if (frontier[a] === 0 && frontier[b] === 0 && frontier[c] === 0) continue;
-      for (const particle of [a, b, c]) {
-        if (mask[particle] !== 0) continue;
-        mask[particle] = 1;
-        next[particle] = 1;
-      }
+      if (a >= particleCount || b >= particleCount || c >= particleCount) continue;
+      union(a, b);
+      union(b, c);
     }
-    frontier = next;
+  }
+  const byRoot = new Map<number, number[]>();
+  for (let particle = 0; particle < particleCount; particle += 1) {
+    const root = find(particle);
+    const component = byRoot.get(root);
+    if (component) component.push(particle);
+    else byRoot.set(root, [particle]);
+  }
+  return [...byRoot.values()];
+}
+
+function translateClothComponent(
+  positions: Float32Array,
+  component: readonly number[],
+  direction: readonly [number, number, number],
+  translationM: number,
+): void {
+  for (const particle of component) {
+    const offset = particle * 3;
+    positions[offset] += direction[0] * translationM;
+    positions[offset + 1] += direction[1] * translationM;
+    positions[offset + 2] += direction[2] * translationM;
   }
 }
 
