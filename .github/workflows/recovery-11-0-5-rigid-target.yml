@@ -1,0 +1,70 @@
+name: recovery-11-0-5 rigid target
+
+on:
+  push:
+    branches:
+      - recovery/11.0.5-exact-human-surface-contact
+
+permissions:
+  contents: write
+
+jobs:
+  focused-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.5-exact-human-surface-contact
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.15.0'
+          cache: npm
+      - run: npm ci
+      - name: Tighten rigid initial recovery target
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('apps/web/src/physics/bodyCollision.ts')
+          text = path.read_text(encoding='utf-8')
+          anchor = 'const INITIAL_DEPENETRATION_EPSILON_M = 1e-6;\n'
+          insert = anchor + 'const INITIAL_DEPENETRATION_TARGET_PENETRATION_M = 0.00005;\n'
+          if text.count(anchor) != 1:
+              raise SystemExit(f'expected one constant anchor, found {text.count(anchor)}')
+          text = text.replace(anchor, insert)
+          requested = 'probe.maximumPenetrationM - MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M'
+          if text.count(requested) != 1:
+              raise SystemExit(f'expected one requested translation expression, found {text.count(requested)}')
+          text = text.replace(requested, 'probe.maximumPenetrationM - INITIAL_DEPENETRATION_TARGET_PENETRATION_M + INITIAL_DEPENETRATION_EPSILON_M')
+          threshold = 'MAX_EXACT_LOCAL_OVERLAP_M + INITIAL_DEPENETRATION_EPSILON_M'
+          if text.count(threshold) != 4:
+              raise SystemExit(f'expected four recovery thresholds after requested replacement, found {text.count(threshold)}')
+          text = text.replace(threshold, 'INITIAL_DEPENETRATION_TARGET_PENETRATION_M + INITIAL_DEPENETRATION_EPSILON_M')
+          path.write_text(text, encoding='utf-8', newline='\n')
+      - name: Diff check
+        run: |
+          git diff --check
+          git diff -- apps/web/src/physics/bodyCollision.ts
+      - name: Focused tests
+        id: focused
+        continue-on-error: true
+        run: npm run test --workspace @moldeon/web -- bodyCollisionExact.test.ts XpbdWorkerState.test.ts exactBodyGarmentGate.test.ts
+      - name: Publish passing fix or clean up failed experiment
+        if: always()
+        env:
+          FOCUSED_OUTCOME: ${{ steps.focused.outcome }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$FOCUSED_OUTCOME" = "success" ]; then
+            git add -- apps/web/src/physics/bodyCollision.ts
+            git rm -- .github/workflows/recovery-11-0-5-rigid-target.yml
+            git commit -m "fix(11.0.5): rigidly clear deep initial overlap"
+          else
+            git restore -- apps/web/src/physics/bodyCollision.ts
+            git rm -- .github/workflows/recovery-11-0-5-rigid-target.yml
+            git commit -m "chore(11.0.5): clean failed rigid-target experiment"
+          fi
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
+          if [ "$FOCUSED_OUTCOME" != "success" ]; then exit 1; fi
