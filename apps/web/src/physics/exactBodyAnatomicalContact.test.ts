@@ -74,7 +74,7 @@ function surfaceSample(mesh: HumanBodyMesh, region: HumanBodyRegionId, vertices:
   if (!vertices || vertices.size === 0) throw new RangeError(`Região anatômica sem binding: ${region}.`);
   for (let offset = 0; offset < mesh.indices.length; offset += 3) {
     const indices = [mesh.indices[offset], mesh.indices[offset + 1], mesh.indices[offset + 2]] as const;
-    if (!indices.some((vertex) => vertices.has(vertex))) continue;
+    if (!indices.every((vertex) => vertices.has(vertex))) continue;
     const a = point(mesh.positions, indices[0]);
     const b = point(mesh.positions, indices[1]);
     const c = point(mesh.positions, indices[2]);

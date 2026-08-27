@@ -18,6 +18,7 @@ const EPSILON = 1e-9;
 const BODY_BROADPHASE_BIN_COUNT = 32;
 const MAX_EXACT_LOCAL_OVERLAP_M = 0.005;
 const MAX_EXACT_CORRECTION_PER_PASS_M = 0.00215;
+const EXACT_LOCAL_SIGN_BAND_M = 0.001;
 
 export interface SimulationBodyTransform {
   translation: readonly [number, number, number];
@@ -713,6 +714,15 @@ function solveExactBodySurfaceCollisions(input: BodyCollisionSolveInput): void {
     }
     let phaseStarted = performance.now();
     const query = closestPointOnExactBody(runtime, point, false);
+    // In the immediate contact band the oriented pseudo-normal is the correct
+    // local side test, including thin/self-near anatomical joints. Once a
+    // particle is farther from the surface, parity is required to distinguish
+    // a genuine deep interior point from the exterior of a concavity.
+    const inside = query.distanceM <= EXACT_LOCAL_SIGN_BAND_M
+      ? query.inside
+      : exactInsideFromWitness(body, runtime, particle, point, query.distanceM);
+    query.inside = inside;
+    query.signedDistanceM = inside ? -query.distanceM : query.distanceM;
     body.bvhQueryMs += performance.now() - phaseStarted;
     body.exactSignedDistances[particle] = query.signedDistanceM;
     body.exactQueryPositions[offset] = point[0];
@@ -991,25 +1001,7 @@ function auditExactBodyResiduals(input: BodyCollisionSolveInput, triangles: Uint
     const point = particlePoint(input.predictedPositions, particle);
     const queryStarted = performance.now();
     const query = closestPointOnExactBody(runtime, point, false);
-    const witnessOffset = particle * 3;
-    const travelledSinceSignWitness = Math.hypot(
-      point[0] - input.body.exactSignWitnessPositions[witnessOffset],
-      point[1] - input.body.exactSignWitnessPositions[witnessOffset + 1],
-      point[2] - input.body.exactSignWitnessPositions[witnessOffset + 2],
-    );
-    let inside: boolean;
-    if (input.body.exactSignKnownMask[particle] !== 0
-      && input.body.exactSignWitnessDistanceM[particle] > travelledSinceSignWitness + 1e-7) {
-      inside = input.body.exactInsideMask[particle] !== 0;
-    } else {
-      inside = pointInsideExactBody(runtime, point);
-      input.body.exactInsideMask[particle] = inside ? 1 : 0;
-      input.body.exactSignKnownMask[particle] = 1;
-      input.body.exactSignWitnessPositions[witnessOffset] = point[0];
-      input.body.exactSignWitnessPositions[witnessOffset + 1] = point[1];
-      input.body.exactSignWitnessPositions[witnessOffset + 2] = point[2];
-      input.body.exactSignWitnessDistanceM[particle] = query.distanceM;
-    }
+    const inside = exactInsideFromWitness(input.body, runtime, particle, point, query.distanceM);
     query.signedDistanceM = inside ? -query.distanceM : query.distanceM;
     input.body.bvhQueryMs += performance.now() - queryStarted;
     const clearance = input.body.particleHalfThicknessM[particle] + input.body.contactSkinM;
@@ -1066,6 +1058,33 @@ function auditExactBodyResiduals(input: BodyCollisionSolveInput, triangles: Uint
   input.body.residualBodyCrossings = crossings;
   input.body.residualBodyTriangleIntersections = triangleIntersections;
   input.body.intersectionAuditMs += performance.now() - auditStarted;
+}
+
+function exactInsideFromWitness(
+  body: BodyCollisionRuntimeState,
+  runtime: ExactBodySurfaceRuntime,
+  particle: number,
+  point: readonly [number, number, number],
+  distanceM: number,
+): boolean {
+  const offset = particle * 3;
+  const travelled = Math.hypot(
+    point[0] - body.exactSignWitnessPositions[offset],
+    point[1] - body.exactSignWitnessPositions[offset + 1],
+    point[2] - body.exactSignWitnessPositions[offset + 2],
+  );
+  if (body.exactSignKnownMask[particle] !== 0
+    && body.exactSignWitnessDistanceM[particle] > travelled + 1e-7) {
+    return body.exactInsideMask[particle] !== 0;
+  }
+  const inside = pointInsideExactBody(runtime, point);
+  body.exactInsideMask[particle] = inside ? 1 : 0;
+  body.exactSignKnownMask[particle] = 1;
+  body.exactSignWitnessPositions[offset] = point[0];
+  body.exactSignWitnessPositions[offset + 1] = point[1];
+  body.exactSignWitnessPositions[offset + 2] = point[2];
+  body.exactSignWitnessDistanceM[particle] = distanceM;
+  return inside;
 }
 
 function particlePoint(positions: Float32Array, particle: number): [number, number, number] {
