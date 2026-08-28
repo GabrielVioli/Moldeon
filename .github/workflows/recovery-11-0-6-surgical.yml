@@ -73,7 +73,17 @@ jobs:
         run: npm ci
 
       - name: Install browser controller
-        run: npm install --no-save --package-lock=false playwright-core@1.55.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          archive="$(npm pack --silent playwright-core@1.55.0)"
+          tar -xzf "$archive"
+          mkdir -p "$GITHUB_WORKSPACE/node_modules/playwright-core"
+          cp -a package/. "$GITHUB_WORKSPACE/node_modules/playwright-core/"
+          cd "$GITHUB_WORKSPACE"
+          node -e "import('playwright-core').then(() => console.log('playwright-core ready'))"
 
       - name: Focused regression tests
         run: npm test --workspace @moldeon/web -- src/domain/canonicalArrangement.test.ts src/avatar/BodyProjection2D.test.ts src/garment3d/ResolvedAssemblyInput.test.ts src/domain/assemblyHistory.test.ts
