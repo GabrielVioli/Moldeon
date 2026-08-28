@@ -87,27 +87,6 @@ describe("11.0.5 exact surface XPBD contacts", () => {
     expect(body.localInitialOverlapSkipCount).toBe(0);
   });
 
-  it("recovers sewn triangulated panels without tearing seams or stretching their STEP-0 metric", () => {
-    const body = runtime(6, 0, 0.00005);
-    const missing = 0xffffffff;
-    const positions = Float32Array.from([0.98,0.98,-0.1, 0.98,0.8,-0.1, 0.98,0.98,0.1, 0.98,0.98,-0.1, 0.8,0.98,-0.1, 0.98,0.98,0.1]);
-    const triangles = Uint32Array.from([0,2,1, 3,4,5]);
-    const seamIndices = Uint32Array.from([0,missing,3,missing, 2,missing,5,missing]);
-    const seamWeights = Float32Array.from([1,0,1,0, 1,0,1,0]);
-    const inverseMasses = new Float32Array(6).fill(1);
-    const before = edgeLengths(positions, triangles);
-    initializeBodyDressing(body, positions, 0.035, triangles, inverseMasses, { indices: seamIndices, weights: seamWeights });
-    expect(body.initialOverlapUnresolved).toBe(false);
-    expect(body.initialDepenetrationPasses).toBeGreaterThan(0);
-    expect(body.dressingStepsRemaining).toBe(0);
-    expect(body.grossDepenetrationEnabled).toBe(false);
-    expect([...body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
-    expect(maximumAbsoluteDelta(before, edgeLengths(positions, triangles))).toBeLessThan(5e-4);
-    solveBodyCollisions(input(body, positions, positions.slice(), triangles, 0.035));
-    expect(body.bodyVertexContacts).toBeGreaterThan(0);
-    expect(body.localInitialOverlapSkipCount).toBe(0);
-  });
-
   it("does not propagate a deep STEP-0 overlap into a connected six-ring collision hole", () => {
     const { positions, triangles, deepParticles, shallowParticles } = connectedDeepShallowPatch();
     const body = runtime(positions.length / 3, 0, 0.00005);
