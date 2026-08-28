@@ -21,10 +21,29 @@ export interface ApprovedAvatarAssetDescriptor {
 }
 
 /**
- * Registro deliberadamente vazio até o usuário fornecer e aprovar um GLB/glTF.
- * Um arquivo colocado em public/ não deve se tornar público por descoberta ou nome.
+ * Mobile preview registration for the canonical female body already shipped
+ * with Moldeon. This lives only on the deploy/test-mobile branch so production
+ * branches remain untouched while the responsive workspace is tested.
  */
-export const APPROVED_AVATAR_ASSETS: readonly ApprovedAvatarAssetDescriptor[] = [];
+export const APPROVED_AVATAR_ASSETS: readonly ApprovedAvatarAssetDescriptor[] = [
+  {
+    assetId: "canonical-female.glb",
+    sourceUrl: "/models/human/canonical-female.glb",
+    bodyProfile: "feminine",
+    sourceUnit: "m",
+    scaleToMeters: 1,
+    upAxis: "y",
+    forwardAxis: "z",
+    groundOffsetM: 0,
+    rootTransform: {
+      positionM: [0, 0, 0],
+      rotationDeg: [0, 0, 0],
+    },
+    version: "canonical-female@1",
+    license: "CC BY 4.0",
+    authorAttribution: "Female body base by Dori Mur (Sketchfab)",
+  },
+];
 
 export function approvedAvatarForBody(
   bodyProfile: BodyType,
