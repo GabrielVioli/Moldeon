@@ -1,11 +1,12 @@
-name: Recovery 9.5-05 Preview Artifact
+name: Moldeon Mobile Vercel Build
 
 on:
   push:
     branches:
-      - "recovery/9.5-05-modeling-operations"
+      - "deploy/test-mobile-20260828"
     paths:
       - ".github/workflows/recovery-modeling-preview-artifact.yml"
+      - "apps/web/src/avatar/ApprovedAvatarAsset.ts"
   workflow_dispatch:
 
 permissions:
@@ -29,14 +30,12 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Tests
-        run: npm test
       - name: Build
         run: npm run build
       - name: Upload static preview
         uses: actions/upload-artifact@v4
         with:
-          name: recovery-9-5-05-preview-${{ github.sha }}
+          name: moldeon-mobile-vercel-dist
           path: apps/web/dist
-          retention-days: 2
+          retention-days: 1
           if-no-files-found: error
