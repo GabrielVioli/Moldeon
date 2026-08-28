@@ -23,23 +23,27 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Instrument isometric pass residuals
+        id: instrument
+        continue-on-error: true
         shell: bash
         run: |
           python <<'PY'
           from pathlib import Path
           p = Path('apps/web/src/physics/bodyCollision.ts')
           s = p.read_text(encoding='utf-8')
-          old = '''      const penetrationM = maximumInitialExactPenetration(body, positions);\n      const edgeError = maximumInitialEdgeRelativeError(positions, edges);\n      const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);\n      if (Number.isFinite(penetrationM)'''
-          new = '''      const penetrationM = maximumInitialExactPenetration(body, positions);\n      const edgeError = maximumInitialEdgeRelativeError(positions, edges);\n      const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);\n      console.log("P1105_ISOMETRIC_PASS", JSON.stringify({ pass: pass + 1, penetrationMm: penetrationM * 1000, edgeRelativeError: edgeError, seamErrorMm: seamErrorM * 1000, displacementMm: displacementM * 1000 }));\n      if (Number.isFinite(penetrationM)'''
-          if s.count(old) != 1:
-              raise SystemExit(f'instrumentation marker count={s.count(old)}')
-          p.write_text(s.replace(old, new), encoding='utf-8', newline='\n')
+          marker = '    const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);'
+          addition = marker + '\n    console.log("P1105_ISOMETRIC_PASS", JSON.stringify({ pass: pass + 1, penetrationMm: penetrationM * 1000, edgeRelativeError: edgeError, seamErrorMm: seamErrorM * 1000, displacementMm: displacementM * 1000 }));'
+          if s.count(marker) != 1:
+              raise SystemExit(f'instrumentation marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, addition, 1), encoding='utf-8', newline='\n')
           PY
       - name: Run straight-skirt diagnostic
+        if: steps.instrument.outcome == 'success'
         id: diagnostic
         continue-on-error: true
         run: npm run test --workspace @moldeon/web -- exactBodyGarmentGate.test.ts
       - name: Restore failed candidate only
+        if: always()
         shell: bash
         run: |
           git restore -- apps/web/src/physics/bodyCollision.ts
