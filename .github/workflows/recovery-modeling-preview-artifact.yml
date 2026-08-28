@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-preview:
@@ -39,3 +39,16 @@ jobs:
           path: apps/web/dist
           retention-days: 1
           if-no-files-found: error
+      - name: Publish CDN snapshot branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R apps/web/dist /tmp/moldeon-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan mobile-preview-static
+          git rm -rf .
+          cp -R /tmp/moldeon-dist/. .
+          git add --all
+          git commit -m "chore: publish mobile preview ${GITHUB_SHA::7}"
+          git push --force origin HEAD:mobile-preview-static
