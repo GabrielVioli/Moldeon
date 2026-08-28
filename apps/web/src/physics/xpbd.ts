@@ -341,8 +341,15 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
     invalidReason: null,
     profile: { integrationMs: 0, stretchMs: 0, shearMs: 0, bendMs: 0, seamMs: 0, velocityUpdateMs: 0, validationMs: 0, solverStepTotalMs: 0, bodyCollisionMs: 0, floorCollisionMs: 0 },
   };
-  initializeBodyDressing(body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses);
-  // Initial depenetration is a rigid placement correction. The other world-
+  initializeBodyDressing(
+    body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses,
+    { indices: state.seams.indices, weights: state.seams.weights },
+  );
+  if (body.initialDepenetrationPasses > 0 && !body.initialOverlapUnresolved) {
+    captureTriangleReferenceNormals(state);
+    state.lastFlippedTriangleCount = 0;
+  }
+  // Initial depenetration is a rigid or isometric placement correction. The other world-
   // space buffers must start from that recovered placement, while rest/material
   // coordinates remain untouched.
   state.previousPositions.set(state.positions);
@@ -546,7 +553,14 @@ export function resetXpbdState(state: XpbdState): void {
   state.invalidReason = null;
   resetBodyContactStep(state.body);
   resetFloorContactStep(state);
-  initializeBodyDressing(state.body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses);
+  initializeBodyDressing(
+    state.body, state.positions, state.config.maximumCorrection, state.triangles, state.inverseMasses,
+    { indices: state.seams.indices, weights: state.seams.weights },
+  );
+  if (state.body.initialDepenetrationPasses > 0 && !state.body.initialOverlapUnresolved) {
+    captureTriangleReferenceNormals(state);
+    state.lastFlippedTriangleCount = 0;
+  }
   state.previousPositions.set(state.positions);
   state.predictedPositions.set(state.positions);
   state.stablePositions.set(state.positions);
@@ -740,7 +754,7 @@ export function measureXpbdDiagnostics(
       ? "initial-overlap-unresolved"
       : state.body.dressingStepsRemaining > 0
         ? "recovering"
-        : state.body.initialDressingSteps > 0
+        : (state.body.initialDepenetrationPasses > 0 || state.body.initialDressingSteps > 0)
           ? "recovered"
           : "not-needed",
     initialOverlapRecoverySteps: state.body.initialDepenetrationPasses
