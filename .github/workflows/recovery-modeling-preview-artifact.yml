@@ -32,6 +32,29 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Patch CDN-hosted module paths
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          dist = Path('apps/web/dist')
+          cdn = 'https://cdn.jsdelivr.net/gh/GabrielVioli/Moldeon@mobile-preview-static/'
+          main = next((dist / 'assets').glob('index-*.js'))
+          text = main.read_text()
+          old = 'Tn=function(e){return`/`+e}'
+          new = f'Tn=function(e){{return`{cdn}`+e}}'
+          if old not in text:
+              raise SystemExit('Vite preload base marker not found')
+          main.write_text(text.replace(old, new, 1))
+
+          garment = next((dist / 'assets').glob('GarmentViewport-*.js'))
+          text = garment.read_text()
+          old = 'sourceUrl:`/models/human/canonical-female.glb`'
+          new = f'sourceUrl:`{cdn}models/human/canonical-female.glb`'
+          if old not in text:
+              raise SystemExit('Avatar source marker not found')
+          garment.write_text(text.replace(old, new, 1))
+          PY
       - name: Upload static preview
         uses: actions/upload-artifact@v4
         with:
