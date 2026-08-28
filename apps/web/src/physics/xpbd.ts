@@ -120,7 +120,7 @@ export interface XpbdState {
   accumulator: number;
   stepCount: number;
   invalid: boolean;
-  invalidReason: "non-finite" | "metric-instability" | "initial-overlap-unresolved" | null;
+  invalidReason: "non-finite" | "metric-instability" | null;
   profile: XpbdProfileTimings;
 }
 
@@ -188,7 +188,7 @@ export interface XpbdStepDiagnostics {
   meanFloorPenetrationM?: number;
   floorCollisionMs?: number;
   invalid: boolean;
-  invalidReason: "non-finite" | "metric-instability" | "initial-overlap-unresolved" | null;
+  invalidReason: "non-finite" | "metric-instability" | null;
   droppedTimeSeconds: number;
   integrationMs?: number;
   stretchMs?: number;
@@ -348,11 +348,6 @@ export function createXpbdState(input: XpbdStateInput): XpbdState {
   state.previousPositions.set(state.positions);
   state.predictedPositions.set(state.positions);
   state.stablePositions.set(state.positions);
-  if (body.initialOverlapUnresolved) {
-    state.velocities.fill(0);
-    state.invalid = true;
-    state.invalidReason = "initial-overlap-unresolved";
-  }
   return state;
 }
 
@@ -550,10 +545,6 @@ export function resetXpbdState(state: XpbdState): void {
   state.previousPositions.set(state.positions);
   state.predictedPositions.set(state.positions);
   state.stablePositions.set(state.positions);
-  if (state.body.initialOverlapUnresolved) {
-    state.invalid = true;
-    state.invalidReason = "initial-overlap-unresolved";
-  }
   resetLambdas(state);
   enforcePinsOn(state.positions, state.pins);
   enforcePinsOn(state.previousPositions, state.pins);

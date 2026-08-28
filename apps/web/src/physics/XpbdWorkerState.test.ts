@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { XpbdInitializationData } from "./GarmentXpbdAdapter";
 import { BODY_COLLIDER_CAPSULE, BODY_COLLIDER_STRIDE } from "./bodyCollision";
-import { measureXpbdDiagnostics, stepXpbd } from "./xpbd";
+import { measureXpbdDiagnostics, resetXpbdState, stepXpbd } from "./xpbd";
 import { createXpbdWorkerState } from "./XpbdWorkerState";
 
 describe("Prompt 11 Adapter → Worker body state boundary", () => {
@@ -54,14 +54,16 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect(state.body.exactSurface?.mesh.topologySignature).toBe("visual:exact-cube");
     expect(state.body.exactSurface?.validation.valid).toBe(true);
     expect(state.body.exactSurface?.bvh.nodeCount).toBeGreaterThan(0);
+    const materialRestGeometry = [...state.restPositions];
     stepXpbd(state);
 
     const diagnostics = measureXpbdDiagnostics(state);
     expect(diagnostics.bodyExactSurface).toBe(true);
     expect(diagnostics.bodyColliderCount).toBe(12);
     expect(diagnostics.bodyBvhBuildMs).toBeGreaterThanOrEqual(0);
-    expect(state.invalid).toBe(true);
-    expect(state.invalidReason).toBe("initial-overlap-unresolved");
+    expect(state.invalid).toBe(false);
+    expect(state.invalidReason).toBeNull();
+    expect(state.stepCount).toBe(1);
     expect(diagnostics.initialOverlapRecoveryStatus).toBe("initial-overlap-unresolved");
     expect(diagnostics.bodyInitialOverlapUnresolved).toBe(true);
     expect(diagnostics.bodyInitialDepenetrationPasses).toBeGreaterThan(0);
@@ -74,6 +76,19 @@ describe("Prompt 11 Adapter → Worker body state boundary", () => {
     expect(diagnostics.bodyTriangleTests).toBeGreaterThan(0);
     expect(diagnostics.bodyContactSkipReasons?.["initial-overlap-too-deep"]).toBeUndefined();
     expect([...state.body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
+    expect([...state.restPositions]).toEqual(materialRestGeometry);
+
+    resetXpbdState(state);
+    expect(state.invalid).toBe(false);
+    expect(state.invalidReason).toBeNull();
+    expect(state.stepCount).toBe(0);
+    expect(state.body.initialOverlapUnresolved).toBe(true);
+    expect([...state.body.initialOverlapGuardMask].every((value) => value === 0)).toBe(true);
+    expect([...state.restPositions]).toEqual(materialRestGeometry);
+
+    stepXpbd(state);
+    expect(state.invalid).toBe(false);
+    expect(state.stepCount).toBe(1);
   });
 });
 

@@ -184,3 +184,26 @@ Continuam fora do core exato:
 8. Confirmar que Floor collision continua ativa independentemente do diagnóstico corporal local.
 
 Não foi iniciado o Prompt 11.0.6 e nenhuma mudança de assembly geral foi feita nesta finalização.
+
+## Fechamento urgente de estabilização
+
+O congelamento observado em `physicsStep = 0` era uma regressão de lifecycle introduzida em `bd81ee9`. A criação e o reset do estado promoviam `body.initialOverlapUnresolved` para `state.invalid = true`; `advanceXpbd` e `stepXpbd` então retornavam antes de executar qualquer passo ou contato. O diagnóstico continua exposto, mas não invalida mais o XPBD. `invalid` voltou a ser reservado para corrupção física real, como valores não finitos ou instabilidade métrica.
+
+Gate funcional no navegador, fixture `exact-contact-tube`:
+
+- Continuar: avançou do step 0 ao step 9;
+- Pausar: permaneceu no step 9;
+- Passo: avançou exatamente ao step 10;
+- Reiniciar: retornou ao step 0;
+- collision ON: 18 contatos, vertex/edge/triangle/CCD ativos e zero interseções/crossings residuais;
+- collision OFF: zero contatos e zero queries corporais;
+- console e rede: zero erros no modo fallback.
+
+## Initial arrangement responsibility boundary
+
+- Exact body contact, BVH, signed classification, vertex/edge/triangle contact e CCD pertencem à colisão.
+- Placement espacial inicial válido pertence ao Arrangement.
+- Recovery profundo multi-panel foi investigado e rejeitado: `bodyCollision` não contém nem deve se tornar um mini assembly solver.
+- Deep overlap não resolvido é um diagnóstico (`initial-overlap-unresolved`), não uma invalidação global do XPBD.
+- O recovery inicial permanece limitado e não altera `restPositions`, PatternDocumentV3 ou a métrica material 2D.
+- A 11.0.6 deverá impedir que garments com placement canônico inválido entrem na física nesse estado; orientação de mangas e front/back também permanecem deliberadamente nessa etapa futura.

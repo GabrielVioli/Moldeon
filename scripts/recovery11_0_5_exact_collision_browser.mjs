@@ -42,12 +42,36 @@ try {
   }
   const pause = page.getByRole("button", { name: "Pausar", exact: true });
   if (await pause.isVisible().catch(() => false)) await pause.click();
+  const restart = page.getByRole("button", { name: "Reiniciar", exact: true });
+  const resume = page.getByRole("button", { name: "Continuar", exact: true });
+  const singleStep = page.getByRole("button", { name: "Passo", exact: true });
+  await restart.click();
+  await waitForPhysicsStep(0);
+  await resume.click();
+  await page.waitForFunction(() => {
+    const element = document.querySelector("[data-testid='dressed-avatar-viewport']");
+    const diagnostics = JSON.parse(element?.getAttribute("data-simulation-diagnostics") ?? "{}");
+    return diagnostics.stepCount >= 2;
+  }, undefined, { timeout: 10_000 });
+  await pause.click();
+  await page.waitForTimeout(150);
+  const pausedAt = await physicsStep();
+  await page.waitForTimeout(150);
+  const pausedAfterWait = await physicsStep();
+  if (pausedAfterWait !== pausedAt) throw new Error(`Pausar nÃ£o estabilizou o step: ${pausedAt} -> ${pausedAfterWait}.`);
+  await singleStep.click();
+  await waitForPhysicsStep(pausedAt + 1);
+  const steppedAt = await physicsStep();
+  if (steppedAt !== pausedAt + 1) throw new Error(`Passo deveria avanÃ§ar uma vez: ${pausedAt} -> ${steppedAt}.`);
+  await restart.click();
+  await waitForPhysicsStep(0);
+  const lifecycle = { resumedPastStepZero: pausedAt >= 2, pausedAt, pausedAfterWait, steppedAt, resetAt: await physicsStep() };
   await page.locator(".viewport-physics-dev select").first().selectOption(validContactGate ? "1" : "0");
   const bodyCollision = page.getByLabel("Body collision");
   if (!await bodyCollision.isChecked()) await bodyCollision.check();
   const ghost = page.getByLabel("Mostrar malha exata de colisão");
   await ghost.check();
-  await page.getByRole("button", { name: "Reiniciar", exact: true }).click();
+  await restart.click();
   await stepSimulation(stepCount);
   await page.waitForFunction((expectedSteps) => {
     const element = document.querySelector("[data-testid='dressed-avatar-viewport']");
@@ -64,6 +88,7 @@ try {
     canvasCount: element.querySelectorAll("canvas").length,
     diagnostics: JSON.parse(element.getAttribute("data-simulation-diagnostics") ?? "{}"),
   }));
+  report.lifecycle = lifecycle;
   report.consoleErrors = consoleErrors;
   report.failedResponses = failedResponses;
   await writeFile(`${outputDir}/browser-report-pre-gate.json`, JSON.stringify({ fixtureId, ...report }, null, 2), "utf8");
@@ -143,6 +168,21 @@ async function stepSimulation(count) {
     await step.click();
     await page.waitForTimeout(25);
   }
+}
+
+async function physicsStep() {
+  return page.locator("[data-testid='dressed-avatar-viewport']").evaluate((element) => {
+    const diagnostics = JSON.parse(element.getAttribute("data-simulation-diagnostics") ?? "{}");
+    return Number(diagnostics.stepCount ?? -1);
+  });
+}
+
+async function waitForPhysicsStep(expected) {
+  await page.waitForFunction((value) => {
+    const element = document.querySelector("[data-testid='dressed-avatar-viewport']");
+    const diagnostics = JSON.parse(element?.getAttribute("data-simulation-diagnostics") ?? "{}");
+    return diagnostics.stepCount === value;
+  }, expected, { timeout: 10_000 });
 }
 
 async function completePreflight() {
