@@ -14,6 +14,7 @@ import { samplePatternContour } from "../domain/polygonGeometry";
 import { getEdgeById, type PieceWorkspaceTransform } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { useInternalPathEditorStore } from "../state/internalPathEditorStore";
+import { BodyReference2D } from "../components/BodyReference2D";
 import type { Camera2D } from "./camera";
 import { pieceLocalToWorld, screenToWorld } from "./coordinates";
 import {
@@ -57,6 +58,7 @@ function PatternCanvasGuard(props: PatternCanvasProps) {
       style={{ position: "relative", minWidth: 0, minHeight: 0 }}
     >
       <LegacyPatternCanvas key={generationKey} {...props} />
+      <BodyReference2D camera={camera} />
       <EditorCoreRotationHandle
         shellRef={shellRef}
         camera={camera}

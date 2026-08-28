@@ -87,7 +87,6 @@ export function App() {
   const draftError = useEditorStore((state) => state.draftError);
   const setPieceVisibility = useEditorStore((state) => state.setPieceVisibility);
   const setPieceLocked = useEditorStore((state) => state.setPieceLocked);
-  const setActivePiecePlacements = useEditorStore((state) => state.setActivePiecePlacements);
   const rotatePieceInWorkspace = useEditorStore((state) => state.rotatePieceInWorkspace);
   const setPieceWorkspaceTransform = useEditorStore((state) => state.setPieceWorkspaceTransform);
   const deletePiece = useEditorStore((state) => state.deletePiece);

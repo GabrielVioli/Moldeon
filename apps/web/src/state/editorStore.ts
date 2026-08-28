@@ -63,6 +63,7 @@ import {
   type BodyMeasurementKey,
   type MeasurementFormulaUpdateResult,
 } from "../domain/parametricMeasurements";
+import { createPanelInstanceId } from "../domain/patternDocumentV3";
 import {
   DocumentCommandHistory,
   type DocumentCommandType,
@@ -176,6 +177,9 @@ export interface EditorState {
   setActivePiecePlacements(placements: PatternPreviewPlacement[]): void;
   setAssemblyPlacement(pieceId: string, placement: Partial<AssemblyPlacement>): void;
   setBodyPlacement(pieceId: string, placement: PatternBodyPlacement): void;
+  setPanelInstanceArrangement(pieceId: string, copyIndex: number, placement: PatternPreviewPlacement | null): void;
+  confirmPanelInstanceArrangement(pieceId: string, copyIndex: number, definitionPlacement: PatternBodyPlacement, placement: PatternPreviewPlacement): void;
+  clearBodyArrangement(pieceId: string): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
   setGarmentEase(region: "bustMm" | "waistMm" | "hipMm" | "sleeveMm", valueMm: number): void;
   setGarmentDressing(update: GarmentDressingSetup): void;
@@ -760,6 +764,63 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...document.garment,
         pieces: document.garment.pieces.map((piece) => piece.id === pieceId
           ? { ...piece, bodyPlacement: structuredClone(placement) }
+          : piece),
+      },
+    }));
+  },
+  setPanelInstanceArrangement: (pieceId, copyIndex, placement) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    const instanceId = createPanelInstanceId(pieceId, copyIndex);
+    changeDocument(set, get, "placement", placement ? "Posicionar instância no corpo" : "Remover posição da instância", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => {
+          if (piece.id !== pieceId) return piece;
+          const placements = (piece.previewPlacements ?? []).filter((candidate) => candidate.id !== instanceId);
+          if (placement) placements.push({ ...structuredClone(placement), id: instanceId, pieceId });
+          placements.sort((left, right) => left.id.localeCompare(right.id));
+          return {
+            ...piece,
+            ...(placements.length > 0 ? { previewPlacements: placements } : { previewPlacements: undefined }),
+          };
+        }),
+      },
+    }));
+  },
+  confirmPanelInstanceArrangement: (pieceId, copyIndex, definitionPlacement, placement) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    const instanceId = createPanelInstanceId(pieceId, copyIndex);
+    changeDocument(set, get, "placement", "Confirmar posição da instância", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => {
+          if (piece.id !== pieceId) return piece;
+          const placements = (piece.previewPlacements ?? []).filter((candidate) => candidate.id !== instanceId);
+          placements.push({ ...structuredClone(placement), id: instanceId, pieceId, scale: 1 });
+          placements.sort((left, right) => left.id.localeCompare(right.id));
+          return {
+            ...piece,
+            bodyPlacement: structuredClone(definitionPlacement),
+            previewPlacements: placements,
+          };
+        }),
+      },
+    }));
+  },
+  clearBodyArrangement: (pieceId) => {
+    if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;
+    changeDocument(set, get, "placement", "Remover posicionamento corporal", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => piece.id === pieceId
+          ? {
+              ...piece,
+              bodyPlacement: createUnclassifiedBodyPlacement(piece.bodyPlacement?.includeIn3D ?? true),
+              previewPlacements: undefined,
+            }
           : piece),
       },
     }));

@@ -9,6 +9,7 @@ import {
   type MeasurementProfile,
   type ParametricProjectMetadata,
 } from "./parametricMeasurements";
+import { pairedBodyAnchorId } from "./bodyArrangement";
 
 export interface PatternPoint {
   id: string;
@@ -499,22 +500,49 @@ export function duplicatePatternPiece(
   const newId = options.newId ?? createDocumentId("piece");
   const newName = options.name ?? `${piece.name} – cópia`;
   const points = options.mirrored ? mirrorPatternPoints(clone.points) : clone.points;
-  const { previewPlacements: _placements, bodyPlacement: sourceBodyPlacement, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
+  const { previewPlacements: sourcePlacements, bodyPlacement: sourceBodyPlacement, nodes: _nodes, segments: _segments, contours: _contours, formatVersion: _formatVersion, ...copyable } = clone;
   const bodyPlacement = sourceBodyPlacement
     ? {
         ...sourceBodyPlacement,
-        status: "unclassified" as const,
-        bodySide: undefined,
-        anchorId: undefined,
+        ...(options.mirrored && sourceBodyPlacement.bodySide === "left" ? { bodySide: "right" as const } : {}),
+        ...(options.mirrored && sourceBodyPlacement.bodySide === "right" ? { bodySide: "left" as const } : {}),
+        ...(options.mirrored && sourceBodyPlacement.anchorId
+          ? { anchorId: pairedBodyAnchorId(sourceBodyPlacement.anchorId, sourceBodyPlacement.bodySide === "left" ? "right" : sourceBodyPlacement.bodySide === "right" ? "left" : "center") }
+          : {}),
+        ...(options.mirrored ? { outwardFace: sourceBodyPlacement.outwardFace === "normal" ? "flipped" as const : "normal" as const } : {}),
         source: "manual" as const,
       }
     : undefined;
+  const previewPlacements = sourcePlacements?.map((placement, index) => {
+    const canonicalPrefix = `${piece.id}:panel:`;
+    const parsedCopyNumber = placement.id.startsWith(canonicalPrefix)
+      ? Number(placement.id.slice(canonicalPrefix.length))
+      : Number.NaN;
+    const copyIndex = Number.isInteger(parsedCopyNumber) && parsedCopyNumber > 0
+      ? parsedCopyNumber - 1
+      : index;
+    const bodySide = options.mirrored
+      ? placement.bodySide === "left" ? "right" as const
+        : placement.bodySide === "right" ? "left" as const
+          : placement.bodySide
+      : placement.bodySide;
+    return {
+      ...placement,
+      id: `${newId}:panel:${copyIndex + 1}`,
+      pieceId: newId,
+      bodySide,
+      ...(placement.bodyAnchorId ? { bodyAnchorId: pairedBodyAnchorId(placement.bodyAnchorId, bodySide) } : {}),
+      scale: 1,
+      mirrorX: options.mirrored ? !placement.mirrorX : placement.mirrorX,
+    };
+  });
 
   return migrateLegacyPieceToSegments({
     ...copyable,
     id: newId,
     name: newName,
     ...(bodyPlacement === undefined ? {} : { bodyPlacement }),
+    ...(previewPlacements === undefined ? {} : { previewPlacements }),
     points: points.map((point, index) => ({
       ...point,
       id: createDocumentId(`${newId}:point-${index + 1}`),

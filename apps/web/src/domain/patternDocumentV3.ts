@@ -43,6 +43,10 @@ import {
   type SeamTreatmentV3,
   type WorkspaceStateV3,
 } from "./patternDocumentV3.types";
+import {
+  bodyAnchorSpecification,
+  pairedBodyAnchorId,
+} from "./bodyArrangement";
 
 const CONNECTOR_ROLE_BY_SEGMENT_ROLE: Partial<Record<SegmentRole, ConnectorRoleV3>> = {
   frontArmhole: "front-armhole",
@@ -426,34 +430,46 @@ export function patternDocumentV3ToGarmentDraft(
 
 export function derivePanelInstances(
   definitions: readonly PatternDefinitionV3[],
-  _garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
+  garment?: Pick<GarmentDraft, "pieces" | "assemblyPlacements">,
 ): PanelInstanceV3[] {
   const result: PanelInstanceV3[] = [];
 
   for (const definition of definitions) {
     const classification = definition.bodyPlacement;
-    const confirmed = classification.status === "confirmed"
-      && classification.role !== undefined
-      && classification.region !== undefined
-      && classification.surface !== undefined
-      && classification.bodySide !== undefined
+    const definitionConfirmed = classification.status === "confirmed"
       && classification.anchorId !== undefined;
+    const sourcePiece = garment?.pieces.find((piece) => piece.id === definition.id);
     for (let copyIndex = 0; copyIndex < definition.cutQuantity; copyIndex += 1) {
-      const bodySide = confirmed
-        ? resolveClassifiedBodySide(classification.bodySide!, definition, copyIndex)
+      const instanceId = createPanelInstanceId(definition.id, copyIndex);
+      const explicitPlacement = sourcePiece?.previewPlacements?.find((placement) => placement.id === instanceId);
+      const explicitAnchorId = explicitPlacement?.bodyAnchorId;
+      const defaultSpecification = definitionConfirmed ? bodyAnchorSpecification(classification.anchorId!) : undefined;
+      const configuredSide = classification.bodySide
+        ?? ((definition.mirrorRule === "paired" || definition.cutQuantity === 2) ? "paired" : defaultSpecification?.bodySide);
+      const defaultBodySide = definitionConfirmed && configuredSide
+        ? resolveClassifiedBodySide(configuredSide, definition, copyIndex)
         : undefined;
-      const surface = confirmed ? classification.surface : undefined;
-      const mirrored =
-        classification.outwardFace === "flipped"
-        || (definition.mirrorRule === "paired" && copyIndex % 2 === 1);
-      const anchor = confirmed && bodySide && surface
-        ? createArrangementAnchor(definition, copyIndex, bodySide, surface)
-        : undefined;
+      const bodySide = explicitPlacement?.bodySide ?? defaultBodySide;
+      const surface = explicitPlacement?.surface ?? classification.surface ?? defaultSpecification?.surface;
+      const region = explicitPlacement?.region ?? classification.region ?? defaultSpecification?.region;
+      const mirrored = explicitPlacement?.mirrorX
+        ?? (classification.outwardFace === "flipped"
+          || (definition.mirrorRule === "paired" && copyIndex % 2 === 1));
+      const anchor = explicitPlacement && explicitAnchorId
+        ? createArrangementAnchorFromPreview(instanceId, explicitPlacement)
+        : definitionConfirmed && bodySide && surface && region
+          ? createArrangementAnchor(definition, copyIndex, bodySide, surface)
+          : undefined;
+      const placementSource = explicitPlacement && explicitAnchorId
+        ? "panel-instance"
+        : anchor
+          ? "pattern-definition"
+          : "unassigned";
       result.push({
-        id: createPanelInstanceId(definition.id, copyIndex),
+        id: instanceId,
         sourcePatternId: definition.id,
         copyIndex,
-        placementStatus: confirmed ? "confirmed" : "unclassified",
+        placementStatus: anchor ? "confirmed" : "unclassified",
         ...(bodySide === undefined ? {} : { bodySide }),
         ...(surface === undefined ? {} : { surface }),
         mirrored,
@@ -461,7 +477,7 @@ export function derivePanelInstances(
         ...(anchor === undefined ? {} : { arrangementAnchor: anchor }),
         includedIn3D: classification.includeIn3D,
         simulationEnabled: true,
-        metadata: {},
+        metadata: { effectivePlacementSource: placementSource },
       });
     }
   }
@@ -678,7 +694,16 @@ function definitionToPatternPiece(
   instances: readonly PanelInstanceV3[],
 ): PatternPiece {
   const previewPlacements = instances
-    .filter((instance) => instance.sourcePatternId === definition.id && instance.placementStatus === "confirmed" && instance.arrangementAnchor)
+    .filter((instance) => (
+      instance.sourcePatternId === definition.id
+      && instance.placementStatus === "confirmed"
+      && instance.arrangementAnchor
+      // A definition default remains a definition default after the V3 -> draft
+      // compatibility projection. Only true instance overrides are materialized
+      // as PatternPreviewPlacement. Documents predating this diagnostic field
+      // keep their historical behavior instead of silently losing placement.
+      && instance.metadata.effectivePlacementSource !== "pattern-definition"
+    ))
     .sort((left, right) => left.copyIndex - right.copyIndex)
     .map((instance): PatternPreviewPlacement => {
       const anchor = instance.arrangementAnchor!;
@@ -1217,13 +1242,15 @@ function createArrangementAnchor(
   surface: NonNullable<PanelInstanceV3["surface"]>,
 ): PanelArrangementAnchorV3 {
   const placement = definition.bodyPlacement;
-  if (!bodySide || !placement.region || !placement.anchorId) {
+  if (!bodySide || !placement.anchorId) {
     throw new Error(`A classificação de ${definition.id} não possui anchor completo.`);
   }
+  const bodyAnchorId = pairedBodyAnchorId(placement.anchorId, bodySide);
+  const specification = bodyAnchorSpecification(bodyAnchorId);
   return {
     id: `${definition.id}:anchor:${copyIndex + 1}`,
-    bodyAnchorId: resolvePairedAnchorId(placement.anchorId, bodySide),
-    region: placement.region,
+    bodyAnchorId,
+    region: placement.region ?? specification.region,
     surface,
     bodySide,
     rotationDeg: placement.rotationZDeg,
@@ -1234,6 +1261,29 @@ function createArrangementAnchor(
     orientationDeg: [placement.rotationXDeg, placement.rotationYDeg, placement.rotationZDeg],
     outwardSide: surface === "back" ? "back" : "front",
     source: placement.source,
+  };
+}
+
+function createArrangementAnchorFromPreview(
+  instanceId: string,
+  placement: PatternPreviewPlacement,
+): PanelArrangementAnchorV3 {
+  if (!placement.bodyAnchorId) throw new Error(`O placement ${placement.id} não possui BodyAnchorId.`);
+  const specification = bodyAnchorSpecification(placement.bodyAnchorId);
+  return {
+    id: `${instanceId}:anchor`,
+    bodyAnchorId: placement.bodyAnchorId,
+    region: placement.region ?? specification.region,
+    surface: placement.surface ?? specification.surface,
+    bodySide: placement.bodySide ?? specification.bodySide,
+    rotationDeg: placement.rotationDeg,
+    offsetXMm: placement.offsetXMm,
+    offsetYMm: placement.offsetYMm,
+    offsetZMm: placement.offsetZMm,
+    scale: 1,
+    orientationDeg: [0, 0, placement.rotationDeg],
+    outwardSide: placement.surface === "back" ? "back" : "front",
+    source: "manual",
   };
 }
 
@@ -1256,9 +1306,7 @@ function resolvePairedAnchorId(
   anchorId: NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>,
   bodySide: NonNullable<PanelInstanceV3["bodySide"]>,
 ): NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]> {
-  if (bodySide === "left" && anchorId.endsWith("-right")) return anchorId.replace(/-right$/, "-left") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
-  if (bodySide === "right" && anchorId.endsWith("-left")) return anchorId.replace(/-left$/, "-right") as NonNullable<PatternDefinitionV3["bodyPlacement"]["anchorId"]>;
-  return anchorId;
+  return pairedBodyAnchorId(anchorId, bodySide);
 }
 
 function firstAssemblyPlacementForDefinition(

@@ -682,6 +682,23 @@ button {
 .body-position-instances { display: grid; gap: 3px; padding: 9px; margin: 10px 0; background: #ebe8e1; border-radius: 7px; font-size: 10px; overflow-wrap: anywhere; }
 .body-position-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .body-position-missing { margin-top: 7px !important; color: #8a5e11; font-size: 10px !important; }
+.body-position-help { margin: 4px 0 10px !important; color: #666862; font-size: 11px !important; line-height: 1.4; }
+.body-position-instance-select, .body-position-anchor-select { display: grid; gap: 4px; margin: 8px 0; color: #62635f; font-size: 10px; font-weight: 700; }
+.body-position-instance-select select, .body-position-anchor-select select { min-height: 36px; width: 100%; }
+.body-position-derived { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.body-position-derived span { padding: 3px 6px; border-radius: 999px; background: #ebe8e1; color: #555750; font-size: 10px; }
+
+.body-reference-2d { position: absolute; z-index: 3; inset: 0; pointer-events: none; overflow: hidden; }
+.body-reference-controls { position: absolute; z-index: 2; top: 52px; right: 12px; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #cbc5ba; border-radius: 7px; background: rgba(250, 248, 243, 0.94); box-shadow: 0 2px 8px rgba(41, 39, 34, 0.08); pointer-events: auto; font-size: 10px; }
+.body-reference-controls label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.body-reference-controls select { min-height: 30px; max-width: 118px; }
+.body-reference-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.body-reference-silhouette { fill: none; stroke: rgba(70, 98, 115, 0.5); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.body-reference-landmark { fill: #3f728f; opacity: 0.75; }
+.body-reference-region { fill: #547788; opacity: 0.72; pointer-events: none; }
+.body-reference-region text { fill: #365363; font: 8px Inter, sans-serif; paint-order: stroke; stroke: rgba(250, 248, 243, 0.9); stroke-width: 2px; }
+.body-reference-anchor { fill: #fff7df; stroke: #8b5d12; stroke-width: 2; pointer-events: auto; cursor: pointer; }
+.body-reference-anchor:hover, .body-reference-anchor:focus-visible, .body-reference-anchor.is-selected { fill: #e7ad43; stroke: #543604; outline: none; }
 
 .viewport-inspection { position: absolute; z-index: 4; top: 10px; right: 10px; display: flex; gap: 4px; }
 .viewport-inspection button { padding: 6px 8px; border: 1px solid #74736f; border-radius: 4px; background: rgba(245, 243, 238, 0.9); }

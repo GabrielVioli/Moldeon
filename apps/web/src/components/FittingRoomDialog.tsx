@@ -1,13 +1,7 @@
 import { memo, useEffect, useState } from "react";
-import {
-  createPreviewPlacement,
-  type PatternPreviewPlacement,
-  type PreviewBodySide,
-  type PreviewRegion,
-  type PreviewSurface,
-} from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import { BodyMeasurementsForm } from "./BodyMeasurementsForm";
+import { BodyPositionPanel } from "./BodyPositionPanel";
 
 type FittingSection = "body" | "placement";
 
@@ -15,14 +9,6 @@ interface FittingRoomDialogProps {
   onClose(): void;
   onPreview(): void;
 }
-
-const REGION_OPTIONS: readonly { value: PreviewRegion; label: string }[] = [
-  { value: "torso", label: "Tronco / blusa" },
-  { value: "waist", label: "Cintura" },
-  { value: "hip", label: "Quadril / saia" },
-  { value: "leg", label: "Perna / calça" },
-  { value: "arm", label: "Braço / manga" },
-];
 
 export const FittingRoomDialog = memo(function FittingRoomDialog({
   onClose,
@@ -34,15 +20,10 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
   const setBodyMeasurement = useEditorStore((state) => state.setBodyMeasurement);
   const resetBodyMeasurement = useEditorStore((state) => state.resetBodyMeasurement);
   const setBodyMeasurementFormula = useEditorStore((state) => state.setBodyMeasurementFormula);
-  const setPlacements = useEditorStore((state) => state.setActivePiecePlacements);
   const [section, setSection] = useState<FittingSection>("body");
 
   const activePiece =
     garment.pieces.find((piece) => piece.id === activePieceId) ?? garment.pieces[0];
-  const placement: PatternPreviewPlacement =
-    activePiece?.previewPlacements?.[0] ?? createPreviewPlacement(activePiece?.id ?? "preview-piece");
-  const duplicatedOnBothSides = (activePiece?.previewPlacements?.length ?? 0) > 1;
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -50,22 +31,6 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  const updatePlacement = (
-    next: Partial<PatternPreviewPlacement>,
-    duplicate = duplicatedOnBothSides,
-  ) => {
-    if (!activePiece) return;
-    const base = { ...placement, ...next, pieceId: activePiece.id };
-    if (duplicate && (base.region === "leg" || base.region === "arm")) {
-      setPlacements([
-        { ...base, bodySide: "left", mirrorX: false },
-        { ...base, bodySide: "right", mirrorX: true },
-      ]);
-      return;
-    }
-    setPlacements([{ ...base, mirrorX: false }]);
-  };
 
   return (
     <div
@@ -141,87 +106,7 @@ export const FittingRoomDialog = memo(function FittingRoomDialog({
               </div>
 
               {activePiece ? (
-                <>
-                  <div className="placement-grid">
-                    <label>
-                      Região
-                      <select
-                        value={placement.region}
-                        onChange={(event) => updatePlacement({ region: event.currentTarget.value as PreviewRegion })}
-                      >
-                        {REGION_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Lado visível
-                      <select
-                        value={placement.surface}
-                        onChange={(event) => updatePlacement({ surface: event.currentTarget.value as PreviewSurface })}
-                      >
-                        <option value="front">Frente</option>
-                        <option value="back">Costas</option>
-                        <option value="side">Lateral</option>
-                      </select>
-                    </label>
-                    <label>
-                      Lado do corpo
-                      <select
-                        value={placement.bodySide}
-                        disabled={duplicatedOnBothSides && (placement.region === "leg" || placement.region === "arm")}
-                        onChange={(event) => updatePlacement({ bodySide: event.currentTarget.value as PreviewBodySide })}
-                      >
-                        <option value="center">Central</option>
-                        <option value="left">Esquerdo</option>
-                        <option value="right">Direito</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="placement-grid placement-adjustments">
-                    <PlacementField label="Rotação" value={placement.rotationDeg} onChange={(rotationDeg) => updatePlacement({ rotationDeg })} />
-                    <PlacementField label="Deslocamento X" value={placement.offsetXMm} onChange={(offsetXMm) => updatePlacement({ offsetXMm })} />
-                    <PlacementField label="Deslocamento Y" value={placement.offsetYMm} onChange={(offsetYMm) => updatePlacement({ offsetYMm })} />
-                    <PlacementField label="Afastamento" value={placement.offsetZMm} onChange={(offsetZMm) => updatePlacement({ offsetZMm })} />
-                    <label>
-                      Escala
-                      <input
-                        type="number"
-                        min="0.1"
-                        step="0.05"
-                        value={placement.scale}
-                        onChange={(event) => {
-                          const scale = event.currentTarget.valueAsNumber;
-                          if (Number.isFinite(scale) && scale > 0) updatePlacement({ scale });
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  <label className="duplicate-placement">
-                    <input
-                      type="checkbox"
-                      checked={duplicatedOnBothSides}
-                      disabled={placement.region !== "leg" && placement.region !== "arm"}
-                      onChange={(event) => updatePlacement({}, event.currentTarget.checked)}
-                    />
-                    <span>
-                      <strong>Usar nos dois lados</strong>
-                      <small>Para mangas e pernas cortadas em par.</small>
-                    </span>
-                  </label>
-
-                  <div className="placement-summary">
-                    A peça <strong>{activePiece.name}</strong> será posicionada em{" "}
-                    <strong>{regionLabel(placement.region).toLowerCase()}</strong>, na{" "}
-                    <strong>{placement.surface === "front" ? "frente" : placement.surface === "back" ? "parte de trás" : "lateral"}</strong>
-                    {duplicatedOnBothSides ? ", dos dois lados" : ""}.
-                  </div>
-                  <button className="secondary-dialog-button" type="button" onClick={() => setPlacements([])}>
-                    Remover do corpo
-                  </button>
-                </>
+                <BodyPositionPanel piece={activePiece} />
               ) : (
                 <p className="dialog-note">Crie ou selecione uma peça antes de configurar a posição no corpo.</p>
               )}
@@ -255,33 +140,4 @@ function FittingTab({
       {children}
     </button>
   );
-}
-
-function PlacementField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange(value: number): void;
-}) {
-  return (
-    <label>
-      {label} (mm/°)
-      <input
-        type="number"
-        step="1"
-        value={value}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          if (Number.isFinite(next)) onChange(next);
-        }}
-      />
-    </label>
-  );
-}
-
-function regionLabel(region: PreviewRegion): string {
-  return REGION_OPTIONS.find((option) => option.value === region)?.label ?? region;
 }

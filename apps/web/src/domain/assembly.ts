@@ -437,10 +437,24 @@ export function deriveDressingPanelInstances(
     if (!definition || definition.bodyPlacement.includeIn3D === false) return instance;
     const authoredPlacement = definition.bodyPlacement;
     const authoredAnchor = instance.arrangementAnchor;
+    if (
+      instance.placementStatus === "confirmed"
+      && authoredAnchor?.bodyAnchorId
+      && (authoredAnchor.source === "manual" || authoredAnchor.source === "template")
+      && instance.metadata.effectivePlacementSource !== "pattern-definition"
+    ) {
+      return {
+        ...instance,
+        arrangementAnchor: { ...authoredAnchor, scale: 1 },
+        metadata: { ...instance.metadata, effectivePlacementSource: "panel-instance" },
+      };
+    }
+    // Compatibility is deliberately restricted to migrated documents. A new
+    // manual/unassigned instance stays UNASSIGNED until the user chooses an
+    // existing BodyAnchorId; preflight answers do not become canonical facts.
+    if (authoredPlacement.source !== "migration") return instance;
     const connectorRegion = semanticRegionForDefinition(definition);
-    const authoritativeRegion = authoredPlacement.source === "manual"
-      ? authoredPlacement.region
-      : connectorRegion ?? authoredPlacement.region;
+    const authoritativeRegion = connectorRegion ?? authoredPlacement.region;
     if (
       (authoredPlacement.status === "confirmed" || connectorRegion !== undefined)
       && authoritativeRegion
@@ -453,15 +467,13 @@ export function deriveDressingPanelInstances(
       const bodySide = authoritativeRegion === "arm" || authoritativeRegion === "leg"
         ? instance.copyIndex % 2 === 0 ? "left" : "right"
         : authoredAnchor?.bodySide ?? instance.bodySide ?? "center";
-      const surface = authoredPlacement.source === "manual"
-        ? authoredPlacement.surface ?? authoredAnchor?.surface ?? instance.surface ?? "front"
-        : connectorRegion === "arm"
-          ? "side"
-          : surfaceByPieceId.get(instance.sourcePatternId)
-            ?? authoredPlacement.surface
-            ?? authoredAnchor?.surface
-            ?? instance.surface
-            ?? "front";
+      const surface = connectorRegion === "arm"
+        ? "side"
+        : surfaceByPieceId.get(instance.sourcePatternId)
+          ?? authoredPlacement.surface
+          ?? authoredAnchor?.surface
+          ?? instance.surface
+          ?? "front";
       return {
         ...instance,
         placementStatus: "confirmed",

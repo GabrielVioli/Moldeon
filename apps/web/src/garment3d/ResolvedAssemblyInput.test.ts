@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
 import { createBlankGarment } from "../domain/blankGarment";
 import { createDefaultFabricSource } from "../domain/fabric";
-import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternPiece } from "../domain/pattern";
+import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternBodyPlacement, type PatternPiece } from "../domain/pattern";
 import { buildGarmentAssemblyMeshes } from "./GarmentThreeBridge";
 import { buildResolvedGarmentAssembly } from "./ResolvedGarmentAssembly";
 import { buildResolvedAssemblyInput } from "./ResolvedAssemblyInput";
 import { buildSemanticAvatarArrangement } from "./SemanticAvatarArrangement";
 
 function placement(
-  region: "torso" | "leg",
-  surface: "front" | "back",
-  bodySide: "center" | "right",
+  region: NonNullable<PatternBodyPlacement["region"]>,
+  surface: NonNullable<PatternBodyPlacement["surface"]>,
+  bodySide: NonNullable<PatternBodyPlacement["bodySide"]>,
   anchorId: BodyAnchorId,
 ) {
   return {
@@ -151,6 +151,62 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     expect(instanceA.arrangement?.anchorId).toBe("torso-front");
     expect(instanceB.arrangement?.anchorId).toBe("leg-right");
     expect(firstPosition).not.toEqual(secondPosition);
+  });
+
+  it("places the canonical P0 body anchors without scaling or swapping left/right", () => {
+    const pieces = [
+      square("torso-a", placement("torso", "front", "center", "torso-front")),
+      square("torso-b", placement("torso", "back", "center", "torso-back")),
+      square("sleeve-a", placement("arm", "side", "left", "arm-left")),
+      square("sleeve-b", placement("arm", "side", "right", "arm-right")),
+      square("pelvis-a", placement("hip", "front", "center", "hip-front")),
+    ];
+    const garment = draft(pieces);
+    const result = buildSemanticAvatarArrangement(
+      buildResolvedAssemblyInput(garment),
+      buildAvatarParametricModel(garment.measurements, garment.bodyType),
+    );
+    const centroid = (pieceId: string) => {
+      const instance = result.state.instances.find((candidate) => candidate.pieceId === pieceId)!;
+      const center = [0, 0, 0];
+      for (let local = 0; local < instance.vertexCount; local += 1) {
+        const offset = (instance.particleStart + local) * 3;
+        center[0] += result.state.positions[offset];
+        center[1] += result.state.positions[offset + 1];
+        center[2] += result.state.positions[offset + 2];
+      }
+      return center.map((value) => value / instance.vertexCount);
+    };
+
+    expect(centroid("torso-a")[2]).toBeGreaterThan(centroid("torso-b")[2]);
+    expect(centroid("sleeve-a")[0]).toBeLessThan(0);
+    expect(centroid("sleeve-b")[0]).toBeGreaterThan(0);
+    expect(centroid("pelvis-a")[2]).toBeGreaterThan(0);
+
+    for (const instance of result.state.instances) {
+      expect(instance.placement.scale).toBe(1);
+      const first = instance.particleStart * 3;
+      const planar = instance.topology.positions2DMm;
+      let verified100MmEdge = false;
+      for (let a = 0; a < instance.vertexCount; a += 1) {
+        for (let b = a + 1; b < instance.vertexCount; b += 1) {
+          const planarDistanceMm = Math.hypot(planar[a * 2] - planar[b * 2], planar[a * 2 + 1] - planar[b * 2 + 1]);
+          if (Math.abs(planarDistanceMm - 100) > 1e-4) continue;
+          const offsetA = first + a * 3;
+          const offsetB = first + b * 3;
+          const spatialDistanceM = Math.hypot(
+            result.state.positions[offsetA] - result.state.positions[offsetB],
+            result.state.positions[offsetA + 1] - result.state.positions[offsetB + 1],
+            result.state.positions[offsetA + 2] - result.state.positions[offsetB + 2],
+          );
+          expect(spatialDistanceM).toBeCloseTo(0.1, 6);
+          verified100MmEdge = true;
+          break;
+        }
+        if (verified100MmEdge) break;
+      }
+      expect(verified100MmEdge).toBe(true);
+    }
   });
 
   it("consumes canonical SeamGroup treatment, distribution, ratio and slack in constraints", () => {

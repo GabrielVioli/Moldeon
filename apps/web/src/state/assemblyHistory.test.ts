@@ -225,6 +225,32 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.pieces[0].bodyPlacement?.status).toBe("confirmed");
   });
 
+  it("undoes and redoes canonical definition plus PanelInstance placement atomically", () => {
+    useEditorStore.getState().confirmPanelInstanceArrangement("a", 0, torsoFrontPlacement, {
+      id: "a:panel:1",
+      pieceId: "a",
+      region: "torso",
+      surface: "front",
+      bodySide: "center",
+      bodyAnchorId: "torso-front",
+      rotationDeg: 0,
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      scale: 1,
+    });
+    expect(useEditorStore.getState().garment.pieces[0]).toMatchObject({
+      bodyPlacement: { status: "confirmed", anchorId: "torso-front" },
+      previewPlacements: [{ id: "a:panel:1", bodyAnchorId: "torso-front", scale: 1 }],
+    });
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.pieces[0].bodyPlacement?.status).toBe("unclassified");
+    expect(useEditorStore.getState().garment.pieces[0].previewPlacements).toBeUndefined();
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.pieces[0].previewPlacements?.[0].bodyAnchorId).toBe("torso-front");
+  });
+
   it("undoes and redoes the garment-level dressing setup", () => {
     createSeam();
     useEditorStore.getState().setGarmentDressing({
