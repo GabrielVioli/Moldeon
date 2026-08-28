@@ -1,0 +1,341 @@
+name: recovery-11-0-5-rigid-seam-pbd
+
+on:
+  push:
+    branches:
+      - recovery/11.0.5-exact-human-surface-contact
+
+permissions:
+  contents: write
+
+jobs:
+  candidate:
+    if: "github.event.head_commit.message == 'chore(11.0.5): stage rigid seam PBD recovery'"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.5-exact-human-surface-contact
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: npm
+      - run: npm ci
+      - name: Build rigid-body seam PBD candidate
+        shell: bash
+        run: |
+          git show --format= de0d6aaee5cb241e8162462d4872f023a82dba16 -- \
+            apps/web/src/physics/bodyCollision.ts \
+            apps/web/src/physics/xpbd.ts \
+            apps/web/src/physics/bodyCollisionExact.test.ts | git apply -
+          python <<'PY'
+          from pathlib import Path
+          p = Path('apps/web/src/physics/bodyCollision.ts')
+          s = p.read_text(encoding='utf-8')
+
+          def one(old, new, label):
+              global s
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              s = s.replace(old, new, 1)
+
+          one(
+            '  const rigidPanels = buildInitialRigidPanels(positions.length / 3, clothTriangles);\n  const seamTargets = captureInitialSeamDistances(original, clothSeams);',
+            '  const rigidPanels = buildInitialRigidPanels(positions.length / 3, clothTriangles);\n  const panelByParticle = buildInitialPanelIndex(positions.length / 3, rigidPanels);\n  const seamTargets = captureInitialSeamDistances(original, clothSeams);',
+            'panel map',
+          )
+          one(
+            '      projectInitialSeams(positions, clothSeams, seamTargets, inverseMasses, sweepCorrectionLimit);\n      projectInitialRigidPanels(original, positions, rigidPanels);',
+            '      projectInitialRigidSeams(positions, clothSeams, seamTargets, rigidPanels, panelByParticle, inverseMasses, sweepCorrectionLimit);\n      projectInitialRigidPanels(original, positions, rigidPanels);',
+            'rigid seam call',
+          )
+
+          marker = 'function projectInitialSeams(positions: Float32Array, seams: BodyInitialSeamConstraints, targets: Float64Array, inverseMasses: Float32Array | undefined, limit: number): void {'
+          helpers = r'''interface InitialRigidPanelProperties {
+            centroid: [number, number, number];
+            inverseMass: number;
+            inverseInertia: [number, number, number, number, number, number, number, number, number];
+          }
+
+          function buildInitialPanelIndex(
+            particleCount: number,
+            panels: readonly (readonly number[])[],
+          ): Int32Array {
+            const panelByParticle = new Int32Array(particleCount);
+            panelByParticle.fill(-1);
+            for (let panel = 0; panel < panels.length; panel += 1) {
+              for (const particle of panels[panel]) {
+                if (particle < particleCount) panelByParticle[particle] = panel;
+              }
+            }
+            return panelByParticle;
+          }
+
+          function initialSeamSidePanel(
+            seams: BodyInitialSeamConstraints,
+            seam: number,
+            side: 0 | 1,
+            panelByParticle: Int32Array,
+          ): number {
+            const base = seam * 4 + side * 2;
+            let panel = -1;
+            for (let slot = 0; slot < 2; slot += 1) {
+              const index = base + slot;
+              const particle = seams.indices[index];
+              if (particle === INITIAL_SEAM_MISSING_PARTICLE || particle >= panelByParticle.length) continue;
+              if (Math.abs(seams.weights[index]) <= EPSILON) continue;
+              const candidate = panelByParticle[particle];
+              if (candidate < 0) continue;
+              if (panel < 0) panel = candidate;
+              else if (panel !== candidate) return -1;
+            }
+            return panel;
+          }
+
+          function initialRigidPanelProperties(
+            positions: Float32Array,
+            particles: readonly number[],
+            inverseMasses: Float32Array | undefined,
+          ): InitialRigidPanelProperties {
+            let fixed = false;
+            let totalMass = 0;
+            let cx = 0, cy = 0, cz = 0;
+            for (const particle of particles) {
+              const inverseMass = inverseMasses ? Math.max(0, inverseMasses[particle] ?? 0) : 1;
+              if (inverseMasses && inverseMass <= EPSILON) fixed = true;
+              const mass = inverseMasses && inverseMass > EPSILON ? 1 / inverseMass : 1;
+              const offset = particle * 3;
+              totalMass += mass;
+              cx += positions[offset] * mass;
+              cy += positions[offset + 1] * mass;
+              cz += positions[offset + 2] * mass;
+            }
+            if (totalMass <= EPSILON) {
+              return { centroid: [0, 0, 0], inverseMass: 0, inverseInertia: [0,0,0,0,0,0,0,0,0] };
+            }
+            cx /= totalMass; cy /= totalMass; cz /= totalMass;
+            if (fixed) {
+              return { centroid: [cx, cy, cz], inverseMass: 0, inverseInertia: [0,0,0,0,0,0,0,0,0] };
+            }
+            let ixx = 0, ixy = 0, ixz = 0, iyy = 0, iyz = 0, izz = 0;
+            for (const particle of particles) {
+              const inverseMass = inverseMasses ? Math.max(0, inverseMasses[particle] ?? 0) : 1;
+              const mass = inverseMasses && inverseMass > EPSILON ? 1 / inverseMass : 1;
+              const offset = particle * 3;
+              const x = positions[offset] - cx;
+              const y = positions[offset + 1] - cy;
+              const z = positions[offset + 2] - cz;
+              ixx += mass * (y * y + z * z);
+              iyy += mass * (x * x + z * z);
+              izz += mass * (x * x + y * y);
+              ixy -= mass * x * y;
+              ixz -= mass * x * z;
+              iyz -= mass * y * z;
+            }
+            const trace = ixx + iyy + izz;
+            const regularization = Math.max(1e-14, trace * 1e-8);
+            const inverseInertia = invertInitialSymmetric3(
+              ixx + regularization, ixy, ixz,
+              iyy + regularization, iyz,
+              izz + regularization,
+            );
+            return { centroid: [cx, cy, cz], inverseMass: 1 / totalMass, inverseInertia };
+          }
+
+          function invertInitialSymmetric3(
+            a: number, b: number, c: number,
+            d: number, e: number,
+            f: number,
+          ): [number, number, number, number, number, number, number, number, number] {
+            const aa = d * f - e * e;
+            const ab = c * e - b * f;
+            const ac = b * e - c * d;
+            const dd = a * f - c * c;
+            const de = b * c - a * e;
+            const ff = a * d - b * b;
+            const determinant = a * aa + b * ab + c * ac;
+            if (!Number.isFinite(determinant) || Math.abs(determinant) <= 1e-24) return [0,0,0,0,0,0,0,0,0];
+            const inverseDeterminant = 1 / determinant;
+            return [
+              aa * inverseDeterminant, ab * inverseDeterminant, ac * inverseDeterminant,
+              ab * inverseDeterminant, dd * inverseDeterminant, de * inverseDeterminant,
+              ac * inverseDeterminant, de * inverseDeterminant, ff * inverseDeterminant,
+            ];
+          }
+
+          function multiplyInitialMatrixVector(
+            matrix: readonly number[],
+            vector: readonly [number, number, number],
+          ): [number, number, number] {
+            return [
+              matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2],
+              matrix[3] * vector[0] + matrix[4] * vector[1] + matrix[5] * vector[2],
+              matrix[6] * vector[0] + matrix[7] * vector[1] + matrix[8] * vector[2],
+            ];
+          }
+
+          function applyInitialRigidPanelDelta(
+            positions: Float32Array,
+            particles: readonly number[],
+            centroid: readonly [number, number, number],
+            translation: readonly [number, number, number],
+            angular: readonly [number, number, number],
+          ): void {
+            const angle = Math.hypot(angular[0], angular[1], angular[2]);
+            let ux = 0, uy = 0, uz = 0, cosine = 1, sine = 0, oneMinusCosine = 0;
+            if (angle > INITIAL_DEPENETRATION_EPSILON_M) {
+              ux = angular[0] / angle; uy = angular[1] / angle; uz = angular[2] / angle;
+              cosine = Math.cos(angle); sine = Math.sin(angle); oneMinusCosine = 1 - cosine;
+            }
+            for (const particle of particles) {
+              const offset = particle * 3;
+              const x = positions[offset] - centroid[0];
+              const y = positions[offset + 1] - centroid[1];
+              const z = positions[offset + 2] - centroid[2];
+              if (angle > INITIAL_DEPENETRATION_EPSILON_M) {
+                const crossX = uy * z - uz * y;
+                const crossY = uz * x - ux * z;
+                const crossZ = ux * y - uy * x;
+                const dot = ux * x + uy * y + uz * z;
+                positions[offset] = centroid[0] + translation[0] + x * cosine + crossX * sine + ux * dot * oneMinusCosine;
+                positions[offset + 1] = centroid[1] + translation[1] + y * cosine + crossY * sine + uy * dot * oneMinusCosine;
+                positions[offset + 2] = centroid[2] + translation[2] + z * cosine + crossZ * sine + uz * dot * oneMinusCosine;
+              } else {
+                positions[offset] += translation[0];
+                positions[offset + 1] += translation[1];
+                positions[offset + 2] += translation[2];
+              }
+            }
+          }
+
+          function projectInitialRigidSeams(
+            positions: Float32Array,
+            seams: BodyInitialSeamConstraints,
+            targets: Float64Array,
+            panels: readonly (readonly number[])[],
+            panelByParticle: Int32Array,
+            inverseMasses: Float32Array | undefined,
+            limit: number,
+          ): void {
+            const properties = panels.map((panel) => initialRigidPanelProperties(positions, panel, inverseMasses));
+            const maximumAngularCorrection = 0.04;
+            for (let seam = 0; seam < targets.length; seam += 1) {
+              const panelA = initialSeamSidePanel(seams, seam, 0, panelByParticle);
+              const panelB = initialSeamSidePanel(seams, seam, 1, panelByParticle);
+              if (panelA < 0 || panelB < 0 || panelA === panelB) continue;
+              const propertyA = properties[panelA];
+              const propertyB = properties[panelB];
+              if (propertyA.inverseMass <= 0 && propertyB.inverseMass <= 0) continue;
+              const anchors = initialSeamAnchors(positions, seams, seam);
+              const dx = anchors.b[0] - anchors.a[0];
+              const dy = anchors.b[1] - anchors.a[1];
+              const dz = anchors.b[2] - anchors.a[2];
+              const length = Math.hypot(dx, dy, dz);
+              if (length <= EPSILON) continue;
+              const constraint = length - targets[seam];
+              if (Math.abs(constraint) <= INITIAL_DEPENETRATION_EPSILON_M) continue;
+              const nx = dx / length, ny = dy / length, nz = dz / length;
+              const rA: [number, number, number] = [
+                anchors.a[0] - propertyA.centroid[0],
+                anchors.a[1] - propertyA.centroid[1],
+                anchors.a[2] - propertyA.centroid[2],
+              ];
+              const rB: [number, number, number] = [
+                anchors.b[0] - propertyB.centroid[0],
+                anchors.b[1] - propertyB.centroid[1],
+                anchors.b[2] - propertyB.centroid[2],
+              ];
+              const crossA: [number, number, number] = [
+                rA[1] * nz - rA[2] * ny,
+                rA[2] * nx - rA[0] * nz,
+                rA[0] * ny - rA[1] * nx,
+              ];
+              const crossB: [number, number, number] = [
+                rB[1] * nz - rB[2] * ny,
+                rB[2] * nx - rB[0] * nz,
+                rB[0] * ny - rB[1] * nx,
+              ];
+              const inertiaA = multiplyInitialMatrixVector(propertyA.inverseInertia, crossA);
+              const inertiaB = multiplyInitialMatrixVector(propertyB.inverseInertia, crossB);
+              const rotationalWeightA = crossA[0] * inertiaA[0] + crossA[1] * inertiaA[1] + crossA[2] * inertiaA[2];
+              const rotationalWeightB = crossB[0] * inertiaB[0] + crossB[1] * inertiaB[1] + crossB[2] * inertiaB[2];
+              const effectiveMass = propertyA.inverseMass + propertyB.inverseMass
+                + Math.max(0, rotationalWeightA) + Math.max(0, rotationalWeightB);
+              if (!Number.isFinite(effectiveMass) || effectiveMass <= EPSILON) continue;
+              let multiplier = constraint / effectiveMass;
+              let translationA: [number, number, number] = [
+                nx * propertyA.inverseMass * multiplier,
+                ny * propertyA.inverseMass * multiplier,
+                nz * propertyA.inverseMass * multiplier,
+              ];
+              let translationB: [number, number, number] = [
+                -nx * propertyB.inverseMass * multiplier,
+                -ny * propertyB.inverseMass * multiplier,
+                -nz * propertyB.inverseMass * multiplier,
+              ];
+              let angularA: [number, number, number] = [inertiaA[0] * multiplier, inertiaA[1] * multiplier, inertiaA[2] * multiplier];
+              let angularB: [number, number, number] = [-inertiaB[0] * multiplier, -inertiaB[1] * multiplier, -inertiaB[2] * multiplier];
+              const translationMagnitudeA = Math.hypot(...translationA);
+              const translationMagnitudeB = Math.hypot(...translationB);
+              const angularMagnitudeA = Math.hypot(...angularA);
+              const angularMagnitudeB = Math.hypot(...angularB);
+              let scale = 1;
+              if (translationMagnitudeA > limit) scale = Math.min(scale, limit / translationMagnitudeA);
+              if (translationMagnitudeB > limit) scale = Math.min(scale, limit / translationMagnitudeB);
+              if (angularMagnitudeA > maximumAngularCorrection) scale = Math.min(scale, maximumAngularCorrection / angularMagnitudeA);
+              if (angularMagnitudeB > maximumAngularCorrection) scale = Math.min(scale, maximumAngularCorrection / angularMagnitudeB);
+              if (!Number.isFinite(scale) || scale <= 0) continue;
+              if (scale < 1) {
+                translationA = [translationA[0] * scale, translationA[1] * scale, translationA[2] * scale];
+                translationB = [translationB[0] * scale, translationB[1] * scale, translationB[2] * scale];
+                angularA = [angularA[0] * scale, angularA[1] * scale, angularA[2] * scale];
+                angularB = [angularB[0] * scale, angularB[1] * scale, angularB[2] * scale];
+              }
+              applyInitialRigidPanelDelta(positions, panels[panelA], propertyA.centroid, translationA, angularA);
+              applyInitialRigidPanelDelta(positions, panels[panelB], propertyB.centroid, translationB, angularB);
+              propertyA.centroid[0] += translationA[0]; propertyA.centroid[1] += translationA[1]; propertyA.centroid[2] += translationA[2];
+              propertyB.centroid[0] += translationB[0]; propertyB.centroid[1] += translationB[1]; propertyB.centroid[2] += translationB[2];
+            }
+          }
+
+          '''
+          one(marker, helpers + marker, 'rigid seam helpers')
+          p.write_text(s, encoding='utf-8', newline='\n')
+          PY
+          git diff --check
+          git diff --stat
+      - name: Publish WIP candidate
+        id: publish
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/physics/bodyCollisionExact.test.ts
+          git rm -- .github/workflows/recovery-11-0-5-rigid-seam-pbd.yml
+          git commit -m "wip(11.0.5): solve STEP-0 seams as rigid-body constraints"
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
+      - name: Focused tests
+        id: focused
+        continue-on-error: true
+        run: npm run test --workspace @moldeon/web -- bodyCollisionExact.test.ts XpbdWorkerState.test.ts exactBodyGarmentGate.test.ts
+      - name: Clean failed candidate
+        if: steps.focused.outcome != 'success'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-commit "${{ steps.publish.outputs.candidate_sha }}"
+          git rm -f --ignore-unmatch -- .github/workflows/recovery-11-0-5-rigid-seam-pbd.yml
+          git diff --cached --check
+          git commit -m "revert(11.0.5): restore pre-rigid-seam-PBD state"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
+          exit 1
+      - name: Typecheck
+        if: steps.focused.outcome == 'success'
+        run: npm run typecheck --workspace @moldeon/web
+      - name: Build
+        if: steps.focused.outcome == 'success'
+        run: npm run build --workspace @moldeon/web
