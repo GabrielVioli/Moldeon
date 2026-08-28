@@ -47,8 +47,16 @@ jobs:
           Path('/tmp/apply-11-0-6.py').write_bytes(zlib.decompress(base64.b64decode(payload)))
           PY
           python3 /tmp/apply-11-0-6.py
-          echo '--- BodyReference2D first 45 lines ---'
-          nl -ba apps/web/src/components/BodyReference2D.tsx | sed -n '1,45p'
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/web/src/components/BodyReference2D.tsx')
+          text = path.read_text()
+          broken = '\n**()\n * Presentation-only origin for the canonical body projection.'
+          fixed = '\n/**\n * Presentation-only origin for the canonical body projection.'
+          if broken not in text:
+              raise SystemExit('Expected BodyReference2D comment marker was not found')
+          path.write_text(text.replace(broken, fixed, 1))
+          PY
           git diff --check
           if git diff --name-only | grep -E '^(apps/web/src/physics/|apps/web/src/garment3d/bodyCollision\.ts$|apps/web/src/garment3d/exactBodySurface\.ts$|apps/web/src/garment3d/xpbd\.ts$)'; then
             echo 'Forbidden physics change detected.' >&2
