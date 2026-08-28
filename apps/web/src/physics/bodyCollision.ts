@@ -22,12 +22,6 @@ const EXACT_LOCAL_SIGN_BAND_M = 0.001;
 const INITIAL_DEPENETRATION_MAX_PASSES = 8;
 const INITIAL_DEPENETRATION_MAX_TOTAL_TRANSLATION_M = 0.12;
 const INITIAL_DEPENETRATION_EPSILON_M = 1e-6;
-const INITIAL_ISOMETRIC_TARGET_PENETRATION_M = 0.0045;
-const INITIAL_ISOMETRIC_PENETRATION_TOLERANCE_M = 0.00005;
-const INITIAL_ISOMETRIC_PROJECTION_SWEEPS = 32;
-const INITIAL_ISOMETRIC_EDGE_RELATIVE_TOLERANCE = 0.005;
-const INITIAL_ISOMETRIC_SEAM_DISTANCE_TOLERANCE_M = 0.0005;
-const INITIAL_SEAM_MISSING_PARTICLE = 0xffffffff;
 
 export interface SimulationBodyTransform {
   translation: readonly [number, number, number];
@@ -77,11 +71,6 @@ export interface BodyContactQuery {
   swept: boolean;
 }
 
-export interface BodyInitialSeamConstraints {
-  indices: Uint32Array;
-  weights: Float32Array;
-}
-
 export interface BodyCollisionRuntimeState {
   enabled: boolean;
   colliders: PackedBodyColliders;
@@ -95,7 +84,7 @@ export interface BodyCollisionRuntimeState {
   exactSignWitnessDistanceM: Float32Array;
   /** Historical STEP-0 diagnostic. Never used to suppress dynamic contact. */
   deepInitialOverlapMask: Uint8Array;
-  /** Temporary only while synchronous STEP-0 depenetration is running. */
+  /** Temporary only while synchronous STEP-0 rigid depenetration is running. */
   initialOverlapGuardMask: Uint8Array;
   initialOverlapUnresolved: boolean;
   initialDepenetrationPasses: number;
@@ -360,7 +349,6 @@ export function initializeBodyDressing(
   maximumCorrectionM: number,
   clothTriangles?: Uint32Array,
   inverseMasses?: Float32Array,
-  clothSeams?: BodyInitialSeamConstraints,
 ): void {
   body.dressingStepsRemaining = 0;
   body.initialDressingSteps = 0;
@@ -382,30 +370,41 @@ export function initializeBodyDressing(
   const particleCount = positions.length / 3;
   if (body.exactSurface) {
     const initial = primeExactInitialContacts(body, positions, true);
+    maximumPenetrationM = initial.maximumPenetrationM;
     body.deepOverlapCount = initial.deepOverlapCount;
     body.initialIntersectionCount = initial.intersectionCount;
     if (initial.deepOverlapCount > 0) {
-      const recovered = clothTriangles && clothSeams && clothSeams.indices.length >= 4 && clothSeams.weights.length >= 4
-        ? recoverSewnInitialExactOverlap(body, positions, maximumCorrectionM, clothTriangles, inverseMasses, clothSeams)
-        : recoverDeepInitialExactOverlap(body, positions, maximumCorrectionM, clothTriangles, inverseMasses);
+      const recovered = recoverDeepInitialExactOverlap(
+        body,
+        positions,
+        maximumCorrectionM,
+        clothTriangles,
+        inverseMasses,
+      );
+      // Rigid recovery moves the query points, so every temporal witness must
+      // be re-primed before ordinary exact contact takes ownership.
       resetExactContactCache(body);
-      primeExactInitialContacts(body, positions, false);
+      const afterRecovery = primeExactInitialContacts(body, positions, false);
+      maximumPenetrationM = afterRecovery.maximumPenetrationM;
       if (!recovered) {
         body.structuralContactDeferred = true;
         return;
       }
     }
-    return;
-  }
-
-  for (let particle = 0; particle < particleCount; particle += 1) {
-    const offset = particle * 3;
-    const point: [number, number, number] = [positions[offset], positions[offset + 1], positions[offset + 2]];
-    const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
-    const contact = deepestBodyContact(point, body.colliders, clearance);
-    if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
+  } else {
+    for (let particle = 0; particle < particleCount; particle += 1) {
+      const offset = particle * 3;
+      const point: [number, number, number] = [positions[offset], positions[offset + 1], positions[offset + 2]];
+      const clearance = body.particleHalfThicknessM[particle] + body.contactSkinM;
+      const contact = deepestBodyContact(point, body.colliders, clearance);
+      if (contact) maximumPenetrationM = Math.max(maximumPenetrationM, contact.penetrationM);
+    }
   }
   if (maximumPenetrationM <= EPSILON) return;
+
+  // Each gross projection is capped by maximumCorrectionM. Two passes per
+  // theoretical minimum leave room for structural constraints to relax between
+  // depenetrations without a garment-specific staging duration.
   const minimumGrossPasses = Math.ceil(maximumPenetrationM / maximumCorrectionM);
   body.initialDressingSteps = Math.max(1, minimumGrossPasses * 2);
   body.dressingStepsRemaining = body.initialDressingSteps;
@@ -1179,568 +1178,6 @@ function primeExactInitialContacts(
     }
   }
   return { maximumPenetrationM, deepOverlapCount, intersectionCount };
-}
-
-function recoverSewnInitialExactOverlap(
-  body: BodyCollisionRuntimeState,
-  positions: Float32Array,
-  maximumCorrectionM: number,
-  clothTriangles: Uint32Array,
-  inverseMasses: Float32Array | undefined,
-  clothSeams: BodyInitialSeamConstraints,
-): boolean {
-  const original = new Float32Array(positions);
-  const edges = buildInitialEdgeConstraints(original, clothTriangles);
-  const rigidPanels = buildInitialRigidPanels(positions.length / 3, clothTriangles);
-  const panelByParticle = buildInitialPanelIndex(positions.length / 3, rigidPanels);
-  const seamTargets = captureInitialSeamDistances(original, clothSeams);
-  const correctionLimit = Math.max(INITIAL_DEPENETRATION_EPSILON_M, Math.min(
-    maximumCorrectionM,
-    INITIAL_DEPENETRATION_MAX_TOTAL_TRANSLATION_M / INITIAL_DEPENETRATION_MAX_PASSES,
-  ));
-  let maximumDisplacementM = 0;
-  let resolved = false;
-  let passes = 0;
-  body.initialOverlapGuardMask.set(body.deepInitialOverlapMask);
-  if (inverseMasses && rigidPanels.some((panel) =>
-    panel.some((particle) => body.deepInitialOverlapMask[particle] !== 0)
-      && panel.some((particle) => inverseMasses[particle] <= 0))) {
-    body.initialOverlapGuardMask.fill(0);
-    body.initialOverlapUnresolved = true;
-    return false;
-  }
-  const sweepCorrectionLimit = Math.max(
-    INITIAL_DEPENETRATION_EPSILON_M,
-    correctionLimit / 8,
-  );
-  for (let pass = 0; pass < INITIAL_DEPENETRATION_MAX_PASSES; pass += 1) {
-    for (let sweep = 0; sweep < INITIAL_ISOMETRIC_PROJECTION_SWEEPS; sweep += 1) {
-      projectInitialExactClearance(body, positions, inverseMasses, sweepCorrectionLimit);
-      projectInitialRigidPanels(original, positions, rigidPanels);
-      projectInitialRigidSeams(positions, clothSeams, seamTargets, rigidPanels, panelByParticle, inverseMasses, sweepCorrectionLimit);
-      projectInitialRigidPanels(original, positions, rigidPanels);
-    }
-    passes += 1;
-    const displacementM = maximumInitialParticleDisplacement(original, positions);
-    if (!Number.isFinite(displacementM) || displacementM > INITIAL_DEPENETRATION_MAX_TOTAL_TRANSLATION_M + INITIAL_DEPENETRATION_EPSILON_M) break;
-    maximumDisplacementM = Math.max(maximumDisplacementM, displacementM);
-    const penetrationM = maximumInitialExactPenetration(body, positions);
-    const edgeError = maximumInitialEdgeRelativeError(positions, edges);
-    const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);
-    console.log("P1105_BALANCED_RIGID_PASS", JSON.stringify({ pass: pass + 1, penetrationMm: penetrationM * 1000, edgeRelativeError: edgeError, seamErrorMm: seamErrorM * 1000, displacementMm: displacementM * 1000 }));
-    if (Number.isFinite(penetrationM)
-      && penetrationM <= INITIAL_ISOMETRIC_TARGET_PENETRATION_M + INITIAL_ISOMETRIC_PENETRATION_TOLERANCE_M
-      && edgeError <= INITIAL_ISOMETRIC_EDGE_RELATIVE_TOLERANCE
-      && seamErrorM <= INITIAL_ISOMETRIC_SEAM_DISTANCE_TOLERANCE_M) {
-      resolved = true;
-      break;
-    }
-  }
-  if (!resolved) positions.set(original);
-  body.initialOverlapGuardMask.fill(0);
-  body.initialOverlapUnresolved = !resolved;
-  body.initialDepenetrationPasses = passes;
-  body.initialDepenetrationMaximumTranslationM = maximumDisplacementM;
-  return resolved;
-}
-
-interface InitialEdgeConstraint { a: number; b: number; restLengthM: number }
-
-function buildInitialEdgeConstraints(positions: Float32Array, triangles: Uint32Array): InitialEdgeConstraint[] {
-  const edges: InitialEdgeConstraint[] = [];
-  const seen = new Set<string>();
-  const particleCount = positions.length / 3;
-  for (let offset = 0; offset < triangles.length; offset += 3) {
-    const t = [triangles[offset], triangles[offset + 1], triangles[offset + 2]] as const;
-    if (t.some((p) => p >= particleCount)) continue;
-    for (const [a, b] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]] as const) {
-      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const ao = a * 3, bo = b * 3;
-      edges.push({ a, b, restLengthM: Math.hypot(positions[bo] - positions[ao], positions[bo + 1] - positions[ao + 1], positions[bo + 2] - positions[ao + 2]) });
-    }
-  }
-  return edges;
-}
-
-function initialSeamAnchors(positions: Float32Array, seams: BodyInitialSeamConstraints, seam: number): { a: [number, number, number]; b: [number, number, number] } {
-  const a: [number, number, number] = [0, 0, 0];
-  const b: [number, number, number] = [0, 0, 0];
-  const base = seam * 4;
-  const particleCount = positions.length / 3;
-  for (let slot = 0; slot < 4; slot += 1) {
-    const particle = seams.indices[base + slot];
-    if (particle === INITIAL_SEAM_MISSING_PARTICLE || particle >= particleCount) continue;
-    const target = slot < 2 ? a : b;
-    const weight = seams.weights[base + slot];
-    const o = particle * 3;
-    target[0] += positions[o] * weight; target[1] += positions[o + 1] * weight; target[2] += positions[o + 2] * weight;
-  }
-  return { a, b };
-}
-
-function captureInitialSeamDistances(positions: Float32Array, seams: BodyInitialSeamConstraints): Float64Array {
-  const count = Math.floor(Math.min(seams.indices.length, seams.weights.length) / 4);
-  const out = new Float64Array(count);
-  for (let seam = 0; seam < count; seam += 1) {
-    const p = initialSeamAnchors(positions, seams, seam);
-    out[seam] = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1], p.b[2] - p.a[2]);
-  }
-  return out;
-}
-
-function projectInitialExactClearance(body: BodyCollisionRuntimeState, positions: Float32Array, inverseMasses: Float32Array | undefined, limit: number): void {
-  const runtime = body.exactSurface!;
-  for (let particle = 0; particle < positions.length / 3; particle += 1) {
-    if (inverseMasses && inverseMasses[particle] <= 0) continue;
-    const point = particlePoint(positions, particle);
-    const query = closestPointOnExactBody(runtime, point, false);
-    const signed = pointInsideExactBody(runtime, point) ? -query.distanceM : query.distanceM;
-    const penetration = body.particleHalfThicknessM[particle] + body.contactSkinM - signed;
-    if (penetration <= INITIAL_ISOMETRIC_TARGET_PENETRATION_M + INITIAL_DEPENETRATION_EPSILON_M) continue;
-    const correction = Math.min(limit, penetration - INITIAL_ISOMETRIC_TARGET_PENETRATION_M + INITIAL_DEPENETRATION_EPSILON_M);
-    const o = particle * 3;
-    positions[o] += query.normal[0] * correction; positions[o + 1] += query.normal[1] * correction; positions[o + 2] += query.normal[2] * correction;
-  }
-}
-
-function buildInitialRigidPanels(particleCount: number, triangles: Uint32Array): number[][] {
-  const used = new Uint8Array(particleCount);
-  for (const particle of triangles) if (particle < particleCount) used[particle] = 1;
-  return buildClothConnectedComponents(particleCount, triangles)
-    .filter((component) => component.some((particle) => used[particle] !== 0));
-}
-
-function projectInitialRigidPanels(
-  original: Float32Array,
-  positions: Float32Array,
-  panels: readonly (readonly number[])[],
-): void {
-  for (const panel of panels) projectInitialRigidPanel(original, positions, panel);
-}
-
-function projectInitialRigidPanel(
-  original: Float32Array,
-  positions: Float32Array,
-  particles: readonly number[],
-): void {
-  if (particles.length === 0) return;
-  let sourceX = 0, sourceY = 0, sourceZ = 0;
-  let targetX = 0, targetY = 0, targetZ = 0;
-  for (const particle of particles) {
-    const offset = particle * 3;
-    sourceX += original[offset]; sourceY += original[offset + 1]; sourceZ += original[offset + 2];
-    targetX += positions[offset]; targetY += positions[offset + 1]; targetZ += positions[offset + 2];
-  }
-  const inverseCount = 1 / particles.length;
-  sourceX *= inverseCount; sourceY *= inverseCount; sourceZ *= inverseCount;
-  targetX *= inverseCount; targetY *= inverseCount; targetZ *= inverseCount;
-  if (particles.length === 1) {
-    const offset = particles[0] * 3;
-    positions[offset] = targetX; positions[offset + 1] = targetY; positions[offset + 2] = targetZ;
-    return;
-  }
-
-  let sxx = 0, sxy = 0, sxz = 0;
-  let syx = 0, syy = 0, syz = 0;
-  let szx = 0, szy = 0, szz = 0;
-  for (const particle of particles) {
-    const offset = particle * 3;
-    const ax = original[offset] - sourceX;
-    const ay = original[offset + 1] - sourceY;
-    const az = original[offset + 2] - sourceZ;
-    const bx = positions[offset] - targetX;
-    const by = positions[offset + 1] - targetY;
-    const bz = positions[offset + 2] - targetZ;
-    sxx += ax * bx; sxy += ax * by; sxz += ax * bz;
-    syx += ay * bx; syy += ay * by; syz += ay * bz;
-    szx += az * bx; szy += az * by; szz += az * bz;
-  }
-  const horn = [
-    sxx + syy + szz, syz - szy, szx - sxz, sxy - syx,
-    syz - szy, sxx - syy - szz, sxy + syx, szx + sxz,
-    szx - sxz, sxy + syx, -sxx + syy - szz, syz + szy,
-    sxy - syx, szx + sxz, syz + szy, -sxx - syy + szz,
-  ];
-  let shift = 0;
-  for (let row = 0; row < 4; row += 1) {
-    let rowMagnitude = 0;
-    for (let column = 0; column < 4; column += 1) rowMagnitude += Math.abs(horn[row * 4 + column]);
-    shift = Math.max(shift, rowMagnitude);
-  }
-  shift += 1e-12;
-  let qw = 1, qx = 0, qy = 0, qz = 0;
-  for (let iteration = 0; iteration < 24; iteration += 1) {
-    const q = [qw, qx, qy, qz];
-    const next = [0, 0, 0, 0];
-    for (let row = 0; row < 4; row += 1) {
-      for (let column = 0; column < 4; column += 1) {
-        next[row] += (horn[row * 4 + column] + (row === column ? shift : 0)) * q[column];
-      }
-    }
-    const length = Math.hypot(next[0], next[1], next[2], next[3]);
-    if (length <= EPSILON) break;
-    qw = next[0] / length; qx = next[1] / length; qy = next[2] / length; qz = next[3] / length;
-    if (qw < 0) { qw = -qw; qx = -qx; qy = -qy; qz = -qz; }
-  }
-  const xx = qx * qx, yy = qy * qy, zz = qz * qz;
-  const xy = qx * qy, xz = qx * qz, yz = qy * qz;
-  const wx = qw * qx, wy = qw * qy, wz = qw * qz;
-  const r00 = 1 - 2 * (yy + zz), r01 = 2 * (xy - wz), r02 = 2 * (xz + wy);
-  const r10 = 2 * (xy + wz), r11 = 1 - 2 * (xx + zz), r12 = 2 * (yz - wx);
-  const r20 = 2 * (xz - wy), r21 = 2 * (yz + wx), r22 = 1 - 2 * (xx + yy);
-  for (const particle of particles) {
-    const offset = particle * 3;
-    const x = original[offset] - sourceX;
-    const y = original[offset + 1] - sourceY;
-    const z = original[offset + 2] - sourceZ;
-    positions[offset] = targetX + r00 * x + r01 * y + r02 * z;
-    positions[offset + 1] = targetY + r10 * x + r11 * y + r12 * z;
-    positions[offset + 2] = targetZ + r20 * x + r21 * y + r22 * z;
-  }
-}
-
-function projectInitialTriangleEdges(positions: Float32Array, edges: readonly InitialEdgeConstraint[], inverseMasses: Float32Array | undefined, limit: number): void {
-  for (const edge of edges) {
-    const ao = edge.a * 3, bo = edge.b * 3;
-    const dx = positions[bo] - positions[ao], dy = positions[bo + 1] - positions[ao + 1], dz = positions[bo + 2] - positions[ao + 2];
-    const length = Math.hypot(dx, dy, dz); if (length <= EPSILON) continue;
-    const wa = inverseMasses ? Math.max(0, inverseMasses[edge.a]) : 1;
-    const wb = inverseMasses ? Math.max(0, inverseMasses[edge.b]) : 1;
-    const denominator = wa + wb; if (denominator <= EPSILON) continue;
-    let multiplier = (length - edge.restLengthM) / denominator;
-    const maxApplied = Math.max(Math.abs(multiplier * wa), Math.abs(multiplier * wb));
-    if (maxApplied > limit) multiplier *= limit / maxApplied;
-    const nx = dx / length, ny = dy / length, nz = dz / length;
-    const ca = multiplier * wa, cb = multiplier * wb;
-    positions[ao] += nx * ca; positions[ao + 1] += ny * ca; positions[ao + 2] += nz * ca;
-    positions[bo] -= nx * cb; positions[bo + 1] -= ny * cb; positions[bo + 2] -= nz * cb;
-  }
-}
-
-interface InitialRigidPanelProperties {
-  centroid: [number, number, number];
-  inverseMass: number;
-  inverseInertia: [number, number, number, number, number, number, number, number, number];
-}
-
-function buildInitialPanelIndex(
-  particleCount: number,
-  panels: readonly (readonly number[])[],
-): Int32Array {
-  const panelByParticle = new Int32Array(particleCount);
-  panelByParticle.fill(-1);
-  for (let panel = 0; panel < panels.length; panel += 1) {
-    for (const particle of panels[panel]) {
-      if (particle < particleCount) panelByParticle[particle] = panel;
-    }
-  }
-  return panelByParticle;
-}
-
-function initialSeamSidePanel(
-  seams: BodyInitialSeamConstraints,
-  seam: number,
-  side: 0 | 1,
-  panelByParticle: Int32Array,
-): number {
-  const base = seam * 4 + side * 2;
-  let panel = -1;
-  for (let slot = 0; slot < 2; slot += 1) {
-    const index = base + slot;
-    const particle = seams.indices[index];
-    if (particle === INITIAL_SEAM_MISSING_PARTICLE || particle >= panelByParticle.length) continue;
-    if (Math.abs(seams.weights[index]) <= EPSILON) continue;
-    const candidate = panelByParticle[particle];
-    if (candidate < 0) continue;
-    if (panel < 0) panel = candidate;
-    else if (panel !== candidate) return -1;
-  }
-  return panel;
-}
-
-function initialRigidPanelProperties(
-  positions: Float32Array,
-  particles: readonly number[],
-  inverseMasses: Float32Array | undefined,
-): InitialRigidPanelProperties {
-  let fixed = false;
-  let totalMass = 0;
-  let cx = 0, cy = 0, cz = 0;
-  for (const particle of particles) {
-    const inverseMass = inverseMasses ? Math.max(0, inverseMasses[particle] ?? 0) : 1;
-    if (inverseMasses && inverseMass <= EPSILON) fixed = true;
-    const mass = inverseMasses && inverseMass > EPSILON ? 1 / inverseMass : 1;
-    const offset = particle * 3;
-    totalMass += mass;
-    cx += positions[offset] * mass;
-    cy += positions[offset + 1] * mass;
-    cz += positions[offset + 2] * mass;
-  }
-  if (totalMass <= EPSILON) {
-    return { centroid: [0, 0, 0], inverseMass: 0, inverseInertia: [0,0,0,0,0,0,0,0,0] };
-  }
-  cx /= totalMass; cy /= totalMass; cz /= totalMass;
-  if (fixed) {
-    return { centroid: [cx, cy, cz], inverseMass: 0, inverseInertia: [0,0,0,0,0,0,0,0,0] };
-  }
-  let ixx = 0, ixy = 0, ixz = 0, iyy = 0, iyz = 0, izz = 0;
-  for (const particle of particles) {
-    const inverseMass = inverseMasses ? Math.max(0, inverseMasses[particle] ?? 0) : 1;
-    const mass = inverseMasses && inverseMass > EPSILON ? 1 / inverseMass : 1;
-    const offset = particle * 3;
-    const x = positions[offset] - cx;
-    const y = positions[offset + 1] - cy;
-    const z = positions[offset + 2] - cz;
-    ixx += mass * (y * y + z * z);
-    iyy += mass * (x * x + z * z);
-    izz += mass * (x * x + y * y);
-    ixy -= mass * x * y;
-    ixz -= mass * x * z;
-    iyz -= mass * y * z;
-  }
-  const trace = ixx + iyy + izz;
-  const regularization = Math.max(1e-14, trace * 1e-8);
-  const inverseInertia = invertInitialSymmetric3(
-    ixx + regularization, ixy, ixz,
-    iyy + regularization, iyz,
-    izz + regularization,
-  );
-  return { centroid: [cx, cy, cz], inverseMass: 1 / totalMass, inverseInertia };
-}
-
-function invertInitialSymmetric3(
-  a: number, b: number, c: number,
-  d: number, e: number,
-  f: number,
-): [number, number, number, number, number, number, number, number, number] {
-  const aa = d * f - e * e;
-  const ab = c * e - b * f;
-  const ac = b * e - c * d;
-  const dd = a * f - c * c;
-  const de = b * c - a * e;
-  const ff = a * d - b * b;
-  const determinant = a * aa + b * ab + c * ac;
-  if (!Number.isFinite(determinant) || Math.abs(determinant) <= 1e-24) return [0,0,0,0,0,0,0,0,0];
-  const inverseDeterminant = 1 / determinant;
-  return [
-    aa * inverseDeterminant, ab * inverseDeterminant, ac * inverseDeterminant,
-    ab * inverseDeterminant, dd * inverseDeterminant, de * inverseDeterminant,
-    ac * inverseDeterminant, de * inverseDeterminant, ff * inverseDeterminant,
-  ];
-}
-
-function multiplyInitialMatrixVector(
-  matrix: readonly number[],
-  vector: readonly [number, number, number],
-): [number, number, number] {
-  return [
-    matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2],
-    matrix[3] * vector[0] + matrix[4] * vector[1] + matrix[5] * vector[2],
-    matrix[6] * vector[0] + matrix[7] * vector[1] + matrix[8] * vector[2],
-  ];
-}
-
-function applyInitialRigidPanelDelta(
-  positions: Float32Array,
-  particles: readonly number[],
-  centroid: readonly [number, number, number],
-  translation: readonly [number, number, number],
-  angular: readonly [number, number, number],
-): void {
-  const angle = Math.hypot(angular[0], angular[1], angular[2]);
-  let ux = 0, uy = 0, uz = 0, cosine = 1, sine = 0, oneMinusCosine = 0;
-  if (angle > INITIAL_DEPENETRATION_EPSILON_M) {
-    ux = angular[0] / angle; uy = angular[1] / angle; uz = angular[2] / angle;
-    cosine = Math.cos(angle); sine = Math.sin(angle); oneMinusCosine = 1 - cosine;
-  }
-  for (const particle of particles) {
-    const offset = particle * 3;
-    const x = positions[offset] - centroid[0];
-    const y = positions[offset + 1] - centroid[1];
-    const z = positions[offset + 2] - centroid[2];
-    if (angle > INITIAL_DEPENETRATION_EPSILON_M) {
-      const crossX = uy * z - uz * y;
-      const crossY = uz * x - ux * z;
-      const crossZ = ux * y - uy * x;
-      const dot = ux * x + uy * y + uz * z;
-      positions[offset] = centroid[0] + translation[0] + x * cosine + crossX * sine + ux * dot * oneMinusCosine;
-      positions[offset + 1] = centroid[1] + translation[1] + y * cosine + crossY * sine + uy * dot * oneMinusCosine;
-      positions[offset + 2] = centroid[2] + translation[2] + z * cosine + crossZ * sine + uz * dot * oneMinusCosine;
-    } else {
-      positions[offset] += translation[0];
-      positions[offset + 1] += translation[1];
-      positions[offset + 2] += translation[2];
-    }
-  }
-}
-
-function projectInitialRigidSeams(
-  positions: Float32Array,
-  seams: BodyInitialSeamConstraints,
-  targets: Float64Array,
-  panels: readonly (readonly number[])[],
-  panelByParticle: Int32Array,
-  inverseMasses: Float32Array | undefined,
-  limit: number,
-): void {
-  const properties = panels.map((panel) => initialRigidPanelProperties(positions, panel, inverseMasses));
-  const maximumAngularCorrection = 0.04;
-  for (let seam = 0; seam < targets.length; seam += 1) {
-    const panelA = initialSeamSidePanel(seams, seam, 0, panelByParticle);
-    const panelB = initialSeamSidePanel(seams, seam, 1, panelByParticle);
-    if (panelA < 0 || panelB < 0 || panelA === panelB) continue;
-    const propertyA = properties[panelA];
-    const propertyB = properties[panelB];
-    if (propertyA.inverseMass <= 0 && propertyB.inverseMass <= 0) continue;
-    const anchors = initialSeamAnchors(positions, seams, seam);
-    const dx = anchors.b[0] - anchors.a[0];
-    const dy = anchors.b[1] - anchors.a[1];
-    const dz = anchors.b[2] - anchors.a[2];
-    const length = Math.hypot(dx, dy, dz);
-    if (length <= EPSILON) continue;
-    const constraint = length - targets[seam];
-    if (Math.abs(constraint) <= INITIAL_DEPENETRATION_EPSILON_M) continue;
-    const nx = dx / length, ny = dy / length, nz = dz / length;
-    const rA: [number, number, number] = [
-      anchors.a[0] - propertyA.centroid[0],
-      anchors.a[1] - propertyA.centroid[1],
-      anchors.a[2] - propertyA.centroid[2],
-    ];
-    const rB: [number, number, number] = [
-      anchors.b[0] - propertyB.centroid[0],
-      anchors.b[1] - propertyB.centroid[1],
-      anchors.b[2] - propertyB.centroid[2],
-    ];
-    const crossA: [number, number, number] = [
-      rA[1] * nz - rA[2] * ny,
-      rA[2] * nx - rA[0] * nz,
-      rA[0] * ny - rA[1] * nx,
-    ];
-    const crossB: [number, number, number] = [
-      rB[1] * nz - rB[2] * ny,
-      rB[2] * nx - rB[0] * nz,
-      rB[0] * ny - rB[1] * nx,
-    ];
-    const inertiaA = multiplyInitialMatrixVector(propertyA.inverseInertia, crossA);
-    const inertiaB = multiplyInitialMatrixVector(propertyB.inverseInertia, crossB);
-    const rotationalWeightA = crossA[0] * inertiaA[0] + crossA[1] * inertiaA[1] + crossA[2] * inertiaA[2];
-    const rotationalWeightB = crossB[0] * inertiaB[0] + crossB[1] * inertiaB[1] + crossB[2] * inertiaB[2];
-    const effectiveMass = propertyA.inverseMass + propertyB.inverseMass
-      + Math.max(0, rotationalWeightA) + Math.max(0, rotationalWeightB);
-    if (!Number.isFinite(effectiveMass) || effectiveMass <= EPSILON) continue;
-    let multiplier = constraint / effectiveMass;
-    let translationA: [number, number, number] = [
-      nx * propertyA.inverseMass * multiplier,
-      ny * propertyA.inverseMass * multiplier,
-      nz * propertyA.inverseMass * multiplier,
-    ];
-    let translationB: [number, number, number] = [
-      -nx * propertyB.inverseMass * multiplier,
-      -ny * propertyB.inverseMass * multiplier,
-      -nz * propertyB.inverseMass * multiplier,
-    ];
-    let angularA: [number, number, number] = [inertiaA[0] * multiplier, inertiaA[1] * multiplier, inertiaA[2] * multiplier];
-    let angularB: [number, number, number] = [-inertiaB[0] * multiplier, -inertiaB[1] * multiplier, -inertiaB[2] * multiplier];
-    const translationMagnitudeA = Math.hypot(...translationA);
-    const translationMagnitudeB = Math.hypot(...translationB);
-    const angularMagnitudeA = Math.hypot(...angularA);
-    const angularMagnitudeB = Math.hypot(...angularB);
-    let scale = 1;
-    if (translationMagnitudeA > limit) scale = Math.min(scale, limit / translationMagnitudeA);
-    if (translationMagnitudeB > limit) scale = Math.min(scale, limit / translationMagnitudeB);
-    if (angularMagnitudeA > maximumAngularCorrection) scale = Math.min(scale, maximumAngularCorrection / angularMagnitudeA);
-    if (angularMagnitudeB > maximumAngularCorrection) scale = Math.min(scale, maximumAngularCorrection / angularMagnitudeB);
-    if (!Number.isFinite(scale) || scale <= 0) continue;
-    if (scale < 1) {
-      translationA = [translationA[0] * scale, translationA[1] * scale, translationA[2] * scale];
-      translationB = [translationB[0] * scale, translationB[1] * scale, translationB[2] * scale];
-      angularA = [angularA[0] * scale, angularA[1] * scale, angularA[2] * scale];
-      angularB = [angularB[0] * scale, angularB[1] * scale, angularB[2] * scale];
-    }
-    applyInitialRigidPanelDelta(positions, panels[panelA], propertyA.centroid, translationA, angularA);
-    applyInitialRigidPanelDelta(positions, panels[panelB], propertyB.centroid, translationB, angularB);
-    propertyA.centroid[0] += translationA[0]; propertyA.centroid[1] += translationA[1]; propertyA.centroid[2] += translationA[2];
-    propertyB.centroid[0] += translationB[0]; propertyB.centroid[1] += translationB[1]; propertyB.centroid[2] += translationB[2];
-  }
-}
-
-function projectInitialSeams(positions: Float32Array, seams: BodyInitialSeamConstraints, targets: Float64Array, inverseMasses: Float32Array | undefined, limit: number): void {
-  const particleCount = positions.length / 3;
-  for (let seam = 0; seam < targets.length; seam += 1) {
-    const base = seam * 4;
-    const anchors = initialSeamAnchors(positions, seams, seam);
-    const dx = anchors.b[0] - anchors.a[0], dy = anchors.b[1] - anchors.a[1], dz = anchors.b[2] - anchors.a[2];
-    const length = Math.hypot(dx, dy, dz); if (length <= EPSILON) continue;
-    const particles: number[] = [], coefficients: number[] = [];
-    for (let slot = 0; slot < 4; slot += 1) {
-      const particle = seams.indices[base + slot];
-      if (particle === INITIAL_SEAM_MISSING_PARTICLE || particle >= particleCount) continue;
-      const coefficient = (slot < 2 ? -1 : 1) * seams.weights[base + slot];
-      if (Math.abs(coefficient) <= EPSILON) continue;
-      const existing = particles.indexOf(particle);
-      if (existing >= 0) coefficients[existing] += coefficient; else { particles.push(particle); coefficients.push(coefficient); }
-    }
-    let denominator = 0;
-    for (let i = 0; i < particles.length; i += 1) {
-      const inv = inverseMasses ? Math.max(0, inverseMasses[particles[i]]) : 1;
-      denominator += inv * coefficients[i] * coefficients[i];
-    }
-    if (denominator <= EPSILON) continue;
-    let multiplier = -(length - targets[seam]) / denominator;
-    let maxApplied = 0;
-    for (let i = 0; i < particles.length; i += 1) {
-      const inv = inverseMasses ? Math.max(0, inverseMasses[particles[i]]) : 1;
-      maxApplied = Math.max(maxApplied, Math.abs(multiplier * coefficients[i] * inv));
-    }
-    if (maxApplied > limit) multiplier *= limit / maxApplied;
-    const nx = dx / length, ny = dy / length, nz = dz / length;
-    for (let i = 0; i < particles.length; i += 1) {
-      const particle = particles[i]; const inv = inverseMasses ? Math.max(0, inverseMasses[particle]) : 1;
-      const c = multiplier * coefficients[i] * inv; const o = particle * 3;
-      positions[o] += nx * c; positions[o + 1] += ny * c; positions[o + 2] += nz * c;
-    }
-  }
-}
-
-function maximumInitialExactPenetration(body: BodyCollisionRuntimeState, positions: Float32Array): number {
-  const runtime = body.exactSurface!; let maximum = 0;
-  for (let particle = 0; particle < positions.length / 3; particle += 1) {
-    const point = particlePoint(positions, particle); const query = closestPointOnExactBody(runtime, point, false);
-    const signed = pointInsideExactBody(runtime, point) ? -query.distanceM : query.distanceM;
-    maximum = Math.max(maximum, body.particleHalfThicknessM[particle] + body.contactSkinM - signed);
-  }
-  return maximum;
-}
-
-function maximumInitialEdgeRelativeError(positions: Float32Array, edges: readonly InitialEdgeConstraint[]): number {
-  let maximum = 0;
-  for (const edge of edges) { if (edge.restLengthM <= EPSILON) continue; const ao = edge.a * 3, bo = edge.b * 3;
-    const length = Math.hypot(positions[bo] - positions[ao], positions[bo + 1] - positions[ao + 1], positions[bo + 2] - positions[ao + 2]);
-    maximum = Math.max(maximum, Math.abs(length - edge.restLengthM) / edge.restLengthM); }
-  return maximum;
-}
-
-function maximumInitialSeamDistanceError(positions: Float32Array, seams: BodyInitialSeamConstraints, targets: Float64Array): number {
-  let maximum = 0;
-  for (let seam = 0; seam < targets.length; seam += 1) { const p = initialSeamAnchors(positions, seams, seam);
-    maximum = Math.max(maximum, Math.abs(Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1], p.b[2] - p.a[2]) - targets[seam])); }
-  return maximum;
-}
-
-function clampInitialRecoveryDisplacements(original: Float32Array, positions: Float32Array, limit: number): void {
-  for (let particle = 0; particle < positions.length / 3; particle += 1) { const o = particle * 3;
-    const dx = positions[o] - original[o], dy = positions[o + 1] - original[o + 1], dz = positions[o + 2] - original[o + 2]; const d = Math.hypot(dx, dy, dz);
-    if (d <= limit || d <= EPSILON) continue; const scale = limit / d;
-    positions[o] = original[o] + dx * scale; positions[o + 1] = original[o + 1] + dy * scale; positions[o + 2] = original[o + 2] + dz * scale; }
-}
-
-function maximumInitialParticleDisplacement(original: Float32Array, positions: Float32Array): number {
-  let maximum = 0;
-  for (let particle = 0; particle < positions.length / 3; particle += 1) { const o = particle * 3;
-    maximum = Math.max(maximum, Math.hypot(positions[o] - original[o], positions[o + 1] - original[o + 1], positions[o + 2] - original[o + 2])); }
-  return maximum;
 }
 
 function recoverDeepInitialExactOverlap(
