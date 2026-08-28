@@ -23,7 +23,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git revert --no-commit 1b06c6bd8c40a4ba95e8257068052717d0fc1816
-          git rm --ignore-unmatch -- .github/workflows/recovery-11-0-5-isometric-candidate.yml .github/workflows/recovery-11-0-5-isometric-runner.yml .github/workflows/recovery-11-0-5-revert-isometric.yml
+          git rm -f --ignore-unmatch -- .github/workflows/recovery-11-0-5-isometric-candidate.yml .github/workflows/recovery-11-0-5-isometric-runner.yml .github/workflows/recovery-11-0-5-revert-isometric.yml
           git diff --cached --check
           git status --short
           git commit -m "revert(11.0.5): restore pre-isometric recovery state"
