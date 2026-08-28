@@ -1,0 +1,38 @@
+name: Build mobile preview artifact
+
+on:
+  push:
+    branches:
+      - "deploy/11.0.6-mobile-preview"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: moldeon-mobile-preview-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 1
