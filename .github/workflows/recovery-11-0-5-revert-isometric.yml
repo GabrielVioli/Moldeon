@@ -1,0 +1,30 @@
+name: recovery-11-0-5-revert-isometric
+
+on:
+  push:
+    branches:
+      - recovery/11.0.5-exact-human-surface-contact
+
+permissions:
+  contents: write
+
+jobs:
+  revert-candidate:
+    if: "github.event.head_commit.message == 'chore(11.0.5): revert failed isometric candidate'"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.5-exact-human-surface-contact
+          fetch-depth: 0
+      - name: Restore pre-candidate physics only
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-commit 1b06c6bd8c40a4ba95e8257068052717d0fc1816
+          git rm --ignore-unmatch -- .github/workflows/recovery-11-0-5-isometric-candidate.yml .github/workflows/recovery-11-0-5-isometric-runner.yml .github/workflows/recovery-11-0-5-revert-isometric.yml
+          git diff --cached --check
+          git status --short
+          git commit -m "revert(11.0.5): restore pre-isometric recovery state"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
