@@ -38,14 +38,23 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
   const transform = workspace?.transform
     ?? garment.workspaceTransforms?.find((entry) => entry.pieceId === activePieceId)
     ?? { pieceId: activePieceId, xMm: 0, yMm: 0, rotationDeg: 0 };
+  const selectedAnchorId = piece?.previewPlacements?.find(
+    (placement) => placement.id === createPanelInstanceId(piece.id, safeCopyIndex),
+  )?.bodyAnchorId ?? piece?.bodyPlacement?.anchorId;
   const pieceBounds = piece ? localBoundsFromPoints(samplePatternContour(piece.points)) : undefined;
   const originWorld = {
     xMm: transform.xMm + ((pieceBounds?.minX ?? 0) + (pieceBounds?.maxX ?? 0)) * 0.5,
-    yMm: transform.yMm + (pieceBounds?.minY ?? 0),
+    yMm: transform.yMm + ((pieceBounds?.minY ?? 0) + (pieceBounds?.maxY ?? 0)) * 0.5,
   };
+  const defaultFocusAnchorId: BodyAnchorId = view === "back" ? "torso-back" : "torso-front";
+  const selectedProjectionAnchor = projection?.anchors.find((anchor) => anchor.id === selectedAnchorId);
+  const focusAnchorId = selectedProjectionAnchor && selectedProjectionAnchor.facing >= -0.05
+    ? selectedProjectionAnchor.id
+    : defaultFocusAnchorId;
+  const bodyFocusMm = projection?.anchors.find((anchor) => anchor.id === focusAnchorId) ?? { xMm: 0, yMm: 0 };
   const toScreen = (point: BodyProjectionPoint2D) => camera && projection ? worldToScreen({
-    xMm: originWorld.xMm + point.xMm,
-    yMm: originWorld.yMm + point.yMm - projection.boundsMm.minY,
+    xMm: originWorld.xMm + point.xMm - bodyFocusMm.xMm,
+    yMm: originWorld.yMm + point.yMm - bodyFocusMm.yMm,
   }, camera) : { x: 0, y: 0 };
   const silhouettePath = camera && projection
     ? projection.silhouette.map((segment) => {
@@ -54,10 +63,6 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
         return `M${start.x.toFixed(2)} ${start.y.toFixed(2)}L${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
       }).join("")
     : "";
-  const selectedAnchorId = piece?.previewPlacements?.find(
-    (placement) => placement.id === createPanelInstanceId(piece.id, safeCopyIndex),
-  )?.bodyAnchorId ?? piece?.bodyPlacement?.anchorId;
-
   const applyAnchor = (anchorId: BodyAnchorId) => {
     if (!piece) return;
     const specification = bodyAnchorSpecification(anchorId);
@@ -127,7 +132,7 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
               })}
             </>
           ) : null}
-          {projection.anchors.map((anchor) => {
+          {projection.anchors.filter((anchor) => anchor.facing >= -0.05).map((anchor) => {
             const point = toScreen(anchor);
             const selected = anchor.id === selectedAnchorId;
             return (
