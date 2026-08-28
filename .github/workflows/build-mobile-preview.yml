@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - "deploy/11.0.6-mobile-preview"
+    paths:
+      - ".github/workflows/build-mobile-preview.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -16,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: "deploy/11.0.6-mobile-preview"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,10 +33,19 @@ jobs:
       - name: Build web
         run: npm run build:web
 
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: moldeon-mobile-preview-dist
-          path: apps/web/dist
-          if-no-files-found: error
-          retention-days: 1
+      - name: Publish static preview files on temp deploy branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf preview-dist
+          mkdir -p preview-dist
+          cp -a apps/web/dist/. preview-dist/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add preview-dist
+          if git diff --cached --quiet; then
+            echo "preview-dist already current"
+            exit 0
+          fi
+          git commit -m "chore(deploy): publish mobile preview dist"
+          git push origin HEAD:deploy/11.0.6-mobile-preview
