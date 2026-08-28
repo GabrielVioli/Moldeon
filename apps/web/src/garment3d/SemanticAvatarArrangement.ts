@@ -184,9 +184,13 @@ export function buildSemanticAvatarArrangement(
     if (!piece || invalidPieceIds.has(instance.pieceId)) continue;
     const anchor = resolveAvatarAnchor(avatar, instance.placement);
     if (!anchor) {
-      // Body placement is an optional hint. A valid included panel with material
-      // seams must still enter structural assembly when it is manual/unclassified.
-      visibleInstanceIds.add(instance.id);
+      diagnostics.push({
+        code: "missing-anchor",
+        severity: "warning",
+        pieceId: instance.pieceId,
+        instanceId: instance.id,
+        message: `${piece.name} · ${instance.id}: instância sem BodyAnchorId explícito; omitida do arrangement corporal.`,
+      });
       continue;
     }
 

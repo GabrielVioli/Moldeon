@@ -272,6 +272,7 @@ export function migrateProjectV2ToV3(
   return garmentDraftToPatternDocumentV3(garment, {
     activePatternId: project.activePieceId,
     warnings,
+    placementProvenance: "migration",
   });
 }
 
@@ -280,12 +281,14 @@ export function garmentDraftToPatternDocumentV3(
   options: {
     activePatternId?: string;
     warnings?: PatternDocumentMigrationWarning[];
+    placementProvenance?: "editor" | "migration";
   } = {},
 ): PatternDocumentV3 {
   const garment = parseGarmentDraft(garmentValue);
   const warnings = options.warnings ?? [];
+  const placementProvenance = options.placementProvenance ?? "editor";
   const patternDefinitions = garment.pieces.map((piece) =>
-    patternPieceToDefinition(piece, garment, warnings),
+    patternPieceToDefinition(piece, garment, warnings, placementProvenance),
   );
   const panelInstances = derivePanelInstances(patternDefinitions, garment);
   const seamGroups = legacySeamsToGroups(garment.seams ?? [], panelInstances);
@@ -645,6 +648,7 @@ function patternPieceToDefinition(
   pieceValue: PatternPiece,
   garment: GarmentDraft,
   warnings: PatternDocumentMigrationWarning[],
+  placementProvenance: "editor" | "migration",
 ): PatternDefinitionV3 {
   const piece = migrateLegacyPieceToSegments(structuredClone(pieceValue));
   if (!piece.nodes || !piece.segments || !piece.contours) {
@@ -663,7 +667,7 @@ function patternPieceToDefinition(
     name: piece.name,
     sourceTemplateId: garment.templateId,
     semanticRole: inferSemanticRole(piece.id, garment),
-    bodyPlacement: bodyPlacementForPiece(piece, garment),
+    bodyPlacement: bodyPlacementForPiece(piece, garment, placementProvenance),
     geometry: {
       geometryVersion: 2,
       points: structuredClone(piece.points),
@@ -881,6 +885,7 @@ function inferSemanticRole(
 function bodyPlacementForPiece(
   piece: PatternPiece,
   garment: GarmentDraft,
+  placementProvenance: "editor" | "migration",
 ): PatternDefinitionV3["bodyPlacement"] {
   if (piece.bodyPlacement) return structuredClone(piece.bodyPlacement);
   const preview = piece.previewPlacements?.[0];
@@ -899,7 +904,7 @@ function bodyPlacementForPiece(
       rotationXDeg: 0,
       rotationYDeg: 0,
       rotationZDeg: 0,
-      source: "migration",
+      source: placementProvenance === "migration" ? "migration" : "manual",
     };
   }
   const role = inferSemanticRole(piece.id, garment);
@@ -925,7 +930,7 @@ function bodyPlacementForPiece(
     rotationXDeg: assembly?.rotationDeg[0] ?? 0,
     rotationYDeg: assembly?.rotationDeg[1] ?? 0,
     rotationZDeg: preview?.rotationDeg ?? assembly?.rotationDeg[2] ?? 0,
-    source: "migration",
+    source: placementProvenance === "migration" ? "migration" : "manual",
   };
 }
 

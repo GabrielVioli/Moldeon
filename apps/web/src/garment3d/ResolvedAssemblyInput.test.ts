@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
+import { buildAvatarParametricModel, resolveAvatarAnchor } from "../avatar/AvatarParametricModel";
 import { createBlankGarment } from "../domain/blankGarment";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternBodyPlacement, type PatternPiece } from "../domain/pattern";
@@ -62,11 +62,9 @@ function draft(pieces: PatternPiece[]): GarmentDraft {
 }
 
 describe("ResolvedAssemblyInput canonical contract", () => {
-  it("derives front and back from the seam graph without classifying panels by name", () => {
+  it("does not let Provar promote fresh unassigned panels into body placements", () => {
     const first = square("banana", undefined);
-    first.name = "Costas";
     const second = square("panel-123", undefined);
-    second.name = "Calça";
     const garment = draft([first, second]);
     garment.dressing = { region: "upper", frontReferencePieceId: first.id };
     garment.seams = [{
@@ -82,14 +80,21 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     }];
 
     const input = buildResolvedAssemblyInput(garment);
+    const state = buildResolvedGarmentAssembly(input);
 
     expect(input.document.patternDefinitions.map((definition) => definition.bodyPlacement.status)).toEqual([
       "unclassified",
       "unclassified",
     ]);
     expect(input.panelInstances).toHaveLength(2);
-    expect(input.panelInstances.map((instance) => instance.surface)).toEqual(["front", "back"]);
-    expect(input.panelInstances.map((instance) => instance.sourcePatternId)).toEqual([first.id, second.id]);
+    expect(input.panelInstances.every((instance) =>
+      instance.placementStatus === "unclassified"
+      && instance.arrangementAnchor === undefined
+      && instance.metadata.effectivePlacementSource === "unassigned",
+    )).toBe(true);
+    expect(input.garmentProjection.pieces.every((piece) => piece.previewPlacements === undefined)).toBe(true);
+    expect(state.instances).toEqual([]);
+    expect(state.warnings.some((warning) => warning.includes("nenhuma instância possui anchor explícito"))).toBe(true);
   });
 
   it("produces no panel instances or garment meshes for an empty project", () => {
@@ -207,6 +212,84 @@ describe("ResolvedAssemblyInput canonical contract", () => {
       }
       expect(verified100MmEdge).toBe(true);
     }
+  });
+
+  it("returns no avatar anchor for custom or insufficient placement", () => {
+    const garment = draft([square("free-custom", undefined)]);
+    const avatar = buildAvatarParametricModel(garment.measurements, garment.bodyType);
+    expect(resolveAvatarAnchor(avatar, {
+      region: "custom",
+      surface: "custom",
+      bodySide: "center",
+    })).toBeUndefined();
+    expect(resolveAvatarAnchor(avatar, {
+      region: "torso",
+      surface: "side",
+      bodySide: "center",
+    })).toBeUndefined();
+  });
+
+  it("keeps a seam-free explicit hip-front rectangle open and rigid", () => {
+    const piece = square("open-hip-front", placement("hip", "front", "center", "hip-front"));
+    piece.cutOnFold = false;
+    piece.cutQuantity = 1;
+    piece.darts = [];
+    const garment = draft([piece]);
+    garment.seams = [];
+    const result = buildSemanticAvatarArrangement(
+      buildResolvedAssemblyInput(garment),
+      buildAvatarParametricModel(garment.measurements, garment.bodyType),
+    );
+    const instance = result.state.instances[0];
+
+    expect(result.state.instances).toHaveLength(1);
+    expect(instance.placement.bodyAnchorId).toBe("hip-front");
+    expect(instance.arrangement?.mapping).toBe("rigid-panel");
+    expect(instance.arrangement?.tubeGroupId).toBeUndefined();
+    expect(result.state.stitchConstraints).toHaveLength(0);
+    expect(instance.topology.boundsMm.width).toBeCloseTo(100, 6);
+    const first = instance.particleStart * 3;
+    const positions = result.state.positions;
+    let found100Mm = false;
+    for (let a = 0; a < instance.vertexCount; a += 1) {
+      for (let b = a + 1; b < instance.vertexCount; b += 1) {
+        const planar = instance.topology.positions2DMm;
+        const planarMm = Math.hypot(
+          planar[a * 2] - planar[b * 2],
+          planar[a * 2 + 1] - planar[b * 2 + 1],
+        );
+        if (Math.abs(planarMm - 100) > 1e-4) continue;
+        const distanceM = Math.hypot(
+          positions[first + a * 3] - positions[first + b * 3],
+          positions[first + a * 3 + 1] - positions[first + b * 3 + 1],
+          positions[first + a * 3 + 2] - positions[first + b * 3 + 2],
+        );
+        expect(distanceM).toBeCloseTo(0.1, 6);
+        found100Mm = true;
+        break;
+      }
+      if (found100Mm) break;
+    }
+    expect(found100Mm).toBe(true);
+  });
+
+  it("keeps two seam-free rectangles independent and never creates a tube", () => {
+    const front = square("independent-front", placement("hip", "front", "center", "hip-front"));
+    const back = square("independent-back", placement("hip", "back", "center", "hip-back"));
+    const garment = draft([front, back]);
+    garment.seams = [];
+    const result = buildSemanticAvatarArrangement(
+      buildResolvedAssemblyInput(garment),
+      buildAvatarParametricModel(garment.measurements, garment.bodyType),
+    );
+
+    expect(result.state.instances).toHaveLength(2);
+    expect(result.state.stitchConstraints).toHaveLength(0);
+    expect(result.state.instances.every((instance) =>
+      instance.arrangement?.mapping === "rigid-panel"
+      && instance.arrangement.tubeGroupId === undefined,
+    )).toBe(true);
+    expect(new Set(result.state.instances.map((instance) => instance.id)).size).toBe(2);
   });
 
   it("consumes canonical SeamGroup treatment, distribution, ratio and slack in constraints", () => {

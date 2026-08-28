@@ -50,11 +50,13 @@ export function projectAvatarBody2D(
   const mesh = avatar.humanBody.visualMesh;
   const viewDirection = projectionViewDirection(view);
   const edgeFaces = new Map<string, EdgeFaces>();
+  const relevantVertices = projectionRelevantVertexMask(avatar);
 
   for (let index = 0; index < mesh.indices.length; index += 3) {
     const a = mesh.indices[index];
     const b = mesh.indices[index + 1];
     const c = mesh.indices[index + 2];
+    if (!relevantVertices[a] || !relevantVertices[b] || !relevantVertices[c]) continue;
     const normal = triangleNormal(mesh.positions, a, b, c);
     const facing = dot3(normal, viewDirection);
     addEdge(edgeFaces, a, b, facing);
@@ -103,7 +105,9 @@ export function projectAvatarBody2D(
     }
     return { id: region.id, ...projectPoint(center, view) };
   });
-  const projectedVertices = Array.from({ length: mesh.positions.length / 3 }, (_, index) => projectPoint(vertex(mesh.positions, index), view));
+  const projectedVertices = Array.from({ length: mesh.positions.length / 3 }, (_, index) => index)
+    .filter((index) => relevantVertices[index])
+    .map((index) => projectPoint(vertex(mesh.positions, index), view));
   const xs = projectedVertices.map((point) => point.xMm);
   const ys = projectedVertices.map((point) => point.yMm);
 
@@ -136,6 +140,52 @@ export function projectionViewDirection(view: BodyProjectionView): AvatarVector3
   if (view === "back") return [0, 0, 1];
   if (view === "left") return [1, 0, 0];
   return [-1, 0, 0];
+}
+
+function projectionRelevantVertexMask(avatar: AvatarParametricModel): Uint8Array {
+  const mesh = avatar.humanBody.visualMesh;
+  const vertexCount = mesh.positions.length / 3;
+  const parent = new Uint32Array(vertexCount);
+  for (let index = 0; index < vertexCount; index += 1) parent[index] = index;
+
+  const find = (value: number): number => {
+    let root = value;
+    while (parent[root] !== root) root = parent[root];
+    let current = value;
+    while (parent[current] !== current) {
+      const next = parent[current];
+      parent[current] = root;
+      current = next;
+    }
+    return root;
+  };
+  const union = (first: number, second: number) => {
+    const a = find(first);
+    const b = find(second);
+    if (a !== b) parent[b] = a;
+  };
+
+  for (let index = 0; index < mesh.indices.length; index += 3) {
+    const a = mesh.indices[index];
+    const b = mesh.indices[index + 1];
+    const c = mesh.indices[index + 2];
+    union(a, b);
+    union(b, c);
+  }
+
+  const includedRoots = new Set<number>();
+  for (const region of avatar.humanBody.surfaceRegions) {
+    for (const index of region.visualVertexIndices) includedRoots.add(find(index));
+  }
+  for (const landmark of Object.values(avatar.humanBody.landmarks)) {
+    for (const index of landmark.binding.vertexIndices) includedRoots.add(find(index));
+  }
+
+  const mask = new Uint8Array(vertexCount);
+  for (let index = 0; index < vertexCount; index += 1) {
+    if (includedRoots.has(find(index))) mask[index] = 1;
+  }
+  return mask;
 }
 
 function addEdge(edges: Map<string, EdgeFaces>, first: number, second: number, facing: number): void {

@@ -322,16 +322,28 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
   );
   const graph = buildAssemblyGraph({ pieces: includedPieces, seams: includedSeams });
   issues.push(...graph.issues);
+  const includedPanelInstances = document.panelInstances.filter((instance) => includedIds.has(instance.sourcePatternId));
+  const canonicalArrangementReady = includedPanelInstances.length > 0
+    && includedPanelInstances.every((instance) =>
+      instance.placementStatus === "confirmed"
+      && Boolean(instance.arrangementAnchor?.bodyAnchorId),
+    );
 
   if (includedPieces.length > 0 && graph.validSeamIds.length === 0) {
-    issues.push("Costure as bordas que formam a roupa antes de provar.");
+    if (canonicalArrangementReady) {
+      warnings.push("Sem costuras: os painéis serão mostrados como superfícies abertas em seus arrangements explícitos.");
+    } else {
+      issues.push("Costure as bordas que formam a roupa antes de provar.");
+    }
   }
   if (graph.validSeamIds.length > 0 && graph.connectedComponents.length > 1) {
     issues.push("Há peças sem conexão com o conjunto principal. Costure-as ou oculte-as antes de provar.");
   }
   warnings.push(...graph.warnings);
 
-  const requiresRegion = includedPieces.length > 0 && garment.dressing?.region === undefined;
+  const requiresRegion = includedPieces.length > 0
+    && !canonicalArrangementReady
+    && garment.dressing?.region === undefined;
   const inferredFront = inferFrontReference(includedPieces);
   const configuredFront = garment.dressing?.frontReferencePieceId;
   const resolvedFrontReferencePieceId = configuredFront && includedIds.has(configuredFront)
@@ -347,7 +359,8 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
     : frontCandidateGroups.find(
       (group) => group.referencePieceId === resolvedFrontReferencePieceId,
     )?.panelInstanceIds ?? [];
-  const requiresFrontReference = includedPieces.length > 1
+  const requiresFrontReference = !canonicalArrangementReady
+    && includedPieces.length > 1
     && graph.connectedComponents.length === 1
     && resolvedFrontReferencePieceId === undefined;
 

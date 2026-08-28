@@ -230,7 +230,7 @@ export function resolveAvatarAnchor(
   placement: Pick<PatternPreviewPlacement, "region" | "surface" | "bodySide" | "bodyAnchorId">,
 ): AvatarArrangementAnchor | undefined {
   if (placement.bodyAnchorId) return anchorById(model, placement.bodyAnchorId);
-  const surface = placement.surface === "back" ? "back" : "front";
+  if (placement.region === "custom" || placement.surface === "custom") return undefined;
   if (placement.region === "arm") {
     if (placement.bodySide === "left") return anchorById(model, "arm-left");
     if (placement.bodySide === "right") return anchorById(model, "arm-right");
@@ -241,9 +241,24 @@ export function resolveAvatarAnchor(
     if (placement.bodySide === "right") return anchorById(model, "leg-right");
     return undefined;
   }
-  if (placement.region === "waist") return anchorById(model, surface === "back" ? "waist-back" : "waist-front");
-  if (placement.region === "hip") return anchorById(model, surface === "back" ? "hip-back" : "hip-front");
-  return anchorById(model, surface === "back" ? "torso-back" : "torso-front");
+  if (placement.region === "neck") return anchorById(model, "neck");
+  if (placement.region === "waist") {
+    if (placement.surface === "front") return anchorById(model, "waist-front");
+    if (placement.surface === "back") return anchorById(model, "waist-back");
+    return undefined;
+  }
+  if (placement.region === "hip") {
+    if (placement.surface === "front") return anchorById(model, "hip-front");
+    if (placement.surface === "back") return anchorById(model, "hip-back");
+    if (placement.surface === "side" && placement.bodySide === "left") return anchorById(model, "hip-left");
+    if (placement.surface === "side" && placement.bodySide === "right") return anchorById(model, "hip-right");
+    return undefined;
+  }
+  if (placement.region === "torso") {
+    if (placement.surface === "front") return anchorById(model, "torso-front");
+    if (placement.surface === "back") return anchorById(model, "torso-back");
+  }
+  return undefined;
 }
 
 export function sampleTorsoAxes(

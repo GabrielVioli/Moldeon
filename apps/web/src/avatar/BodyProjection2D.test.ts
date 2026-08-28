@@ -22,6 +22,35 @@ describe("11.0.6 synchronized HumanBodyModel 2D projection", () => {
     }
   });
 
+  it("omits disconnected internal facial geometry that has no body bindings", () => {
+    const avatar = buildAvatarParametricModel(DEFAULT_BODY_MEASUREMENTS, "feminine");
+    const baseline = projectAvatarBody2D(avatar, "front");
+    const mesh = avatar.humanBody.visualMesh;
+    const vertexCount = mesh.positions.length / 3;
+    const positions = new Float32Array(mesh.positions.length + 9);
+    positions.set(mesh.positions);
+    positions.set([
+      -0.02, avatar.landmarks.headCenterY, 0.08,
+      0.02, avatar.landmarks.headCenterY, 0.08,
+      0, avatar.landmarks.headCenterY - 0.02, 0.08,
+    ], mesh.positions.length);
+    const normals = new Float32Array(mesh.normals.length + 9);
+    normals.set(mesh.normals);
+    normals.set([0, 0, 1, 0, 0, 1, 0, 0, 1], mesh.normals.length);
+    const indices = new Uint32Array(mesh.indices.length + 3);
+    indices.set(mesh.indices);
+    indices.set([vertexCount, vertexCount + 1, vertexCount + 2], mesh.indices.length);
+    const synthetic = {
+      ...avatar,
+      humanBody: {
+        ...avatar.humanBody,
+        visualMesh: { ...mesh, positions, normals, indices },
+      },
+    };
+
+    expect(projectAvatarBody2D(synthetic, "front").silhouette).toEqual(baseline.silhouette);
+  });
+
   it("preserves the absolute millimetre contract and view chirality", () => {
     expect(projectPoint([0, 0, 0], "front")).toEqual({ xMm: 0, yMm: -0 });
     expect(projectPoint([0.1, 0, 0], "front").xMm).toBeCloseTo(100, 10);

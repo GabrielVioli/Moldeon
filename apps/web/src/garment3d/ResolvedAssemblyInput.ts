@@ -125,25 +125,29 @@ function projectPhysicalInstancesForAssembly(
         .filter((instance) => instance.sourcePatternId === piece.id)
         .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
       if (physical.length === 0) return piece;
+      const previewPlacements = physical.flatMap((instance) => {
+        const anchor = instance.arrangementAnchor;
+        if (instance.placementStatus !== "confirmed" || !anchor?.bodyAnchorId) return [];
+        return [{
+          id: instance.id,
+          pieceId: piece.id,
+          region: anchor.region,
+          surface: anchor.surface,
+          bodySide: anchor.bodySide,
+          bodyAnchorId: anchor.bodyAnchorId,
+          rotationDeg: anchor.rotationDeg,
+          offsetXMm: anchor.offsetXMm,
+          offsetYMm: anchor.offsetYMm,
+          offsetZMm: anchor.offsetZMm,
+          scale: 1,
+          mirrorX: instance.mirrored,
+        }];
+      });
       return {
         ...piece,
-        previewPlacements: physical.map((instance) => {
-          const anchor = instance.arrangementAnchor;
-          return {
-            id: instance.id,
-            pieceId: piece.id,
-            region: anchor?.region ?? "custom",
-            surface: anchor?.surface ?? instance.surface ?? "custom",
-            bodySide: anchor?.bodySide ?? instance.bodySide ?? "center",
-            ...(anchor?.bodyAnchorId ? { bodyAnchorId: anchor.bodyAnchorId } : {}),
-            rotationDeg: anchor?.rotationDeg ?? 0,
-            offsetXMm: anchor?.offsetXMm ?? 0,
-            offsetYMm: anchor?.offsetYMm ?? 0,
-            offsetZMm: anchor?.offsetZMm ?? 0,
-            scale: 1,
-            mirrorX: instance.mirrored,
-          };
-        }),
+        ...(previewPlacements.length > 0
+          ? { previewPlacements }
+          : { previewPlacements: undefined }),
       };
     }),
   };

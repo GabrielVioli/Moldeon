@@ -4,6 +4,7 @@ import { deriveDressingPanelInstances } from "./assembly";
 import { createUnclassifiedBodyPlacement, duplicatePatternPiece } from "./pattern";
 import {
   garmentDraftToPatternDocumentV3,
+  migratePatternProject,
   parsePatternDocumentV3,
   patternDocumentV3ToGarmentDraft,
   serializePatternDocumentV3,
@@ -106,20 +107,24 @@ describe("11.0.6 canonical PanelInstance arrangement", () => {
     expect(regenerated.panelInstances).toEqual(original.panelInstances);
   });
 
-  it("does not infer a new manual document from names, template or Provar answers", () => {
-    const garment = createBaselineFixture("exact-contact-tube");
+  it("keeps a genuinely fresh panel UNASSIGNED after Provar answers", () => {
+    const garment = createBaselineFixture("free-simple-piece");
     garment.templateId = "camiseta-que-nao-e-fato";
-    garment.assemblyPlacements = [];
+    garment.assemblyPlacements = undefined;
     garment.pieces = garment.pieces.map((piece) => ({
       ...piece,
       name: "Frente da manga direita",
-      bodyPlacement: createUnclassifiedBodyPlacement(true, "manual"),
+      bodyPlacement: undefined,
       previewPlacements: undefined,
     }));
     garment.dressing = { region: "upper", frontReferencePieceId: garment.pieces[0].id };
     const document = garmentDraftToPatternDocumentV3(garment);
     const instances = deriveDressingPanelInstances(document, garment);
 
+    expect(document.patternDefinitions[0].bodyPlacement).toMatchObject({
+      status: "unclassified",
+      source: "manual",
+    });
     expect(instances[0].placementStatus).toBe("unclassified");
     expect(instances[0].arrangementAnchor).toBeUndefined();
     expect(instances[0].metadata.effectivePlacementSource).toBe("unassigned");
@@ -133,7 +138,7 @@ describe("11.0.6 canonical PanelInstance arrangement", () => {
       id: "legacy-preview", pieceId: source.id, region: "hip", surface: "front", bodySide: "center",
       rotationDeg: 0, offsetXMm: 0, offsetYMm: 0, offsetZMm: 25, scale: 1,
     }];
-    const normalized = garmentDraftToPatternDocumentV3(sufficient);
+    const normalized = migratePatternProject({ formatVersion: 2, garment: sufficient }).document;
     expect(normalized.patternDefinitions[0].bodyPlacement).toMatchObject({ source: "migration", status: "confirmed", anchorId: "hip-front" });
     expect(normalized.panelInstances[0]).toMatchObject({
       placementStatus: "confirmed",
@@ -145,7 +150,7 @@ describe("11.0.6 canonical PanelInstance arrangement", () => {
     insufficient.pieces[0].bodyPlacement = undefined;
     insufficient.pieces[0].previewPlacements = undefined;
     insufficient.assemblyPlacements = [];
-    const unresolved = garmentDraftToPatternDocumentV3(insufficient);
+    const unresolved = migratePatternProject({ formatVersion: 2, garment: insufficient }).document;
     expect(unresolved.patternDefinitions[0].bodyPlacement).toMatchObject({ source: "migration", status: "unclassified" });
     expect(unresolved.panelInstances[0]).toMatchObject({
       placementStatus: "unclassified",

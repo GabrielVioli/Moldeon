@@ -1,12 +1,12 @@
-import { memo, useMemo, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
-import { projectAvatarBody2D, type BodyProjectionPoint2D, type BodyProjectionView } from "../avatar/BodyProjection2D";
+import { projectAvatarBody2D, projectPoint, type BodyProjectionPoint2D, type BodyProjectionView } from "../avatar/BodyProjection2D";
 import { bodyAnchorSpecification, placementFieldsForAnchor } from "../domain/bodyArrangement";
-import { createUnclassifiedBodyPlacement, type BodyAnchorId, type PatternPreviewPlacement } from "../domain/pattern";
+import { createUnclassifiedBodyPlacement, type BodyAnchorId, type PatternPreviewPlacement, type PreviewBodySide, type PreviewSurface } from "../domain/pattern";
 import { samplePatternContour } from "../domain/polygonGeometry";
 import { createPanelInstanceId } from "../domain/patternDocumentV3";
 import type { Camera2D } from "../editor/camera";
-import { worldToScreen } from "../editor/coordinates";
+import { pieceLocalToWorld, worldToScreen } from "../editor/coordinates";
 import { localBoundsFromPoints } from "../editor/editorCoreMath";
 import { useEditorStore } from "../state/editorStore";
 
@@ -17,6 +17,15 @@ const VIEW_LABELS: Record<BodyProjectionView, string> = {
   right: "Lado D",
 };
 
+/**
+ * Presentation-only origin for the canonical body projection.
+ *
+ * It deliberately does not depend on the active PatternDefinition, its bounds,
+ * selection state or arrangement. The body therefore stays on the workbench
+ * while pieces move independently around it.
+ */
+export const BODY_REFERENCE_ORIGIN_WORLD = { xMm: 0, yMm: 0 } as const;
+
 export const BodyReference2D = memo(function BodyReference2D({ camera }: { camera: Camera2D | null }) {
   const garment = useEditorStore((state) => state.garment);
   const activePieceId = useEditorStore((state) => state.activePieceId);
@@ -25,6 +34,7 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
   const [view, setView] = useState<BodyProjectionView>("front");
   const [showLandmarks, setShowLandmarks] = useState(false);
   const [copyIndex, setCopyIndex] = useState(0);
+  const spatialTransformRef = useRef<{ pieceId: string; signature: string } | null>(null);
   const piece = garment.pieces.find((candidate) => candidate.id === activePieceId);
   const instanceCount = Math.max(1, piece?.cutQuantity ?? 1);
   const safeCopyIndex = Math.min(copyIndex, instanceCount - 1);
@@ -41,20 +51,9 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
   const selectedAnchorId = piece?.previewPlacements?.find(
     (placement) => placement.id === createPanelInstanceId(piece.id, safeCopyIndex),
   )?.bodyAnchorId ?? piece?.bodyPlacement?.anchorId;
-  const pieceBounds = piece ? localBoundsFromPoints(samplePatternContour(piece.points)) : undefined;
-  const originWorld = {
-    xMm: transform.xMm + ((pieceBounds?.minX ?? 0) + (pieceBounds?.maxX ?? 0)) * 0.5,
-    yMm: transform.yMm + ((pieceBounds?.minY ?? 0) + (pieceBounds?.maxY ?? 0)) * 0.5,
-  };
-  const defaultFocusAnchorId: BodyAnchorId = view === "back" ? "torso-back" : "torso-front";
-  const selectedProjectionAnchor = projection?.anchors.find((anchor) => anchor.id === selectedAnchorId);
-  const focusAnchorId = selectedProjectionAnchor && selectedProjectionAnchor.facing >= -0.05
-    ? selectedProjectionAnchor.id
-    : defaultFocusAnchorId;
-  const bodyFocusMm = projection?.anchors.find((anchor) => anchor.id === focusAnchorId) ?? { xMm: 0, yMm: 0 };
   const toScreen = (point: BodyProjectionPoint2D) => camera && projection ? worldToScreen({
-    xMm: originWorld.xMm + point.xMm - bodyFocusMm.xMm,
-    yMm: originWorld.yMm + point.yMm - bodyFocusMm.yMm,
+    xMm: BODY_REFERENCE_ORIGIN_WORLD.xMm + point.xMm,
+    yMm: BODY_REFERENCE_ORIGIN_WORLD.yMm + point.yMm,
   }, camera) : { x: 0, y: 0 };
   const silhouettePath = camera && projection
     ? projection.silhouette.map((segment) => {
@@ -63,6 +62,159 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
         return `M${start.x.toFixed(2)} ${start.y.toFixed(2)}L${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
       }).join("")
     : "";
+
+  useEffect(() => {
+    if (!visible || !projection || !avatar || !piece) {
+      spatialTransformRef.current = null;
+      return;
+    }
+
+    const signature = `${transform.xMm.toFixed(6)}:${transform.yMm.toFixed(6)}:${transform.rotationDeg.toFixed(6)}`;
+    const previous = spatialTransformRef.current;
+    spatialTransformRef.current = { pieceId: piece.id, signature };
+
+    // Showing the body, switching the active piece or changing body view is not
+    // authoring. Only a subsequent explicit workspace move/rotation can author.
+    if (!previous || previous.pieceId !== piece.id || previous.signature === signature) return;
+
+    const contour = samplePatternContour(piece.points);
+    if (contour.length === 0) return;
+    const localBounds = localBoundsFromPoints(contour);
+    const centerWorld = pieceLocalToWorld({
+      xMm: (localBounds.minX + localBounds.maxX) * 0.5,
+      yMm: (localBounds.minY + localBounds.maxY) * 0.5,
+    }, transform);
+    const worldPoints = contour.map((point) => pieceLocalToWorld(point, transform));
+    const pieceBounds = {
+      minX: Math.min(...worldPoints.map((point) => point.xMm)),
+      maxX: Math.max(...worldPoints.map((point) => point.xMm)),
+      minY: Math.min(...worldPoints.map((point) => point.yMm)),
+      maxY: Math.max(...worldPoints.map((point) => point.yMm)),
+    };
+    const bodyBounds = {
+      minX: BODY_REFERENCE_ORIGIN_WORLD.xMm + projection.boundsMm.minX,
+      maxX: BODY_REFERENCE_ORIGIN_WORLD.xMm + projection.boundsMm.maxX,
+      minY: BODY_REFERENCE_ORIGIN_WORLD.yMm + projection.boundsMm.minY,
+      maxY: BODY_REFERENCE_ORIGIN_WORLD.yMm + projection.boundsMm.maxY,
+    };
+    const overlapsBodyBounds = !(
+      pieceBounds.maxX < bodyBounds.minX
+      || pieceBounds.minX > bodyBounds.maxX
+      || pieceBounds.maxY < bodyBounds.minY
+      || pieceBounds.minY > bodyBounds.maxY
+    );
+    const instanceId = createPanelInstanceId(piece.id, safeCopyIndex);
+    const existingPlacement = piece.previewPlacements?.find((placement) => placement.id === instanceId);
+    const alreadyRelatedToBody = Boolean(existingPlacement?.bodyAnchorId ?? piece.bodyPlacement?.anchorId);
+
+    const bodyPoint = {
+      xMm: centerWorld.xMm - BODY_REFERENCE_ORIGIN_WORLD.xMm,
+      yMm: centerWorld.yMm - BODY_REFERENCE_ORIGIN_WORLD.yMm,
+    };
+    const candidates = projection.anchors
+      .filter((anchor) => anchor.facing > 0.05)
+      .map((anchor) => ({
+        anchor,
+        distanceMm: Math.hypot(bodyPoint.xMm - anchor.xMm, bodyPoint.yMm - anchor.yMm),
+      }))
+      .sort((left, right) => left.distanceMm - right.distanceMm || left.anchor.id.localeCompare(right.anchor.id));
+    const nearest = candidates[0];
+    if (!nearest) return;
+
+    const panelHalfDiagonalMm = Math.hypot(
+      localBounds.maxX - localBounds.minX,
+      localBounds.maxY - localBounds.minY,
+    ) * 0.5;
+    const freshAuthoringRadiusMm = Math.max(180, panelHalfDiagonalMm + 140);
+    if (!alreadyRelatedToBody && (!overlapsBodyBounds || nearest.distanceMm > freshAuthoringRadiusMm)) return;
+
+    const anchorId = nearest.anchor.id;
+    const specification = bodyAnchorSpecification(anchorId);
+    const avatarAnchor = avatar.anchors.find((candidate) => candidate.id === anchorId);
+    if (!avatarAnchor) return;
+    const fields = placementFieldsForAnchor(anchorId);
+    const current = piece.bodyPlacement ?? createUnclassifiedBodyPlacement();
+    const deltaX = bodyPoint.xMm - nearest.anchor.xMm;
+    const deltaY = bodyPoint.yMm - nearest.anchor.yMm;
+    const projectedBasis = (direction: readonly [number, number, number]) => {
+      const stepM = 0.1;
+      const endpoint = projectPoint([
+        avatarAnchor.position[0] + direction[0] * stepM,
+        avatarAnchor.position[1] + direction[1] * stepM,
+        avatarAnchor.position[2] + direction[2] * stepM,
+      ], view);
+      return {
+        x: (endpoint.xMm - nearest.anchor.xMm) / (stepM * 1000),
+        y: (endpoint.yMm - nearest.anchor.yMm) / (stepM * 1000),
+      };
+    };
+    const tangent = projectedBasis(avatarAnchor.tangent);
+    const axis = projectedBasis(avatarAnchor.axis);
+    const determinant = tangent.x * axis.y - tangent.y * axis.x;
+    const offsetXMm = Math.abs(determinant) > 1e-6
+      ? (deltaX * axis.y - deltaY * axis.x) / determinant
+      : deltaX;
+    const offsetYMm = Math.abs(determinant) > 1e-6
+      ? (tangent.x * deltaY - tangent.y * deltaX) / determinant
+      : deltaY;
+
+    let authoredSurface: PreviewSurface = specification.surface;
+    let authoredBodySide: PreviewBodySide = specification.bodySide;
+    if (view === "front" || view === "back") {
+      authoredSurface = view;
+      const visualSide = Math.abs(bodyPoint.xMm) < 35
+        ? "center"
+        : bodyPoint.xMm < 0 ? "left" : "right";
+      authoredBodySide = view === "back"
+        ? visualSide === "left" ? "right" : visualSide === "right" ? "left" : "center"
+        : visualSide;
+    } else {
+      authoredSurface = "side";
+      authoredBodySide = view;
+    }
+
+    const paired = instanceCount > 1 && (authoredBodySide === "left" || authoredBodySide === "right");
+    const placement: PatternPreviewPlacement = {
+      id: instanceId,
+      pieceId: piece.id,
+      region: specification.region,
+      surface: authoredSurface,
+      bodySide: authoredBodySide,
+      bodyAnchorId: anchorId,
+      rotationDeg: transform.rotationDeg,
+      offsetXMm,
+      offsetYMm,
+      offsetZMm: current.offsetZMm,
+      scale: 1,
+      mirrorX: current.outwardFace === "flipped" || (instanceCount > 1 && safeCopyIndex % 2 === 1),
+    };
+    confirmPanelInstanceArrangement(piece.id, safeCopyIndex, {
+      ...current,
+      status: "confirmed",
+      ...fields,
+      region: specification.region,
+      surface: authoredSurface,
+      bodySide: paired ? "paired" : authoredBodySide,
+      anchorId,
+      offsetXMm,
+      offsetYMm,
+      rotationZDeg: transform.rotationDeg,
+      source: "manual",
+    }, placement);
+  }, [
+    avatar,
+    confirmPanelInstanceArrangement,
+    instanceCount,
+    piece,
+    projection,
+    safeCopyIndex,
+    transform.rotationDeg,
+    transform.xMm,
+    transform.yMm,
+    view,
+    visible,
+  ]);
+
   const applyAnchor = (anchorId: BodyAnchorId) => {
     if (!piece) return;
     const specification = bodyAnchorSpecification(anchorId);
