@@ -1,0 +1,455 @@
+/*
+ * Mobile workspace v2: reduce chrome, preserve touch targets, maximize canvas.
+ * Presentation only. No domain/arrangement/garment3d/physics behavior.
+ */
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-v2-gap: 6px;
+    --mobile-v2-radius: 12px;
+    --mobile-v2-surface: rgba(250, 249, 246, 0.96);
+    --mobile-v2-border: rgba(71, 67, 60, 0.18);
+    --mobile-v2-shadow: 0 6px 18px rgba(31, 28, 23, 0.10);
+  }
+
+  /* Keep the top app chrome compact and predictable. */
+  .toolbar {
+    min-height: 82px;
+    grid-template-rows: 40px 42px;
+    padding-inline: 4px;
+    gap: 0 4px;
+  }
+
+  .workspace-mode-switch,
+  .workspace-mode-switch button,
+  .history-button,
+  .toolbar-preview-button,
+  .toolbar-overflow > summary {
+    min-height: 38px;
+    height: 38px;
+  }
+
+  .workspace-mode-switch button {
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+
+  .history-button,
+  .toolbar-overflow > summary {
+    width: 40px;
+  }
+
+  .toolbar-preview-button {
+    min-width: 48px;
+    padding-inline: 9px;
+  }
+
+  .tool-buttons {
+    gap: 0;
+    padding-inline: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    justify-content: center;
+  }
+
+  .tool-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tool-button {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 40px;
+    min-height: 40px;
+    flex: 0 0 44px;
+    border-radius: 10px;
+  }
+
+  .tool-glyph {
+    width: 19px;
+    height: 19px;
+  }
+
+  /* One thin workspace switcher row. */
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 42px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 42px;
+    padding: 2px 4px;
+  }
+
+  .workspace-tab {
+    min-height: 38px;
+    padding-inline: 5px;
+    border-radius: 9px;
+    font-size: 10px;
+  }
+
+  /* Remove the redundant title strip entirely on phones. */
+  .editor-panel {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .panel-titlebar {
+    display: none !important;
+  }
+
+  /* The canvas becomes the actual workspace. Piece chrome floats above it. */
+  .editor-body {
+    position: relative;
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .canvas-stack {
+    position: absolute;
+    inset: 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pattern-canvas,
+  .editor-core-canvas-shell {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Active piece rail is now a floating compact pill instead of a full row. */
+  .pieces-panel {
+    position: absolute;
+    z-index: 31;
+    top: 7px;
+    left: max(7px, env(safe-area-inset-left));
+    right: max(7px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    width: auto;
+    min-height: 48px;
+    height: 48px;
+    max-height: 48px;
+    border: 1px solid var(--mobile-v2-border);
+    border-radius: 14px;
+    background: var(--mobile-v2-surface);
+    box-shadow: var(--mobile-v2-shadow);
+    overflow: hidden;
+  }
+
+  .pieces-panel header {
+    position: static;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    width: auto;
+    min-width: 46px;
+    height: 48px;
+    min-height: 48px;
+    padding: 2px;
+    border: 0;
+  }
+
+  .pieces-panel header strong {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap;
+  }
+
+  .pieces-panel header button {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border-radius: 10px;
+  }
+
+  .pieces-list {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    min-width: 0;
+    height: 48px;
+    min-height: 48px;
+    padding: 3px 4px 3px 1px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .pieces-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pieces-item {
+    flex: 0 0 min(154px, 44vw);
+    min-width: 122px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 10px;
+  }
+
+  .pieces-item > input[type="checkbox"],
+  .pieces-visibility,
+  .pieces-lock,
+  .pieces-more {
+    width: 34px;
+    min-width: 34px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .pieces-name {
+    min-height: 40px;
+    font-size: 11px;
+  }
+
+  /* Point actions become two small square controls under the piece pill. */
+  .point-actions {
+    top: 62px;
+    left: max(7px, env(safe-area-inset-left));
+    gap: 4px;
+  }
+
+  .point-actions button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 11px;
+    font-size: 0;
+    background: var(--mobile-v2-surface);
+    box-shadow: var(--mobile-v2-shadow);
+  }
+
+  .point-actions button:first-child::after {
+    content: "+";
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .point-actions button:last-child::after {
+    content: "−";
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  /* Hide dead controls instead of reserving finger-sized blocks for them. */
+  .editor-core-numeric-panel button:disabled,
+  .context-bar button:disabled {
+    display: none !important;
+  }
+
+  /* Numeric editor becomes a low, dense bottom sheet. */
+  .editor-core-numeric-panel {
+    z-index: 36 !important;
+    right: max(7px, env(safe-area-inset-right)) !important;
+    bottom: calc(54px + env(safe-area-inset-bottom)) !important;
+    left: max(7px, env(safe-area-inset-left)) !important;
+    width: auto !important;
+    max-height: min(28dvh, 220px) !important;
+    padding: 7px !important;
+    gap: 5px !important;
+    border-radius: 13px !important;
+    box-shadow: 0 8px 26px rgba(31, 28, 23, 0.14) !important;
+    overflow: auto;
+  }
+
+  .editor-core-numeric-panel > div:first-child {
+    min-height: 34px;
+  }
+
+  .editor-core-numeric-panel strong {
+    font-size: 11px;
+  }
+
+  .editor-core-numeric-panel button {
+    min-height: 38px;
+    height: 38px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+
+  .editor-core-numeric-panel label {
+    gap: 2px !important;
+    font-size: 10px !important;
+  }
+
+  .editor-core-numeric-panel input {
+    min-height: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
+  /* Context actions stay above navigation but no longer fill a third of screen. */
+  .context-bar {
+    z-index: 35;
+    right: max(7px, env(safe-area-inset-right));
+    bottom: calc(54px + env(safe-area-inset-bottom));
+    left: max(7px, env(safe-area-inset-left));
+    width: auto;
+    max-width: none;
+    max-height: min(26dvh, 210px);
+    padding: 7px;
+    gap: 5px;
+    border-radius: 13px;
+    box-shadow: 0 8px 26px rgba(31, 28, 23, 0.14);
+    overflow: auto;
+  }
+
+  .context-bar strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .context-bar button,
+  .context-bar summary {
+    min-height: 40px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+
+  /* Zoom/navigation is a narrow bottom dock, not a full-width slab. */
+  .canvas-navigation {
+    z-index: 40;
+    right: max(7px, env(safe-area-inset-right)) !important;
+    bottom: max(7px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+    width: auto;
+    max-width: calc(100% - 14px);
+    min-height: 44px;
+    height: 44px;
+    padding: 2px 3px;
+    gap: 1px;
+    border-radius: 12px;
+    transform: none;
+    box-shadow: var(--mobile-v2-shadow);
+  }
+
+  .canvas-navigation button {
+    min-width: 40px;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 7px;
+    font-size: 10px;
+    border-radius: 9px;
+  }
+
+  /* Body projection control should remain reachable without becoming a card wall. */
+  .body-reference-2d-controls,
+  .body-reference-controls {
+    border-radius: 12px !important;
+    box-shadow: var(--mobile-v2-shadow) !important;
+  }
+
+  /* Popovers are compact sheets with only their content scrollable. */
+  .pieces-popover {
+    right: 7px !important;
+    left: 7px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(46dvh, 340px);
+    padding: 5px;
+    border-radius: 13px;
+  }
+
+  .pieces-popover button {
+    min-height: 42px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 430px) {
+  .toolbar {
+    min-height: 78px;
+    grid-template-rows: 38px 40px;
+  }
+
+  .workspace-mode-switch button {
+    padding-inline: 6px;
+    font-size: 9px;
+  }
+
+  .tool-button {
+    width: 42px;
+    min-width: 42px;
+    max-width: 42px;
+    flex-basis: 42px;
+  }
+
+  .pieces-panel {
+    left: 5px;
+    right: 5px;
+    top: 5px;
+  }
+
+  .pieces-item {
+    flex-basis: min(142px, 42vw);
+  }
+
+  .point-actions {
+    top: 59px;
+    left: 5px;
+  }
+
+  .canvas-navigation button:nth-of-type(4),
+  .canvas-navigation button:nth-of-type(5) {
+    padding-inline: 5px;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  .toolbar {
+    min-height: 72px;
+    grid-template-rows: 34px 38px;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 36px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 36px;
+  }
+
+  .workspace-tab {
+    min-height: 32px;
+  }
+
+  .pieces-panel {
+    width: min(62vw, 520px);
+    right: auto;
+  }
+
+  .editor-core-numeric-panel,
+  .context-bar {
+    left: auto !important;
+    width: min(52vw, 420px) !important;
+  }
+}
