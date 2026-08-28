@@ -1,0 +1,54 @@
+name: recovery-11-0-5-rigid-panel-diagnostic
+
+on:
+  push:
+    branches:
+      - recovery/11.0.5-exact-human-surface-contact
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: "github.event.head_commit.message == 'chore(11.0.5): diagnose rigid-panel recovery'"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.5-exact-human-surface-contact
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: npm
+      - run: npm ci
+      - name: Apply candidate only in runner and instrument
+        shell: bash
+        run: |
+          git show --format= 004b987b2274cc96ddb7bace7fd4d357ae0967e1 -- \
+            apps/web/src/physics/bodyCollision.ts \
+            apps/web/src/physics/xpbd.ts \
+            apps/web/src/physics/bodyCollisionExact.test.ts | git apply -
+          python <<'PY'
+          from pathlib import Path
+          p = Path('apps/web/src/physics/bodyCollision.ts')
+          s = p.read_text(encoding='utf-8')
+          marker = '    const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);'
+          addition = marker + '\n    console.log("P1105_RIGID_PANEL_PASS", JSON.stringify({ pass: pass + 1, penetrationMm: penetrationM * 1000, edgeRelativeError: edgeError, seamErrorMm: seamErrorM * 1000, displacementMm: displacementM * 1000 }));'
+          if s.count(marker) != 1:
+              raise SystemExit(f'marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, addition, 1), encoding='utf-8', newline='\n')
+          PY
+      - name: Run garment gate diagnostic
+        continue-on-error: true
+        run: npm run test --workspace @moldeon/web -- exactBodyGarmentGate.test.ts
+      - name: Remove diagnostic workflow
+        if: always()
+        shell: bash
+        run: |
+          git restore -- apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/physics/bodyCollisionExact.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -- .github/workflows/recovery-11-0-5-rigid-panel-diagnostic.yml
+          git commit -m "chore(11.0.5): clean rigid-panel diagnostic"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
