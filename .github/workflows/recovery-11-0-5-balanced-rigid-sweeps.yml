@@ -1,0 +1,81 @@
+name: recovery-11-0-5-balanced-rigid-sweeps
+
+on:
+  push:
+    branches:
+      - recovery/11.0.5-exact-human-surface-contact
+
+permissions:
+  contents: write
+
+jobs:
+  candidate:
+    if: "github.event.head_commit.message == 'chore(11.0.5): stage balanced rigid-sweep recovery'"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.5-exact-human-surface-contact
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: npm
+      - run: npm ci
+      - name: Build balanced rigid-sweep candidate
+        shell: bash
+        run: |
+          git show --format= 004b987b2274cc96ddb7bace7fd4d357ae0967e1 -- \
+            apps/web/src/physics/bodyCollision.ts \
+            apps/web/src/physics/xpbd.ts \
+            apps/web/src/physics/bodyCollisionExact.test.ts | git apply -
+          python <<'PY'
+          from pathlib import Path
+          p = Path('apps/web/src/physics/bodyCollision.ts')
+          s = p.read_text(encoding='utf-8')
+          old = '''  for (let pass = 0; pass < INITIAL_DEPENETRATION_MAX_PASSES; pass += 1) {\n    projectInitialExactClearance(body, positions, inverseMasses, correctionLimit);\n    for (let sweep = 0; sweep < INITIAL_ISOMETRIC_PROJECTION_SWEEPS; sweep += 1) {\n      projectInitialSeams(positions, clothSeams, seamTargets, inverseMasses, correctionLimit);\n      projectInitialRigidPanels(original, positions, rigidPanels);\n    }'''
+          new = '''  const sweepCorrectionLimit = Math.max(\n    INITIAL_DEPENETRATION_EPSILON_M,\n    correctionLimit / 8,\n  );\n  for (let pass = 0; pass < INITIAL_DEPENETRATION_MAX_PASSES; pass += 1) {\n    for (let sweep = 0; sweep < INITIAL_ISOMETRIC_PROJECTION_SWEEPS; sweep += 1) {\n      projectInitialExactClearance(body, positions, inverseMasses, sweepCorrectionLimit);\n      projectInitialRigidPanels(original, positions, rigidPanels);\n      projectInitialSeams(positions, clothSeams, seamTargets, inverseMasses, sweepCorrectionLimit);\n      projectInitialRigidPanels(original, positions, rigidPanels);\n    }'''
+          if s.count(old) != 1:
+              raise SystemExit(f'balanced loop count={s.count(old)}')
+          s = s.replace(old, new, 1)
+          marker = '    const seamErrorM = maximumInitialSeamDistanceError(positions, clothSeams, seamTargets);'
+          log = marker + '\n    console.log("P1105_BALANCED_RIGID_PASS", JSON.stringify({ pass: pass + 1, penetrationMm: penetrationM * 1000, edgeRelativeError: edgeError, seamErrorMm: seamErrorM * 1000, displacementMm: displacementM * 1000 }));'
+          if s.count(marker) != 1:
+              raise SystemExit(f'diagnostic marker count={s.count(marker)}')
+          p.write_text(s.replace(marker, log, 1), encoding='utf-8', newline='\n')
+          PY
+          git diff --check
+          git diff --stat
+      - name: Publish WIP candidate
+        id: publish
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- apps/web/src/physics/bodyCollision.ts apps/web/src/physics/xpbd.ts apps/web/src/physics/bodyCollisionExact.test.ts
+          git rm -- .github/workflows/recovery-11-0-5-balanced-rigid-sweeps.yml
+          git commit -m "wip(11.0.5): balance exact contact with rigid seam sweeps"
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
+      - name: Focused tests
+        id: focused
+        continue-on-error: true
+        run: npm run test --workspace @moldeon/web -- bodyCollisionExact.test.ts XpbdWorkerState.test.ts exactBodyGarmentGate.test.ts
+      - name: Clean failed candidate
+        if: steps.focused.outcome != 'success'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-commit "${{ steps.publish.outputs.candidate_sha }}"
+          git rm -f --ignore-unmatch -- .github/workflows/recovery-11-0-5-balanced-rigid-sweeps.yml
+          git diff --cached --check
+          git commit -m "revert(11.0.5): restore pre-balanced-rigid recovery state"
+          git push origin HEAD:recovery/11.0.5-exact-human-surface-contact
+          exit 1
+      - name: Typecheck
+        if: steps.focused.outcome == 'success'
+        run: npm run typecheck --workspace @moldeon/web
+      - name: Build
+        if: steps.focused.outcome == 'success'
+        run: npm run build --workspace @moldeon/web
