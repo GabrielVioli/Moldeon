@@ -1,6 +1,16 @@
+import fs from "node:fs";
 import { chromium } from "playwright-core";
 
-const executablePath = "C:/Program Files/Google/Chrome/Application/chrome.exe";
+const executablePath = process.env.MOLDEON_CHROME
+  ?? [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  ].find((candidate) => fs.existsSync(candidate));
+if (!executablePath) throw new Error("CHROMIUM_EXECUTABLE_NOT_FOUND");
+
 const baseURL = process.env.MOLDEON_URL ?? "http://127.0.0.1:5173";
 const browser = await chromium.launch({ executablePath, headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
@@ -73,17 +83,46 @@ await page.waitForFunction(() => {
 }, undefined, { timeout: 30_000 });
 await page.screenshot({ path: "docs/progress/RECOVERY_11_0_7_DESKTOP.png", fullPage: true });
 
-const dragPoints = await page.evaluate(() => {
+const initial = await page.evaluate(() => {
   const bridge = window.__MOLDEON_VIEWPORT_DEV__;
+  const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
+  const workspace = document.querySelector(".workspace");
+  const toolbar = host?.querySelector(".viewport-arrangement-controls");
+  const viewportRect = host?.getBoundingClientRect();
+  const workspaceRect = workspace?.getBoundingClientRect();
   return {
     panel: bridge?.instanceScreenPosition("browser-panel:panel:1") ?? null,
     body: bridge?.bodyScreenPosition() ?? null,
+    viewportWidth: viewportRect?.width ?? 0,
+    viewportHeight: viewportRect?.height ?? 0,
+    workspaceWidth: workspaceRect?.width ?? 0,
+    workspaceHeight: workspaceRect?.height ?? 0,
+    toolbarClientWidth: toolbar?.clientWidth ?? 0,
+    toolbarScrollWidth: toolbar?.scrollWidth ?? 0,
+    canvasCount: document.querySelectorAll("canvas.three-canvas").length,
   };
 });
-if (!dragPoints.panel || !dragPoints.body) throw new Error(`ARRANGEMENT_POINTS_UNAVAILABLE ${JSON.stringify(dragPoints)}`);
-await page.mouse.move(dragPoints.panel[0], dragPoints.panel[1]);
+if (!initial.panel || !initial.body) throw new Error(`ARRANGEMENT_POINTS_UNAVAILABLE ${JSON.stringify(initial)}`);
+if (initial.viewportWidth < initial.workspaceWidth * 0.94 || initial.viewportHeight < initial.workspaceHeight * 0.94) {
+  throw new Error(`MONTAR_NOT_PRIMARY_WORKSPACE ${JSON.stringify(initial)}`);
+}
+if (initial.toolbarScrollWidth > initial.toolbarClientWidth + 2) {
+  throw new Error(`ARRANGEMENT_TOOLBAR_OVERFLOW ${JSON.stringify(initial)}`);
+}
+if (initial.canvasCount !== 1) throw new Error(`WEBGL_CANVAS_COUNT ${initial.canvasCount}`);
+
+const grab = [initial.panel[0] + 14, initial.panel[1] - 10];
+await page.mouse.move(grab[0], grab[1]);
 await page.mouse.down();
-await page.mouse.move(dragPoints.body[0], dragPoints.body[1], { steps: 12 });
+await page.mouse.move(grab[0] + 2, grab[1] + 1);
+const afterTinyMove = await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.instanceScreenPosition("browser-panel:panel:1") ?? null);
+if (!afterTinyMove) throw new Error("PANEL_POSITION_LOST_DURING_DRAG");
+const tinyScreenDelta = Math.hypot(afterTinyMove[0] - initial.panel[0], afterTinyMove[1] - initial.panel[1]);
+if (tinyScreenDelta > 18) throw new Error(`DRAG_INITIAL_JUMP ${tinyScreenDelta.toFixed(2)}px`);
+
+await page.mouse.move(initial.body[0], initial.body[1], { steps: 12 });
+const candidateDuringDrag = await viewport.evaluate((host) => host.dataset.arrangementSurfaceCandidate ?? null);
+if (!candidateDuringDrag) throw new Error("SURFACE_CANDIDATE_MISSING");
 await page.mouse.up();
 await page.waitForFunction(() => {
   const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
@@ -91,6 +130,34 @@ await page.waitForFunction(() => {
     && host?.dataset.arrangementStates?.includes("AJUSTADO");
 }, undefined, { timeout: 10_000 });
 await page.screenshot({ path: "docs/progress/RECOVERY_11_0_7_DESKTOP_ADJUSTED.png", fullPage: true });
+
+await page.getByRole("button", { name: "Ajustar", exact: true }).click();
+await page.waitForTimeout(100);
+const conformDiagnostics = await viewport.evaluate((host) => {
+  const raw = host.dataset.arrangementConformDiagnostics;
+  return raw ? JSON.parse(raw) : null;
+});
+if (!conformDiagnostics) throw new Error("CONFORM_DIAGNOSTICS_MISSING");
+for (const result of Object.values(conformDiagnostics)) {
+  if ((result?.minimumClearanceMm ?? 0) <= 0) throw new Error(`CONFORM_INSIDE_BODY ${JSON.stringify(result)}`);
+  if ((result?.metricDistortionMax ?? 0) > 0.0085 && result?.conformed) {
+    throw new Error(`CONFORM_METRIC_GATE_FAILED ${JSON.stringify(result)}`);
+  }
+}
+
+await page.getByRole("button", { name: "Girar", exact: true }).click();
+const rotatePoint = await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.instanceScreenPosition("browser-panel:panel:1") ?? null);
+if (!rotatePoint) throw new Error("ROTATE_POINT_MISSING");
+const commitsBeforeRotate = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0);
+await page.mouse.move(rotatePoint[0], rotatePoint[1]);
+await page.mouse.down();
+await page.mouse.move(rotatePoint[0] + 80, rotatePoint[1], { steps: 8 });
+await page.mouse.up();
+const commitsAfterRotate = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0);
+if (commitsAfterRotate !== commitsBeforeRotate + 1) {
+  throw new Error(`ROTATE_COMMIT_COUNT ${commitsBeforeRotate}->${commitsAfterRotate}`);
+}
+await page.getByRole("button", { name: "Mover", exact: true }).click();
 
 const desktop = await viewport.evaluate((host) => {
   const canvas = host.querySelector("canvas.three-canvas");
@@ -112,24 +179,51 @@ const desktop = await viewport.evaluate((host) => {
     arrangementStates: host.dataset.arrangementStates,
     transientFrames: host.dataset.arrangementTransientFrames,
     gestureCommits: host.dataset.arrangementGestureCommits,
+    conformDiagnostics: host.dataset.arrangementConformDiagnostics,
+    viewportSize: host.dataset.viewportSize,
     arrangementControlCount: host.querySelectorAll(".viewport-arrangement-controls button").length,
     simulationControlCount: host.querySelectorAll(".viewport-simulation-controls button").length,
   };
 });
+if (desktop.simulationStatus !== "disabled-in-montar") throw new Error(`MONTAR_SIMULATION_STATE ${desktop.simulationStatus}`);
+if (Number(desktop.xpbdInitializations ?? "0") !== 0) throw new Error(`MONTAR_XPBD_INIT ${desktop.xpbdInitializations}`);
+
+for (let cycle = 0; cycle < 10; cycle += 1) {
+  await page.getByRole("button", { name: "Modelar", exact: true }).click();
+  await page.getByRole("button", { name: "Montar", exact: true }).click();
+}
+await viewport.waitFor({ state: "visible" });
+await page.waitForTimeout(100);
+const lifecycle = await page.evaluate(() => ({
+  canvasCount: document.querySelectorAll("canvas.three-canvas").length,
+  viewportCount: document.querySelectorAll('[data-testid="dressed-avatar-viewport"]').length,
+}));
+if (lifecycle.canvasCount !== 1 || lifecycle.viewportCount !== 1) {
+  throw new Error(`VIEWPORT_RESOURCE_DUPLICATION ${JSON.stringify(lifecycle)}`);
+}
 
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(250);
 await page.screenshot({ path: "docs/progress/RECOVERY_11_0_7_MOBILE.png", fullPage: true });
-const mobile = await viewport.evaluate((host) => ({
-  viewportWidth: host.getBoundingClientRect().width,
-  viewportHeight: host.getBoundingClientRect().height,
-  editorDisplay: getComputedStyle(document.querySelector(".editor-panel")).display,
-  buttonSizes: [...host.querySelectorAll(".viewport-arrangement-controls button")].map((button) => {
-    const bounds = button.getBoundingClientRect();
-    return [Math.round(bounds.width), Math.round(bounds.height)];
-  }),
-}));
+const mobile = await viewport.evaluate((host) => {
+  const toolbar = host.querySelector(".viewport-arrangement-controls");
+  return {
+    viewportWidth: host.getBoundingClientRect().width,
+    viewportHeight: host.getBoundingClientRect().height,
+    editorDisplay: getComputedStyle(document.querySelector(".editor-panel")).display,
+    toolbarClientWidth: toolbar?.clientWidth ?? 0,
+    toolbarScrollWidth: toolbar?.scrollWidth ?? 0,
+    buttonSizes: [...host.querySelectorAll(".viewport-arrangement-controls button")].map((button) => {
+      const bounds = button.getBoundingClientRect();
+      return [Math.round(bounds.width), Math.round(bounds.height)];
+    }),
+  };
+});
+if (mobile.toolbarScrollWidth > mobile.toolbarClientWidth + 2) throw new Error(`MOBILE_TOOLBAR_OVERFLOW ${JSON.stringify(mobile)}`);
+if (mobile.buttonSizes.some(([width, height]) => width < 44 || height < 44)) {
+  throw new Error(`MOBILE_TOUCH_TARGET ${JSON.stringify(mobile.buttonSizes)}`);
+}
 
-console.log(JSON.stringify({ desktop, mobile, consoleErrors }, null, 2));
+console.log(JSON.stringify({ desktop, mobile, lifecycle, tinyScreenDelta, candidateDuringDrag, consoleErrors }, null, 2));
 await browser.close();
 if (consoleErrors.length > 0) process.exitCode = 2;
