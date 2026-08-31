@@ -14,6 +14,26 @@ describe("canonical body surface query", () => {
     expect(Math.hypot(...hit!.outwardNormal)).toBeCloseTo(1, 6);
   });
 
+  it("keeps positive clearance outside even when source vertex normals point inward", () => {
+    const body = inwardPlanarBody();
+    const hit = raycastBodySurface(body, [0, 0, 2], [0, 0, -1], 12);
+    expect(hit).not.toBeNull();
+    expect(hit!.outwardNormal[2]).toBeGreaterThan(0.99);
+    expect(hit!.position[2]).toBeCloseTo(1.012, 6);
+
+    const flippedFaceAttachment = { ...hit!.attachment, normalOffsetMm: 20 };
+    const reconstructed = resolveBodySurfaceAttachment(body, flippedFaceAttachment);
+    expect(reconstructed).not.toBeNull();
+    expect(reconstructed!.outwardNormal[2]).toBeGreaterThan(0.99);
+    expect(reconstructed!.position[2]).toBeCloseTo(1.02, 6);
+  });
+
+  it("honors a bounded ray distance for interaction queries", () => {
+    const body = planarBody();
+    expect(raycastBodySurface(body, [0, 0, 2], [0, 0, -1], 12, 0.5)).toBeNull();
+    expect(raycastBodySurface(body, [0, 0, 0.25], [0, 0, -1], 12, 0.5)).not.toBeNull();
+  });
+
   it("rejects an attachment from another topology", () => {
     const body = planarBody();
     expect(resolveBodySurfaceAttachment(body, {
@@ -32,8 +52,20 @@ function planarBody(): HumanBodyMesh {
     normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
     indices: new Uint32Array([0, 1, 2]),
     regionIds: ["chest-front", "chest-front", "chest-front"],
-    bounds: { min: [-1, -1, 0], max: [1, 1, 0] },
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
     topologySignature: "planar-body",
+    sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function inwardPlanarBody(): HumanBodyMesh {
+  return {
+    positions: new Float32Array([-1, -1, 1, 1, -1, 1, 0, 1, 1]),
+    normals: new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1]),
+    indices: new Uint32Array([0, 1, 2]),
+    regionIds: ["chest-front", "chest-front", "chest-front"],
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
+    topologySignature: "inward-planar-body",
     sourceAssetId: "canonical-female.glb",
   };
 }
