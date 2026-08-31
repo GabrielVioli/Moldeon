@@ -51,7 +51,9 @@ jobs:
         run: npm run typecheck
 
       - name: Prepare Chromium harness
-        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core
+        run: |
+          npm install --no-save --ignore-scripts playwright-core
+          git checkout -- package-lock.json
 
       - name: Start fallback dev server
         working-directory: apps/web
