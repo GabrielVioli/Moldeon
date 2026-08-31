@@ -1,0 +1,62 @@
+name: Continue 11.0.7 Mount Gate
+on:
+  push:
+    branches: [automation/11-0-7-mount-gate]
+permissions:
+  contents: write
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/11.0.7-canonical-3d-arrangement-workspace
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply scoped patch
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = c91b816a5bb8eee0cdbd56fafd55a5be114ce632
+          git fetch origin automation/11-0-7-mount-gate
+          git show origin/automation/11-0-7-mount-gate:apps/web/src/avatar/BodySurfaceQuery.ts > apps/web/src/avatar/BodySurfaceQuery.ts
+          git show origin/automation/11-0-7-mount-gate:scripts/apply-11-0-7-mount-patch.py > /tmp/patch.py
+          python /tmp/patch.py
+          test "$(git diff --name-only | wc -l)" -eq 9
+          ! git diff --name-only | grep '^apps/web/src/physics/'
+          git diff --check
+      - name: Install
+        run: npm ci
+      - name: Focused tests
+        working-directory: apps/web
+        run: npm test -- --run src/avatar/BodySurfaceQuery.test.ts src/viewport/ArrangementWorkspace.test.ts src/garment3d/ResolvedAssemblyInput.test.ts src/state/assemblyHistory.test.ts src/domain/patternDocumentV3.test.ts src/avatar/HumanBodyModel.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Chromium harness
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts playwright-core
+          git checkout -- package-lock.json
+          cd apps/web
+          npm run dev:fallback -- --host 127.0.0.1 > /tmp/moldeon-mount.log 2>&1 &
+          cd ../..
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:5173 >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:5173 >/dev/null || { cat /tmp/moldeon-mount.log; exit 1; }
+          git show origin/automation/11-0-7-mount-gate:scripts/verify-11-0-7-mount.mjs > /tmp/gate.mjs
+          export MOLDEON_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$MOLDEON_CHROME"
+          node /tmp/gate.mjs
+      - name: Push gated checkpoint
+        shell: bash
+        run: |
+          test "$(git diff --name-only | wc -l)" -eq 9
+          ! git diff --name-only | grep '^apps/web/src/physics/'
+          git diff --check
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src/App.tsx apps/web/src/avatar/BodySurfaceQuery.test.ts apps/web/src/avatar/BodySurfaceQuery.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.ts apps/web/src/viewport/ArrangementWorkspace.test.ts apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/GlobalThreeViewport.ts
+          git commit -m "fix(11.0.7): make mount manipulation kinematic"
+          git push origin HEAD:recovery/11.0.7-canonical-3d-arrangement-workspace
