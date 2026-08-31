@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   focused:
-    name: Focused tests and typecheck
+    name: Focused tests, typecheck and browser gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -44,3 +44,36 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Start fallback dev server
+        shell: bash
+        run: |
+          npm run dev:fallback -- --host 127.0.0.1 > /tmp/moldeon-vite.log 2>&1 &
+          echo $! > /tmp/moldeon-vite.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/moldeon-vite.log
+          exit 1
+
+      - name: Browser interaction gate
+        env:
+          MOLDEON_URL: http://127.0.0.1:5173
+        run: |
+          export MOLDEON_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          node scripts/verify-11-0-7.mjs
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-11-0-7-browser-evidence
+          if-no-files-found: ignore
+          path: |
+            docs/progress/RECOVERY_11_0_7_DESKTOP.png
+            docs/progress/RECOVERY_11_0_7_DESKTOP_ADJUSTED.png
+            docs/progress/RECOVERY_11_0_7_MOBILE.png
+            docs/progress/RECOVERY_11_0_7_BROWSER_FAILURE.png
