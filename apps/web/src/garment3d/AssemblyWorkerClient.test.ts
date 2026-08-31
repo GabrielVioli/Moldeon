@@ -39,7 +39,7 @@ describe("AssemblyWorkerClient isolated lifecycle", () => {
     });
     const document = garmentDraftToPatternDocumentV3(createBlankGarment());
     const first = client.solve({ document, revision: "A" });
-    const second = client.solve({ document, revision: "B" });
+    const second = client.solve({ document, revision: "B", mode: "workspace" });
     expect(workers).toHaveLength(2);
     expect(workers[0].terminated).toBe(true);
     expect(workers[0].onmessage).toBeNull();
@@ -48,6 +48,7 @@ describe("AssemblyWorkerClient isolated lifecycle", () => {
     const request = workers[1].requests[0];
     expect(request.type).toBe("solve");
     if (request.type !== "solve") throw new Error("solve request expected");
+    expect(request.mode).toBe("workspace");
     workers[1].emit({
       type: "solved",
       generation: request.generation,

@@ -62,7 +62,7 @@ export interface IsometricAssemblyComponentDiagnostic extends IsometricAssemblyM
 }
 
 export interface IsometricSurfaceAssemblyResult {
-  strategy: "coarse-isometric-surface";
+  strategy: "coarse-isometric-surface" | "workspace-rigid-panels";
   components: IsometricAssemblyComponentDiagnostic[];
   metrics: IsometricAssemblyMetrics;
   assemblySolveMs: number;

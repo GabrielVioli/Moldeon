@@ -10,6 +10,7 @@ import {
   type SimulationDevTelemetry,
   type SimulationLifecycleState,
 } from "./GlobalThreeViewport";
+import type { ArrangementCommit } from "./ArrangementWorkspace";
 
 interface GarmentViewportProps {
   assemblyInput: ResolvedAssemblyInput;
@@ -17,6 +18,7 @@ interface GarmentViewportProps {
   active: boolean;
   displayMode: "side-preview" | "full-fitting";
   onBackendChange(backend: "webgpu" | "webgl2"): void;
+  onArrangementCommit?(commits: ArrangementCommit[]): void;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -25,6 +27,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   active,
   displayMode,
   onBackendChange,
+  onArrangementCommit,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -51,11 +54,22 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [telemetry, setTelemetry] = useState<SimulationDevTelemetry | null>(null);
   const devSettingsRef = useRef(devSettings);
   const wireframeRef = useRef(wireframe);
+  const arrangementCommitRef = useRef(onArrangementCommit);
+  const [selectedArrangementIds, setSelectedArrangementIds] = useState<string[]>([]);
+  const [selectionPinned, setSelectionPinned] = useState(false);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
+  const selectedArrangementState = selectedArrangementIds.length === 0
+    ? null
+    : selectedArrangementIds.every((id) =>
+      assemblyInput.panelInstances.find((instance) => instance.id === id)?.arrangementAnchor,
+    )
+      ? "AJUSTADO"
+      : "POSICIONAR";
 
   latestInputRef.current = assemblyInput;
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
+  arrangementCommitRef.current = onArrangementCommit;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -80,14 +94,21 @@ export const GarmentViewport = memo(function GarmentViewport({
           return;
         }
         viewportRef.current = viewport;
+        viewport.setArrangementInteractionHandlers(
+          (commits) => arrangementCommitRef.current?.(commits),
+          setSelectedArrangementIds,
+        );
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
         if (latestActiveRef.current) {
-          setWarnings(viewport.updateGarment(latestInputRef.current));
-          lastAppliedSignatureRef.current = latestInputRef.current.signature;
+          const mode = displayMode === "full-fitting" ? "fitting" : "assembly";
+          setWarnings(viewport.updateGarment(latestInputRef.current, mode));
+          lastAppliedSignatureRef.current = mode === "fitting"
+            ? latestInputRef.current.simulationRevision
+            : latestInputRef.current.geometryRevision;
         }
-        if (latestActiveRef.current && latestSimulateVersionRef.current > 0) {
+        if (displayMode === "full-fitting" && latestActiveRef.current && latestSimulateVersionRef.current > 0) {
           viewport.dress();
           lastDressedVersionRef.current = latestSimulateVersionRef.current;
         } else if (latestActiveRef.current) {
@@ -113,19 +134,28 @@ export const GarmentViewport = memo(function GarmentViewport({
 
   useEffect(() => {
     if (!active || updateFrameRef.current !== null) return;
-    if (lastAppliedSignatureRef.current === assemblyInput.signature) return;
+    const effectiveRevision = displayMode === "full-fitting"
+      ? assemblyInput.simulationRevision
+      : assemblyInput.geometryRevision;
+    if (lastAppliedSignatureRef.current === effectiveRevision) return;
     updateFrameRef.current = window.requestAnimationFrame(() => {
       updateFrameRef.current = null;
       const viewport = viewportRef.current;
       if (!viewport) return;
-      setWarnings(viewport.updateGarment(latestInputRef.current));
-      lastAppliedSignatureRef.current = latestInputRef.current.signature;
+      const mode = displayMode === "full-fitting" ? "fitting" : "assembly";
+      setWarnings(viewport.updateGarment(latestInputRef.current, mode));
+      lastAppliedSignatureRef.current = effectiveRevision;
     });
     return () => {
       if (updateFrameRef.current !== null) window.cancelAnimationFrame(updateFrameRef.current);
       updateFrameRef.current = null;
     };
-  }, [active, assemblyInput.signature]);
+  }, [active, assemblyInput.geometryRevision, assemblyInput.simulationRevision, displayMode]);
+
+  useEffect(() => {
+    if (!active || displayMode !== "side-preview") return;
+    viewportRef.current?.updateWorkspaceArrangement(assemblyInput);
+  }, [active, assemblyInput.arrangementRevision, displayMode]);
 
   useEffect(() => {
     if (!active) return;
@@ -134,10 +164,10 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [active, displayMode]);
 
   useEffect(() => {
-    if (simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
+    if (displayMode !== "full-fitting" || simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
     viewportRef.current.dress();
     lastDressedVersionRef.current = simulateVersion;
-  }, [simulateVersion]);
+  }, [displayMode, simulateVersion]);
 
   useEffect(() => {
     devSettingsRef.current = devSettings;
@@ -170,7 +200,24 @@ export const GarmentViewport = memo(function GarmentViewport({
             ? `Manequim aprovado · ${approvedAvatar.assetId}`
             : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
-      <div className="viewport-simulation-controls" aria-label="Controles da simulação">
+      {displayMode === "side-preview" ? (
+        <div className="viewport-arrangement-controls" aria-label="Ações da montagem 3D">
+          <span>{selectedArrangementIds.length > 0
+            ? `${selectedArrangementIds.length} selecionada(s) · ${selectedArrangementState}`
+            : "Selecione uma peça"}</span>
+          <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.adjustArrangementSelectionToBody()}>Ajustar ao corpo</button>
+          <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(-15)}>Girar −15°</button>
+          <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(15)}>Girar +15°</button>
+          <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar</button>
+          <button
+            type="button"
+            disabled={selectedArrangementIds.length === 0}
+            aria-pressed={selectionPinned}
+            onClick={() => setSelectionPinned(viewportRef.current?.toggleArrangementPin() ?? false)}
+          >{selectionPinned ? "Desafixar" : "Fixar"}</button>
+        </div>
+      ) : null}
+      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">
         {simulationState === "running" ? (
           <button type="button" onClick={() => {
             viewportRef.current?.pauseSimulation();
@@ -186,7 +233,7 @@ export const GarmentViewport = memo(function GarmentViewport({
         <button type="button" onClick={() => {
           viewportRef.current?.resetSimulation();
         }}>Reiniciar</button>
-      </div>
+      </div> : null}
       {import.meta.env.DEV && displayMode === "full-fitting" ? (
         <details className="viewport-physics-dev" data-testid="physics-dev-panel">
           <summary>Física DEV</summary>

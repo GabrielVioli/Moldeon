@@ -1628,12 +1628,24 @@ function parsePreviewSurfaceAttachment(
     throw new TypeError(`As coordenadas baricêntricas ${index + 1} são inválidas.`);
   }
   return {
-    version: readEnum(value.version, [1] as const, `A versão do attachment ${index + 1}`),
+    version: readAttachmentVersion(value.version, `A versão do attachment ${index + 1}`),
     topologySignature: readString(value.topologySignature, `A topologia do attachment ${index + 1}`),
-    triangleIndex: readNonNegativeInteger(value.triangleIndex, `O triângulo do attachment ${index + 1}`),
+    triangleIndex: readNonNegativePlacementInteger(value.triangleIndex, `O triângulo do attachment ${index + 1}`),
     barycentric,
     normalOffsetMm: readFiniteNumber(value.normalOffsetMm, `O afastamento do attachment ${index + 1}`),
   };
+}
+
+function readAttachmentVersion(value: unknown, label: string): 1 {
+  if (value !== 1) throw new TypeError(`${label} é inválida.`);
+  return 1;
+}
+
+function readNonNegativePlacementInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new TypeError(`${label} precisa ser um inteiro não negativo.`);
+  }
+  return value;
 }
 
 export function validateSeam(

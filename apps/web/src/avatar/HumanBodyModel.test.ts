@@ -3,6 +3,8 @@ import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
 import type { BodyMeasurements } from "../domain/pattern";
 import {
   buildHumanBodyModel,
+  humanBodyModelCacheStats,
+  updateBoundedCache,
   inspectHumanBodyMesh,
   measureHumanBodyMeshCircumferenceAtY,
 } from "./HumanBodyModel";
@@ -46,6 +48,18 @@ const FEMALE_PROFILES: ReadonlyArray<{ id: string; measurements: BodyMeasurement
 ];
 
 describe("HumanBodyModel canonical female anatomy", () => {
+  it("bounds the calibrated body cache under repeated measurement changes", () => {
+    const cache = new Map<number, string>();
+    for (let index = 0; index < 12; index += 1) {
+      updateBoundedCache(cache, index, String(index), humanBodyModelCacheStats().maximum);
+    }
+    const stats = humanBodyModelCacheStats();
+    expect(cache.size).toBe(stats.maximum);
+    expect(cache.has(0)).toBe(false);
+    expect(cache.has(11)).toBe(true);
+    expect(stats.maximum).toBeLessThanOrEqual(8);
+  });
+
   it("builds one watertight manifold anatomy for both visual and collision LODs", () => {
     const body = buildHumanBodyModel(DEFAULT_BODY_MEASUREMENTS, { disableCache: true });
     const visual = inspectHumanBodyMesh(body.visualMesh);

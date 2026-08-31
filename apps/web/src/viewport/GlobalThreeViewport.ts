@@ -41,8 +41,17 @@ import type {
   XpbdSimulationCadence,
   XpbdWorkerDiagnostics,
 } from "../physics/xpbdProtocol";
+import { raycastBodySurface } from "../avatar/BodySurfaceQuery";
+import {
+  captureMeshArrangement,
+  applyAuthoredArrangementToAssemblyState,
+  placeMeshCentroid,
+  resolveArrangementTransform,
+  type ArrangementCommit,
+} from "./ArrangementWorkspace";
 
 export type RenderBackend = "webgpu" | "webgl2";
+export type ThreeViewportMode = "assembly" | "fitting";
 export type SimulationLifecycleState = "paused" | "running";
 export interface SimulationDevSettings {
   gravityScale: 0 | 0.25 | 1;
@@ -106,6 +115,17 @@ export class ThreeViewport {
   private wireframeEnabled = false;
   private approximateFps = 0;
   private lastAppliedFrameAt = 0;
+  private viewportMode: ThreeViewportMode = "fitting";
+  private currentInput: ResolvedAssemblyInput | null = null;
+  private readonly selectedInstanceIds = new Set<string>();
+  private arrangementCommitHandler?: (commits: ArrangementCommit[]) => void;
+  private arrangementSelectionHandler?: (instanceIds: string[]) => void;
+  private dragState: {
+    pointerId: number;
+    activeInstanceId: string;
+    lastSurfaceAttachment?: ArrangementCommit["surfaceAttachment"];
+    moved: boolean;
+  } | null = null;
 
   private constructor(
     private readonly host: HTMLElement,
@@ -175,6 +195,10 @@ export class ThreeViewport {
     this.controls.minDistance = 0.45;
     this.controls.maxDistance = 12;
     this.controls.addEventListener("change", this.requestRender);
+    this.renderer.domElement.addEventListener("pointerdown", this.handleArrangementPointerDown);
+    this.renderer.domElement.addEventListener("pointermove", this.handleArrangementPointerMove);
+    this.renderer.domElement.addEventListener("pointerup", this.handleArrangementPointerUp);
+    this.renderer.domElement.addEventListener("pointercancel", this.handleArrangementPointerUp);
 
     this.avatarGroup.name = "avatar-root";
     this.garmentGroup.name = "garment-root";
@@ -228,7 +252,122 @@ export class ThreeViewport {
     }
   }
 
-  updateGarment(input: ResolvedAssemblyInput): string[] {
+  setArrangementInteractionHandlers(
+    onCommit?: (commits: ArrangementCommit[]) => void,
+    onSelectionChange?: (instanceIds: string[]) => void,
+  ): void {
+    this.arrangementCommitHandler = onCommit;
+    this.arrangementSelectionHandler = onSelectionChange;
+  }
+
+  updateWorkspaceArrangement(input: ResolvedAssemblyInput): void {
+    this.currentInput = input;
+    if (this.viewportMode !== "assembly") return;
+    const avatarModel = buildAvatarParametricModel(
+      input.document.measurements.values,
+      input.document.body.type,
+      {
+        profile: input.document.measurements.profile,
+        origins: measurementOriginsFromDocument(input.document.measurements),
+      },
+    );
+    this.currentAvatarModel = avatarModel;
+    this.avatarGroup.visible = false;
+    this.configureDevBodyVisuals(avatarModel, undefined, IDENTITY_BODY_TRANSFORM);
+    this.proceduralAvatarGroup.visible = true;
+    this.applyWorkspaceArrangement(input, avatarModel);
+    this.requestRender();
+  }
+
+  rotateArrangementSelection(deltaDeg: number): void {
+    if (this.viewportMode !== "assembly" || this.selectedInstanceIds.size === 0) return;
+    for (const item of this.garmentMeshes) {
+      if (!this.selectedInstanceIds.has(item.key)) continue;
+      item.mesh.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deltaDeg));
+      item.mesh.updateMatrixWorld(true);
+    }
+    this.commitSelectedArrangement();
+    this.requestRender();
+  }
+
+  flipArrangementSelection(): void {
+    if (this.viewportMode !== "assembly" || this.selectedInstanceIds.size === 0) return;
+    for (const item of this.garmentMeshes) {
+      if (!this.selectedInstanceIds.has(item.key)) continue;
+      item.mesh.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI);
+      item.mesh.updateMatrixWorld(true);
+    }
+    this.commitSelectedArrangement();
+    this.requestRender();
+  }
+
+  adjustArrangementSelectionToBody(): void {
+    const body = this.currentAvatarModel?.humanBody.visualMesh;
+    if (this.viewportMode !== "assembly" || !body || this.selectedInstanceIds.size === 0) return;
+    const bodyCenter = new THREE.Vector3(
+      (body.bounds.min[0] + body.bounds.max[0]) * 0.5,
+      (body.bounds.min[1] + body.bounds.max[1]) * 0.5,
+      (body.bounds.min[2] + body.bounds.max[2]) * 0.5,
+    );
+    const commits: ArrangementCommit[] = [];
+    for (const item of this.garmentMeshes) {
+      if (!this.selectedInstanceIds.has(item.key) || item.mesh.userData.arrangementPinned === true) continue;
+      const centroid = meshWorldCentroid(item.mesh);
+      const direction = centroid.clone().sub(bodyCenter);
+      if (direction.lengthSq() <= 1e-12) direction.set(0, 0, 1);
+      direction.normalize();
+      const hit = raycastBodySurface(
+        body,
+        [bodyCenter.x, bodyCenter.y, bodyCenter.z],
+        [direction.x, direction.y, direction.z],
+        12,
+      );
+      if (!hit) continue;
+      const current = captureMeshArrangement(item.key, item.mesh);
+      placeMeshCentroid(item.mesh, resolveArrangementTransform({
+        id: item.key,
+        pieceId: item.pieceId,
+        region: "custom",
+        surface: "custom",
+        bodySide: "center",
+        rotationDeg: 0,
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 12,
+        scale: 1,
+        surfaceAttachment: hit.attachment,
+        orientationDeg: current.orientationDeg,
+        presentationMode: "authored",
+      }, this.currentAvatarModel!));
+      commits.push(captureMeshArrangement(item.key, item.mesh, hit.attachment));
+    }
+    if (commits.length > 0) {
+      this.host.dataset.arrangementConformOperations = String(
+        Number(this.host.dataset.arrangementConformOperations ?? "0") + 1,
+      );
+      this.arrangementCommitHandler?.(commits);
+      this.requestRender();
+    }
+  }
+
+  toggleArrangementPin(): boolean {
+    if (this.selectedInstanceIds.size === 0) return false;
+    const items = this.garmentMeshes.filter((item) => this.selectedInstanceIds.has(item.key));
+    const next = !items.every((item) => item.mesh.userData.arrangementPinned === true);
+    for (const item of items) item.mesh.userData.arrangementPinned = next;
+    this.host.dataset.arrangementPinnedIds = this.garmentMeshes
+      .filter((item) => item.mesh.userData.arrangementPinned === true)
+      .map((item) => item.key)
+      .join(",");
+    return next;
+  }
+
+  updateGarment(input: ResolvedAssemblyInput, mode: ThreeViewportMode = "fitting"): string[] {
+    this.viewportMode = mode;
+    this.currentInput = input;
+    this.host.dataset.viewportMode = mode;
+    this.avatarGroup.visible = mode !== "assembly";
+    if (mode === "fitting" && !import.meta.env.DEV) this.clearDevBodyVisuals();
     const garment = input.garmentProjection;
     const avatarModel = buildAvatarParametricModel(
       input.document.measurements.values,
@@ -239,17 +378,21 @@ export class ThreeViewport {
       },
     );
     this.currentAvatarModel = avatarModel;
-    const avatarConfiguration = this.configureApprovedAvatar(input.document.body.type);
+    const avatarConfiguration = mode === "assembly"
+      ? { changed: this.avatarGroup.visible }
+      : this.configureApprovedAvatar(input.document.body.type);
     const settings = input.document.simulationSettings;
     this.baseGravity = settings.gravityMmS2.map((value) => value * 0.001) as [number, number, number];
     const resumeAfterRebuild = this.simulationRunning;
 
-    this.pendingAssemblyRevision = input.signature;
-    this.assemblyRevision = input.signature;
+    const revision = mode === "assembly" ? input.geometryRevision : input.simulationRevision;
+    const assemblyDocument = mode === "assembly" ? input.assemblyDocument : input.simulationDocument;
+    this.pendingAssemblyRevision = revision;
+    this.assemblyRevision = revision;
     this.assemblyState = null;
     this.simulation.pause();
     this.host.dataset.assemblyStatus = "solving";
-    this.host.dataset.assemblyRevision = input.signature;
+    this.host.dataset.assemblyRevision = revision;
     this.host.dataset.simulationStatus = "assembling";
 
     if (import.meta.env.DEV) {
@@ -257,11 +400,18 @@ export class ThreeViewport {
       this.installDevDocumentExport(input.document);
     }
 
-    void this.assembly.solve({ document: input.assemblyDocument, revision: input.signature }).then((response) => {
-      if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== input.signature) return;
+    void this.assembly.solve({
+      document: assemblyDocument,
+      revision,
+      mode: mode === "assembly" ? "workspace" : "simulation",
+    }).then((response) => {
+      if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== revision) return;
       const state = response.state;
-      const registration = resolveGarmentBodyRegistration(state, avatarModel);
-      applyGarmentBodyRegistration(state, registration);
+      if (mode === "fitting") applyAuthoredArrangementToAssemblyState(state, input, avatarModel);
+      const registration = mode === "fitting"
+        ? resolveGarmentBodyRegistration(state, avatarModel)
+        : null;
+      if (registration) applyGarmentBodyRegistration(state, registration);
       const visibleInstanceIds = new Set(state.instances.map((instance) => instance.id));
       const nextMeshes = buildGarmentAssemblyMeshes(state, garment, {
         castShadow: this.profile.shadows,
@@ -278,6 +428,27 @@ export class ThreeViewport {
       this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
       this.host.dataset.assemblyWarnings = JSON.stringify(response.warnings);
 
+      if (mode === "assembly") {
+        this.simulation.pause();
+        this.configureDevBodyVisuals(avatarModel, undefined, IDENTITY_BODY_TRANSFORM);
+        this.proceduralAvatarGroup.visible = true;
+        this.applyWorkspaceArrangement(input, avatarModel);
+        this.bodyRegistrationStatus = "body-placement-required";
+        this.host.dataset.simulationStatus = "disabled-in-montar";
+        this.host.dataset.arrangementAssemblySolves = String(
+          Number(this.host.dataset.arrangementAssemblySolves ?? "0") + 1,
+        );
+        this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
+        this.host.dataset.garmentInstanceIds = this.garmentMeshes.map((item) => item.key).join(",");
+        if (!this.hasFramedScene || avatarConfiguration.changed) {
+          this.frameDressedScene();
+          this.hasFramedScene = true;
+        }
+        this.requestRender();
+        return;
+      }
+
+      if (!registration) return;
       this.bodyRegistrationStatus = registration.status;
       this.currentBodyTransform = IDENTITY_BODY_TRANSFORM;
       const exactBodyMesh = registration.status === "registered"
@@ -385,7 +556,7 @@ export class ThreeViewport {
       this.requestRender();
     }).catch((error: unknown) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      if (this.disposed || this.pendingAssemblyRevision !== input.signature) return;
+      if (this.disposed || this.pendingAssemblyRevision !== revision) return;
       this.pendingAssemblyRevision = null;
       this.host.dataset.assemblyStatus = "error";
       this.host.dataset.simulationStatus = "assembly-error";
@@ -467,6 +638,10 @@ export class ThreeViewport {
       this.frameId = null;
     }
     this.controls.removeEventListener("change", this.requestRender);
+    this.renderer.domElement.removeEventListener("pointerdown", this.handleArrangementPointerDown);
+    this.renderer.domElement.removeEventListener("pointermove", this.handleArrangementPointerMove);
+    this.renderer.domElement.removeEventListener("pointerup", this.handleArrangementPointerUp);
+    this.renderer.domElement.removeEventListener("pointercancel", this.handleArrangementPointerUp);
     this.controls.dispose();
     this.avatarLoadController?.abort();
     this.avatarLoadController = null;
@@ -635,13 +810,201 @@ export class ThreeViewport {
     this.requestRender();
   }
 
+  private applyWorkspaceArrangement(
+    input: ResolvedAssemblyInput,
+    avatar: AvatarParametricModel,
+  ): void {
+    const placements = new Map(
+      input.garmentProjection.pieces.flatMap((piece) =>
+        (piece.previewPlacements ?? []).map((placement) => [placement.id, placement] as const),
+      ),
+    );
+    const states: Record<string, "POSICIONAR" | "AJUSTADO"> = {};
+    for (const item of this.garmentMeshes) {
+      const placement = placements.get(item.key);
+      if (!placement) continue;
+      placeMeshCentroid(item.mesh, resolveArrangementTransform(placement, avatar));
+      const materials = Array.isArray(item.mesh.material) ? item.mesh.material : [item.mesh.material];
+      for (const material of materials) {
+        material.side = THREE.DoubleSide;
+        material.needsUpdate = true;
+      }
+      item.mesh.userData.panelInstanceId = item.key;
+      item.mesh.userData.arrangementState = placement.presentationMode === "staging"
+        ? "POSICIONAR"
+        : "AJUSTADO";
+      states[item.key] = item.mesh.userData.arrangementState;
+    }
+    this.host.dataset.arrangementStates = JSON.stringify(states);
+    this.host.dataset.arrangementRevision = input.arrangementRevision;
+    this.host.dataset.arrangementXpbdInitializations = "0";
+    this.applyArrangementSelectionVisuals();
+  }
+
+  private readonly handleArrangementPointerDown = (event: PointerEvent): void => {
+    if (this.viewportMode !== "assembly" || event.button !== 0 || this.disposed) return;
+    const hit = this.raycastGarment(event);
+    if (!hit) return;
+    const item = this.garmentMeshes.find((candidate) => candidate.mesh === hit.object);
+    if (!item) return;
+    if (!event.shiftKey) this.selectedInstanceIds.clear();
+    if (event.shiftKey && this.selectedInstanceIds.has(item.key)) this.selectedInstanceIds.delete(item.key);
+    else this.selectedInstanceIds.add(item.key);
+    this.applyArrangementSelectionVisuals();
+    this.arrangementSelectionHandler?.([...this.selectedInstanceIds]);
+    this.dragState = {
+      pointerId: event.pointerId,
+      activeInstanceId: item.key,
+      moved: false,
+    };
+    this.controls.enabled = false;
+    this.renderer.domElement.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  private readonly handleArrangementPointerMove = (event: PointerEvent): void => {
+    const drag = this.dragState;
+    const body = this.currentAvatarModel?.humanBody.visualMesh;
+    if (!drag || drag.pointerId !== event.pointerId || !body) return;
+    const active = this.garmentMeshes.find((item) => item.key === drag.activeInstanceId);
+    if (!active || active.mesh.userData.arrangementPinned === true) return;
+    const ray = this.pointerRay(event);
+    const surface = raycastBodySurface(
+      body,
+      [ray.origin.x, ray.origin.y, ray.origin.z],
+      [ray.direction.x, ray.direction.y, ray.direction.z],
+      12,
+    );
+    if (!surface) return;
+    const before = meshWorldCentroid(active.mesh);
+    placeMeshCentroid(active.mesh, resolveArrangementTransform({
+      id: active.key,
+      pieceId: active.pieceId,
+      region: "custom",
+      surface: "custom",
+      bodySide: "center",
+      rotationDeg: 0,
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: surface.attachment.normalOffsetMm,
+      scale: 1,
+      surfaceAttachment: surface.attachment,
+      presentationMode: "authored",
+    }, this.currentAvatarModel!));
+    const after = meshWorldCentroid(active.mesh);
+    const delta = after.clone().sub(before);
+    for (const item of this.garmentMeshes) {
+      if (item.key === active.key
+        || !this.selectedInstanceIds.has(item.key)
+        || item.mesh.userData.arrangementPinned === true) continue;
+      item.mesh.position.add(delta);
+      item.mesh.updateMatrixWorld(true);
+    }
+    drag.lastSurfaceAttachment = surface.attachment;
+    drag.moved = true;
+    this.host.dataset.arrangementTransientFrames = String(
+      Number(this.host.dataset.arrangementTransientFrames ?? "0") + 1,
+    );
+    this.requestRender();
+    event.preventDefault();
+  };
+
+  private readonly handleArrangementPointerUp = (event: PointerEvent): void => {
+    const drag = this.dragState;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    this.dragState = null;
+    this.controls.enabled = true;
+    if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
+      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    }
+    if (drag.moved) this.commitSelectedArrangement(drag.activeInstanceId, drag.lastSurfaceAttachment);
+    event.preventDefault();
+  };
+
+  private raycastGarment(event: PointerEvent): THREE.Intersection | null {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(this.pointerNdc(event), this.camera);
+    return raycaster.intersectObjects(this.garmentMeshes.map((item) => item.mesh), false)[0] ?? null;
+  }
+
+  private pointerRay(event: PointerEvent): THREE.Ray {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(this.pointerNdc(event), this.camera);
+    return raycaster.ray;
+  }
+
+  private pointerNdc(event: PointerEvent): THREE.Vector2 {
+    const bounds = this.renderer.domElement.getBoundingClientRect();
+    return new THREE.Vector2(
+      ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
+      -((event.clientY - bounds.top) / Math.max(1, bounds.height)) * 2 + 1,
+    );
+  }
+
+  private commitSelectedArrangement(
+    activeInstanceId?: string,
+    surfaceAttachment?: ArrangementCommit["surfaceAttachment"],
+  ): void {
+    const commits = this.garmentMeshes
+      .filter((item) => this.selectedInstanceIds.has(item.key))
+      .map((item) => captureMeshArrangement(
+        item.key,
+        item.mesh,
+        item.key === activeInstanceId ? surfaceAttachment : undefined,
+      ));
+    if (commits.length === 0) return;
+    this.host.dataset.arrangementGestureCommits = String(
+      Number(this.host.dataset.arrangementGestureCommits ?? "0") + 1,
+    );
+    this.arrangementCommitHandler?.(commits);
+  }
+
+  private applyArrangementSelectionVisuals(): void {
+    for (const item of this.garmentMeshes) {
+      const selected = this.selectedInstanceIds.has(item.key);
+      item.mesh.userData.arrangementSelected = selected;
+      const materials = Array.isArray(item.mesh.material) ? item.mesh.material : [item.mesh.material];
+      for (const material of materials) {
+        if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+        if (material.userData.arrangementBaseEmissive === undefined) {
+          material.userData.arrangementBaseEmissive = material.emissive.getHex();
+        }
+        material.emissive.setHex(selected ? 0x5f4200 : material.userData.arrangementBaseEmissive as number);
+        material.emissiveIntensity = selected ? 0.35 : 1;
+      }
+    }
+    this.requestRender();
+  }
+
   private installDevViewportBridge(): void {
     const target = window as Window & {
-      __MOLDEON_VIEWPORT_DEV__?: { cameraView(view: "front" | "side" | "back"): void };
+      __MOLDEON_VIEWPORT_DEV__?: {
+        cameraView(view: "front" | "side" | "back"): void;
+        instanceScreenPosition(instanceId: string): [number, number] | null;
+        bodyScreenPosition(): [number, number] | null;
+      };
     };
     target.__MOLDEON_VIEWPORT_DEV__ = {
       cameraView: (view) => this.setCanonicalCameraView(view),
+      instanceScreenPosition: (instanceId) => {
+        const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
+        return item ? this.worldToCanvasPoint(meshWorldCentroid(item.mesh)) : null;
+      },
+      bodyScreenPosition: () => {
+        const landmark = this.currentAvatarModel?.humanBody.landmarks["center-front-waist"];
+        return landmark ? this.worldToCanvasPoint(new THREE.Vector3(...landmark.position)) : null;
+      },
     };
+  }
+
+  private worldToCanvasPoint(world: THREE.Vector3): [number, number] {
+    const projected = world.clone().project(this.camera);
+    const bounds = this.renderer.domElement.getBoundingClientRect();
+    return [
+      bounds.left + (projected.x + 1) * 0.5 * bounds.width,
+      bounds.top + (1 - projected.y) * 0.5 * bounds.height,
+    ];
   }
 
   private setCanonicalCameraView(view: "front" | "side" | "back"): void {
@@ -1059,6 +1422,12 @@ function disposeObject(root: THREE.Object3D): void {
 function disposeMesh(mesh: THREE.Mesh): void {
   mesh.geometry.dispose();
   disposeMaterial(mesh.material);
+}
+
+function meshWorldCentroid(mesh: THREE.Mesh): THREE.Vector3 {
+  mesh.geometry.computeBoundingBox();
+  const center = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+  return mesh.localToWorld(center);
 }
 
 function disposeMaterial(material: THREE.Material | THREE.Material[]): void {

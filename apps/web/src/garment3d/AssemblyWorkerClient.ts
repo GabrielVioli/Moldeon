@@ -18,6 +18,7 @@ export type AssemblyWorkerFactory = () => AssemblyWorkerLike;
 export interface AssemblyWorkerSolveInput {
   document: PatternDocumentV3;
   revision: string;
+  mode?: "workspace" | "simulation";
 }
 
 /**
@@ -63,6 +64,7 @@ export class AssemblyWorkerClient {
         generation,
         revision: input.revision,
         serializedDocument: serializePatternDocumentV3(input.document),
+        mode: input.mode,
       });
     });
   }

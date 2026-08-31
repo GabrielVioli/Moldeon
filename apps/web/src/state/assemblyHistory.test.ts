@@ -251,6 +251,38 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.pieces[0].previewPlacements?.[0].bodyAnchorId).toBe("torso-front");
   });
 
+  it("commits a multi-panel 3D gesture as one undoable history entry", () => {
+    const placement = (pieceId: string, xMm: number) => ({
+      id: `${pieceId}:panel:1`,
+      pieceId,
+      region: "custom" as const,
+      surface: "custom" as const,
+      bodySide: "center" as const,
+      rotationDeg: 0,
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 12,
+      scale: 1,
+      positionMm: [xMm, 1_000, 0] as [number, number, number],
+      orientationDeg: [0, 0, 0] as [number, number, number],
+      presentationMode: "authored" as const,
+    });
+    useEditorStore.getState().setPanelInstanceArrangements([
+      { pieceId: "a", copyIndex: 0, placement: placement("a", -100) },
+      { pieceId: "b", copyIndex: 0, placement: placement("b", 100) },
+    ]);
+    expect(useEditorStore.getState().garment.pieces.map((candidate) =>
+      candidate.previewPlacements?.[0].positionMm?.[0],
+    )).toEqual([-100, 100]);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.pieces.every((candidate) => candidate.previewPlacements === undefined)).toBe(true);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.pieces.map((candidate) =>
+      candidate.previewPlacements?.[0].positionMm?.[0],
+    )).toEqual([-100, 100]);
+  });
+
   it("undoes and redoes the garment-level dressing setup", () => {
     createSeam();
     useEditorStore.getState().setGarmentDressing({
@@ -279,6 +311,37 @@ describe("assembly document history", () => {
     expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).signature).toBe(before);
     useEditorStore.getState().redo();
     expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).signature).toBe(changed);
+  });
+
+  it("keeps authored 3D arrangement when the technical 2D contour changes", () => {
+    useEditorStore.getState().setPanelInstanceArrangements([{
+      pieceId: "a",
+      copyIndex: 0,
+      placement: {
+        id: "a:panel:1",
+        pieceId: "a",
+        region: "custom",
+        surface: "custom",
+        bodySide: "center",
+        rotationDeg: 12,
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 12,
+        scale: 1,
+        positionMm: [120, 980, 50],
+        orientationDeg: [0, 12, 0],
+        presentationMode: "authored",
+      },
+    }]);
+    const point = useEditorStore.getState().snapshot.piece.points[0];
+    useEditorStore.getState().movePoint(point.id, point.xMm + 20, point.yMm + 10);
+    const anchor = buildResolvedAssemblyInput(useEditorStore.getState().garment)
+      .panelInstances.find((instance) => instance.id === "a:panel:1")?.arrangementAnchor;
+    expect(anchor).toMatchObject({
+      positionMm: [120, 980, 50],
+      orientationDeg: [0, 12, 0],
+      scale: 1,
+    });
   });
 
   it("keeps workspace transforms out of body placement and canonical assembly signatures", () => {

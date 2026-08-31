@@ -105,6 +105,13 @@ function finalizeResolvedAssemblyInput(
   ]));
   const geometryRevision = stableHash(JSON.stringify({
     geometry: [...geometrySignatures.entries()],
+    instances: includedInstances.map((instance) => ({
+      id: instance.id,
+      sourcePatternId: instance.sourcePatternId,
+      copyIndex: instance.copyIndex,
+      mirrored: instance.mirrored,
+    })),
+    seams: seamGroups,
     fabrics: document.fabrics.map((fabric) => ({ id: fabric.id })),
   }));
   const arrangementRevision = stableHash(JSON.stringify({

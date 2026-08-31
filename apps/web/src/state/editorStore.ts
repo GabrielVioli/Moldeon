@@ -178,6 +178,7 @@ export interface EditorState {
   setAssemblyPlacement(pieceId: string, placement: Partial<AssemblyPlacement>): void;
   setBodyPlacement(pieceId: string, placement: PatternBodyPlacement): void;
   setPanelInstanceArrangement(pieceId: string, copyIndex: number, placement: PatternPreviewPlacement | null): void;
+  setPanelInstanceArrangements(updates: Array<{ pieceId: string; copyIndex: number; placement: PatternPreviewPlacement }>): void;
   confirmPanelInstanceArrangement(pieceId: string, copyIndex: number, definitionPlacement: PatternBodyPlacement, placement: PatternPreviewPlacement): void;
   clearBodyArrangement(pieceId: string): void;
   setEdgeFinish(pieceId: string, edgeId: string, finish: NonNullable<PatternPiece["edgeFinishes"]>[string]): void;
@@ -784,6 +785,39 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             ...piece,
             ...(placements.length > 0 ? { previewPlacements: placements } : { previewPlacements: undefined }),
           };
+        }),
+      },
+    }));
+  },
+  setPanelInstanceArrangements: (updates) => {
+    if (updates.length === 0) return;
+    const byPiece = new Map<string, Map<string, PatternPreviewPlacement>>();
+    for (const update of updates) {
+      if (!get().garment.pieces.some((piece) => piece.id === update.pieceId)) continue;
+      const instanceId = createPanelInstanceId(update.pieceId, update.copyIndex);
+      const placements = byPiece.get(update.pieceId) ?? new Map<string, PatternPreviewPlacement>();
+      placements.set(instanceId, {
+        ...structuredClone(update.placement),
+        id: instanceId,
+        pieceId: update.pieceId,
+        scale: 1,
+        presentationMode: "authored",
+      });
+      byPiece.set(update.pieceId, placements);
+    }
+    if (byPiece.size === 0) return;
+    changeDocument(set, get, "placement", "Posicionar instância(s) no 3D", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        pieces: document.garment.pieces.map((piece) => {
+          const updatesForPiece = byPiece.get(piece.id);
+          if (!updatesForPiece) return piece;
+          const placements = (piece.previewPlacements ?? [])
+            .filter((candidate) => !updatesForPiece.has(candidate.id));
+          placements.push(...updatesForPiece.values());
+          placements.sort((left, right) => left.id.localeCompare(right.id));
+          return { ...piece, previewPlacements: placements };
         }),
       },
     }));

@@ -326,7 +326,11 @@ export function evaluateDressingPreflight(garment: GarmentDraft): DressingPrefli
   const canonicalArrangementReady = includedPanelInstances.length > 0
     && includedPanelInstances.every((instance) =>
       instance.placementStatus === "confirmed"
-      && Boolean(instance.arrangementAnchor?.bodyAnchorId),
+      && Boolean(
+        instance.arrangementAnchor?.bodyAnchorId
+        || instance.arrangementAnchor?.surfaceAttachment
+        || instance.arrangementAnchor?.positionMm,
+      ),
     );
 
   if (includedPieces.length > 0 && graph.validSeamIds.length === 0) {
@@ -452,7 +456,8 @@ export function deriveDressingPanelInstances(
     const authoredAnchor = instance.arrangementAnchor;
     if (
       instance.placementStatus === "confirmed"
-      && authoredAnchor?.bodyAnchorId
+      && authoredAnchor !== undefined
+      && Boolean(authoredAnchor.bodyAnchorId || authoredAnchor.surfaceAttachment || authoredAnchor.positionMm)
       && (authoredAnchor.source === "manual" || authoredAnchor.source === "template")
       && instance.metadata.effectivePlacementSource !== "pattern-definition"
     ) {
@@ -635,8 +640,7 @@ export function shouldLoadThreeViewport(
   requested: boolean,
   mode: WorkspaceMode,
 ): boolean {
-  void mode;
-  return requested && eligibility.canOpenViewport;
+  return eligibility.canOpenViewport && (requested || mode === "assembly" || mode === "fitting");
 }
 
 /**

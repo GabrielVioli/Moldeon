@@ -28,6 +28,7 @@ import { evaluateDressingPreflight, evaluateGarment3DEligibility, shouldLoadThre
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
 import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
+import type { ArrangementCommit } from "./viewport/ArrangementWorkspace";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
 type RenderBackend = "deferred" | "webgpu" | "webgl2";
@@ -97,6 +98,7 @@ export function App() {
   const simulate = useEditorStore((state) => state.simulate);
   const setGarmentDressing = useEditorStore((state) => state.setGarmentDressing);
   const addGuidedSleeve = useEditorStore((state) => state.addGuidedSleeve);
+  const setPanelInstanceArrangements = useEditorStore((state) => state.setPanelInstanceArrangements);
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const autosaveRevisionRef = useRef(0);
@@ -118,6 +120,36 @@ export function App() {
   const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
   const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
+  const handleArrangementCommit = useCallback((commits: ArrangementCommit[]) => {
+    const updates = commits.flatMap((commit) => {
+      const instance = assemblyInput.panelInstances.find((candidate) => candidate.id === commit.instanceId);
+      if (!instance) return [];
+      const existing = instance.arrangementAnchor;
+      return [{
+        pieceId: instance.sourcePatternId,
+        copyIndex: instance.copyIndex,
+        placement: {
+          id: instance.id,
+          pieceId: instance.sourcePatternId,
+          region: existing?.region ?? "custom" as const,
+          surface: existing?.surface ?? "custom" as const,
+          bodySide: existing?.bodySide ?? "center" as const,
+          ...(existing?.bodyAnchorId ? { bodyAnchorId: existing.bodyAnchorId } : {}),
+          rotationDeg: commit.orientationDeg[2],
+          offsetXMm: existing?.offsetXMm ?? 0,
+          offsetYMm: existing?.offsetYMm ?? 0,
+          offsetZMm: existing?.offsetZMm ?? 12,
+          scale: 1,
+          mirrorX: instance.mirrored,
+          positionMm: commit.positionMm,
+          orientationDeg: commit.orientationDeg,
+          ...(commit.surfaceAttachment ? { surfaceAttachment: commit.surfaceAttachment } : {}),
+          presentationMode: "authored" as const,
+        },
+      }];
+    });
+    setPanelInstanceArrangements(updates);
+  }, [assemblyInput.panelInstances, setPanelInstanceArrangements]);
   const openDressedViewport = useCallback((mode: "assembly" | "fitting") => {
     setWorkspaceMode(mode);
     setPreviewRequested(true);
@@ -155,6 +187,12 @@ export function App() {
       return;
     }
     setWorkspaceMode(mode);
+    if (mode === "assembly") {
+      setPreviewRequested(true);
+      setIsRightPanelOpen(true);
+      if (isCompactWorkspace) setMobileView("preview");
+      return;
+    }
     if (isCompactWorkspace) setMobileView("editor");
   }, [dressingPreflight.canDress, handleDressBody, isCompactWorkspace, previewRequested]);
   useEffect(() => {
@@ -676,6 +714,7 @@ export function App() {
                 active={isRightPanelOpen && (!isCompactWorkspace || mobileView === "preview")}
                 displayMode={workspaceMode === "fitting" ? "full-fitting" : "side-preview"}
                 onBackendChange={setRenderBackend}
+                onArrangementCommit={handleArrangementCommit}
               />
             </Suspense>
           ) : (

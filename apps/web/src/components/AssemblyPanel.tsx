@@ -246,7 +246,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
           </div>
         </section>
 
-        <section className="assembly-section">
+        {activePiece ? <section className="assembly-section">
           <h3>Acabamento de borda</h3>
           <select
             aria-label="Acabamento da primeira borda"
@@ -276,7 +276,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
             <option value="facing">Revel</option>
             <option value="elastic">Elástico</option>
           </select>
-        </section>
+        </section> : null}
       </details>
 
       <section className="assembly-readiness" aria-live="polite">

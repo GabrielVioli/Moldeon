@@ -28,6 +28,104 @@
   grid-template-rows: minmax(0, 1fr) !important;
 }
 
+/* 11.0.7: Montar is a 3D workspace, not a thumbnail beside the 2D editor. */
+.workspace.mode-assembly,
+.workspace.is-right-panel-closed.mode-assembly {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.workspace.mode-assembly > .mobile-workspace-tabs,
+.workspace.mode-assembly > .editor-panel {
+  display: none !important;
+}
+
+.workspace.mode-assembly > .workspace-right-panel {
+  position: relative;
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace.mode-assembly .preview-panel {
+  display: block !important;
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.workspace.mode-assembly .assembly-panel {
+  position: absolute;
+  z-index: 12;
+  right: clamp(10px, 1.4vw, 22px);
+  bottom: clamp(10px, 1.4vw, 22px);
+  width: min(300px, calc(100% - 20px));
+  max-height: min(48%, 430px);
+  border: 1px solid rgba(112, 105, 93, 0.55);
+  border-radius: 9px;
+  box-shadow: 0 10px 32px rgba(40, 35, 28, 0.2);
+  background: rgba(248, 246, 241, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.workspace.mode-assembly .right-panel-close {
+  display: none;
+}
+
+.viewport-arrangement-controls {
+  position: absolute;
+  z-index: 14;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 32px);
+  padding: 6px;
+  border: 1px solid rgba(112, 105, 93, 0.55);
+  border-radius: 9px;
+  background: rgba(248, 246, 241, 0.94);
+  box-shadow: 0 6px 20px rgba(40, 35, 28, 0.16);
+  transform: translateX(-50%);
+  overflow-x: auto;
+}
+
+.viewport-arrangement-controls span {
+  padding: 0 7px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.viewport-arrangement-controls button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #bdb8ae;
+  border-radius: 7px;
+  white-space: nowrap;
+  background: #fff;
+  cursor: pointer;
+}
+
+.viewport-arrangement-controls button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .workspace.mode-fitting > .mobile-workspace-tabs,
 .workspace.mode-fitting > .editor-panel {
   display: none !important;
@@ -133,6 +231,18 @@
 }
 
 @media (max-width: 760px) {
+  .workspace.mode-assembly .assembly-panel {
+    right: 8px;
+    bottom: 8px;
+    width: min(280px, calc(100% - 16px));
+    max-height: 38%;
+  }
+
+  .viewport-arrangement-controls {
+    top: max(8px, env(safe-area-inset-top));
+    width: calc(100% - 16px);
+  }
+
   .fitting-summary-drawer {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));

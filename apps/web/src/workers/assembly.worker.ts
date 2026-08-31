@@ -2,6 +2,8 @@
 
 import { parsePatternDocumentV3 } from "../domain/patternDocumentV3";
 import { buildCoarseIsometricAssembly } from "../garment3d/CoarseAssemblyPipeline";
+import { buildResolvedAssemblyInputFromDocument } from "../garment3d/ResolvedAssemblyInput";
+import { buildResolvedGarmentAssembly } from "../garment3d/ResolvedGarmentAssembly";
 import {
   collectAssemblyStateTransferables,
   type AssemblyWorkerRequest,
@@ -23,7 +25,9 @@ scope.onmessage = (event: MessageEvent<AssemblyWorkerRequest>) => {
   try {
     const raw = JSON.parse(request.serializedDocument) as unknown;
     const document = parsePatternDocumentV3(raw);
-    const result = buildCoarseIsometricAssembly(document);
+    const result = request.mode === "workspace"
+      ? buildRigidWorkspaceAssembly(document)
+      : buildCoarseIsometricAssembly(document);
     const response: AssemblyWorkerResponse = {
       type: "solved",
       generation: request.generation,
@@ -53,5 +57,46 @@ scope.onmessage = (event: MessageEvent<AssemblyWorkerRequest>) => {
     scope.postMessage(response);
   }
 };
+
+function buildRigidWorkspaceAssembly(document: ReturnType<typeof parsePatternDocumentV3>) {
+  const input = buildResolvedAssemblyInputFromDocument(document);
+  const state = buildResolvedGarmentAssembly(input);
+  const vertexCount = state.positions.length / 3;
+  const triangleCount = state.instances.reduce((sum, instance) => sum + instance.topology.triangles.length / 3, 0);
+  const zeroMetrics = {
+    metricDistortionMean: 0,
+    metricDistortionMax: 0,
+    areaDistortionMean: 0,
+    areaDistortionMax: 0,
+    structuralSeamMeanMm: 0,
+    structuralSeamMaxMm: 0,
+    normalizedResidual: 0,
+    overlapScore: 0,
+    triangleCrossingProxyCount: 0,
+    nonPlanarityRad: 0,
+  };
+  return {
+    state,
+    coarse: {
+      coarseVertexCount: vertexCount,
+      coarseTriangleCount: triangleCount,
+      fineVertexCount: vertexCount,
+      hingeCount: 0,
+      reductionRatio: 1,
+    },
+    fineBindings: { buildMs: 0 },
+    fineTransferMs: 0,
+    assembly: {
+      strategy: "workspace-rigid-panels" as const,
+      components: [],
+      metrics: zeroMetrics,
+      assemblySolveMs: 0,
+      candidateCount: 0,
+      invalid: false,
+      warnings: [],
+    },
+    warnings: state.warnings,
+  };
+}
 
 export {};

@@ -88,6 +88,54 @@ describe("PatternDocumentV3", () => {
     expect(JSON.stringify(document)).not.toContain("suggested");
   });
 
+  it("round-trips a continuous 3D surface attachment without requiring a named anchor", () => {
+    const garment = createBaselineFixture("free-simple-piece");
+    const piece = garment.pieces[0];
+    piece.bodyPlacement = undefined;
+    piece.previewPlacements = [{
+      id: `${piece.id}:panel:1`,
+      pieceId: piece.id,
+      region: "custom",
+      surface: "custom",
+      bodySide: "center",
+      rotationDeg: 7,
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 12,
+      scale: 1,
+      positionMm: [120, 940, 215],
+      orientationDeg: [1, 2, 7],
+      surfaceAttachment: {
+        version: 1,
+        topologySignature: "canonical-female-topology",
+        triangleIndex: 42,
+        barycentric: [0.2, 0.3, 0.5],
+        normalOffsetMm: 12,
+      },
+      presentationMode: "authored",
+    }];
+
+    const document = garmentDraftToPatternDocumentV3(garment);
+    const parsed = parsePatternDocumentV3(JSON.parse(serializePatternDocumentV3(document)));
+    const restored = patternDocumentV3ToGarmentDraft(parsed);
+
+    expect(parsed.panelInstances[0]).toMatchObject({
+      placementStatus: "confirmed",
+      arrangementAnchor: {
+        positionMm: [120, 940, 215],
+        orientationDeg: [1, 2, 7],
+        surfaceAttachment: {
+          triangleIndex: 42,
+          barycentric: [0.2, 0.3, 0.5],
+        },
+      },
+    });
+    expect(restored.pieces[0].previewPlacements?.[0]).toMatchObject({
+      positionMm: [120, 940, 215],
+      presentationMode: "authored",
+    });
+  });
+
   it("round trips curves, partial seams, darts, lines, fabrics and workspace", () => {
     const garment = richGarment();
     garment.dressing = {

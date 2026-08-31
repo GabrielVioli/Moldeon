@@ -1772,7 +1772,9 @@ function parsePanelSurfaceAttachment(
     throw new TypeError(`As coordenadas baricêntricas do attachment ${index + 1} precisam somar 1.`);
   }
   return {
-    version: readEnum(value.version, [1] as const, `A versão do attachment ${index + 1}`),
+    version: value.version === 1
+      ? 1
+      : (() => { throw new TypeError(`A versão do attachment ${index + 1} é inválida.`); })(),
     topologySignature: readString(value.topologySignature, `A topologia do attachment ${index + 1}`),
     triangleIndex: readNonNegativeInteger(value.triangleIndex, `O triângulo do attachment ${index + 1}`),
     barycentric,

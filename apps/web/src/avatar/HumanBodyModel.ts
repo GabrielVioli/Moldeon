@@ -371,6 +371,7 @@ export const HUMAN_BODY_FRAME: HumanBodyFrame = {
 const CIRCUMFERENCE_TOLERANCE_MM = 5;
 const LENGTH_TOLERANCE_MM = 5;
 const DEFAULT_METRIC_ITERATIONS = 28;
+const MAX_MODEL_CACHE_ENTRIES = 8;
 const modelCache = new Map<string, HumanBodyModel>();
 let referenceCache: CanonicalReference | null = null;
 let nativeMeasurementCache: HumanBodyMeasurements | null = null;
@@ -393,7 +394,11 @@ export function buildHumanBodyModel(
   });
   if (!options.disableCache) {
     const cached = modelCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      modelCache.delete(cacheKey);
+      modelCache.set(cacheKey, cached);
+      return cached;
+    }
   }
 
   const reference = canonicalReference();
@@ -498,8 +503,33 @@ export function buildHumanBodyModel(
       rise: measurements.crotchDepthMm,
     },
   };
-  if (!options.disableCache) modelCache.set(cacheKey, model);
+  if (!options.disableCache) {
+    updateBoundedCache(modelCache, cacheKey, model, MAX_MODEL_CACHE_ENTRIES);
+  }
   return model;
+}
+
+export function humanBodyModelCacheStats(): { size: number; maximum: number } {
+  return { size: modelCache.size, maximum: MAX_MODEL_CACHE_ENTRIES };
+}
+
+export function clearHumanBodyModelCache(): void {
+  modelCache.clear();
+}
+
+export function updateBoundedCache<K, V>(
+  cache: Map<K, V>,
+  key: K,
+  value: V,
+  maximum: number,
+): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > maximum) {
+    const oldest = cache.keys().next().value as K | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 function applyMeasurementOriginOverrides(

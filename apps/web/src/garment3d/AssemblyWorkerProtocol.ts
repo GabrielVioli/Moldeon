@@ -6,6 +6,7 @@ export interface AssemblyWorkerSolveRequest {
   generation: number;
   revision: string;
   serializedDocument: string;
+  mode?: "workspace" | "simulation";
 }
 
 export interface AssemblyWorkerDisposeRequest {
