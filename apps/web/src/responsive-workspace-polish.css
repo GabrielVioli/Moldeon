@@ -5,48 +5,15 @@
 }
 
 /*
- * The right-hand preview is a visual tool first. Its lower information region
- * scrolls independently instead of reducing the mannequin to a thumbnail.
- */
-@media (min-width: 1181px) {
-  .workspace.mode-modeling,
-  .workspace.mode-assembly {
-    grid-template-rows: minmax(260px, 0.58fr) minmax(0, 0.42fr);
-  }
-}
-
-/*
- * Fitting reuses the mounted preview viewport as a full workspace. Keeping the
- * same DOM owner is intentional: layout changes must not recreate Three.js,
- * its ResizeObserver, animation loop, or physics Worker.
+ * Fitting and assembly reuse the one mounted Three viewport as the primary
+ * workspace. Layout changes must not create another renderer, Worker or RAF.
  */
 .workspace.mode-fitting,
-.workspace.is-right-panel-closed.mode-fitting {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) !important;
-  grid-template-rows: minmax(0, 1fr) !important;
-}
-
-/* 11.0.7: Montar is a 3D workspace, not a thumbnail beside the 2D editor. */
+.workspace.is-right-panel-closed.mode-fitting,
 .workspace.mode-assembly,
 .workspace.is-right-panel-closed.mode-assembly {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) !important;
-  grid-template-rows: minmax(0, 1fr) !important;
-}
-
-.workspace.mode-assembly > .mobile-workspace-tabs,
-.workspace.mode-assembly > .editor-panel {
-  display: none !important;
-}
-
-.workspace.mode-assembly > .workspace-right-panel {
-  position: relative;
-  display: grid;
-  grid-column: 1;
-  grid-row: 1;
+  display: block !important;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -54,35 +21,71 @@
   overflow: hidden;
 }
 
-.workspace.mode-assembly .preview-panel {
+.workspace.mode-assembly > .mobile-workspace-tabs,
+.workspace.mode-assembly > .editor-panel,
+.workspace.mode-fitting > .mobile-workspace-tabs,
+.workspace.mode-fitting > .editor-panel {
+  display: none !important;
+}
+
+.workspace.mode-assembly > .workspace-right-panel,
+.workspace.mode-fitting > .workspace-right-panel {
+  position: absolute !important;
+  inset: 0 !important;
   display: block !important;
-  grid-column: 1;
-  grid-row: 1;
-  width: 100%;
-  height: 100%;
+  width: auto !important;
+  height: auto !important;
   min-width: 0;
   min-height: 0;
-  border: 0;
+  overflow: hidden;
+}
+
+.workspace.mode-assembly .preview-panel,
+.workspace.mode-fitting .preview-panel {
+  position: absolute !important;
+  z-index: 1;
+  inset: 0 !important;
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0;
+  min-height: 0;
+  border: 0 !important;
   visibility: visible !important;
   pointer-events: auto !important;
 }
 
-.workspace.mode-assembly .assembly-panel {
+.workspace.mode-assembly .viewport-host,
+.workspace.mode-fitting .viewport-host,
+.workspace.mode-assembly .three-canvas,
+.workspace.mode-fitting .three-canvas {
   position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+}
+
+.workspace.mode-assembly .right-panel-close,
+.workspace.mode-fitting .right-panel-close {
+  display: none;
+}
+
+.workspace.mode-assembly .assembly-panel {
+  position: absolute !important;
   z-index: 12;
   right: clamp(10px, 1.4vw, 22px);
   bottom: clamp(10px, 1.4vw, 22px);
   width: min(300px, calc(100% - 20px));
-  max-height: min(48%, 430px);
+  max-height: min(46%, 430px);
   border: 1px solid rgba(112, 105, 93, 0.55);
-  border-radius: 9px;
+  border-radius: 10px;
   box-shadow: 0 10px 32px rgba(40, 35, 28, 0.2);
-  background: rgba(248, 246, 241, 0.94);
+  background: rgba(248, 246, 241, 0.92);
   backdrop-filter: blur(10px);
-}
-
-.workspace.mode-assembly .right-panel-close {
-  display: none;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .viewport-arrangement-controls {
@@ -90,77 +93,115 @@
   z-index: 14;
   top: 12px;
   left: 50%;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  width: min(900px, calc(100% - 32px));
   max-width: calc(100% - 32px);
-  padding: 6px;
+  padding: 7px;
   border: 1px solid rgba(112, 105, 93, 0.55);
-  border-radius: 9px;
-  background: rgba(248, 246, 241, 0.94);
+  border-radius: 10px;
+  background: rgba(248, 246, 241, 0.92);
   box-shadow: 0 6px 20px rgba(40, 35, 28, 0.16);
+  backdrop-filter: blur(10px);
   transform: translateX(-50%);
-  overflow-x: auto;
+  overflow: visible;
 }
 
-.viewport-arrangement-controls span {
+.viewport-arrangement-status {
+  display: grid;
+  gap: 1px;
+  min-width: 130px;
   padding: 0 7px;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 800;
 }
 
-.viewport-arrangement-controls button {
+.viewport-arrangement-status strong,
+.viewport-arrangement-status small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewport-arrangement-status strong {
+  font-size: 11px;
+}
+
+.viewport-arrangement-status small {
+  color: #6b6b65;
+  font-size: 9px;
+}
+
+.viewport-arrangement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.viewport-arrangement-controls button,
+.viewport-arrangement-more > summary {
+  display: inline-flex;
   min-width: 44px;
   min-height: 44px;
+  align-items: center;
+  justify-content: center;
   padding: 0 10px;
   border: 1px solid #bdb8ae;
   border-radius: 7px;
-  white-space: nowrap;
+  color: #33352f;
   background: #fff;
   cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.viewport-arrangement-controls button[aria-pressed="true"] {
+  border-color: #8f6d15;
+  background: #f2dda1;
+  box-shadow: inset 0 0 0 1px rgba(143, 109, 21, 0.22);
 }
 
 .viewport-arrangement-controls button:disabled {
   cursor: default;
-  opacity: 0.45;
+  opacity: 0.42;
 }
 
-.workspace.mode-fitting > .mobile-workspace-tabs,
-.workspace.mode-fitting > .editor-panel {
-  display: none !important;
-}
-
-.workspace.mode-fitting > .workspace-right-panel {
+.viewport-arrangement-more {
   position: relative;
-  display: grid;
-  grid-column: 1;
-  grid-row: 1;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
-.workspace.mode-fitting .preview-panel {
-  z-index: 1;
-  display: block;
-  grid-column: 1;
-  grid-row: 1;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  border: 0;
-  visibility: visible !important;
-  pointer-events: auto !important;
+.viewport-arrangement-more > summary {
+  width: 44px;
+  padding: 0;
+  list-style: none;
 }
 
-.workspace.mode-fitting .right-panel-close {
+.viewport-arrangement-more > summary::-webkit-details-marker {
   display: none;
+}
+
+.viewport-arrangement-more > div {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid #c6c1b8;
+  border-radius: 8px;
+  background: rgba(248, 246, 241, 0.98);
+  box-shadow: 0 8px 22px rgba(40, 35, 28, 0.18);
+}
+
+.workspace.mode-assembly .viewport-label {
+  top: auto;
+  bottom: 12px;
+  left: 12px;
+  max-width: min(44vw, 320px);
 }
 
 .fitting-summary-drawer {
@@ -212,19 +253,6 @@
   margin-top: 2px;
 }
 
-/* Side preview controls remain available without becoming a toolbar band. */
-.viewport-host[data-viewport-layout="side-preview"] .viewport-simulation-controls {
-  top: 46px;
-  right: 8px;
-  gap: 4px;
-}
-
-.viewport-host[data-viewport-layout="side-preview"] .viewport-simulation-controls button {
-  min-height: 28px;
-  padding: 0 7px;
-  font-size: 9px;
-}
-
 .viewport-host[data-viewport-layout="full-fitting"] .viewport-physics-dev:not([open]) {
   width: auto;
   min-width: 116px;
@@ -232,15 +260,57 @@
 
 @media (max-width: 760px) {
   .workspace.mode-assembly .assembly-panel {
-    right: 8px;
-    bottom: 8px;
-    width: min(280px, calc(100% - 16px));
-    max-height: 38%;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(260px, calc(100% - 16px));
+    max-height: min(32%, 250px);
   }
 
   .viewport-arrangement-controls {
     top: max(8px, env(safe-area-inset-top));
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
     width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
+    padding: 5px;
+  }
+
+  .viewport-arrangement-status {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    padding-inline: 4px;
+  }
+
+  .viewport-arrangement-status small {
+    max-width: 46vw;
+  }
+
+  .viewport-arrangement-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    gap: 4px;
+  }
+
+  .viewport-arrangement-controls button,
+  .viewport-arrangement-more > summary {
+    width: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 5px;
+    font-size: 9px;
+  }
+
+  .viewport-arrangement-more > div {
+    right: 0;
+  }
+
+  .workspace.mode-assembly .viewport-label {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    max-width: 40vw;
+    font-size: 9px;
   }
 
   .fitting-summary-drawer {
@@ -268,12 +338,7 @@
   }
 }
 
-/*
- * Mid-size desktops and notebooks have enough width for the whole product,
- * but not enough for a verbose single-row toolbar. Keep actions on one compact
- * row and the six essential tools on a second 38px row instead of allowing an
- * accidental tall auto-row caused by font metrics.
- */
+/* Mid-size desktops keep the top toolbar compact without affecting workspace ownership. */
 @media (min-width: 1181px) and (max-width: 1599px) {
   .toolbar {
     grid-template-columns: 38px minmax(0, 1fr) auto;
