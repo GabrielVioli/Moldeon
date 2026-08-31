@@ -1,9 +1,21 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { AvatarParametricModel } from "../avatar/AvatarParametricModel";
+import type { BodySurfaceFrame } from "../avatar/BodySurfaceQuery";
+import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
 import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
-import { applyAuthoredArrangementToAssemblyState, arrangementVisualState, captureMeshArrangement, placeMeshCentroid, resolveArrangementTransform } from "./ArrangementWorkspace";
+import {
+  adjustMeshToBodySurface,
+  applyAuthoredArrangementToAssemblyState,
+  arrangementVisualState,
+  captureMeshArrangement,
+  createCameraDragPlane,
+  intersectPointerRayWithDragPlane,
+  placeMeshCentroid,
+  resolveArrangementTransform,
+  updateSurfaceCandidate,
+} from "./ArrangementWorkspace";
 
 const placement = {
   id: "panel:1",
@@ -38,6 +50,88 @@ describe("canonical 3D arrangement workspace", () => {
       expect.closeTo(20, 5),
       expect.closeTo(30, 5),
     ]));
+  });
+
+  it("preserves the exact grab point on a stable camera-parallel free-drag plane", () => {
+    const grabPoint = new THREE.Vector3(0.18, 0.42, 0.7);
+    const plane = createCameraDragPlane(grabPoint, new THREE.Vector3(0, 0, -1));
+    const initialRay = new THREE.Ray(new THREE.Vector3(0.18, 0.42, 2), new THREE.Vector3(0, 0, -1));
+    const movedRay = new THREE.Ray(new THREE.Vector3(0.41, 0.17, 2), new THREE.Vector3(0, 0, -1));
+    const initial = intersectPointerRayWithDragPlane(initialRay, plane);
+    const moved = intersectPointerRayWithDragPlane(movedRay, plane);
+
+    expect(initial?.toArray()).toEqual(expect.arrayContaining([
+      expect.closeTo(0.18, 8),
+      expect.closeTo(0.42, 8),
+      expect.closeTo(0.7, 8),
+    ]));
+    expect(moved?.z).toBeCloseTo(0.7, 8);
+    expect(moved!.clone().sub(initial!).toArray()).toEqual(expect.arrayContaining([
+      expect.closeTo(0.23, 8),
+      expect.closeTo(-0.25, 8),
+      expect.closeTo(0, 8),
+    ]));
+  });
+
+  it("keeps a body candidate through hysteresis and rejects an implausible triangle jump", () => {
+    const grab = new THREE.Vector3(0, 0, 0);
+    const near = frameAt([0.1, 0, 0], 1);
+    const moderate = frameAt([0.18, 0, 0], 2);
+    const jumped = frameAt([0.18, 0.3, 0], 3);
+
+    const entered = updateSurfaceCandidate(undefined, near, grab);
+    expect(entered?.attachment.triangleIndex).toBe(1);
+    const retained = updateSurfaceCandidate(entered, null, new THREE.Vector3(0.2, 0, 0));
+    expect(retained?.attachment.triangleIndex).toBe(1);
+    const updated = updateSurfaceCandidate(entered, moderate, new THREE.Vector3(0.18, 0, 0));
+    expect(updated?.attachment.triangleIndex).toBe(2);
+    const guarded = updateSurfaceCandidate(updated, jumped, new THREE.Vector3(0.18, 0, 0));
+    expect(guarded?.attachment.triangleIndex).toBe(2);
+    const exited = updateSurfaceCandidate(guarded, null, new THREE.Vector3(0.5, 0, 0));
+    expect(exited).toBeUndefined();
+  });
+
+  it("adjusts a panel with positive local clearance and preserves edge metric", () => {
+    const body = planarBody();
+    const geometry = new THREE.PlaneGeometry(0.1, 0.1, 1, 1);
+    const mesh = new THREE.Mesh(geometry);
+    const reference = new Float32Array((geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
+    mesh.rotation.set(0.35, 0.2, 0.1);
+    mesh.position.set(0, 0, 0.08);
+    mesh.updateMatrixWorld(true);
+
+    const result = adjustMeshToBodySurface(mesh, body, {
+      version: 1,
+      topologySignature: body.topologySignature,
+      triangleIndex: 0,
+      barycentric: [0.25, 0.25, 0.5],
+      normalOffsetMm: 12,
+    }, reference);
+
+    expect(result.metricDistortionMax).toBeLessThanOrEqual(0.008);
+    expect(result.minimumClearanceMm).toBeGreaterThanOrEqual(6);
+    expect(mesh.scale.toArray()).toEqual([1, 1, 1]);
+    expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
+  });
+
+  it("flipping panel face does not invert the body-outward placement direction", () => {
+    const body = planarBody();
+    const geometry = new THREE.PlaneGeometry(0.1, 0.1, 1, 1);
+    const mesh = new THREE.Mesh(geometry);
+    const reference = new Float32Array((geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
+    mesh.rotateY(Math.PI);
+    mesh.updateMatrixWorld(true);
+
+    adjustMeshToBodySurface(mesh, body, {
+      version: 1,
+      topologySignature: body.topologySignature,
+      triangleIndex: 0,
+      barycentric: [0.25, 0.25, 0.5],
+      normalOffsetMm: 12,
+    }, reference);
+
+    expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
+    expect(captureMeshArrangement("panel", mesh).positionMm[2]).toBeGreaterThan(0);
   });
 
   it("derives presentation state rather than persisting simulation lifecycle", () => {
@@ -83,3 +177,43 @@ describe("canonical 3D arrangement workspace", () => {
     ]));
   });
 });
+
+function frameAt(position: [number, number, number], triangleIndex: number): BodySurfaceFrame {
+  return {
+    attachment: {
+      version: 1,
+      topologySignature: "body",
+      triangleIndex,
+      barycentric: [1, 0, 0],
+      normalOffsetMm: 12,
+    },
+    position,
+    outwardNormal: [0, 0, 1],
+    tangent: [1, 0, 0],
+    axis: [0, 1, 0],
+  };
+}
+
+function planarBody(): HumanBodyMesh {
+  return {
+    positions: new Float32Array([-1, -1, 0, 1, -1, 0, 0, 1, 0]),
+    normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+    indices: new Uint32Array([0, 1, 2]),
+    regionIds: ["chest-front", "chest-front", "chest-front"],
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
+    topologySignature: "body",
+    sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function minimumWorldZ(mesh: THREE.Mesh): number {
+  mesh.updateMatrixWorld(true);
+  const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const point = new THREE.Vector3();
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < positions.count; index += 1) {
+    point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+    minimum = Math.min(minimum, point.z);
+  }
+  return minimum;
+}
