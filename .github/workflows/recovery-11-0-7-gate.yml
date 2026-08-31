@@ -46,6 +46,7 @@ jobs:
         run: npm run typecheck
 
       - name: Start fallback dev server
+        working-directory: apps/web
         shell: bash
         run: |
           npm run dev:fallback -- --host 127.0.0.1 > /tmp/moldeon-vite.log 2>&1 &
