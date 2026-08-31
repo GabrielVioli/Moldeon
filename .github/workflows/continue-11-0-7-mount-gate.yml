@@ -24,7 +24,9 @@ jobs:
           git fetch origin automation/11-0-7-mount-gate
           git show origin/automation/11-0-7-mount-gate:apps/web/src/avatar/BodySurfaceQuery.ts > apps/web/src/avatar/BodySurfaceQuery.ts
           git show origin/automation/11-0-7-mount-gate:scripts/apply-11-0-7-mount-patch.py > /tmp/patch.py
+          sed -i 's/function createArrangementCandidateMarker(): THREE.Mesh {/function createArrangementCandidateMarker(): THREE.Group {/' apps/web/src/viewport/GlobalThreeViewport.ts
           python /tmp/patch.py
+          sed -i 's/function createArrangementCandidateMarker(): THREE.Group {/function createArrangementCandidateMarker(): THREE.Mesh {/' apps/web/src/viewport/GlobalThreeViewport.ts
           test "$(git diff --name-only | wc -l)" -eq 9
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
