@@ -27,68 +27,243 @@ jobs:
 
       - name: Verify base HEAD
         shell: bash
-        run: |
-          test "$(git rev-parse HEAD)" = "1fc8f09301c712d8ea37f20afe94e491686f48f3"
+        run: test "$(git rev-parse HEAD)" = "1fc8f09301c712d8ea37f20afe94e491686f48f3"
 
       - name: Apply scoped blocker patch
         shell: bash
         run: |
           python <<'PY'
           from pathlib import Path
+          import re
+          import subprocess
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def sub_once(path: str, pattern: str, replacement: str) -> None:
               file = Path(path)
               text = file.read_text()
-              count = text.count(old)
+              next_text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
               if count != 1:
                   raise SystemExit(f"{path}: expected exactly one match, got {count}")
-              file.write_text(text.replace(old, new, 1))
+              file.write_text(next_text)
 
-          replace_once(
-              "apps/web/src/state/documentCommandHistory.ts",
-              '''  undo(): EditorDocumentState | null {\n''',
-              '''  recordImmutable(\n    type: DocumentCommandType,\n    label: string,\n    before: EditorDocumentState,\n    after: EditorDocumentState,\n  ): boolean {\n    if (this.transaction\n      || (before.garment === after.garment && before.activePieceId === after.activePieceId)) return false;\n    const command = createImmutableCommand(type, label, before, after);\n    this.past.push(command);\n    if (this.past.length > this.limit) this.past.shift();\n    this.future.length = 0;\n    return true;\n  }\n\n  undo(): EditorDocumentState | null {\n''',
+          history = "apps/web/src/state/documentCommandHistory.ts"
+          sub_once(
+              history,
+              r'  undo\(\): EditorDocumentState \| null \{',
+              '''  recordImmutable(
+    type: DocumentCommandType,
+    label: string,
+    before: EditorDocumentState,
+    after: EditorDocumentState,
+  ): boolean {
+    if (this.transaction
+      || (before.garment === after.garment && before.activePieceId === after.activePieceId)) return false;
+    const command = createImmutableCommand(type, label, before, after);
+    this.past.push(command);
+    if (this.past.length > this.limit) this.past.shift();
+    this.future.length = 0;
+    return true;
+  }
+
+  undo(): EditorDocumentState | null {''',
           )
-          replace_once(
-              "apps/web/src/state/documentCommandHistory.ts",
-              '''function cloneState(state: EditorDocumentState): EditorDocumentState {\n''',
-              '''function createImmutableCommand(\n  type: DocumentCommandType,\n  label: string,\n  before: EditorDocumentState,\n  after: EditorDocumentState,\n): DocumentCommand {\n  return {\n    type,\n    label,\n    before,\n    after,\n    undo: () => before,\n    redo: () => after,\n  };\n}\n\nfunction cloneState(state: EditorDocumentState): EditorDocumentState {\n''',
+          sub_once(
+              history,
+              r'function cloneState\(state: EditorDocumentState\): EditorDocumentState \{',
+              '''function createImmutableCommand(
+  type: DocumentCommandType,
+  label: string,
+  before: EditorDocumentState,
+  after: EditorDocumentState,
+): DocumentCommand {
+  return {
+    type,
+    label,
+    before,
+    after,
+    undo: () => before,
+    redo: () => after,
+  };
+}
+
+function cloneState(state: EditorDocumentState): EditorDocumentState {''',
           )
 
-          replace_once(
+          store = "apps/web/src/state/editorStore.ts"
+          sub_once(
+              store,
+              r'  setPanelInstanceArrangements: \(updates\) => \{.*?\n  \},\n  confirmPanelInstanceArrangement:',
+              '''  setPanelInstanceArrangements: (updates) => {
+    if (updates.length === 0) return;
+    const state = get();
+    const validPieceIds = new Set(state.garment.pieces.map((piece) => piece.id));
+    const byPiece = new Map<string, Map<string, PatternPreviewPlacement>>();
+    for (const update of updates) {
+      if (!validPieceIds.has(update.pieceId)) continue;
+      const instanceId = createPanelInstanceId(update.pieceId, update.copyIndex);
+      const placements = byPiece.get(update.pieceId) ?? new Map<string, PatternPreviewPlacement>();
+      placements.set(instanceId, {
+        ...structuredClone(update.placement),
+        id: instanceId,
+        pieceId: update.pieceId,
+        scale: 1,
+        presentationMode: "authored",
+      });
+      byPiece.set(update.pieceId, placements);
+    }
+    if (byPiece.size === 0) return;
+
+    const pieces = state.garment.pieces.map((piece) => {
+      const updatesForPiece = byPiece.get(piece.id);
+      if (!updatesForPiece) return piece;
+      const placements = (piece.previewPlacements ?? [])
+        .filter((candidate) => !updatesForPiece.has(candidate.id));
+      placements.push(...updatesForPiece.values());
+      placements.sort((left, right) => left.id.localeCompare(right.id));
+      return { ...piece, previewPlacements: placements };
+    });
+    const garment = { ...state.garment, pieces };
+    history.recordImmutable(
+      "placement",
+      "Posicionar instância(s) no 3D",
+      { garment: state.garment, activePieceId: state.activePieceId },
+      { garment, activePieceId: state.activePieceId },
+    );
+    const previousActivePiece = state.garment.pieces.find((piece) => piece.id === state.activePieceId);
+    const nextActivePiece = pieces.find((piece) => piece.id === state.activePieceId);
+    set({
+      garment,
+      ...(previousActivePiece && nextActivePiece && previousActivePiece !== nextActivePiece
+        ? { snapshot: { ...state.snapshot, piece: { ...state.snapshot.piece, previewPlacements: nextActivePiece.previewPlacements } } }
+        : {}),
+      ...historyAvailability(),
+    });
+  },
+  confirmPanelInstanceArrangement:''',
+          )
+
+          viewport = "apps/web/src/viewport/GlobalThreeViewport.ts"
+          sub_once(
+              viewport,
+              r'  updateWorkspaceArrangement\(input: ResolvedAssemblyInput\): void \{\n    this\.currentInput = input;\n    if \(this\.viewportMode !== "assembly"\) return;',
+              '''  updateWorkspaceArrangement(
+    input: ResolvedAssemblyInput,
+    options: { transformOnly?: boolean } = {},
+  ): void {
+    this.currentInput = input;
+    if (this.viewportMode !== "assembly") return;
+    if (options.transformOnly) {
+      this.host.dataset.arrangementRevision = input.arrangementRevision;
+      this.host.dataset.arrangementXpbdInitializations = "0";
+      this.host.dataset.arrangementCommitPath = "transform-only";
+      this.requestRender();
+      return;
+    }
+    delete this.host.dataset.arrangementCommitPath;''',
+          )
+
+          component = "apps/web/src/viewport/GarmentViewport.tsx"
+          sub_once(
+              component,
+              r'  const arrangementCommitRef = useRef\(onArrangementCommit\);',
+              '''  const arrangementCommitRef = useRef(onArrangementCommit);
+  const pendingArrangementCommitsRef = useRef<ArrangementCommit[] | null>(null);''',
+          )
+          sub_once(
+              component,
+              r'        viewport\.setArrangementInteractionHandlers\(\n          \(commits\) => arrangementCommitRef\.current\?\.\(commits\),',
+              '''        viewport.setArrangementInteractionHandlers(
+          (commits) => {
+            const handler = arrangementCommitRef.current;
+            if (!handler || commits.length === 0) return;
+            pendingArrangementCommitsRef.current = commits;
+            handler(commits);
+          },''',
+          )
+          sub_once(
+              component,
+              r'  useEffect\(\(\) => \{\n    if \(!active \|\| displayMode !== "side-preview"\) return;\n    viewportRef\.current\?\.updateWorkspaceArrangement\(assemblyInput\);\n  \}, \[active, assemblyInput\.arrangementRevision, displayMode\]\);',
+              '''  useEffect(() => {
+    if (!active || displayMode !== "side-preview") return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const pending = pendingArrangementCommitsRef.current;
+    pendingArrangementCommitsRef.current = null;
+    viewport.updateWorkspaceArrangement(assemblyInput, {
+      transformOnly: Boolean(pending && arrangementCommitsMatchInput(assemblyInput, pending)),
+    });
+  }, [active, assemblyInput.arrangementRevision, displayMode]);''',
+          )
+          sub_once(
+              component,
+              r'  useEffect\(\(\) => \{\n    if \(!active\) return;\n    const frame = window\.requestAnimationFrame\(\(\) => viewportRef\.current\?\.refresh\(\)\);\n    return \(\) => window\.cancelAnimationFrame\(frame\);\n  \}, \[active, displayMode\]\);',
+              '''  useEffect(() => {
+    if (!active) return;
+    const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());
+    return () => window.cancelAnimationFrame(frame);
+  }, [active, displayMode]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const workspace = host?.closest(".workspace") as HTMLElement | null;
+    if (!host || !workspace || !active) return;
+    let frame: number | null = null;
+    const syncWorkspaceLayout = () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const primary3D = workspace.classList.contains("mode-assembly")
+          || workspace.classList.contains("mode-fitting");
+        host.dataset.viewportWorkspaceRole = primary3D ? "primary-3d" : "side-preview";
+        viewportRef.current?.refresh();
+      });
+    };
+    syncWorkspaceLayout();
+    const observer = new MutationObserver(syncWorkspaceLayout);
+    observer.observe(workspace, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [active]);''',
+          )
+          sub_once(
+              component,
+              r'function formatMetric\(value: number \| undefined\): string \{',
+              '''function arrangementCommitsMatchInput(
+  input: ResolvedAssemblyInput,
+  commits: readonly ArrangementCommit[],
+): boolean {
+  const instances = new Map(input.panelInstances.map((instance) => [instance.id, instance] as const));
+  return commits.every((commit) => {
+    const anchor = instances.get(commit.instanceId)?.arrangementAnchor;
+    return tupleClose(anchor?.positionMm, commit.positionMm)
+      && tupleClose(anchor?.orientationDeg, commit.orientationDeg);
+  });
+}
+
+function tupleClose(
+  left: readonly number[] | undefined,
+  right: readonly number[],
+  epsilon = 1e-4,
+): boolean {
+  return Boolean(left
+    && left.length === right.length
+    && left.every((value, index) => Math.abs(value - right[index]) <= epsilon));
+}
+
+function formatMetric(value: number | undefined): string {''',
+          )
+
+          allowed = {
+              "apps/web/src/state/documentCommandHistory.ts",
               "apps/web/src/state/editorStore.ts",
-              '''  setPanelInstanceArrangements: (updates) => {\n    if (updates.length === 0) return;\n    const byPiece = new Map<string, Map<string, PatternPreviewPlacement>>();\n    for (const update of updates) {\n      if (!get().garment.pieces.some((piece) => piece.id === update.pieceId)) continue;\n      const instanceId = createPanelInstanceId(update.pieceId, update.copyIndex);\n      const placements = byPiece.get(update.pieceId) ?? new Map<string, PatternPreviewPlacement>();\n      placements.set(instanceId, {\n        ...structuredClone(update.placement),\n        id: instanceId,\n        pieceId: update.pieceId,\n        scale: 1,\n        presentationMode: "authored",\n      });\n      byPiece.set(update.pieceId, placements);\n    }\n    if (byPiece.size === 0) return;\n    changeDocument(set, get, "placement", "Posicionar instância(s) no 3D", (document) => ({\n      ...document,\n      garment: {\n        ...document.garment,\n        pieces: document.garment.pieces.map((piece) => {\n          const updatesForPiece = byPiece.get(piece.id);\n          if (!updatesForPiece) return piece;\n          const placements = (piece.previewPlacements ?? [])\n            .filter((candidate) => !updatesForPiece.has(candidate.id));\n          placements.push(...updatesForPiece.values());\n          placements.sort((left, right) => left.id.localeCompare(right.id));\n          return { ...piece, previewPlacements: placements };\n        }),\n      },\n    }));\n  },\n''',
-              '''  setPanelInstanceArrangements: (updates) => {\n    if (updates.length === 0) return;\n    const state = get();\n    const validPieceIds = new Set(state.garment.pieces.map((piece) => piece.id));\n    const byPiece = new Map<string, Map<string, PatternPreviewPlacement>>();\n    for (const update of updates) {\n      if (!validPieceIds.has(update.pieceId)) continue;\n      const instanceId = createPanelInstanceId(update.pieceId, update.copyIndex);\n      const placements = byPiece.get(update.pieceId) ?? new Map<string, PatternPreviewPlacement>();\n      placements.set(instanceId, {\n        ...structuredClone(update.placement),\n        id: instanceId,\n        pieceId: update.pieceId,\n        scale: 1,\n        presentationMode: "authored",\n      });\n      byPiece.set(update.pieceId, placements);\n    }\n    if (byPiece.size === 0) return;\n\n    const pieces = state.garment.pieces.map((piece) => {\n      const updatesForPiece = byPiece.get(piece.id);\n      if (!updatesForPiece) return piece;\n      const placements = (piece.previewPlacements ?? [])\n        .filter((candidate) => !updatesForPiece.has(candidate.id));\n      placements.push(...updatesForPiece.values());\n      placements.sort((left, right) => left.id.localeCompare(right.id));\n      return { ...piece, previewPlacements: placements };\n    });\n    const garment = { ...state.garment, pieces };\n    history.recordImmutable(\n      "placement",\n      "Posicionar instância(s) no 3D",\n      { garment: state.garment, activePieceId: state.activePieceId },\n      { garment, activePieceId: state.activePieceId },\n    );\n    const previousActivePiece = state.garment.pieces.find((piece) => piece.id === state.activePieceId);\n    const nextActivePiece = pieces.find((piece) => piece.id === state.activePieceId);\n    set({\n      garment,\n      ...(previousActivePiece && nextActivePiece && previousActivePiece !== nextActivePiece\n        ? { snapshot: { ...state.snapshot, piece: { ...state.snapshot.piece, previewPlacements: nextActivePiece.previewPlacements } } }\n        : {}),\n      ...historyAvailability(),\n    });\n  },\n''',
-          )
-
-          replace_once(
               "apps/web/src/viewport/GlobalThreeViewport.ts",
-              '''  updateWorkspaceArrangement(input: ResolvedAssemblyInput): void {\n    this.currentInput = input;\n    if (this.viewportMode !== "assembly") return;\n    const avatarModel = buildAvatarParametricModel(\n''',
-              '''  updateWorkspaceArrangement(\n    input: ResolvedAssemblyInput,\n    options: { transformOnly?: boolean } = {},\n  ): void {\n    this.currentInput = input;\n    if (this.viewportMode !== "assembly") return;\n    if (options.transformOnly) {\n      this.host.dataset.arrangementRevision = input.arrangementRevision;\n      this.host.dataset.arrangementXpbdInitializations = "0";\n      this.host.dataset.arrangementCommitPath = "transform-only";\n      this.requestRender();\n      return;\n    }\n    delete this.host.dataset.arrangementCommitPath;\n    const avatarModel = buildAvatarParametricModel(\n''',
-          )
-
-          replace_once(
               "apps/web/src/viewport/GarmentViewport.tsx",
-              '''  const arrangementCommitRef = useRef(onArrangementCommit);\n''',
-              '''  const arrangementCommitRef = useRef(onArrangementCommit);\n  const pendingArrangementCommitsRef = useRef<ArrangementCommit[] | null>(null);\n''',
-          )
-          replace_once(
-              "apps/web/src/viewport/GarmentViewport.tsx",
-              '''        viewport.setArrangementInteractionHandlers(\n          (commits) => arrangementCommitRef.current?.(commits),\n          (instanceIds) => {\n''',
-              '''        viewport.setArrangementInteractionHandlers(\n          (commits) => {\n            const handler = arrangementCommitRef.current;\n            if (!handler || commits.length === 0) return;\n            pendingArrangementCommitsRef.current = commits;\n            handler(commits);\n          },\n          (instanceIds) => {\n''',
-          )
-          replace_once(
-              "apps/web/src/viewport/GarmentViewport.tsx",
-              '''  useEffect(() => {\n    if (!active || displayMode !== "side-preview") return;\n    viewportRef.current?.updateWorkspaceArrangement(assemblyInput);\n  }, [active, assemblyInput.arrangementRevision, displayMode]);\n\n  useEffect(() => {\n    if (!active) return;\n    const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());\n    return () => window.cancelAnimationFrame(frame);\n  }, [active, displayMode]);\n''',
-              '''  useEffect(() => {\n    if (!active || displayMode !== "side-preview") return;\n    const viewport = viewportRef.current;\n    if (!viewport) return;\n    const pending = pendingArrangementCommitsRef.current;\n    pendingArrangementCommitsRef.current = null;\n    viewport.updateWorkspaceArrangement(assemblyInput, {\n      transformOnly: Boolean(pending && arrangementCommitsMatchInput(assemblyInput, pending)),\n    });\n  }, [active, assemblyInput.arrangementRevision, displayMode]);\n\n  useEffect(() => {\n    if (!active) return;\n    const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());\n    return () => window.cancelAnimationFrame(frame);\n  }, [active, displayMode]);\n\n  useEffect(() => {\n    const host = hostRef.current;\n    const workspace = host?.closest(".workspace") as HTMLElement | null;\n    if (!host || !workspace || !active) return;\n    let frame: number | null = null;\n    const syncWorkspaceLayout = () => {\n      if (frame !== null) window.cancelAnimationFrame(frame);\n      frame = window.requestAnimationFrame(() => {\n        frame = null;\n        const primary3D = workspace.classList.contains("mode-assembly")\n          || workspace.classList.contains("mode-fitting");\n        host.dataset.viewportWorkspaceRole = primary3D ? "primary-3d" : "side-preview";\n        viewportRef.current?.refresh();\n      });\n    };\n    syncWorkspaceLayout();\n    const observer = new MutationObserver(syncWorkspaceLayout);\n    observer.observe(workspace, { attributes: true, attributeFilter: ["class"] });\n    return () => {\n      observer.disconnect();\n      if (frame !== null) window.cancelAnimationFrame(frame);\n    };\n  }, [active]);\n''',
-          )
-          replace_once(
-              "apps/web/src/viewport/GarmentViewport.tsx",
-              '''function formatMetric(value: number | undefined): string {\n''',
-              '''function arrangementCommitsMatchInput(\n  input: ResolvedAssemblyInput,\n  commits: readonly ArrangementCommit[],\n): boolean {\n  const instances = new Map(input.panelInstances.map((instance) => [instance.id, instance] as const));\n  return commits.every((commit) => {\n    const anchor = instances.get(commit.instanceId)?.arrangementAnchor;\n    return tupleClose(anchor?.positionMm, commit.positionMm)\n      && tupleClose(anchor?.orientationDeg, commit.orientationDeg);\n  });\n}\n\nfunction tupleClose(\n  left: readonly number[] | undefined,\n  right: readonly number[],\n  epsilon = 1e-4,\n): boolean {\n  return Boolean(left\n    && left.length === right.length\n    && left.every((value, index) => Math.abs(value - right[index]) <= epsilon));\n}\n\nfunction formatMetric(value: number | undefined): string {\n''',
-          )
-
-          allowed = {\n              "apps/web/src/state/documentCommandHistory.ts",\n              "apps/web/src/state/editorStore.ts",\n              "apps/web/src/viewport/GlobalThreeViewport.ts",\n              "apps/web/src/viewport/GarmentViewport.tsx",\n          }\n          import subprocess\n          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())\n          if changed != allowed:\n              raise SystemExit(f"unexpected changed files: {sorted(changed)}")\n          PY
+          }
+          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
+          if changed != allowed:
+              raise SystemExit(f"unexpected changed files: {sorted(changed)}")
+          PY
 
       - name: Install dependencies
         run: npm ci
@@ -108,7 +283,7 @@ jobs:
         run: npm run typecheck
 
       - name: Prepare Chromium smoke harness
-        run: npm install --no-save --ignore-scripts playwright-core
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core
 
       - name: Start fallback dev server
         working-directory: apps/web
@@ -126,7 +301,7 @@ jobs:
       - name: Chromium blocker smoke
         shell: bash
         run: |
-          cat > /tmp/verify-11-0-7-blockers.mjs <<'JS'
+          cat > scripts/.verify-11-0-7-blockers.mjs <<'JS'
           import { chromium } from "playwright-core";
 
           const executablePath = process.env.MOLDEON_CHROME;
@@ -137,6 +312,7 @@ jobs:
           const errors = [];
           page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
           page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+          page.on("dialog", (dialog) => dialog.accept());
           await page.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
           await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
           await page.reload({ waitUntil: "networkidle" });
@@ -193,12 +369,8 @@ jobs:
             });
             if (!metrics) throw new Error(`${label}_LAYOUT_MISSING`);
             if (metrics.role !== "primary-3d") throw new Error(`${label}_NOT_PRIMARY ${JSON.stringify(metrics)}`);
-            if (metrics.host[0] < metrics.workspace[0] * 0.9 || metrics.host[1] < metrics.workspace[1] * 0.9) {
-              throw new Error(`${label}_VIEWPORT_SMALL ${JSON.stringify(metrics)}`);
-            }
-            if (metrics.canvas[0] < metrics.host[0] * 0.98 || metrics.canvas[1] < metrics.host[1] * 0.98) {
-              throw new Error(`${label}_CANVAS_SMALL ${JSON.stringify(metrics)}`);
-            }
+            if (metrics.host[0] < metrics.workspace[0] * 0.9 || metrics.host[1] < metrics.workspace[1] * 0.9) throw new Error(`${label}_VIEWPORT_SMALL ${JSON.stringify(metrics)}`);
+            if (metrics.canvas[0] < metrics.host[0] * 0.98 || metrics.canvas[1] < metrics.host[1] * 0.98) throw new Error(`${label}_CANVAS_SMALL ${JSON.stringify(metrics)}`);
             if (metrics.horizontalOverflow > 2) throw new Error(`${label}_HORIZONTAL_OVERFLOW ${JSON.stringify(metrics)}`);
             return metrics;
           }
@@ -251,11 +423,13 @@ jobs:
           await browser.close();
           JS
           export MOLDEON_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
-          node /tmp/verify-11-0-7-blockers.mjs
+          node scripts/.verify-11-0-7-blockers.mjs
+          rm -f scripts/.verify-11-0-7-blockers.mjs
 
       - name: Commit and push WIP checkpoint
         shell: bash
         run: |
+          test "$(git status --short | wc -l)" -eq 4
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
           git add \
