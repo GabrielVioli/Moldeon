@@ -16,6 +16,7 @@ interface QueryRuntime {
 }
 
 const runtimes = new WeakMap<HumanBodyMesh, QueryRuntime>();
+const windingSigns = new WeakMap<HumanBodyMesh, -1 | 0 | 1>();
 
 /**
  * Continuous surface query against the exact visual body used by the viewport.
@@ -69,6 +70,7 @@ export function resolveBodySurfaceAttachment(
     .addScaledVector(triangle.c, w);
   const normal = orientOutwardNormal(
     body,
+    attachment.triangleIndex,
     surfacePoint,
     interpolatedNormal(body, attachment.triangleIndex, attachment.barycentric),
   );
@@ -130,10 +132,21 @@ function interpolatedNormal(
 
 function orientOutwardNormal(
   body: HumanBodyMesh,
+  triangleIndex: number,
   surfacePoint: THREE.Vector3,
   normalValue: THREE.Vector3,
 ): THREE.Vector3 {
   const normal = normalValue.clone().normalize();
+  const windingSign = bodyWindingSign(body);
+  if (windingSign !== 0) {
+    const outwardFace = triangleFor(body, triangleIndex).getNormal(new THREE.Vector3());
+    if (windingSign < 0) outwardFace.negate();
+    if (normal.dot(outwardFace) < 0) normal.negate();
+    return normal;
+  }
+
+  // Open/synthetic meshes do not have a meaningful signed volume. The radial
+  // fallback is used only there; the canonical closed body follows winding.
   const boundsCenter = new THREE.Vector3(
     (body.bounds.min[0] + body.bounds.max[0]) * 0.5,
     (body.bounds.min[1] + body.bounds.max[1]) * 0.5,
@@ -142,6 +155,26 @@ function orientOutwardNormal(
   const radial = surfacePoint.clone().sub(boundsCenter);
   if (radial.lengthSq() > 1e-12 && normal.dot(radial) < 0) normal.negate();
   return normal;
+}
+
+function bodyWindingSign(body: HumanBodyMesh): -1 | 0 | 1 {
+  const cached = windingSigns.get(body);
+  if (cached !== undefined) return cached;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const cross = new THREE.Vector3();
+  let sixVolume = 0;
+  for (let offset = 0; offset + 2 < body.indices.length; offset += 3) {
+    a.copy(vertex(body.positions, body.indices[offset]));
+    b.copy(vertex(body.positions, body.indices[offset + 1]));
+    c.copy(vertex(body.positions, body.indices[offset + 2]));
+    cross.crossVectors(b, c);
+    sixVolume += a.dot(cross);
+  }
+  const sign: -1 | 0 | 1 = Math.abs(sixVolume) <= 1e-8 ? 0 : sixVolume > 0 ? 1 : -1;
+  windingSigns.set(body, sign);
+  return sign;
 }
 
 function orthogonalTangent(normal: THREE.Vector3): THREE.Vector3 {
