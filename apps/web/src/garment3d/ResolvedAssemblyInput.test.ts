@@ -5,7 +5,7 @@ import { createDefaultFabricSource } from "../domain/fabric";
 import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternBodyPlacement, type PatternPiece } from "../domain/pattern";
 import { buildGarmentAssemblyMeshes } from "./GarmentThreeBridge";
 import { buildResolvedGarmentAssembly } from "./ResolvedGarmentAssembly";
-import { buildResolvedAssemblyInput } from "./ResolvedAssemblyInput";
+import { buildResolvedAssemblyInput, buildResolvedAssemblyInputFromDocument } from "./ResolvedAssemblyInput";
 import { buildSemanticAvatarArrangement } from "./SemanticAvatarArrangement";
 
 function placement(
@@ -92,9 +92,11 @@ describe("ResolvedAssemblyInput canonical contract", () => {
       && instance.arrangementAnchor === undefined
       && instance.metadata.effectivePlacementSource === "unassigned",
     )).toBe(true);
-    expect(input.garmentProjection.pieces.every((piece) => piece.previewPlacements === undefined)).toBe(true);
-    expect(state.instances).toEqual([]);
-    expect(state.warnings.some((warning) => warning.includes("nenhuma instância possui anchor explícito"))).toBe(true);
+    expect(input.garmentProjection.pieces.every((piece) =>
+      piece.previewPlacements?.every((preview) => preview.presentationMode === "staging"),
+    )).toBe(true);
+    expect(state.instances).toHaveLength(2);
+    expect(state.instances.map((instance) => instance.id).sort()).toEqual(input.panelInstances.map((instance) => instance.id).sort());
   });
 
   it("produces no panel instances or garment meshes for an empty project", () => {
@@ -108,6 +110,25 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     expect(input.panelInstances).toEqual([]);
     expect(state.instances).toEqual([]);
     expect(meshes).toEqual([]);
+  });
+
+  it("keeps included instances visible in Montar even when simulation is disabled", () => {
+    const garment = draft([square("visual-only", undefined)]);
+    const document = buildResolvedAssemblyInput(garment).document;
+    document.panelInstances[0].simulationEnabled = false;
+
+    const input = buildResolvedAssemblyInputFromDocument(document);
+    const state = buildResolvedGarmentAssembly(input);
+
+    expect(input.panelInstances.map((instance) => instance.id)).toEqual(["visual-only:panel:1"]);
+    expect(input.simulationPanelInstances).toEqual([]);
+    expect(input.assemblyDocument.panelInstances).toHaveLength(1);
+    expect(input.simulationDocument.panelInstances).toHaveLength(0);
+    expect(state.instances).toHaveLength(1);
+    expect(input.garmentProjection.pieces[0].previewPlacements?.[0]).toMatchObject({
+      id: "visual-only:panel:1",
+      presentationMode: "staging",
+    });
   });
 
   it("does not let templateId or a legacy arrangement scale alter physical assembly", () => {

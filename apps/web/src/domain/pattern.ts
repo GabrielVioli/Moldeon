@@ -161,6 +161,11 @@ export interface PatternPreviewPlacement {
   offsetZMm: number;
   scale: number;
   mirrorX?: boolean;
+  positionMm?: [number, number, number];
+  orientationDeg?: [number, number, number];
+  surfaceAttachment?: import("./patternDocumentV3.types").PanelSurfaceAttachmentV3;
+  /** Derived viewport state; staging is never persisted as an arrangement. */
+  presentationMode?: "authored" | "staging";
 }
 
 export interface EdgeRange {
@@ -1555,6 +1560,14 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
         ["torso-front", "torso-back", "shoulder-left", "shoulder-right", "arm-left", "arm-right", "waist-front", "waist-back", "hip-front", "hip-back", "hip-left", "hip-right", "leg-left", "leg-right", "neck"] as const,
         `O anchor corporal da posição ${index + 1}`,
       );
+    const positionMm = parseOptionalPlacementTuple(placement.positionMm, `A posição 3D ${index + 1}`);
+    const orientationDeg = parseOptionalPlacementTuple(placement.orientationDeg, `A orientação 3D ${index + 1}`);
+    const surfaceAttachment = placement.surfaceAttachment === undefined
+      ? undefined
+      : parsePreviewSurfaceAttachment(placement.surfaceAttachment, index);
+    const presentationMode = placement.presentationMode === undefined
+      ? undefined
+      : readEnum(placement.presentationMode, ["authored", "staging"] as const, `O modo de apresentação ${index + 1}`);
     return {
       id:
         placement.id === undefined
@@ -1589,8 +1602,38 @@ function parsePreviewPlacements(value: unknown): PatternPreviewPlacement[] {
           ? 1
           : readOptionalPositiveNumber(placement.scale, 1, `A escala da posição ${index + 1}`),
       ...(mirrorX === undefined ? {} : { mirrorX }),
+      ...(positionMm === undefined ? {} : { positionMm }),
+      ...(orientationDeg === undefined ? {} : { orientationDeg }),
+      ...(surfaceAttachment === undefined ? {} : { surfaceAttachment }),
+      ...(presentationMode === undefined ? {} : { presentationMode }),
     };
   });
+}
+
+function parseOptionalPlacementTuple(value: unknown, label: string): [number, number, number] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length !== 3) throw new TypeError(`${label} precisa ter três números.`);
+  return value.map((candidate, coordinate) => readFiniteNumber(candidate, `${label}[${coordinate}]`)) as [number, number, number];
+}
+
+function parsePreviewSurfaceAttachment(
+  value: unknown,
+  index: number,
+): NonNullable<PatternPreviewPlacement["surfaceAttachment"]> {
+  if (!isRecord(value)) throw new TypeError(`O attachment da posição ${index + 1} é inválido.`);
+  const barycentric = parseOptionalPlacementTuple(value.barycentric, `As coordenadas baricêntricas ${index + 1}`);
+  if (!barycentric) throw new TypeError(`O attachment da posição ${index + 1} está incompleto.`);
+  const sum = barycentric[0] + barycentric[1] + barycentric[2];
+  if (barycentric.some((coordinate) => coordinate < -1e-9) || Math.abs(sum - 1) > 1e-6) {
+    throw new TypeError(`As coordenadas baricêntricas ${index + 1} são inválidas.`);
+  }
+  return {
+    version: readEnum(value.version, [1] as const, `A versão do attachment ${index + 1}`),
+    topologySignature: readString(value.topologySignature, `A topologia do attachment ${index + 1}`),
+    triangleIndex: readNonNegativeInteger(value.triangleIndex, `O triângulo do attachment ${index + 1}`),
+    barycentric,
+    normalOffsetMm: readFiniteNumber(value.normalOffsetMm, `O afastamento do attachment ${index + 1}`),
+  };
 }
 
 export function validateSeam(

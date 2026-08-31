@@ -20,13 +20,19 @@ export interface ResolvedAssemblyInput {
   document: PatternDocumentV3;
   /** Recorte canônico contendo todas as peças físicas incluídas no 3D. */
   assemblyDocument: PatternDocumentV3;
+  /** Recorte exclusivo da etapa Provar; Montar não depende deste filtro. */
+  simulationDocument: PatternDocumentV3;
   /** Projeção legada derivada do V3, nunca fonte autoritativa. */
   garmentProjection: GarmentDraft;
   definitions: PatternDefinitionV3[];
   panelInstances: PanelInstanceV3[];
+  simulationPanelInstances: PanelInstanceV3[];
   seamGroups: SeamGroupV3[];
   geometrySignatures: ReadonlyMap<string, string>;
   signature: string;
+  geometryRevision: string;
+  arrangementRevision: string;
+  simulationRevision: string;
   diagnostics: PatternDocumentValidationIssue[];
   snapshots: ReturnType<typeof createPatternSnapshot>[];
 }
@@ -54,9 +60,8 @@ function finalizeResolvedAssemblyInput(
   document: PatternDocumentV3,
   resolvedInstances: readonly PanelInstanceV3[],
 ): ResolvedAssemblyInput {
-  const includedInstances = resolvedInstances.filter((instance) =>
-    instance.includedIn3D && instance.simulationEnabled,
-  );
+  const includedInstances = resolvedInstances.filter((instance) => instance.includedIn3D);
+  const simulationInstances = includedInstances.filter((instance) => instance.simulationEnabled);
   const includedPatternIds = new Set(includedInstances.map((instance) => instance.sourcePatternId));
   const definitions = document.patternDefinitions.filter((definition) => includedPatternIds.has(definition.id));
   const definitionIds = new Set(definitions.map((definition) => definition.id));
@@ -75,6 +80,21 @@ function finalizeResolvedAssemblyInput(
       patterns: document.workspace.patterns.filter((entry) => definitionIds.has(entry.patternId)),
     },
   });
+  const simulationPatternIds = new Set(simulationInstances.map((instance) => instance.sourcePatternId));
+  const simulationDefinitions = definitions.filter((definition) => simulationPatternIds.has(definition.id));
+  const simulationSeamGroups = seamGroups.filter((group) =>
+    [...group.first, ...group.second].every((range) => simulationPatternIds.has(range.pieceId)),
+  );
+  const simulationDocument = parsePatternDocumentV3({
+    ...document,
+    patternDefinitions: simulationDefinitions,
+    panelInstances: simulationInstances,
+    seamGroups: simulationSeamGroups,
+    workspace: {
+      ...(activePatternId && simulationPatternIds.has(activePatternId) ? { activePatternId } : {}),
+      patterns: document.workspace.patterns.filter((entry) => simulationPatternIds.has(entry.patternId)),
+    },
+  });
   const garmentProjection = projectPhysicalInstancesForAssembly(
     patternDocumentV3ToGarmentDraft(assemblyDocument),
     includedInstances,
@@ -83,8 +103,12 @@ function finalizeResolvedAssemblyInput(
     definition.id,
     patternDefinitionGeometrySignature(definition),
   ]));
-  const signature = stableHash(JSON.stringify({
+  const geometryRevision = stableHash(JSON.stringify({
     geometry: [...geometrySignatures.entries()],
+    fabrics: document.fabrics.map((fabric) => ({ id: fabric.id })),
+  }));
+  const arrangementRevision = stableHash(JSON.stringify({
+    geometryRevision,
     instances: includedInstances.map((instance) => ({
       id: instance.id,
       sourcePatternId: instance.sourcePatternId,
@@ -94,21 +118,33 @@ function finalizeResolvedAssemblyInput(
       surface: instance.surface,
       anchor: instance.arrangementAnchor,
     })),
+    body: document.body,
+    measurements: document.measurements.values,
+  }));
+  const simulationRevision = stableHash(JSON.stringify({
+    arrangementRevision,
+    simulationInstances: simulationInstances.map((instance) => instance.id),
     seams: seamGroups,
     fabrics: document.fabrics.map((fabric) => ({ id: fabric.id, physics: fabric.physics })),
     simulationSettings: document.simulationSettings,
     body: document.body,
     measurements: document.measurements.values,
   }));
+  const signature = simulationRevision;
   return {
     document,
     assemblyDocument,
+    simulationDocument,
     garmentProjection,
     definitions,
     panelInstances: includedInstances.map((instance) => structuredClone(instance)),
+    simulationPanelInstances: simulationInstances.map((instance) => structuredClone(instance)),
     seamGroups: seamGroups.map((group) => structuredClone(group)),
     geometrySignatures,
     signature,
+    geometryRevision,
+    arrangementRevision,
+    simulationRevision,
     diagnostics: validatePatternDocumentV3(document),
     snapshots: garmentProjection.pieces.map(createPatternSnapshot),
   };
@@ -125,10 +161,30 @@ function projectPhysicalInstancesForAssembly(
         .filter((instance) => instance.sourcePatternId === piece.id)
         .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
       if (physical.length === 0) return piece;
-      const previewPlacements = physical.flatMap((instance) => {
+      const orderedInstances = [...instances].sort((left, right) => left.id.localeCompare(right.id));
+      const previewPlacements = physical.map((instance) => {
         const anchor = instance.arrangementAnchor;
-        if (instance.placementStatus !== "confirmed" || !anchor?.bodyAnchorId) return [];
-        return [{
+        if (instance.placementStatus !== "confirmed" || !anchor) {
+          return {
+            id: instance.id,
+            pieceId: piece.id,
+            region: "custom" as const,
+            surface: "custom" as const,
+            bodySide: "center" as const,
+            rotationDeg: 0,
+            offsetXMm: 0,
+            offsetYMm: 0,
+            offsetZMm: 0,
+            scale: 1,
+            mirrorX: instance.mirrored,
+            positionMm: deterministicStagingPositionMm(
+              orderedInstances.findIndex((candidate) => candidate.id === instance.id),
+            ),
+            orientationDeg: [0, 0, 0] as [number, number, number],
+            presentationMode: "staging" as const,
+          };
+        }
+        return {
           id: instance.id,
           pieceId: piece.id,
           region: anchor.region,
@@ -141,7 +197,11 @@ function projectPhysicalInstancesForAssembly(
           offsetZMm: anchor.offsetZMm,
           scale: 1,
           mirrorX: instance.mirrored,
-        }];
+          ...(anchor.positionMm ? { positionMm: structuredClone(anchor.positionMm) } : {}),
+          ...(anchor.orientationDeg ? { orientationDeg: structuredClone(anchor.orientationDeg) } : {}),
+          ...(anchor.surfaceAttachment ? { surfaceAttachment: structuredClone(anchor.surfaceAttachment) } : {}),
+          presentationMode: "authored" as const,
+        };
       });
       return {
         ...piece,
@@ -151,6 +211,13 @@ function projectPhysicalInstancesForAssembly(
       };
     }),
   };
+}
+
+export function deterministicStagingPositionMm(index: number): [number, number, number] {
+  const safeIndex = Math.max(0, index);
+  const column = safeIndex % 3;
+  const row = Math.floor(safeIndex / 3);
+  return [-900 + column * 300, 1_350 - row * 360, 0];
 }
 
 export function patternDefinitionGeometrySignature(definition: PatternDefinitionV3): string {

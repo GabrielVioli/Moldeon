@@ -458,12 +458,16 @@ export function derivePanelInstances(
       const mirrored = explicitPlacement?.mirrorX
         ?? (classification.outwardFace === "flipped"
           || (definition.mirrorRule === "paired" && copyIndex % 2 === 1));
-      const anchor = explicitPlacement && explicitAnchorId
+      const hasExplicitArrangement = Boolean(
+        explicitPlacement
+        && (explicitAnchorId || explicitPlacement.positionMm || explicitPlacement.surfaceAttachment),
+      );
+      const anchor = explicitPlacement && hasExplicitArrangement
         ? createArrangementAnchorFromPreview(instanceId, explicitPlacement)
         : definitionConfirmed && bodySide && surface && region
           ? createArrangementAnchor(definition, copyIndex, bodySide, surface)
           : undefined;
-      const placementSource = explicitPlacement && explicitAnchorId
+      const placementSource = explicitPlacement && hasExplicitArrangement
         ? "panel-instance"
         : anchor
           ? "pattern-definition"
@@ -724,6 +728,10 @@ function definitionToPatternPiece(
       offsetZMm: anchor.offsetZMm,
       scale: 1,
       mirrorX: instance.mirrored,
+      ...(anchor.positionMm ? { positionMm: structuredClone(anchor.positionMm) } : {}),
+      ...(anchor.orientationDeg ? { orientationDeg: structuredClone(anchor.orientationDeg) } : {}),
+      ...(anchor.surfaceAttachment ? { surfaceAttachment: structuredClone(anchor.surfaceAttachment) } : {}),
+      presentationMode: "authored",
     });
     });
 
@@ -1273,20 +1281,27 @@ function createArrangementAnchorFromPreview(
   instanceId: string,
   placement: PatternPreviewPlacement,
 ): PanelArrangementAnchorV3 {
-  if (!placement.bodyAnchorId) throw new Error(`O placement ${placement.id} não possui BodyAnchorId.`);
-  const specification = bodyAnchorSpecification(placement.bodyAnchorId);
+  const specification = placement.bodyAnchorId
+    ? bodyAnchorSpecification(placement.bodyAnchorId)
+    : undefined;
   return {
     id: `${instanceId}:anchor`,
-    bodyAnchorId: placement.bodyAnchorId,
-    region: placement.region ?? specification.region,
-    surface: placement.surface ?? specification.surface,
-    bodySide: placement.bodySide ?? specification.bodySide,
+    ...(placement.bodyAnchorId ? { bodyAnchorId: placement.bodyAnchorId } : {}),
+    region: placement.region ?? specification?.region ?? "custom",
+    surface: placement.surface ?? specification?.surface ?? "custom",
+    bodySide: placement.bodySide ?? specification?.bodySide ?? "center",
     rotationDeg: placement.rotationDeg,
     offsetXMm: placement.offsetXMm,
     offsetYMm: placement.offsetYMm,
     offsetZMm: placement.offsetZMm,
     scale: 1,
-    orientationDeg: [0, 0, placement.rotationDeg],
+    ...(placement.positionMm ? { positionMm: structuredClone(placement.positionMm) } : {}),
+    orientationDeg: placement.orientationDeg
+      ? structuredClone(placement.orientationDeg)
+      : [0, 0, placement.rotationDeg],
+    ...(placement.surfaceAttachment
+      ? { surfaceAttachment: structuredClone(placement.surfaceAttachment) }
+      : {}),
     outwardSide: placement.surface === "back" ? "back" : "front",
     source: "manual",
   };
@@ -1693,6 +1708,9 @@ function parsePanelInstances(value: unknown): PanelInstanceV3[] {
 function parseArrangementAnchor(value: Record<string, unknown>, index: number): PanelArrangementAnchorV3 {
   const positionMm = parseOptionalTuple(value.positionMm, `A posição do anchor ${index + 1}`);
   const orientationDeg = parseOptionalTuple(value.orientationDeg, `A orientação do anchor ${index + 1}`);
+  const surfaceAttachment = value.surfaceAttachment === undefined
+    ? undefined
+    : parsePanelSurfaceAttachment(value.surfaceAttachment, index);
   const outwardSide =
     value.outwardSide === undefined
       ? undefined
@@ -1726,12 +1744,39 @@ function parseArrangementAnchor(value: Record<string, unknown>, index: number): 
     scale: readPositiveNumber(value.scale, `A escala do anchor ${index + 1}`),
     ...(positionMm === undefined ? {} : { positionMm }),
     ...(orientationDeg === undefined ? {} : { orientationDeg }),
+    ...(surfaceAttachment === undefined ? {} : { surfaceAttachment }),
     ...(outwardSide === undefined ? {} : { outwardSide }),
     source: readEnum(value.source, ["template", "inferred", "manual", "migration"] as const, `A origem do anchor ${index + 1}`),
     ...(value.legacyPreviewPlacementId === undefined
       ? {}
       : { legacyPreviewPlacementId: readString(value.legacyPreviewPlacementId, `O placement legado do anchor ${index + 1}`) }),
     ...(legacyAssemblyRole === undefined ? {} : { legacyAssemblyRole }),
+  };
+}
+
+function parsePanelSurfaceAttachment(
+  value: unknown,
+  index: number,
+): NonNullable<PanelArrangementAnchorV3["surfaceAttachment"]> {
+  if (!isRecord(value)) throw new TypeError(`O attachment de superfície ${index + 1} é inválido.`);
+  const barycentric = parseOptionalTuple(
+    value.barycentric,
+    `As coordenadas baricêntricas do attachment ${index + 1}`,
+  );
+  if (!barycentric) throw new TypeError(`O attachment de superfície ${index + 1} não possui coordenadas baricêntricas.`);
+  if (barycentric.some((coordinate) => coordinate < -1e-9)) {
+    throw new TypeError(`As coordenadas baricêntricas do attachment ${index + 1} não podem ser negativas.`);
+  }
+  const sum = barycentric[0] + barycentric[1] + barycentric[2];
+  if (Math.abs(sum - 1) > 1e-6) {
+    throw new TypeError(`As coordenadas baricêntricas do attachment ${index + 1} precisam somar 1.`);
+  }
+  return {
+    version: readEnum(value.version, [1] as const, `A versão do attachment ${index + 1}`),
+    topologySignature: readString(value.topologySignature, `A topologia do attachment ${index + 1}`),
+    triangleIndex: readNonNegativeInteger(value.triangleIndex, `O triângulo do attachment ${index + 1}`),
+    barycentric,
+    normalOffsetMm: readFiniteNumber(value.normalOffsetMm, `O afastamento normal do attachment ${index + 1}`),
   };
 }
 

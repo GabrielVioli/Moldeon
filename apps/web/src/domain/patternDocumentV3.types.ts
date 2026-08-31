@@ -196,10 +196,20 @@ export interface PanelArrangementAnchorV3 {
   scale: number;
   positionMm?: [number, number, number];
   orientationDeg?: [number, number, number];
+  /** Exact authored hit on the canonical HumanBodyModel surface. */
+  surfaceAttachment?: PanelSurfaceAttachmentV3;
   outwardSide?: AssemblyOutwardSide;
   source: "template" | "inferred" | "manual" | "migration";
   legacyPreviewPlacementId?: string;
   legacyAssemblyRole?: AssemblyPieceRole;
+}
+
+export interface PanelSurfaceAttachmentV3 {
+  version: 1;
+  topologySignature: string;
+  triangleIndex: number;
+  barycentric: [number, number, number];
+  normalOffsetMm: number;
 }
 
 export interface PanelInstanceV3 {
