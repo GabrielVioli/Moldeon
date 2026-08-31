@@ -45,6 +45,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Prepare browser harness
+        run: |
+          npm install --no-save --ignore-scripts playwright-core
+          rm -f docs/progress/RECOVERY_11_0_7_DESKTOP.png \
+            docs/progress/RECOVERY_11_0_7_DESKTOP_ADJUSTED.png \
+            docs/progress/RECOVERY_11_0_7_MOBILE.png \
+            docs/progress/RECOVERY_11_0_7_BROWSER_FAILURE.png
+
       - name: Start fallback dev server
         working-directory: apps/web
         shell: bash
