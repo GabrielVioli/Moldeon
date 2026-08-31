@@ -27,13 +27,14 @@ export function raycastBodySurface(
   origin: readonly [number, number, number],
   direction: readonly [number, number, number],
   normalOffsetMm = 12,
+  maxDistanceM = Number.POSITIVE_INFINITY,
 ): BodySurfaceFrame | null {
   const runtime = runtimeFor(body);
   const raycaster = new THREE.Raycaster(
     new THREE.Vector3(...origin),
     new THREE.Vector3(...direction).normalize(),
     0,
-    Number.POSITIVE_INFINITY,
+    maxDistanceM,
   );
   const hit = raycaster.intersectObject(runtime.mesh, false)[0];
   if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) return null;
@@ -63,15 +64,19 @@ export function resolveBodySurfaceAttachment(
   if (attachment.triangleIndex < 0 || attachment.triangleIndex * 3 + 2 >= body.indices.length) return null;
   const triangle = triangleFor(body, attachment.triangleIndex);
   const [u, v, w] = attachment.barycentric;
-  const position = triangle.a.clone().multiplyScalar(u)
+  const surfacePoint = triangle.a.clone().multiplyScalar(u)
     .addScaledVector(triangle.b, v)
     .addScaledVector(triangle.c, w);
-  const normal = interpolatedNormal(body, attachment.triangleIndex, attachment.barycentric);
+  const normal = orientOutwardNormal(
+    body,
+    surfacePoint,
+    interpolatedNormal(body, attachment.triangleIndex, attachment.barycentric),
+  );
   const tangent = triangle.b.clone().sub(triangle.a);
   tangent.addScaledVector(normal, -tangent.dot(normal)).normalize();
-  const safeTangent = tangent.lengthSq() > 1e-12 ? tangent : new THREE.Vector3(1, 0, 0);
+  const safeTangent = tangent.lengthSq() > 1e-12 ? tangent : orthogonalTangent(normal);
   const axis = new THREE.Vector3().crossVectors(normal, safeTangent).normalize();
-  position.addScaledVector(normal, attachment.normalOffsetMm * 0.001);
+  const position = surfacePoint.clone().addScaledVector(normal, attachment.normalOffsetMm * 0.001);
   return {
     attachment: structuredClone(attachment),
     position: tuple(position),
@@ -121,6 +126,29 @@ function interpolatedNormal(
     return triangleFor(body, triangleIndex).getNormal(result);
   }
   return result.normalize();
+}
+
+function orientOutwardNormal(
+  body: HumanBodyMesh,
+  surfacePoint: THREE.Vector3,
+  normalValue: THREE.Vector3,
+): THREE.Vector3 {
+  const normal = normalValue.clone().normalize();
+  const boundsCenter = new THREE.Vector3(
+    (body.bounds.min[0] + body.bounds.max[0]) * 0.5,
+    (body.bounds.min[1] + body.bounds.max[1]) * 0.5,
+    (body.bounds.min[2] + body.bounds.max[2]) * 0.5,
+  );
+  const radial = surfacePoint.clone().sub(boundsCenter);
+  if (radial.lengthSq() > 1e-12 && normal.dot(radial) < 0) normal.negate();
+  return normal;
+}
+
+function orthogonalTangent(normal: THREE.Vector3): THREE.Vector3 {
+  const seed = Math.abs(normal.y) < 0.9
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(1, 0, 0);
+  return seed.addScaledVector(normal, -seed.dot(normal)).normalize();
 }
 
 function vertex(values: Float32Array, index: number): THREE.Vector3 {
