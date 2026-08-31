@@ -27,6 +27,16 @@ jobs:
           sed -i 's/function createArrangementCandidateMarker(): THREE.Mesh {/function createArrangementCandidateMarker(): THREE.Group {/' apps/web/src/viewport/GlobalThreeViewport.ts
           python /tmp/patch.py
           sed -i 's/function createArrangementCandidateMarker(): THREE.Group {/function createArrangementCandidateMarker(): THREE.Mesh {/' apps/web/src/viewport/GlobalThreeViewport.ts
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("apps/web/src/viewport/ArrangementWorkspace.ts")
+          s = p.read_text()
+          old = "const correction = surface.addScaledVector(normal, clearanceM).sub(desired);"
+          new = "const signedAtCrossing = desired.clone().sub(surface).dot(normal);\n              const correction = normal.clone().multiplyScalar(clearanceM - signedAtCrossing);"
+          if s.count(old) != 1:
+              raise SystemExit(f"crossing correction marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
+          PY
           test "$(git diff --name-only | wc -l)" -eq 9
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
