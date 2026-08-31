@@ -791,9 +791,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setPanelInstanceArrangements: (updates) => {
     if (updates.length === 0) return;
+    const state = get();
+    const validPieceIds = new Set(state.garment.pieces.map((piece) => piece.id));
     const byPiece = new Map<string, Map<string, PatternPreviewPlacement>>();
     for (const update of updates) {
-      if (!get().garment.pieces.some((piece) => piece.id === update.pieceId)) continue;
+      if (!validPieceIds.has(update.pieceId)) continue;
       const instanceId = createPanelInstanceId(update.pieceId, update.copyIndex);
       const placements = byPiece.get(update.pieceId) ?? new Map<string, PatternPreviewPlacement>();
       placements.set(instanceId, {
@@ -806,21 +808,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       byPiece.set(update.pieceId, placements);
     }
     if (byPiece.size === 0) return;
-    changeDocument(set, get, "placement", "Posicionar instância(s) no 3D", (document) => ({
-      ...document,
-      garment: {
-        ...document.garment,
-        pieces: document.garment.pieces.map((piece) => {
-          const updatesForPiece = byPiece.get(piece.id);
-          if (!updatesForPiece) return piece;
-          const placements = (piece.previewPlacements ?? [])
-            .filter((candidate) => !updatesForPiece.has(candidate.id));
-          placements.push(...updatesForPiece.values());
-          placements.sort((left, right) => left.id.localeCompare(right.id));
-          return { ...piece, previewPlacements: placements };
-        }),
-      },
-    }));
+
+    const pieces = state.garment.pieces.map((piece) => {
+      const updatesForPiece = byPiece.get(piece.id);
+      if (!updatesForPiece) return piece;
+      const placements = (piece.previewPlacements ?? [])
+        .filter((candidate) => !updatesForPiece.has(candidate.id));
+      placements.push(...updatesForPiece.values());
+      placements.sort((left, right) => left.id.localeCompare(right.id));
+      return { ...piece, previewPlacements: placements };
+    });
+    const garment = { ...state.garment, pieces };
+    history.recordImmutable(
+      "placement",
+      "Posicionar instância(s) no 3D",
+      { garment: state.garment, activePieceId: state.activePieceId },
+      { garment, activePieceId: state.activePieceId },
+    );
+    const previousActivePiece = state.garment.pieces.find((piece) => piece.id === state.activePieceId);
+    const nextActivePiece = pieces.find((piece) => piece.id === state.activePieceId);
+    set({
+      garment,
+      ...(previousActivePiece && nextActivePiece && previousActivePiece !== nextActivePiece
+        ? { snapshot: { ...state.snapshot, piece: { ...state.snapshot.piece, previewPlacements: nextActivePiece.previewPlacements } } }
+        : {}),
+      ...historyAvailability(),
+    });
   },
   confirmPanelInstanceArrangement: (pieceId, copyIndex, definitionPlacement, placement) => {
     if (!get().garment.pieces.some((piece) => piece.id === pieceId)) return;

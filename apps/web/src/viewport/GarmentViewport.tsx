@@ -56,6 +56,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const devSettingsRef = useRef(devSettings);
   const wireframeRef = useRef(wireframe);
   const arrangementCommitRef = useRef(onArrangementCommit);
+  const pendingArrangementCommitsRef = useRef<ArrangementCommit[] | null>(null);
   const [selectedArrangementIds, setSelectedArrangementIds] = useState<string[]>([]);
   const [selectionPinned, setSelectionPinned] = useState(false);
   const [arrangementTool, setArrangementTool] = useState<ArrangementTool>("move");
@@ -99,7 +100,12 @@ export const GarmentViewport = memo(function GarmentViewport({
         }
         viewportRef.current = viewport;
         viewport.setArrangementInteractionHandlers(
-          (commits) => arrangementCommitRef.current?.(commits),
+          (commits) => {
+            const handler = arrangementCommitRef.current;
+            if (!handler || commits.length === 0) return;
+            pendingArrangementCommitsRef.current = commits;
+            handler(commits);
+          },
           (instanceIds) => {
             setSelectedArrangementIds(instanceIds);
             setSelectionPinned(false);
@@ -162,7 +168,13 @@ export const GarmentViewport = memo(function GarmentViewport({
 
   useEffect(() => {
     if (!active || displayMode !== "side-preview") return;
-    viewportRef.current?.updateWorkspaceArrangement(assemblyInput);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const pending = pendingArrangementCommitsRef.current;
+    pendingArrangementCommitsRef.current = null;
+    viewport.updateWorkspaceArrangement(assemblyInput, {
+      transformOnly: Boolean(pending && arrangementCommitsMatchInput(assemblyInput, pending)),
+    });
   }, [active, assemblyInput.arrangementRevision, displayMode]);
 
   useEffect(() => {
@@ -170,6 +182,30 @@ export const GarmentViewport = memo(function GarmentViewport({
     const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());
     return () => window.cancelAnimationFrame(frame);
   }, [active, displayMode]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const workspace = host?.closest(".workspace") as HTMLElement | null;
+    if (!host || !workspace || !active) return;
+    let frame: number | null = null;
+    const syncWorkspaceLayout = () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const primary3D = workspace.classList.contains("mode-assembly")
+          || workspace.classList.contains("mode-fitting");
+        host.dataset.viewportWorkspaceRole = primary3D ? "primary-3d" : "side-preview";
+        viewportRef.current?.refresh();
+      });
+    };
+    syncWorkspaceLayout();
+    const observer = new MutationObserver(syncWorkspaceLayout);
+    observer.observe(workspace, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [active]);
 
   useEffect(() => {
     if (displayMode !== "full-fitting" || simulateVersion <= lastDressedVersionRef.current || !viewportRef.current) return;
@@ -463,6 +499,28 @@ export const GarmentViewport = memo(function GarmentViewport({
     </div>
   );
 });
+
+function arrangementCommitsMatchInput(
+  input: ResolvedAssemblyInput,
+  commits: readonly ArrangementCommit[],
+): boolean {
+  const instances = new Map(input.panelInstances.map((instance) => [instance.id, instance] as const));
+  return commits.every((commit) => {
+    const anchor = instances.get(commit.instanceId)?.arrangementAnchor;
+    return tupleClose(anchor?.positionMm, commit.positionMm)
+      && tupleClose(anchor?.orientationDeg, commit.orientationDeg);
+  });
+}
+
+function tupleClose(
+  left: readonly number[] | undefined,
+  right: readonly number[],
+  epsilon = 1e-4,
+): boolean {
+  return Boolean(left
+    && left.length === right.length
+    && left.every((value, index) => Math.abs(value - right[index]) <= epsilon));
+}
 
 function formatMetric(value: number | undefined): string {
   return Number.isFinite(value) ? (value ?? 0).toFixed(2) : "0.00";

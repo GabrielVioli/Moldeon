@@ -90,6 +90,21 @@ export class DocumentCommandHistory {
     return true;
   }
 
+  recordImmutable(
+    type: DocumentCommandType,
+    label: string,
+    before: EditorDocumentState,
+    after: EditorDocumentState,
+  ): boolean {
+    if (this.transaction
+      || (before.garment === after.garment && before.activePieceId === after.activePieceId)) return false;
+    const command = createImmutableCommand(type, label, before, after);
+    this.past.push(command);
+    if (this.past.length > this.limit) this.past.shift();
+    this.future.length = 0;
+    return true;
+  }
+
   undo(): EditorDocumentState | null {
     const command = this.past.pop();
     if (!command) return null;
@@ -126,6 +141,22 @@ function createCommand(
     after: storedAfter,
     undo: () => cloneState(storedBefore),
     redo: () => cloneState(storedAfter),
+  };
+}
+
+function createImmutableCommand(
+  type: DocumentCommandType,
+  label: string,
+  before: EditorDocumentState,
+  after: EditorDocumentState,
+): DocumentCommand {
+  return {
+    type,
+    label,
+    before,
+    after,
+    undo: () => before,
+    redo: () => after,
   };
 }
 

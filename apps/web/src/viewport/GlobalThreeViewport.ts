@@ -292,9 +292,20 @@ export class ThreeViewport {
     this.hideArrangementCandidate();
   }
 
-  updateWorkspaceArrangement(input: ResolvedAssemblyInput): void {
+  updateWorkspaceArrangement(
+    input: ResolvedAssemblyInput,
+    options: { transformOnly?: boolean } = {},
+  ): void {
     this.currentInput = input;
     if (this.viewportMode !== "assembly") return;
+    if (options.transformOnly) {
+      this.host.dataset.arrangementRevision = input.arrangementRevision;
+      this.host.dataset.arrangementXpbdInitializations = "0";
+      this.host.dataset.arrangementCommitPath = "transform-only";
+      this.requestRender();
+      return;
+    }
+    delete this.host.dataset.arrangementCommitPath;
     const avatarModel = buildAvatarParametricModel(
       input.document.measurements.values,
       input.document.body.type,
