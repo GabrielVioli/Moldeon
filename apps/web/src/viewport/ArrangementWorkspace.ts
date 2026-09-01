@@ -122,6 +122,92 @@ export function createAxisDragPlane(
   return new THREE.Plane().setFromNormalAndCoplanarPoint(normal.normalize(), grabPointWorld);
 }
 
+/** Parameter of the closest point on a frozen world axis to a pointer ray. */
+export function closestRayAxisParameter(
+  ray: THREE.Ray,
+  axisOriginWorld: THREE.Vector3,
+  axisWorld: THREE.Vector3,
+): number | null {
+  const axis = axisWorld.clone();
+  if (axis.lengthSq() <= 1e-12 || ray.direction.lengthSq() <= 1e-12) return null;
+  axis.normalize();
+  const direction = ray.direction.clone().normalize();
+  const betweenOrigins = ray.origin.clone().sub(axisOriginWorld);
+  const axisRayDot = direction.dot(axis);
+  const denominator = 1 - axisRayDot * axisRayDot;
+  if (denominator <= 1e-5) return null;
+  const rayOriginProjection = direction.dot(betweenOrigins);
+  const axisOriginProjection = axis.dot(betweenOrigins);
+  const parameter = (axisOriginProjection - axisRayDot * rayOriginProjection) / denominator;
+  return Number.isFinite(parameter) ? parameter : null;
+}
+
+export function axisParameterOnDragPlane(
+  ray: THREE.Ray,
+  plane: THREE.Plane,
+  axisOriginWorld: THREE.Vector3,
+  axisWorld: THREE.Vector3,
+): number | null {
+  const point = ray.intersectPlane(plane, new THREE.Vector3());
+  if (!point) return null;
+  const axis = axisWorld.clone();
+  if (axis.lengthSq() <= 1e-12) return null;
+  return point.sub(axisOriginWorld).dot(axis.normalize());
+}
+
+export function perspectiveWorldUnitsPerPixel(
+  depthAlongViewM: number,
+  verticalFovDeg: number,
+  viewportHeightPx: number,
+): number {
+  const depth = Math.max(1e-4, Math.abs(depthAlongViewM));
+  const height = Math.max(1, viewportHeightPx);
+  return 2 * depth * Math.tan(THREE.MathUtils.degToRad(verticalFovDeg * 0.5)) / height;
+}
+
+export function signedRotationAngle(
+  startDirection: THREE.Vector3,
+  currentDirection: THREE.Vector3,
+  axisWorld: THREE.Vector3,
+): number {
+  const start = startDirection.clone().normalize();
+  const current = currentDirection.clone().normalize();
+  const axis = axisWorld.clone().normalize();
+  const cross = new THREE.Vector3().crossVectors(start, current);
+  return Math.atan2(axis.dot(cross), THREE.MathUtils.clamp(start.dot(current), -1, 1));
+}
+
+export function unwrapRotationAngle(previousRaw: number, currentRaw: number, accumulated: number): number {
+  let delta = currentRaw - previousRaw;
+  if (delta > Math.PI) delta -= Math.PI * 2;
+  else if (delta < -Math.PI) delta += Math.PI * 2;
+  return accumulated + delta;
+}
+
+export function applyFrozenRigidTranslation(
+  mesh: THREE.Mesh,
+  initialPosition: THREE.Vector3,
+  initialQuaternion: THREE.Quaternion,
+  deltaWorld: THREE.Vector3,
+): void {
+  mesh.position.copy(initialPosition).add(deltaWorld);
+  mesh.quaternion.copy(initialQuaternion);
+  mesh.updateMatrixWorld(true);
+}
+
+export function applyFrozenRigidRotation(
+  mesh: THREE.Mesh,
+  initialPosition: THREE.Vector3,
+  initialQuaternion: THREE.Quaternion,
+  pivotWorld: THREE.Vector3,
+  rotationWorld: THREE.Quaternion,
+): void {
+  const relative = initialPosition.clone().sub(pivotWorld).applyQuaternion(rotationWorld);
+  mesh.position.copy(pivotWorld).add(relative);
+  mesh.quaternion.copy(rotationWorld).multiply(initialQuaternion);
+  mesh.updateMatrixWorld(true);
+}
+
 export function createBodyBarrierState(mesh: THREE.Mesh, maximumSamples = 20): BodyBarrierState {
   const position = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
   const local: number[] = [];
@@ -158,6 +244,10 @@ export function createBodyBarrierState(mesh: THREE.Mesh, maximumSamples = 20): B
   const previousWorld = new Float32Array(localSamples.length);
   writeBarrierWorldSamples(mesh, localSamples, previousWorld);
   return { localSamples, previousWorld };
+}
+
+export function refreshBodyBarrierState(mesh: THREE.Mesh, state: BodyBarrierState): void {
+  writeBarrierWorldSamples(mesh, state.localSamples, state.previousWorld);
 }
 
 /**

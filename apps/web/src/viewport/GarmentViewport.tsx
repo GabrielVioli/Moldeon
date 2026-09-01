@@ -119,6 +119,7 @@ export const GarmentViewport = memo(function GarmentViewport({
             setSelectionPinned(false);
           },
           (active) => arrangementInteractionRef.current?.(active),
+          (axis) => setArrangementAxis(axis),
         );
         viewport.setArrangementTool(arrangementToolRef.current);
         viewport.setArrangementAxis(arrangementAxisRef.current);
@@ -272,8 +273,8 @@ export const GarmentViewport = memo(function GarmentViewport({
               ? `${selectedArrangementIds.length} selecionada(s) · ${selectedArrangementState}`
               : "Selecione uma peça"}</strong>
             <small>{arrangementTool === "move"
-              ? arrangementAxis === "free" ? "Mover livremente" : `Mover no eixo ${arrangementAxis.toUpperCase()}`
-              : `Girar no eixo ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`}</small>
+              ? arrangementAxis === "free" ? "Arraste a peça livremente" : `Arraste o handle ${arrangementAxis.toUpperCase()}`
+              : `Arraste o arco ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`}</small>
           </div>
           <div className="viewport-arrangement-actions">
             <button

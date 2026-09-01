@@ -44,18 +44,26 @@ import type {
 import { closestBodySurfacePoint, prepareBodySurfaceQuery, raycastBodySurface, resolveBodySurfaceAttachment, type BodySurfaceFrame } from "../avatar/BodySurfaceQuery";
 import {
   adjustMeshToBodySurface,
+  applyFrozenRigidRotation,
+  applyFrozenRigidTranslation,
+  axisParameterOnDragPlane,
   applyAuthoredArrangementToAssemblyState,
   auditMeshBodyClearance,
   captureMeshArrangement,
+  closestRayAxisParameter,
   constrainMeshOutsideBody,
   createAxisDragPlane,
   createBodyBarrierState,
   createCameraDragPlane,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
+  perspectiveWorldUnitsPerPixel,
+  refreshBodyBarrierState,
   resolveDeterministicStagingLayout,
   resolveArrangementTransform,
   restoreMeshMaterialGeometry,
+  signedRotationAngle,
+  unwrapRotationAngle,
   updateSurfaceCandidate,
   type ArrangementCommit,
   type BodyBarrierState,
@@ -97,18 +105,35 @@ interface ArrangementDragState {
   pointerId: number;
   activeInstanceId: string;
   tool: ArrangementTool;
-  grabPointWorld: THREE.Vector3;
   dragPlane: THREE.Plane;
+  translationStartPoint: THREE.Vector3;
+  axisOrigin: THREE.Vector3;
+  axisStartParameter?: number;
+  axisSolveMode?: "closest" | "plane" | "screen";
+  axisScreenStart?: THREE.Vector2;
+  axisWorldUnitsPerPixel?: number;
   initialTransforms: Map<string, ArrangementDragTransform>;
   rotationPivot: THREE.Vector3;
   rotationAxis: THREE.Vector3;
   rotationPlane?: THREE.Plane;
   rotationStartVector?: THREE.Vector3;
-  pointerStartX: number;
+  rotationSolveMode?: "plane" | "screen";
+  rotationScreenStart?: THREE.Vector2;
+  rotationScreenTangent?: THREE.Vector2;
+  rotationPixelsPerRad?: number;
+  rotationLastRawAngle: number;
+  rotationAccumulatedAngle: number;
   axis: ArrangementAxis;
   barriers: Map<string, BodyBarrierState>;
+  surfaceAttachments: Map<string, ArrangementCommit["surfaceAttachment"]>;
   surfaceCandidate?: BodySurfaceFrame;
   moved: boolean;
+}
+
+interface ArrangementHandleHit {
+  point: THREE.Vector3;
+  axis: Exclude<ArrangementAxis, "free">;
+  tool: ArrangementTool;
 }
 
 export class ThreeViewport {
@@ -160,9 +185,12 @@ export class ThreeViewport {
   private arrangementCommitHandler?: (commits: ArrangementCommit[]) => void;
   private arrangementSelectionHandler?: (instanceIds: string[]) => void;
   private arrangementInteractionHandler?: (active: boolean) => void;
+  private arrangementAxisHandler?: (axis: ArrangementAxis) => void;
   private arrangementTool: ArrangementTool = "move";
   private arrangementAxis: ArrangementAxis = "free";
   private dragState: ArrangementDragState | null = null;
+  private hoveredArrangementHandle: Pick<ArrangementHandleHit, "tool" | "axis"> | null = null;
+  private hoveredArrangementInstanceId: string | null = null;
   private readonly arrangementPointerMoveMs: number[] = [];
   private readonly arrangementFrameMs: number[] = [];
   private readonly arrangementReleaseMs: number[] = [];
@@ -240,11 +268,14 @@ export class ThreeViewport {
     this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 0.45;
     this.controls.maxDistance = 12;
+    this.controls.screenSpacePanning = true;
     this.controls.addEventListener("change", this.requestRender);
     this.renderer.domElement.addEventListener("pointerdown", this.handleArrangementPointerDown, { capture: true });
     this.renderer.domElement.addEventListener("pointermove", this.handleArrangementPointerMove, { capture: true });
     this.renderer.domElement.addEventListener("pointerup", this.handleArrangementPointerUp, { capture: true });
     this.renderer.domElement.addEventListener("pointercancel", this.handleArrangementPointerUp, { capture: true });
+    this.renderer.domElement.addEventListener("pointerleave", this.handleArrangementPointerLeave, { capture: true });
+    this.renderer.domElement.addEventListener("contextmenu", this.handleViewportContextMenu);
 
     this.avatarGroup.name = "avatar-root";
     this.garmentGroup.name = "garment-root";
@@ -306,10 +337,12 @@ export class ThreeViewport {
     onCommit?: (commits: ArrangementCommit[]) => void,
     onSelectionChange?: (instanceIds: string[]) => void,
     onInteractionChange?: (active: boolean) => void,
+    onAxisChange?: (axis: ArrangementAxis) => void,
   ): void {
     this.arrangementCommitHandler = onCommit;
     this.arrangementSelectionHandler = onSelectionChange;
     this.arrangementInteractionHandler = onInteractionChange;
+    this.arrangementAxisHandler = onAxisChange;
   }
 
   setArrangementTool(tool: ArrangementTool): void {
@@ -318,7 +351,9 @@ export class ThreeViewport {
     if (tool === "rotate" && this.arrangementAxis === "free") this.arrangementAxis = "z";
     this.host.dataset.arrangementTool = tool;
     this.host.dataset.arrangementAxis = this.arrangementAxis;
+    this.hoveredArrangementHandle = null;
     this.hideArrangementCandidate();
+    this.setArrangementPointerFeedback(this.hoveredArrangementInstanceId ? "panel" : "idle");
     this.updateArrangementGizmo();
   }
 
@@ -466,6 +501,19 @@ export class ThreeViewport {
   updateGarment(input: ResolvedAssemblyInput, mode: ThreeViewportMode = "fitting"): string[] {
     const enteringAssembly = mode === "assembly" && this.viewportMode !== "assembly";
     this.viewportMode = mode;
+    this.controls.mouseButtons.LEFT = mode === "assembly" ? null : THREE.MOUSE.ROTATE;
+    this.controls.mouseButtons.MIDDLE = mode === "assembly" ? THREE.MOUSE.PAN : THREE.MOUSE.DOLLY;
+    this.controls.mouseButtons.RIGHT = mode === "assembly" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    if (mode === "assembly") {
+      this.setArrangementPointerFeedback("idle");
+    } else {
+      this.hoveredArrangementHandle = null;
+      this.hoveredArrangementInstanceId = null;
+      this.renderer.domElement.style.cursor = "default";
+      delete this.host.dataset.arrangementPointerMode;
+      delete this.host.dataset.arrangementHoveredHandle;
+      delete this.host.dataset.arrangementHoveredInstanceId;
+    }
     this.currentInput = input;
     this.host.dataset.viewportMode = mode;
     this.host.dataset.arrangementTool = this.arrangementTool;
@@ -756,6 +804,8 @@ export class ThreeViewport {
     this.renderer.domElement.removeEventListener("pointermove", this.handleArrangementPointerMove, { capture: true });
     this.renderer.domElement.removeEventListener("pointerup", this.handleArrangementPointerUp, { capture: true });
     this.renderer.domElement.removeEventListener("pointercancel", this.handleArrangementPointerUp, { capture: true });
+    this.renderer.domElement.removeEventListener("pointerleave", this.handleArrangementPointerLeave, { capture: true });
+    this.renderer.domElement.removeEventListener("contextmenu", this.handleViewportContextMenu);
     this.controls.dispose();
     this.avatarLoadController?.abort();
     this.avatarLoadController = null;
@@ -986,33 +1036,71 @@ export class ThreeViewport {
   }
 
   private readonly handleArrangementPointerDown = (event: PointerEvent): void => {
-    if (this.viewportMode !== "assembly" || event.button !== 0 || this.disposed || !event.isPrimary) return;
+    if (this.viewportMode !== "assembly" || this.disposed || !event.isPrimary) return;
+    if (event.button === 2) {
+      this.hoveredArrangementHandle = null;
+      this.hoveredArrangementInstanceId = null;
+      this.setArrangementPointerFeedback("orbit");
+      return;
+    }
+    if (event.button === 1) {
+      this.hoveredArrangementHandle = null;
+      this.hoveredArrangementInstanceId = null;
+      this.setArrangementPointerFeedback("pan");
+      return;
+    }
+    if (event.button !== 0) return;
     const gizmoHit = this.raycastArrangementGizmo(event);
     const garmentHit = gizmoHit ? null : this.raycastGarment(event);
-    if (!gizmoHit && !garmentHit) return;
+    if (!gizmoHit && !garmentHit) {
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey && this.selectedInstanceIds.size > 0) {
+        this.selectedInstanceIds.clear();
+        this.applyArrangementSelectionVisuals();
+        this.arrangementSelectionHandler?.([]);
+      }
+      this.updateArrangementHover(event);
+      return;
+    }
 
-    let active = this.garmentMeshes.find((candidate) => this.selectedInstanceIds.has(candidate.key));
+    let active = this.garmentMeshes.find((candidate) =>
+      this.selectedInstanceIds.has(candidate.key) && candidate.mesh.userData.arrangementPinned !== true,
+    );
     if (garmentHit) {
       const item = this.garmentMeshes.find((candidate) => candidate.mesh === garmentHit.object);
       if (!item) return;
-      if (!event.shiftKey) this.selectedInstanceIds.clear();
-      if (event.shiftKey && this.selectedInstanceIds.has(item.key)) this.selectedInstanceIds.delete(item.key);
-      else this.selectedInstanceIds.add(item.key);
-      active = item;
+      const extendSelection = event.ctrlKey || event.metaKey || event.shiftKey;
+      if (extendSelection) {
+        if (this.selectedInstanceIds.has(item.key)) this.selectedInstanceIds.delete(item.key);
+        else this.selectedInstanceIds.add(item.key);
+      } else if (!this.selectedInstanceIds.has(item.key)) {
+        this.selectedInstanceIds.clear();
+        this.selectedInstanceIds.add(item.key);
+      }
+      active = this.selectedInstanceIds.has(item.key) && item.mesh.userData.arrangementPinned !== true
+        ? item
+        : this.garmentMeshes.find((candidate) =>
+            this.selectedInstanceIds.has(candidate.key) && candidate.mesh.userData.arrangementPinned !== true,
+          );
       this.applyArrangementSelectionVisuals();
       this.arrangementSelectionHandler?.([...this.selectedInstanceIds]);
+      if (extendSelection || this.arrangementTool === "rotate") {
+        this.updateArrangementHover(event);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
     }
     if (!active || active.mesh.userData.arrangementPinned === true || !this.selectedInstanceIds.has(active.key)) return;
 
-    const axis = gizmoHit?.axis ?? this.arrangementAxis;
-    const effectiveAxis: ArrangementAxis = this.arrangementTool === "rotate" && axis === "free" ? "z" : axis;
-    if (gizmoHit) this.setArrangementAxis(effectiveAxis);
+    const effectiveAxis: ArrangementAxis = gizmoHit?.axis ?? "free";
+    if (gizmoHit) {
+      this.setArrangementAxis(effectiveAxis);
+      this.arrangementAxisHandler?.(effectiveAxis);
+    }
     const hitPoint = gizmoHit?.point ?? garmentHit!.point;
+    const initialRay = this.pointerRay(event);
     const cameraDirection = this.camera.getWorldDirection(new THREE.Vector3());
     const worldAxis = effectiveAxis === "free" ? new THREE.Vector3(0, 0, 1) : arrangementAxisVector(effectiveAxis);
-    const dragPlane = this.arrangementTool === "move" && effectiveAxis !== "free"
-      ? createAxisDragPlane(hitPoint, worldAxis, cameraDirection)
-      : createCameraDragPlane(hitPoint, cameraDirection);
     const initialTransforms = new Map<string, ArrangementDragTransform>();
     const barriers = new Map<string, BodyBarrierState>();
     const body = this.currentAvatarModel?.humanBody.visualMesh;
@@ -1024,38 +1112,91 @@ export class ThreeViewport {
       });
       if (body) barriers.set(candidate.key, createBodyBarrierState(candidate.mesh, 20));
     }
-    const rotationPivot = this.selectionCentroid();
+    if (initialTransforms.size === 0) return;
+    const rotationPivot = this.selectionCentroid(new Set(initialTransforms.keys()));
+    const dragPlane = effectiveAxis !== "free"
+      ? createAxisDragPlane(rotationPivot, worldAxis, cameraDirection)
+      : createCameraDragPlane(hitPoint, cameraDirection);
+    const translationStartPoint = intersectPointerRayWithDragPlane(initialRay, dragPlane) ?? hitPoint.clone();
+    const axisAlignment = Math.abs(initialRay.direction.dot(worldAxis));
+    let axisSolveMode: ArrangementDragState["axisSolveMode"];
+    let axisStartParameter: number | undefined;
+    if (this.arrangementTool === "move" && effectiveAxis !== "free") {
+      axisSolveMode = axisAlignment < 0.965 ? "closest" : "screen";
+      axisStartParameter = axisSolveMode === "closest"
+        ? closestRayAxisParameter(initialRay, rotationPivot, worldAxis) ?? undefined
+        : 0;
+      if (axisStartParameter === undefined) {
+        axisSolveMode = "plane";
+        axisStartParameter = axisParameterOnDragPlane(initialRay, dragPlane, rotationPivot, worldAxis) ?? undefined;
+      }
+      if (axisStartParameter === undefined) {
+        axisSolveMode = "screen";
+        axisStartParameter = 0;
+      }
+    }
+    const axisDepth = Math.max(0.08, rotationPivot.clone().sub(this.camera.position).dot(cameraDirection));
+    const axisWorldUnitsPerPixel = perspectiveWorldUnitsPerPixel(
+      axisDepth,
+      this.camera.fov,
+      this.renderer.domElement.clientHeight,
+    );
     const rotationPlane = this.arrangementTool === "rotate"
       ? new THREE.Plane().setFromNormalAndCoplanarPoint(worldAxis, rotationPivot)
       : undefined;
     const rotationStartPoint = rotationPlane
-      ? this.pointerRay(event).intersectPlane(rotationPlane, new THREE.Vector3())
+      ? initialRay.intersectPlane(rotationPlane, new THREE.Vector3())
       : null;
     const rotationStartVector = rotationStartPoint ? rotationStartPoint.clone().sub(rotationPivot) : undefined;
     if (rotationStartVector) {
       rotationStartVector.addScaledVector(worldAxis, -rotationStartVector.dot(worldAxis));
       if (rotationStartVector.lengthSq() > 1e-10) rotationStartVector.normalize();
     }
+    const rotationSolveMode = this.arrangementTool === "rotate"
+      && Math.abs(initialRay.direction.dot(worldAxis)) >= 0.12
+      && rotationStartVector
+      && rotationStartVector.lengthSq() > 1e-8
+        ? "plane"
+        : this.arrangementTool === "rotate" ? "screen" : undefined;
+    const screenRotation = this.arrangementTool === "rotate"
+      ? this.createScreenRotationSolver(rotationPivot, hitPoint, worldAxis, event)
+      : null;
+    if (this.arrangementTool === "rotate" && rotationSolveMode === "screen" && !screenRotation) return;
     this.dragState = {
       pointerId: event.pointerId,
       activeInstanceId: active.key,
       tool: this.arrangementTool,
-      grabPointWorld: hitPoint.clone(),
       dragPlane,
+      translationStartPoint,
+      axisOrigin: rotationPivot.clone(),
+      axisStartParameter,
+      axisSolveMode,
+      axisScreenStart: new THREE.Vector2(event.clientX, event.clientY),
+      axisWorldUnitsPerPixel,
       initialTransforms,
       rotationPivot,
       rotationAxis: worldAxis,
       rotationPlane,
       rotationStartVector: rotationStartVector && rotationStartVector.lengthSq() > 1e-8 ? rotationStartVector : undefined,
-      pointerStartX: event.clientX,
+      rotationSolveMode,
+      rotationScreenStart: screenRotation?.start,
+      rotationScreenTangent: screenRotation?.tangent,
+      rotationPixelsPerRad: screenRotation?.pixelsPerRad,
+      rotationLastRawAngle: 0,
+      rotationAccumulatedAngle: 0,
       axis: effectiveAxis,
       barriers,
+      surfaceAttachments: new Map(),
       moved: false,
     };
     this.controls.enabled = false;
     this.renderer.domElement.setPointerCapture(event.pointerId);
     this.arrangementInteractionHandler?.(true);
     this.host.dataset.arrangementInteractionActive = "true";
+    this.host.dataset.arrangementActiveHandle = gizmoHit
+      ? `${gizmoHit.tool}:${gizmoHit.axis}`
+      : "move:free";
+    this.setArrangementPointerFeedback(this.arrangementTool === "rotate" ? "rotate-active" : "move-active");
     this.arrangementInteractionLastFrameAt = performance.now();
     this.arrangementInteractionWindowUntil = Number.POSITIVE_INFINITY;
     event.preventDefault();
@@ -1065,41 +1206,51 @@ export class ThreeViewport {
   private readonly handleArrangementPointerMove = (event: PointerEvent): void => {
     const startedAt = performance.now();
     const drag = this.dragState;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      if (this.viewportMode === "assembly" && event.buttons === 0) this.updateArrangementHover(event);
+      return;
+    }
     const active = this.garmentMeshes.find((item) => item.key === drag.activeInstanceId);
     if (!active || active.mesh.userData.arrangementPinned === true) return;
     const body = this.currentAvatarModel?.humanBody.visualMesh;
-    const attachmentById = new Map<string, ArrangementCommit["surfaceAttachment"]>();
+    drag.surfaceAttachments.clear();
 
     if (drag.tool === "rotate") {
-      const ray = this.pointerRay(event);
-      const currentPoint = drag.rotationPlane
-        ? ray.intersectPlane(drag.rotationPlane, new THREE.Vector3())
-        : null;
-      let angle = (event.clientX - drag.pointerStartX) * 0.01;
-      if (currentPoint && drag.rotationStartVector) {
+      let angle: number | null = null;
+      if (drag.rotationSolveMode === "plane" && drag.rotationPlane && drag.rotationStartVector) {
+        const currentPoint = this.pointerRay(event).intersectPlane(drag.rotationPlane, new THREE.Vector3());
+        if (!currentPoint) return;
         const currentVector = currentPoint.sub(drag.rotationPivot);
         currentVector.addScaledVector(drag.rotationAxis, -currentVector.dot(drag.rotationAxis));
         if (currentVector.lengthSq() > 1e-10) {
           currentVector.normalize();
-          const cross = new THREE.Vector3().crossVectors(drag.rotationStartVector, currentVector);
-          angle = Math.atan2(drag.rotationAxis.dot(cross), drag.rotationStartVector.dot(currentVector));
+          const raw = signedRotationAngle(drag.rotationStartVector, currentVector, drag.rotationAxis);
+          drag.rotationAccumulatedAngle = unwrapRotationAngle(
+            drag.rotationLastRawAngle,
+            raw,
+            drag.rotationAccumulatedAngle,
+          );
+          drag.rotationLastRawAngle = raw;
+          angle = drag.rotationAccumulatedAngle;
         }
+      } else if (drag.rotationScreenStart && drag.rotationScreenTangent && drag.rotationPixelsPerRad) {
+        const pointerDelta = new THREE.Vector2(event.clientX, event.clientY).sub(drag.rotationScreenStart);
+        angle = pointerDelta.dot(drag.rotationScreenTangent) / drag.rotationPixelsPerRad;
       }
+      if (angle === null || !Number.isFinite(angle)) return;
       const rotation = new THREE.Quaternion().setFromAxisAngle(drag.rotationAxis, angle);
       for (const item of this.garmentMeshes) {
         const initial = drag.initialTransforms.get(item.key);
         if (!initial) continue;
-        const relative = initial.position.clone().sub(drag.rotationPivot).applyQuaternion(rotation);
-        item.mesh.position.copy(drag.rotationPivot).add(relative);
-        item.mesh.quaternion.copy(rotation).multiply(initial.quaternion);
-        item.mesh.updateMatrixWorld(true);
-        const barrier = drag.barriers.get(item.key);
-        if (body && barrier) {
-          const result = constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 8 });
-          if (result.surfaceAttachment) attachmentById.set(item.key, result.surfaceAttachment);
-        }
+        applyFrozenRigidRotation(
+          item.mesh,
+          initial.position,
+          initial.quaternion,
+          drag.rotationPivot,
+          rotation,
+        );
       }
+      if (body) this.constrainDraggedSelectionRigidly(body, drag);
       drag.moved = drag.moved || Math.abs(angle) >= 0.005;
       this.hideArrangementCandidate();
       this.updateArrangementGizmo();
@@ -1112,28 +1263,34 @@ export class ThreeViewport {
     }
 
     const ray = this.pointerRay(event);
-    const planePoint = intersectPointerRayWithDragPlane(ray, drag.dragPlane);
-    if (!planePoint) return;
-    const delta = planePoint.clone().sub(drag.grabPointWorld);
+    const delta = new THREE.Vector3();
+    let pointerWorldPoint = drag.translationStartPoint;
     if (drag.axis !== "free") {
       const axis = arrangementAxisVector(drag.axis);
-      delta.copy(axis).multiplyScalar(delta.dot(axis));
+      const parameter = drag.axisSolveMode === "closest"
+        ? closestRayAxisParameter(ray, drag.axisOrigin, axis)
+        : drag.axisSolveMode === "plane"
+          ? axisParameterOnDragPlane(ray, drag.dragPlane, drag.axisOrigin, axis)
+          : drag.axisScreenStart && drag.axisWorldUnitsPerPixel
+            ? (drag.axisStartParameter ?? 0) + (drag.axisScreenStart.y - event.clientY) * drag.axisWorldUnitsPerPixel
+            : null;
+      if (parameter === null || parameter === undefined || drag.axisStartParameter === undefined) return;
+      delta.copy(axis).multiplyScalar(parameter - drag.axisStartParameter);
+    } else {
+      const planePoint = intersectPointerRayWithDragPlane(ray, drag.dragPlane);
+      if (!planePoint) return;
+      pointerWorldPoint = planePoint;
+      delta.copy(planePoint).sub(drag.translationStartPoint);
     }
     for (const item of this.garmentMeshes) {
       const initial = drag.initialTransforms.get(item.key);
       if (!initial) continue;
-      item.mesh.position.copy(initial.position).add(delta);
-      item.mesh.quaternion.copy(initial.quaternion);
-      item.mesh.updateMatrixWorld(true);
-      const barrier = drag.barriers.get(item.key);
-      if (body && barrier) {
-        const result = constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 8 });
-        if (result.surfaceAttachment) attachmentById.set(item.key, result.surfaceAttachment);
-      }
+      applyFrozenRigidTranslation(item.mesh, initial.position, initial.quaternion, delta);
     }
+    if (body) this.constrainDraggedSelectionRigidly(body, drag);
 
-    if (body) {
-      const barrierAttachment = attachmentById.get(drag.activeInstanceId);
+    if (body && drag.axis === "free" && drag.initialTransforms.size === 1) {
+      const barrierAttachment = drag.surfaceAttachments.get(drag.activeInstanceId);
       const queried = barrierAttachment
         ? resolveBodySurfaceAttachment(body, barrierAttachment)
         : raycastBodySurface(
@@ -1142,7 +1299,7 @@ export class ThreeViewport {
             [ray.direction.x, ray.direction.y, ray.direction.z],
             12,
           );
-      drag.surfaceCandidate = updateSurfaceCandidate(drag.surfaceCandidate, queried, planePoint);
+      drag.surfaceCandidate = updateSurfaceCandidate(drag.surfaceCandidate, queried, pointerWorldPoint);
       this.showArrangementCandidate(drag.surfaceCandidate);
     }
     drag.moved = drag.moved || delta.lengthSq() > 1e-8;
@@ -1156,7 +1313,13 @@ export class ThreeViewport {
 
   private readonly handleArrangementPointerUp = (event: PointerEvent): void => {
     const drag = this.dragState;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      if (this.viewportMode === "assembly") {
+        this.host.dataset.arrangementInteractionActive = "false";
+        this.updateArrangementHover(event);
+      }
+      return;
+    }
     const releaseStartedAt = performance.now();
     this.dragState = null;
     this.arrangementReleaseStartedAt = releaseStartedAt;
@@ -1167,16 +1330,7 @@ export class ThreeViewport {
     }
     this.hideArrangementCandidate();
     if (drag.moved) {
-      const body = this.currentAvatarModel?.humanBody.visualMesh;
-      const attachments = new Map<string, ArrangementCommit["surfaceAttachment"]>();
-      if (body) {
-        for (const item of this.garmentMeshes) {
-          if (!this.selectedInstanceIds.has(item.key) || item.mesh.userData.arrangementPinned === true) continue;
-          const barrier = createBodyBarrierState(item.mesh, 64);
-          const result = constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 8, maximumPasses: 4 });
-          if (result.surfaceAttachment) attachments.set(item.key, result.surfaceAttachment);
-        }
-      }
+      const attachments = new Map(drag.surfaceAttachments);
       if (drag.tool === "move" && drag.surfaceCandidate && !attachments.has(drag.activeInstanceId)) {
         attachments.set(drag.activeInstanceId, {
           ...drag.surfaceCandidate.attachment,
@@ -1186,17 +1340,50 @@ export class ThreeViewport {
       }
       this.commitSelectedArrangement(attachments, drag.tool === "rotate");
     } else {
+      for (const item of this.garmentMeshes) {
+        const initial = drag.initialTransforms.get(item.key);
+        if (!initial) continue;
+        applyFrozenRigidTranslation(item.mesh, initial.position, initial.quaternion, new THREE.Vector3());
+      }
       this.finishArrangementReleaseLatency();
     }
+    delete this.host.dataset.arrangementActiveHandle;
     this.updateArrangementGizmo();
     this.arrangementInteractionHandler?.(false);
     this.host.dataset.arrangementInteractionActive = "false";
+    this.updateArrangementHover(event);
     this.requestRender();
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  private raycastArrangementGizmo(event: PointerEvent): { point: THREE.Vector3; axis: ArrangementAxis } | null {
+  private constrainDraggedSelectionRigidly(body: AvatarParametricModel["humanBody"]["visualMesh"], drag: ArrangementDragState): void {
+    const selected = this.garmentMeshes.filter((item) => drag.initialTransforms.has(item.key));
+    for (const item of selected) {
+      const barrier = drag.barriers.get(item.key);
+      if (!barrier) continue;
+      const before = item.mesh.position.clone();
+      const result = constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 8 });
+      if (result.surfaceAttachment && selected.length === 1) {
+        drag.surfaceAttachments.set(item.key, result.surfaceAttachment);
+      }
+      const commonCorrection = item.mesh.position.clone().sub(before);
+      if (commonCorrection.lengthSq() <= 1e-12) continue;
+      for (const companion of selected) {
+        if (companion.key === item.key) continue;
+        companion.mesh.position.add(commonCorrection);
+        companion.mesh.updateMatrixWorld(true);
+      }
+    }
+    if (selected.length > 1) {
+      for (const item of selected) {
+        const barrier = drag.barriers.get(item.key);
+        if (barrier) refreshBodyBarrierState(item.mesh, barrier);
+      }
+    }
+  }
+
+  private raycastArrangementGizmo(event: PointerEvent): ArrangementHandleHit | null {
     if (!this.arrangementGizmo.visible) return null;
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(this.pointerNdc(event), this.camera);
@@ -1205,7 +1392,11 @@ export class ThreeViewport {
         && candidate.object.userData.arrangementTool === this.arrangementTool
         && candidate.object.userData.arrangementAxis);
     if (!hit) return null;
-    return { point: hit.point.clone(), axis: hit.object.userData.arrangementAxis as ArrangementAxis };
+    return {
+      point: hit.point.clone(),
+      axis: hit.object.userData.arrangementAxis as Exclude<ArrangementAxis, "free">,
+      tool: hit.object.userData.arrangementTool as ArrangementTool,
+    };
   }
 
   private raycastGarment(event: PointerEvent): THREE.Intersection | null {
@@ -1213,6 +1404,106 @@ export class ThreeViewport {
     raycaster.setFromCamera(this.pointerNdc(event), this.camera);
     return raycaster.intersectObjects(this.garmentMeshes.map((item) => item.mesh), false)[0] ?? null;
   }
+
+  private createScreenRotationSolver(
+    pivot: THREE.Vector3,
+    handlePoint: THREE.Vector3,
+    axis: THREE.Vector3,
+    event: PointerEvent,
+  ): { start: THREE.Vector2; tangent: THREE.Vector2; pixelsPerRad: number } | null {
+    const radial = handlePoint.clone().sub(pivot);
+    radial.addScaledVector(axis, -radial.dot(axis));
+    if (radial.lengthSq() <= 1e-8) {
+      radial.crossVectors(axis, this.camera.getWorldDirection(new THREE.Vector3()));
+      if (radial.lengthSq() <= 1e-8) radial.crossVectors(axis, this.camera.up);
+      if (radial.lengthSq() <= 1e-8) return null;
+      radial.normalize().multiplyScalar(0.2 * this.arrangementGizmo.scale.x);
+    }
+    const sampleAngle = 0.12;
+    const startWorld = pivot.clone().add(radial);
+    const rotatedWorld = pivot.clone().add(
+      radial.clone().applyAxisAngle(axis.clone().normalize(), sampleAngle),
+    );
+    const startScreen = new THREE.Vector2(...this.worldToCanvasPoint(startWorld));
+    const rotatedScreen = new THREE.Vector2(...this.worldToCanvasPoint(rotatedWorld));
+    let tangent = rotatedScreen.sub(startScreen);
+    let pixelsPerRad = tangent.length() / sampleAngle;
+    if (!Number.isFinite(pixelsPerRad) || pixelsPerRad < 6) {
+      const pivotScreen = new THREE.Vector2(...this.worldToCanvasPoint(pivot));
+      const axisScreen = new THREE.Vector2(...this.worldToCanvasPoint(pivot.clone().add(axis)))
+        .sub(pivotScreen);
+      if (axisScreen.lengthSq() <= 4) return null;
+      axisScreen.normalize();
+      tangent = new THREE.Vector2(-axisScreen.y, axisScreen.x);
+      pixelsPerRad = Math.max(24, startScreen.distanceTo(pivotScreen));
+    } else {
+      tangent.normalize();
+    }
+    return {
+      start: new THREE.Vector2(event.clientX, event.clientY),
+      tangent,
+      pixelsPerRad,
+    };
+  }
+
+  private updateArrangementHover(event: PointerEvent): void {
+    if (this.viewportMode !== "assembly" || this.dragState) return;
+    const handle = this.raycastArrangementGizmo(event);
+    const garment = handle ? null : this.raycastGarment(event);
+    const instanceId = garment
+      ? this.garmentMeshes.find((item) => item.mesh === garment.object)?.key ?? null
+      : null;
+    const nextHandle = handle ? { tool: handle.tool, axis: handle.axis } : null;
+    const handleChanged = this.hoveredArrangementHandle?.tool !== nextHandle?.tool
+      || this.hoveredArrangementHandle?.axis !== nextHandle?.axis;
+    const garmentChanged = this.hoveredArrangementInstanceId !== instanceId;
+    this.hoveredArrangementHandle = nextHandle;
+    this.hoveredArrangementInstanceId = instanceId;
+    if (handle) this.setArrangementPointerFeedback(handle.tool === "rotate" ? "rotate-handle" : "move-handle");
+    else if (garment) this.setArrangementPointerFeedback("panel");
+    else this.setArrangementPointerFeedback("idle");
+    if (handleChanged || garmentChanged) {
+      this.updateArrangementGizmo();
+      this.requestRender();
+    }
+  }
+
+  private setArrangementPointerFeedback(
+    mode: "idle" | "panel" | "move-handle" | "rotate-handle" | "move-active" | "rotate-active" | "orbit" | "pan",
+  ): void {
+    const cursor = mode === "panel" || mode === "move-handle"
+      ? "grab"
+      : mode === "rotate-handle"
+        ? "crosshair"
+        : mode === "pan"
+          ? "move"
+          : mode === "idle" ? "default" : "grabbing";
+    this.renderer.domElement.style.cursor = cursor;
+    this.host.dataset.arrangementPointerMode = mode;
+    if (this.hoveredArrangementHandle) {
+      this.host.dataset.arrangementHoveredHandle = `${this.hoveredArrangementHandle.tool}:${this.hoveredArrangementHandle.axis}`;
+    } else {
+      delete this.host.dataset.arrangementHoveredHandle;
+    }
+    if (this.hoveredArrangementInstanceId) {
+      this.host.dataset.arrangementHoveredInstanceId = this.hoveredArrangementInstanceId;
+    } else {
+      delete this.host.dataset.arrangementHoveredInstanceId;
+    }
+  }
+
+  private readonly handleArrangementPointerLeave = (): void => {
+    if (this.dragState) return;
+    this.hoveredArrangementHandle = null;
+    this.hoveredArrangementInstanceId = null;
+    this.setArrangementPointerFeedback("idle");
+    this.updateArrangementGizmo();
+    this.requestRender();
+  };
+
+  private readonly handleViewportContextMenu = (event: MouseEvent): void => {
+    if (this.viewportMode === "assembly") event.preventDefault();
+  };
 
   private pointerRay(event: PointerEvent): THREE.Ray {
     const raycaster = new THREE.Raycaster();
@@ -1335,11 +1626,11 @@ export class ThreeViewport {
     ];
   }
 
-  private selectionCentroid(): THREE.Vector3 {
+  private selectionCentroid(instanceIds: ReadonlySet<string> = this.selectedInstanceIds): THREE.Vector3 {
     const center = new THREE.Vector3();
     let count = 0;
     for (const item of this.garmentMeshes) {
-      if (!this.selectedInstanceIds.has(item.key)) continue;
+      if (!instanceIds.has(item.key)) continue;
       center.add(meshWorldCentroid(item.mesh));
       count += 1;
     }
@@ -1352,16 +1643,35 @@ export class ThreeViewport {
     if (!visible) return;
     const center = this.selectionCentroid();
     this.arrangementGizmo.position.copy(center);
-    const distance = Math.max(0.35, center.distanceTo(this.camera.position));
-    this.arrangementGizmo.scale.setScalar(Math.min(2.4, Math.max(0.65, distance * 0.22)));
+    const cameraDirection = this.camera.getWorldDirection(new THREE.Vector3());
+    const depth = Math.max(0.08, center.clone().sub(this.camera.position).dot(cameraDirection));
+    const viewportHeight = Math.max(1, this.renderer.domElement.clientHeight);
+    const worldPerPixel = perspectiveWorldUnitsPerPixel(depth, this.camera.fov, viewportHeight);
+    const scale = worldPerPixel * 86 / 0.285;
+    this.arrangementGizmo.scale.setScalar(Math.max(0.01, scale));
     this.arrangementGizmo.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const tool = object.userData.arrangementTool as ArrangementTool | undefined;
       object.visible = tool === this.arrangementTool;
       const material = object.material;
-      if (material instanceof THREE.MeshBasicMaterial) {
-        const axis = object.userData.arrangementAxis as ArrangementAxis | undefined;
-        material.opacity = axis && axis !== "free" && axis === this.arrangementAxis ? 1 : 0.72;
+      if (!(material instanceof THREE.MeshBasicMaterial) || object.userData.arrangementVisibleHandle !== true) return;
+      const axis = object.userData.arrangementAxis as Exclude<ArrangementAxis, "free"> | undefined;
+      const hoveredHandle = this.hoveredArrangementHandle;
+      const drag = this.dragState;
+      const hovered = Boolean(axis
+        && hoveredHandle
+        && hoveredHandle.tool === tool
+        && hoveredHandle.axis === axis);
+      const active = Boolean(axis
+        && drag
+        && drag.tool === tool
+        && drag.axis === axis);
+      const selectedAxis = axis === this.arrangementAxis;
+      material.opacity = active ? 1 : hovered ? 0.96 : selectedAxis ? 0.88 : 0.68;
+      const baseColor = object.userData.arrangementBaseColor as number | undefined;
+      if (baseColor !== undefined) {
+        material.color.setHex(baseColor);
+        if (active || hovered) material.color.lerp(new THREE.Color(0xffffff), active ? 0.38 : 0.22);
       }
     });
     this.arrangementGizmo.updateMatrixWorld(true);
@@ -1815,12 +2125,14 @@ function createArrangementGizmo(): THREE.Group {
   const axes = ["x", "y", "z"] as const;
   for (const axis of axes) {
     const direction = arrangementAxisVector(axis);
-    const moveMaterial = new THREE.MeshBasicMaterial({ color: colors[axis], transparent: true, opacity: 0.72, depthTest: false });
+    const moveMaterial = new THREE.MeshBasicMaterial({ color: colors[axis], transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 10), moveMaterial);
     shaft.position.copy(direction).multiplyScalar(0.11);
     shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
     shaft.userData.arrangementTool = "move";
     shaft.userData.arrangementAxis = axis;
+    shaft.userData.arrangementVisibleHandle = true;
+    shaft.userData.arrangementBaseColor = colors[axis];
     shaft.renderOrder = 20;
     group.add(shaft);
     const head = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.07, 12), moveMaterial.clone());
@@ -1828,17 +2140,55 @@ function createArrangementGizmo(): THREE.Group {
     head.quaternion.copy(shaft.quaternion);
     head.userData.arrangementTool = "move";
     head.userData.arrangementAxis = axis;
+    head.userData.arrangementVisibleHandle = true;
+    head.userData.arrangementBaseColor = colors[axis];
     head.renderOrder = 20;
     group.add(head);
 
-    const rotateMaterial = new THREE.MeshBasicMaterial({ color: colors[axis], transparent: true, opacity: 0.72, depthTest: false, side: THREE.DoubleSide });
+    const moveHitMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+      colorWrite: false,
+    });
+    const moveHit = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.3, 8), moveHitMaterial);
+    moveHit.position.copy(direction).multiplyScalar(0.18);
+    moveHit.quaternion.copy(shaft.quaternion);
+    moveHit.userData.arrangementTool = "move";
+    moveHit.userData.arrangementAxis = axis;
+    moveHit.userData.arrangementHitTarget = true;
+    moveHit.renderOrder = 21;
+    group.add(moveHit);
+
+    const rotateMaterial = new THREE.MeshBasicMaterial({ color: colors[axis], transparent: true, opacity: 0.72, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.008, 8, 48), rotateMaterial);
     if (axis === "x") ring.rotation.y = Math.PI / 2;
     else if (axis === "y") ring.rotation.x = Math.PI / 2;
     ring.userData.arrangementTool = "rotate";
     ring.userData.arrangementAxis = axis;
+    ring.userData.arrangementVisibleHandle = true;
+    ring.userData.arrangementBaseColor = colors[axis];
     ring.renderOrder = 20;
     group.add(ring);
+
+    const rotateHit = new THREE.Mesh(
+      new THREE.TorusGeometry(0.19, 0.034, 8, 48),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthTest: false,
+        depthWrite: false,
+        colorWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    rotateHit.rotation.copy(ring.rotation);
+    rotateHit.userData.arrangementTool = "rotate";
+    rotateHit.userData.arrangementAxis = axis;
+    rotateHit.userData.arrangementHitTarget = true;
+    rotateHit.renderOrder = 21;
+    group.add(rotateHit);
   }
   return group;
 }

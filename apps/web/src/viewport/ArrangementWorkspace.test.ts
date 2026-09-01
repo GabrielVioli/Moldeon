@@ -7,6 +7,9 @@ import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
 import {
   adjustMeshToBodySurface,
+  applyFrozenRigidRotation,
+  applyFrozenRigidTranslation,
+  axisParameterOnDragPlane,
   applyAuthoredArrangementToAssemblyState,
   arrangementVisualState,
   auditMeshBodyClearance,
@@ -15,10 +18,14 @@ import {
   createAxisDragPlane,
   createBodyBarrierState,
   createCameraDragPlane,
+  closestRayAxisParameter,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
+  perspectiveWorldUnitsPerPixel,
   resolveDeterministicStagingLayout,
   resolveArrangementTransform,
+  signedRotationAngle,
+  unwrapRotationAngle,
   updateSurfaceCandidate,
 } from "./ArrangementWorkspace";
 
@@ -138,6 +145,95 @@ describe("canonical 3D arrangement workspace", () => {
     const plane = createAxisDragPlane(point, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1));
     expect(Math.abs(plane.normal.dot(new THREE.Vector3(1, 0, 0)))).toBeLessThan(1e-8);
     expect(Math.abs(plane.distanceToPoint(point))).toBeLessThan(1e-8);
+  });
+
+  it("solves axis translation continuously from the frozen ray-axis relationship", () => {
+    const origin = new THREE.Vector3(0, 0, 0);
+    const axis = new THREE.Vector3(1, 0, 0);
+    const rayAt = (x: number) => new THREE.Ray(
+      new THREE.Vector3(0, 0, 5),
+      new THREE.Vector3(x, 0, -5).normalize(),
+    );
+    const start = closestRayAxisParameter(rayAt(0.2), origin, axis)!;
+    const forward = closestRayAxisParameter(rayAt(0.8), origin, axis)!;
+    const reverse = closestRayAxisParameter(rayAt(-0.1), origin, axis)!;
+
+    expect(start).toBeCloseTo(0.2, 6);
+    expect(forward - start).toBeCloseTo(0.6, 6);
+    expect(reverse - start).toBeCloseTo(-0.3, 6);
+    expect(closestRayAxisParameter(
+      new THREE.Ray(new THREE.Vector3(0, 0, 0), axis.clone()),
+      origin,
+      axis,
+    )).toBeNull();
+  });
+
+  it("uses one frozen geometric plane when ray and axis are nearly parallel", () => {
+    const origin = new THREE.Vector3(0, 0, 0);
+    const axis = new THREE.Vector3(0, 0, 1);
+    const plane = createAxisDragPlane(origin, axis, new THREE.Vector3(0, 0, -1));
+    const start = axisParameterOnDragPlane(
+      new THREE.Ray(new THREE.Vector3(0, 1, 5), new THREE.Vector3(0, -0.2, -1).normalize()),
+      plane,
+      origin,
+      axis,
+    );
+    const moved = axisParameterOnDragPlane(
+      new THREE.Ray(new THREE.Vector3(0, 1, 5), new THREE.Vector3(0, -0.4, -1).normalize()),
+      plane,
+      origin,
+      axis,
+    );
+    expect(start).not.toBeNull();
+    expect(moved).not.toBeNull();
+    expect(Number.isFinite(moved! - start!)).toBe(true);
+  });
+
+  it("derives the parallel-axis fallback scale from camera projection instead of a fixed metre step", () => {
+    const near = perspectiveWorldUnitsPerPixel(1, 36, 800);
+    const far = perspectiveWorldUnitsPerPixel(2, 36, 800);
+    const tallerViewport = perspectiveWorldUnitsPerPixel(1, 36, 1_600);
+    expect(far).toBeCloseTo(near * 2, 10);
+    expect(tallerViewport).toBeCloseTo(near * 0.5, 10);
+    expect(near).toBeGreaterThan(0);
+  });
+
+  it("unwraps rotation continuously across the minus-pi/pi boundary", () => {
+    const axis = new THREE.Vector3(0, 0, 1);
+    const start = new THREE.Vector3(1, 0, 0);
+    const beforeBoundary = signedRotationAngle(
+      start,
+      new THREE.Vector3(Math.cos(Math.PI - 0.02), Math.sin(Math.PI - 0.02), 0),
+      axis,
+    );
+    const afterBoundary = signedRotationAngle(
+      start,
+      new THREE.Vector3(Math.cos(-Math.PI + 0.02), Math.sin(-Math.PI + 0.02), 0),
+      axis,
+    );
+    const continuous = unwrapRotationAngle(beforeBoundary, afterBoundary, beforeBoundary);
+    expect(continuous).toBeCloseTo(Math.PI + 0.02, 6);
+  });
+
+  it("derives multiselect translation and rotation from one frozen group snapshot", () => {
+    const first = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.01));
+    const second = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.01));
+    const firstStart = new THREE.Vector3(-0.4, 0.8, 0.2);
+    const secondStart = new THREE.Vector3(0.4, 0.8, 0.2);
+    const identity = new THREE.Quaternion();
+    const translation = new THREE.Vector3(0.3, -0.2, 0.1);
+    applyFrozenRigidTranslation(first, firstStart, identity, translation);
+    applyFrozenRigidTranslation(second, secondStart, identity, translation);
+    expect(first.position.distanceTo(second.position)).toBeCloseTo(0.8, 8);
+
+    const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    const pivot = new THREE.Vector3(0, 0.8, 0.2);
+    applyFrozenRigidRotation(first, firstStart, identity, pivot, rotation);
+    applyFrozenRigidRotation(second, secondStart, identity, pivot, rotation);
+    expect(first.position.distanceTo(second.position)).toBeCloseTo(0.8, 8);
+    expect(first.position.x).toBeCloseTo(0, 8);
+    expect(second.position.x).toBeCloseTo(0, 8);
+    expect(first.quaternion.angleTo(second.quaternion)).toBeCloseTo(0, 8);
   });
 
   it("blocks a rigid panel from crossing a body surface while preserving tangential movement", () => {
