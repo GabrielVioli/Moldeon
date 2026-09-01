@@ -27,7 +27,7 @@ import { useInternalPathEditorStore } from "./state/internalPathEditorStore";
 import { evaluateDressingPreflight, evaluateGarment3DEligibility, shouldLoadThreeViewport, type WorkspaceMode } from "./domain/assembly";
 import { canAddGuidedSleeve } from "./domain/sleeveSystem";
 import { createBlankGarment } from "./domain/blankGarment";
-import { buildResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
+import { buildResolvedAssemblyInput, updateResolvedAssemblyArrangements, type ResolvedAssemblyInput } from "./garment3d/ResolvedAssemblyInput";
 import type { ArrangementCommit } from "./viewport/ArrangementWorkspace";
 
 type WorkspaceView = "editor" | "preview" | "inspector";
@@ -102,6 +102,8 @@ export function App() {
   const [autosaveStatus, setAutosaveStatus] = useState("Autosave aguardando");
   const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const autosaveRevisionRef = useRef(0);
+  const arrangementInteractionActiveRef = useRef(false);
+  const pendingArrangementInputRef = useRef<ResolvedAssemblyInput | null>(null);
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobileView, setMobileView] = useState<WorkspaceView>("editor");
   const [previewRequested, setPreviewRequested] = useState(false);
@@ -119,7 +121,14 @@ export function App() {
   const dressingPreflight = useMemo(() => evaluateDressingPreflight(garment), [garment]);
   const canAddSleeve = useMemo(() => canAddGuidedSleeve(garment.pieces), [garment.pieces]);
   const showViewport = shouldLoadThreeViewport(eligibility, previewRequested, workspaceMode);
-  const assemblyInput = useMemo(() => buildResolvedAssemblyInput(garment), [garment]);
+  const assemblyInput = useMemo(() => {
+    const pending = pendingArrangementInputRef.current;
+    if (pending) {
+      pendingArrangementInputRef.current = null;
+      return pending;
+    }
+    return buildResolvedAssemblyInput(garment);
+  }, [garment]);
   const handleArrangementCommit = useCallback((commits: ArrangementCommit[]) => {
     const updates = commits.flatMap((commit) => {
       const instance = assemblyInput.panelInstances.find((candidate) => candidate.id === commit.instanceId);
@@ -148,8 +157,21 @@ export function App() {
         },
       }];
     });
+    if (updates.length === 0) return;
+    pendingArrangementInputRef.current = updateResolvedAssemblyArrangements(
+      assemblyInput,
+      commits.map((commit) => ({
+        instanceId: commit.instanceId,
+        positionMm: [...commit.positionMm],
+        orientationDeg: [...commit.orientationDeg],
+        ...(commit.surfaceAttachment ? { surfaceAttachment: commit.surfaceAttachment } : {}),
+      })),
+    );
     setPanelInstanceArrangements(updates);
-  }, [assemblyInput.panelInstances, setPanelInstanceArrangements]);
+  }, [assemblyInput, setPanelInstanceArrangements]);
+  const handleArrangementInteractionChange = useCallback((active: boolean) => {
+    arrangementInteractionActiveRef.current = active;
+  }, []);
   const openDressedViewport = useCallback((mode: "assembly" | "fitting") => {
     setWorkspaceMode(mode);
     setPreviewRequested(true);
@@ -368,24 +390,40 @@ export function App() {
     if (!persistenceReady) return;
     const revision = autosaveRevisionRef.current + 1;
     autosaveRevisionRef.current = revision;
+    let timeout = 0;
+    let cancelled = false;
 
-    const timeout = window.setTimeout(() => {
+    const persistWhenIdle = () => {
+      if (cancelled || autosaveRevisionRef.current !== revision) return;
+      if (arrangementInteractionActiveRef.current) {
+        timeout = window.setTimeout(persistWhenIdle, 350);
+        return;
+      }
       setAutosaveStatus("Salvando alterações…");
       const request = autosaveQueueRef.current.then(async () => {
-        const method = await saveAutosave(garment, activePieceId);
+        if (arrangementInteractionActiveRef.current) {
+          timeout = window.setTimeout(persistWhenIdle, 350);
+          return;
+        }
+        const current = useEditorStore.getState();
+        const method = await saveAutosave(current.garment, current.activePieceId);
         if (autosaveRevisionRef.current === revision) {
           setAutosaveStatus(`Salvo localmente · ${method}`);
         }
       });
       autosaveQueueRef.current = request.catch((error: unknown) => {
         console.warn("Autosave falhou", error);
-        if (autosaveRevisionRef.current === revision) {
-          setAutosaveStatus("Falha no autosave");
-        }
+        if (autosaveRevisionRef.current === revision) setAutosaveStatus("Falha no autosave");
       });
-    }, 500);
+    };
 
-    return () => window.clearTimeout(timeout);
+    // Arrangement commits are intentionally coalesced so serialization cannot
+    // land between two consecutive manipulation gestures.
+    timeout = window.setTimeout(persistWhenIdle, 900);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
   }, [activePieceId, garment, persistenceReady]);
 
   useEffect(() => {
@@ -715,6 +753,7 @@ export function App() {
                 displayMode={workspaceMode === "fitting" ? "full-fitting" : "side-preview"}
                 onBackendChange={setRenderBackend}
                 onArrangementCommit={handleArrangementCommit}
+                onArrangementInteractionChange={handleArrangementInteractionChange}
               />
             </Suspense>
           ) : (

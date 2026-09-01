@@ -6,6 +6,7 @@ import {
 } from "../avatar/ApprovedAvatarAsset";
 import {
   ThreeViewport,
+  type ArrangementAxis,
   type ArrangementTool,
   type SimulationDevSettings,
   type SimulationDevTelemetry,
@@ -20,6 +21,7 @@ interface GarmentViewportProps {
   displayMode: "side-preview" | "full-fitting";
   onBackendChange(backend: "webgpu" | "webgl2"): void;
   onArrangementCommit?(commits: ArrangementCommit[]): void;
+  onArrangementInteractionChange?(active: boolean): void;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -29,6 +31,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   displayMode,
   onBackendChange,
   onArrangementCommit,
+  onArrangementInteractionChange,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -56,11 +59,14 @@ export const GarmentViewport = memo(function GarmentViewport({
   const devSettingsRef = useRef(devSettings);
   const wireframeRef = useRef(wireframe);
   const arrangementCommitRef = useRef(onArrangementCommit);
+  const arrangementInteractionRef = useRef(onArrangementInteractionChange);
   const pendingArrangementCommitsRef = useRef<ArrangementCommit[] | null>(null);
   const [selectedArrangementIds, setSelectedArrangementIds] = useState<string[]>([]);
   const [selectionPinned, setSelectionPinned] = useState(false);
   const [arrangementTool, setArrangementTool] = useState<ArrangementTool>("move");
+  const [arrangementAxis, setArrangementAxis] = useState<ArrangementAxis>("free");
   const arrangementToolRef = useRef<ArrangementTool>(arrangementTool);
+  const arrangementAxisRef = useRef<ArrangementAxis>(arrangementAxis);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
   const selectedArrangementState = selectedArrangementIds.length === 0
     ? null
@@ -74,7 +80,9 @@ export const GarmentViewport = memo(function GarmentViewport({
   latestActiveRef.current = active;
   latestSimulateVersionRef.current = simulateVersion;
   arrangementCommitRef.current = onArrangementCommit;
+  arrangementInteractionRef.current = onArrangementInteractionChange;
   arrangementToolRef.current = arrangementTool;
+  arrangementAxisRef.current = arrangementAxis;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -110,8 +118,10 @@ export const GarmentViewport = memo(function GarmentViewport({
             setSelectedArrangementIds(instanceIds);
             setSelectionPinned(false);
           },
+          (active) => arrangementInteractionRef.current?.(active),
         );
         viewport.setArrangementTool(arrangementToolRef.current);
+        viewport.setArrangementAxis(arrangementAxisRef.current);
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
@@ -228,6 +238,11 @@ export const GarmentViewport = memo(function GarmentViewport({
     viewportRef.current?.setArrangementTool(arrangementTool);
   }, [arrangementTool]);
 
+  useEffect(() => {
+    arrangementAxisRef.current = arrangementAxis;
+    viewportRef.current?.setArrangementAxis(arrangementAxis);
+  }, [arrangementAxis]);
+
   return (
     <div
       className="viewport-host"
@@ -256,21 +271,31 @@ export const GarmentViewport = memo(function GarmentViewport({
             <strong>{selectedArrangementIds.length > 0
               ? `${selectedArrangementIds.length} selecionada(s) · ${selectedArrangementState}`
               : "Selecione uma peça"}</strong>
-            <small>{arrangementTool === "move" ? "Arraste a peça para mover" : "Arraste horizontalmente para girar"}</small>
+            <small>{arrangementTool === "move"
+              ? arrangementAxis === "free" ? "Mover livremente" : `Mover no eixo ${arrangementAxis.toUpperCase()}`
+              : `Girar no eixo ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`}</small>
           </div>
           <div className="viewport-arrangement-actions">
             <button
               type="button"
               className="arrangement-tool-button"
               aria-pressed={arrangementTool === "move"}
-              onClick={() => setArrangementTool("move")}
+              onClick={() => { setArrangementTool("move"); setArrangementAxis("free"); }}
             >Mover</button>
             <button
               type="button"
               className="arrangement-tool-button"
               aria-pressed={arrangementTool === "rotate"}
-              onClick={() => setArrangementTool("rotate")}
+              onClick={() => { setArrangementTool("rotate"); if (arrangementAxis === "free") setArrangementAxis("z"); }}
             >Girar</button>
+            <div className="arrangement-axis-controls" role="group" aria-label="Eixo da transformação">
+              {arrangementTool === "move" ? (
+                <button type="button" aria-pressed={arrangementAxis === "free"} onClick={() => setArrangementAxis("free")}>Livre</button>
+              ) : null}
+              {(["x", "y", "z"] as const).map((axis) => (
+                <button key={axis} type="button" aria-pressed={arrangementAxis === axis} onClick={() => setArrangementAxis(axis)}>{axis.toUpperCase()}</button>
+              ))}
+            </div>
             <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.adjustArrangementSelectionToBody()}>Ajustar</button>
             <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar face</button>
             <button
@@ -281,16 +306,18 @@ export const GarmentViewport = memo(function GarmentViewport({
             >{selectionPinned ? "Soltar" : "Fixar"}</button>
             <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.focusArrangementSelection()}>Focar</button>
             <details className="viewport-arrangement-more">
-              <summary aria-label="Mais ações de rotação">•••</summary>
-              <div>
-                <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(-15)}>−15°</button>
-                <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(15)}>+15°</button>
+              <summary aria-label="Ajustes de rotação">Rotação fina</summary>
+              <div className="arrangement-rotation-grid">
+                {(["x", "y", "z"] as const).flatMap((axis) => ([
+                  <button key={`${axis}-minus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, -15)}>{axis.toUpperCase()} −15°</button>,
+                  <button key={`${axis}-plus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, 15)}>{axis.toUpperCase()} +15°</button>,
+                ]))}
               </div>
             </details>
           </div>
         </div>
       ) : null}
-      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">
+      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simula??o">
         {simulationState === "running" ? (
           <button type="button" onClick={() => {
             viewportRef.current?.pauseSimulation();

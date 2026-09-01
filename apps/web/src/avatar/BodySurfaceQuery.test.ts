@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HumanBodyMesh } from "./HumanBodyModel";
-import { raycastBodySurface, resolveBodySurfaceAttachment } from "./BodySurfaceQuery";
+import { closestBodySurfacePoint, prepareBodySurfaceQuery, raycastBodySurface, resolveBodySurfaceAttachment } from "./BodySurfaceQuery";
 
 describe("canonical body surface query", () => {
   it("persists and reconstructs the same continuous visual-mesh hit", () => {
@@ -32,6 +32,18 @@ describe("canonical body surface query", () => {
     const body = planarBody();
     expect(raycastBodySurface(body, [0, 0, 2], [0, 0, -1], 12, 0.5)).toBeNull();
     expect(raycastBodySurface(body, [0, 0, 0.25], [0, 0, -1], 12, 0.5)).not.toBeNull();
+  });
+
+  it("prewarms and reuses the accelerated nearest-point query", () => {
+    const body = planarBody();
+    prepareBodySurfaceQuery(body);
+    const nearest = closestBodySurfacePoint(body, [0.1, 0.1, 0.2], 0, 0.5);
+    expect(nearest).not.toBeNull();
+    expect(nearest!.position[2]).toBeCloseTo(0, 6);
+    expect(nearest!.outwardNormal[2]).toBeGreaterThan(0.99);
+    for (let index = 0; index < 20; index += 1) {
+      expect(raycastBodySurface(body, [0, 0, 0.25], [0, 0, -1], 8, 0.5)).not.toBeNull();
+    }
   });
 
   it("rejects an attachment from another topology", () => {

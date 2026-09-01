@@ -9,7 +9,11 @@ import {
   adjustMeshToBodySurface,
   applyAuthoredArrangementToAssemblyState,
   arrangementVisualState,
+  auditMeshBodyClearance,
   captureMeshArrangement,
+  constrainMeshOutsideBody,
+  createAxisDragPlane,
+  createBodyBarrierState,
   createCameraDragPlane,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
@@ -71,6 +75,29 @@ describe("canonical 3D arrangement workspace", () => {
       expect.closeTo(-0.25, 8),
       expect.closeTo(0, 8),
     ]));
+  });
+
+  it("projects axis drag onto a stable plane containing the requested world axis", () => {
+    const point = new THREE.Vector3(0.1, 0.2, 0.3);
+    const plane = createAxisDragPlane(point, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1));
+    expect(Math.abs(plane.normal.dot(new THREE.Vector3(1, 0, 0)))).toBeLessThan(1e-8);
+    expect(Math.abs(plane.distanceToPoint(point))).toBeLessThan(1e-8);
+  });
+
+  it("blocks a rigid panel from crossing a body surface while preserving tangential movement", () => {
+    const body = planarBody();
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12, 1, 1));
+    mesh.position.set(0, 0, 0.08);
+    mesh.updateMatrixWorld(true);
+    const barrier = createBodyBarrierState(mesh, 20);
+    mesh.position.set(0.25, 0.1, -0.08);
+    mesh.updateMatrixWorld(true);
+    const result = constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+    const audit = auditMeshBodyClearance(mesh, body, 1, 64);
+    expect(result.corrected).toBe(true);
+    expect(mesh.position.x).toBeGreaterThan(0.2);
+    expect(audit.penetratingSamples).toBe(0);
+    expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
   });
 
   it("keeps a body candidate through hysteresis and rejects an implausible triangle jump", () => {

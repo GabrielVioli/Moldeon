@@ -1,5 +1,5 @@
 import { createPatternSnapshot } from "../core/fallbackPatternEngine";
-import type { GarmentDraft } from "../domain/pattern";
+import type { GarmentDraft, PatternPreviewPlacement } from "../domain/pattern";
 import { deriveDressingPanelInstances } from "../domain/assembly";
 import {
   garmentDraftToPatternDocumentV3,
@@ -8,7 +8,9 @@ import {
   validatePatternDocumentV3,
 } from "../domain/patternDocumentV3";
 import type {
+  PanelArrangementAnchorV3,
   PanelInstanceV3,
+  PanelSurfaceAttachmentV3,
   PatternDefinitionV3,
   PatternDocumentV3,
   PatternDocumentValidationIssue,
@@ -37,6 +39,13 @@ export interface ResolvedAssemblyInput {
   snapshots: ReturnType<typeof createPatternSnapshot>[];
 }
 
+export interface ResolvedArrangementUpdate {
+  instanceId: string;
+  positionMm: [number, number, number];
+  orientationDeg: [number, number, number];
+  surfaceAttachment?: PanelSurfaceAttachmentV3;
+}
+
 export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssemblyInput {
   const document = garmentDraftToPatternDocumentV3(garment);
   const resolvedInstances = deriveDressingPanelInstances(document, garment);
@@ -49,6 +58,131 @@ export function buildResolvedAssemblyInput(garment: GarmentDraft): ResolvedAssem
  * again. This is the path used by Prompt 10.7 fixture imports and Assembly
  * Worker solves.
  */
+/**
+ * Transform-only update used by Montar. PatternDocumentV3 remains the current
+ * canonical source, but geometry, seams, validation and snapshots are reused.
+ */
+export function updateResolvedAssemblyArrangements(
+  input: ResolvedAssemblyInput,
+  updates: readonly ResolvedArrangementUpdate[],
+): ResolvedAssemblyInput {
+  if (updates.length === 0) return input;
+  const byId = new Map(updates.map((update) => [update.instanceId, update] as const));
+  const patchInstance = (instance: PanelInstanceV3): PanelInstanceV3 => {
+    const update = byId.get(instance.id);
+    if (!update) return instance;
+    const existing = instance.arrangementAnchor;
+    const anchor: PanelArrangementAnchorV3 = {
+      id: existing?.id ?? instance.id,
+      ...(existing?.bodyAnchorId ? { bodyAnchorId: existing.bodyAnchorId } : {}),
+      region: existing?.region ?? "custom",
+      surface: existing?.surface ?? "custom",
+      bodySide: existing?.bodySide ?? "center",
+      rotationDeg: update.orientationDeg[2],
+      offsetXMm: existing?.offsetXMm ?? 0,
+      offsetYMm: existing?.offsetYMm ?? 0,
+      offsetZMm: existing?.offsetZMm ?? 12,
+      scale: 1,
+      positionMm: [...update.positionMm],
+      orientationDeg: [...update.orientationDeg],
+      ...(update.surfaceAttachment
+        ? { surfaceAttachment: cloneSurfaceAttachment(update.surfaceAttachment) }
+        : {}),
+      ...(existing?.outwardSide ? { outwardSide: existing.outwardSide } : {}),
+      source: "manual",
+      ...(existing?.legacyPreviewPlacementId ? { legacyPreviewPlacementId: existing.legacyPreviewPlacementId } : {}),
+      ...(existing?.legacyAssemblyRole ? { legacyAssemblyRole: existing.legacyAssemblyRole } : {}),
+    };
+    return { ...instance, placementStatus: "confirmed", arrangementAnchor: anchor };
+  };
+  const patchDocument = (document: PatternDocumentV3): PatternDocumentV3 => ({
+    ...document,
+    panelInstances: document.panelInstances.map(patchInstance),
+  });
+  const document = patchDocument(input.document);
+  const assemblyDocument = patchDocument(input.assemblyDocument);
+  const simulationDocument = patchDocument(input.simulationDocument);
+  const panelInstances = input.panelInstances.map(patchInstance);
+  const simulationPanelInstances = input.simulationPanelInstances.map(patchInstance);
+  const projectedById = new Map(panelInstances.map((instance) => [instance.id, instance] as const));
+  const garmentProjection: GarmentDraft = {
+    ...input.garmentProjection,
+    pieces: input.garmentProjection.pieces.map((piece) => ({
+      ...piece,
+      previewPlacements: piece.previewPlacements?.map((placement) => {
+        const instance = projectedById.get(placement.id);
+        const update = byId.get(placement.id);
+        if (!instance || !update || !instance.arrangementAnchor) return placement;
+        return arrangementPreviewPlacement(placement, instance.arrangementAnchor, instance.mirrored);
+      }),
+    })),
+  };
+  const arrangementRevision = stableHash(JSON.stringify({
+    geometryRevision: input.geometryRevision,
+    instances: panelInstances.map((instance) => ({
+      id: instance.id,
+      sourcePatternId: instance.sourcePatternId,
+      copyIndex: instance.copyIndex,
+      mirrored: instance.mirrored,
+      bodySide: instance.bodySide,
+      surface: instance.surface,
+      anchor: instance.arrangementAnchor,
+    })),
+    body: document.body,
+    measurements: document.measurements.values,
+  }));
+  const simulationRevision = stableHash(JSON.stringify({
+    arrangementRevision,
+    simulationInstances: simulationPanelInstances.map((instance) => instance.id),
+    seams: input.seamGroups,
+    fabrics: document.fabrics.map((fabric) => ({ id: fabric.id, physics: fabric.physics })),
+    simulationSettings: document.simulationSettings,
+    body: document.body,
+    measurements: document.measurements.values,
+  }));
+  return {
+    ...input,
+    document,
+    assemblyDocument,
+    simulationDocument,
+    garmentProjection,
+    panelInstances,
+    simulationPanelInstances,
+    arrangementRevision,
+    simulationRevision,
+    signature: simulationRevision,
+  };
+}
+
+function arrangementPreviewPlacement(
+  placement: PatternPreviewPlacement,
+  anchor: PanelArrangementAnchorV3,
+  mirrored: boolean,
+): PatternPreviewPlacement {
+  const { surfaceAttachment: _oldSurfaceAttachment, ...withoutSurfaceAttachment } = placement;
+  return {
+    ...withoutSurfaceAttachment,
+    region: anchor.region,
+    surface: anchor.surface,
+    bodySide: anchor.bodySide,
+    ...(anchor.bodyAnchorId ? { bodyAnchorId: anchor.bodyAnchorId } : {}),
+    rotationDeg: anchor.rotationDeg,
+    offsetXMm: anchor.offsetXMm,
+    offsetYMm: anchor.offsetYMm,
+    offsetZMm: anchor.offsetZMm,
+    scale: 1,
+    mirrorX: mirrored,
+    positionMm: anchor.positionMm ? [...anchor.positionMm] : undefined,
+    orientationDeg: anchor.orientationDeg ? [...anchor.orientationDeg] : undefined,
+    ...(anchor.surfaceAttachment ? { surfaceAttachment: cloneSurfaceAttachment(anchor.surfaceAttachment) } : {}),
+    presentationMode: "authored",
+  };
+}
+
+function cloneSurfaceAttachment(attachment: PanelSurfaceAttachmentV3): PanelSurfaceAttachmentV3 {
+  return { ...attachment, barycentric: [...attachment.barycentric] };
+}
+
 export function buildResolvedAssemblyInputFromDocument(
   documentValue: PatternDocumentV3,
 ): ResolvedAssemblyInput {

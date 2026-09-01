@@ -5,7 +5,7 @@ import { createDefaultFabricSource } from "../domain/fabric";
 import { getPatternEdges, type BodyAnchorId, type GarmentDraft, type PatternBodyPlacement, type PatternPiece } from "../domain/pattern";
 import { buildGarmentAssemblyMeshes } from "./GarmentThreeBridge";
 import { buildResolvedGarmentAssembly } from "./ResolvedGarmentAssembly";
-import { buildResolvedAssemblyInput, buildResolvedAssemblyInputFromDocument } from "./ResolvedAssemblyInput";
+import { buildResolvedAssemblyInput, buildResolvedAssemblyInputFromDocument, updateResolvedAssemblyArrangements } from "./ResolvedAssemblyInput";
 import { buildSemanticAvatarArrangement } from "./SemanticAvatarArrangement";
 
 function placement(
@@ -62,6 +62,33 @@ function draft(pieces: PatternPiece[]): GarmentDraft {
 }
 
 describe("ResolvedAssemblyInput canonical contract", () => {
+  it("updates only arrangement state without rebuilding canonical geometry artifacts", () => {
+    const input = buildResolvedAssemblyInput(draft([square("fast", undefined)]));
+    const instance = input.panelInstances[0];
+    const next = updateResolvedAssemblyArrangements(input, [{
+      instanceId: instance.id,
+      positionMm: [120, 980, 40],
+      orientationDeg: [15, -20, 35],
+    }]);
+    expect(next).not.toBe(input);
+    expect(next.geometryRevision).toBe(input.geometryRevision);
+    expect(next.geometrySignatures).toBe(input.geometrySignatures);
+    expect(next.snapshots).toBe(input.snapshots);
+    expect(next.diagnostics).toBe(input.diagnostics);
+    expect(next.arrangementRevision).not.toBe(input.arrangementRevision);
+    expect(next.panelInstances[0].arrangementAnchor).toMatchObject({
+      positionMm: [120, 980, 40],
+      orientationDeg: [15, -20, 35],
+      scale: 1,
+      source: "manual",
+    });
+    expect(next.garmentProjection.pieces[0].previewPlacements?.[0]).toMatchObject({
+      positionMm: [120, 980, 40],
+      orientationDeg: [15, -20, 35],
+      presentationMode: "authored",
+    });
+  });
+
   it("does not let Provar promote fresh unassigned panels into body placements", () => {
     const first = square("banana", undefined);
     const second = square("panel-123", undefined);

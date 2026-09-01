@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AvatarParametricModel } from "../avatar/AvatarParametricModel";
 import { anchorById } from "../avatar/AvatarParametricModel";
 import {
+  closestBodySurfacePoint,
   raycastBodySurface,
   resolveBodySurfaceAttachment,
   type BodySurfaceFrame,
@@ -46,6 +47,31 @@ export interface SurfaceConformResult {
   reason?: "surface-unavailable" | "coverage" | "metric" | "clearance";
 }
 
+export interface BodyBarrierState {
+  localSamples: Float32Array;
+  previousWorld: Float32Array;
+}
+
+export interface BodyBarrierOptions {
+  clearanceMm?: number;
+  maximumQueryDistanceM?: number;
+  maximumPasses?: number;
+}
+
+export interface BodyBarrierResult {
+  corrected: boolean;
+  maximumCorrectionMm: number;
+  minimumSignedClearanceMm: number;
+  sampledPoints: number;
+  surfaceAttachment?: ArrangementCommit["surfaceAttachment"];
+}
+
+export interface BodyClearanceAudit {
+  minimumSignedClearanceMm: number;
+  penetratingSamples: number;
+  sampledPoints: number;
+}
+
 export const DEFAULT_SURFACE_CANDIDATE_POLICY: SurfaceCandidatePolicy = {
   enterDistanceM: 0.16,
   exitDistanceM: 0.24,
@@ -75,6 +101,222 @@ export function intersectPointerRayWithDragPlane(
   plane: THREE.Plane,
 ): THREE.Vector3 | null {
   return ray.intersectPlane(plane, new THREE.Vector3());
+}
+
+export function createAxisDragPlane(
+  grabPointWorld: THREE.Vector3,
+  axisWorld: THREE.Vector3,
+  cameraDirectionWorld: THREE.Vector3,
+): THREE.Plane {
+  const axis = axisWorld.clone().normalize();
+  let normal = cameraDirectionWorld.clone().addScaledVector(axis, -cameraDirectionWorld.dot(axis));
+  if (normal.lengthSq() <= 1e-10) {
+    const fallback = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    normal = fallback.addScaledVector(axis, -fallback.dot(axis));
+  }
+  return new THREE.Plane().setFromNormalAndCoplanarPoint(normal.normalize(), grabPointWorld);
+}
+
+export function createBodyBarrierState(mesh: THREE.Mesh, maximumSamples = 20): BodyBarrierState {
+  const position = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const local: number[] = [];
+  const point = new THREE.Vector3();
+  const count = Math.max(1, position.count);
+  const vertexBudget = Math.max(4, Math.floor(maximumSamples * 0.6));
+  const vertexStep = Math.max(1, Math.floor(count / vertexBudget));
+  for (let index = 0; index < count && local.length / 3 < vertexBudget; index += vertexStep) {
+    point.fromBufferAttribute(position, index);
+    local.push(point.x, point.y, point.z);
+  }
+
+  mesh.geometry.computeBoundingBox();
+  const center = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+  local.push(center.x, center.y, center.z);
+
+  const index = mesh.geometry.getIndex();
+  const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(position.count / 3);
+  const triangleBudget = Math.max(0, maximumSamples - local.length / 3);
+  const triangleStep = Math.max(1, Math.floor(Math.max(1, triangleCount) / Math.max(1, triangleBudget)));
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  for (let triangle = 0; triangle < triangleCount && local.length / 3 < maximumSamples; triangle += triangleStep) {
+    const base = triangle * 3;
+    a.fromBufferAttribute(position, index ? index.getX(base) : base);
+    b.fromBufferAttribute(position, index ? index.getX(base + 1) : base + 1);
+    c.fromBufferAttribute(position, index ? index.getX(base + 2) : base + 2);
+    point.copy(a).add(b).add(c).multiplyScalar(1 / 3);
+    local.push(point.x, point.y, point.z);
+  }
+
+  const localSamples = Float32Array.from(local);
+  const previousWorld = new Float32Array(localSamples.length);
+  writeBarrierWorldSamples(mesh, localSamples, previousWorld);
+  return { localSamples, previousWorld };
+}
+
+/**
+ * Cheap unilateral rigid-body constraint for Montar. Outside the body the
+ * authored transform is untouched. Only inward/crossing motion is removed;
+ * tangential sliding and motion away from the surface remain free.
+ */
+export function constrainMeshOutsideBody(
+  mesh: THREE.Mesh,
+  body: HumanBodyMesh,
+  state: BodyBarrierState,
+  options: BodyBarrierOptions = {},
+): BodyBarrierResult {
+  const clearanceMm = Math.max(1, options.clearanceMm ?? 8);
+  const clearanceM = clearanceMm * 0.001;
+  const maximumQueryDistanceM = Math.max(clearanceM * 2, options.maximumQueryDistanceM ?? 0.32);
+  const maximumPasses = Math.max(1, options.maximumPasses ?? 3);
+  const sampleCount = Math.floor(state.localSamples.length / 3);
+  const desired = new THREE.Vector3();
+  const previous = new THREE.Vector3();
+  const movement = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  let corrected = false;
+  let maximumCorrectionM = 0;
+  let minimumSignedClearanceM = Number.POSITIVE_INFINITY;
+  let lastAttachment: ArrangementCommit["surfaceAttachment"] | undefined;
+
+  for (let pass = 0; pass < maximumPasses; pass += 1) {
+    mesh.updateMatrixWorld(true);
+    let bestCorrection: THREE.Vector3 | null = null;
+    let bestCorrectionLength = 0;
+
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      readBarrierWorldSample(mesh, state.localSamples, sample, desired);
+      const offset = sample * 3;
+      previous.set(state.previousWorld[offset], state.previousWorld[offset + 1], state.previousWorld[offset + 2]);
+
+      if (pass === 0) {
+        movement.copy(desired).sub(previous);
+        const travel = movement.length();
+        if (travel > 1e-6) {
+          const direction = movement.multiplyScalar(1 / travel);
+          const hit = raycastBodySurface(
+            body,
+            [previous.x, previous.y, previous.z],
+            [direction.x, direction.y, direction.z],
+            0,
+            travel + clearanceM * 2,
+          );
+          if (hit) {
+            normal.set(...hit.outwardNormal).normalize();
+            // A first surface crossing is only blocking when motion goes inward.
+            if (direction.dot(normal) < -1e-5) {
+              surface.set(...hit.position);
+              const signedAtCrossing = desired.clone().sub(surface).dot(normal);
+              const correction = normal.clone().multiplyScalar(clearanceM - signedAtCrossing);
+              const length = correction.length();
+              if (length > bestCorrectionLength) {
+                bestCorrection = correction.clone();
+                bestCorrectionLength = length;
+                lastAttachment = { ...hit.attachment, barycentric: [...hit.attachment.barycentric], normalOffsetMm: clearanceMm };
+              }
+            }
+          }
+        }
+      }
+
+      const nearest = closestBodySurfacePoint(
+        body,
+        [desired.x, desired.y, desired.z],
+        0,
+        maximumQueryDistanceM,
+      );
+      if (!nearest) continue;
+      surface.set(...nearest.position);
+      normal.set(...nearest.outwardNormal).normalize();
+      const signed = desired.clone().sub(surface).dot(normal);
+      minimumSignedClearanceM = Math.min(minimumSignedClearanceM, signed);
+      if (signed >= clearanceM) continue;
+      const correction = normal.clone().multiplyScalar(clearanceM - signed);
+      const length = correction.length();
+      if (length > bestCorrectionLength) {
+        bestCorrection = correction;
+        bestCorrectionLength = length;
+        lastAttachment = { ...nearest.attachment, barycentric: [...nearest.attachment.barycentric], normalOffsetMm: clearanceMm };
+      }
+    }
+
+    if (!bestCorrection || bestCorrectionLength <= 1e-7) break;
+    mesh.position.add(bestCorrection);
+    mesh.updateMatrixWorld(true);
+    corrected = true;
+    maximumCorrectionM = Math.max(maximumCorrectionM, bestCorrectionLength);
+  }
+
+  writeBarrierWorldSamples(mesh, state.localSamples, state.previousWorld);
+  return {
+    corrected,
+    maximumCorrectionMm: maximumCorrectionM * 1_000,
+    minimumSignedClearanceMm: Number.isFinite(minimumSignedClearanceM) ? minimumSignedClearanceM * 1_000 : clearanceMm,
+    sampledPoints: sampleCount,
+    ...(lastAttachment ? { surfaceAttachment: lastAttachment } : {}),
+  };
+}
+
+export function auditMeshBodyClearance(
+  mesh: THREE.Mesh,
+  body: HumanBodyMesh,
+  requiredClearanceMm = 1,
+  maximumSamples = 96,
+): BodyClearanceAudit {
+  const state = createBodyBarrierState(mesh, maximumSamples);
+  const queryLimitM = 0.55;
+  const point = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  let minimumSignedClearanceMm = Number.POSITIVE_INFINITY;
+  let penetratingSamples = 0;
+  const sampleCount = Math.floor(state.localSamples.length / 3);
+  mesh.updateMatrixWorld(true);
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    readBarrierWorldSample(mesh, state.localSamples, sample, point);
+    const nearest = closestBodySurfacePoint(body, [point.x, point.y, point.z], 0, queryLimitM);
+    if (!nearest) continue;
+    surface.set(...nearest.position);
+    normal.set(...nearest.outwardNormal).normalize();
+    const signedMm = point.clone().sub(surface).dot(normal) * 1_000;
+    minimumSignedClearanceMm = Math.min(minimumSignedClearanceMm, signedMm);
+    if (signedMm < requiredClearanceMm) penetratingSamples += 1;
+  }
+  return {
+    minimumSignedClearanceMm: Number.isFinite(minimumSignedClearanceMm) ? minimumSignedClearanceMm : Number.POSITIVE_INFINITY,
+    penetratingSamples,
+    sampledPoints: sampleCount,
+  };
+}
+
+function readBarrierWorldSample(
+  mesh: THREE.Mesh,
+  localSamples: Float32Array,
+  sample: number,
+  target: THREE.Vector3,
+): THREE.Vector3 {
+  const offset = sample * 3;
+  target.set(localSamples[offset], localSamples[offset + 1], localSamples[offset + 2]);
+  return target.applyMatrix4(mesh.matrixWorld);
+}
+
+function writeBarrierWorldSamples(
+  mesh: THREE.Mesh,
+  localSamples: Float32Array,
+  target: Float32Array,
+): void {
+  mesh.updateMatrixWorld(true);
+  const point = new THREE.Vector3();
+  const sampleCount = Math.floor(localSamples.length / 3);
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    readBarrierWorldSample(mesh, localSamples, sample, point);
+    const offset = sample * 3;
+    target[offset] = point.x;
+    target[offset + 1] = point.y;
+    target[offset + 2] = point.z;
+  }
 }
 
 export function updateSurfaceCandidate(
@@ -253,7 +495,11 @@ export function adjustMeshToBodySurface(
   mesh.geometry.computeBoundingBox();
   mesh.geometry.computeBoundingSphere();
   const metricDistortionMax = maximumEdgeMetricDistortion(mesh.geometry, metricReference, positions);
-  const clearanceValid = Number.isFinite(minimumClearanceMm) && minimumClearanceMm >= clearanceMm * 0.5;
+  const exteriorAudit = auditMeshBodyClearance(mesh, body, clearanceMm * 0.5, Math.max(96, positionAttribute.count));
+  minimumClearanceMm = Math.min(minimumClearanceMm, exteriorAudit.minimumSignedClearanceMm);
+  const clearanceValid = Number.isFinite(minimumClearanceMm)
+    && minimumClearanceMm >= clearanceMm * 0.5
+    && exteriorAudit.penetratingSamples === 0;
   const coverageValid = projectedVertexRatio >= minimumProjectedVertexRatio;
   const metricValid = metricDistortionMax <= maximumMetricDistortion;
 
@@ -264,10 +510,13 @@ export function adjustMeshToBodySurface(
     mesh.geometry.computeBoundingBox();
     mesh.geometry.computeBoundingSphere();
     mesh.updateMatrixWorld(true);
+    const rigidBarrier = createBodyBarrierState(mesh, 64);
+    constrainMeshOutsideBody(mesh, body, rigidBarrier, { clearanceMm, maximumPasses: 4 });
+    const rigidAudit = auditMeshBodyClearance(mesh, body, clearanceMm * 0.5, 128);
     return {
       conformed: false,
       metricDistortionMax,
-      minimumClearanceMm: Number.isFinite(minimumClearanceMm) ? minimumClearanceMm : clearanceMm,
+      minimumClearanceMm: rigidAudit.minimumSignedClearanceMm,
       projectedVertexRatio,
       reason: !coverageValid ? "coverage" : !metricValid ? "metric" : "clearance",
     };
