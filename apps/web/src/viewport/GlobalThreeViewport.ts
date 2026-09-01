@@ -512,9 +512,9 @@ export class ThreeViewport {
   updateGarment(input: ResolvedAssemblyInput, mode: ThreeViewportMode = "fitting"): string[] {
     const enteringAssembly = mode === "assembly" && this.viewportMode !== "assembly";
     this.viewportMode = mode;
-    this.controls.mouseButtons.LEFT = mode === "assembly" ? null : THREE.MOUSE.ROTATE;
-    this.controls.mouseButtons.MIDDLE = mode === "assembly" ? THREE.MOUSE.PAN : THREE.MOUSE.DOLLY;
-    this.controls.mouseButtons.RIGHT = mode === "assembly" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    this.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+    this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+    this.controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     if (mode === "assembly") {
       this.setArrangementPointerFeedback("idle");
     } else {
@@ -1051,25 +1051,22 @@ export class ThreeViewport {
     if (event.button === 2) {
       this.hoveredArrangementHandle = null;
       this.hoveredArrangementInstanceId = null;
-      this.setArrangementPointerFeedback("orbit");
+      this.setArrangementPointerFeedback("pan");
       return;
     }
     if (event.button === 1) {
       this.hoveredArrangementHandle = null;
       this.hoveredArrangementInstanceId = null;
-      this.setArrangementPointerFeedback("pan");
+      this.setArrangementPointerFeedback("zoom");
       return;
     }
     if (event.button !== 0) return;
     const gizmoHit = this.raycastArrangementGizmo(event);
     const garmentHit = gizmoHit ? null : this.raycastGarment(event);
     if (!gizmoHit && !garmentHit) {
-      if (!event.ctrlKey && !event.metaKey && !event.shiftKey && this.selectedInstanceIds.size > 0) {
-        this.selectedInstanceIds.clear();
-        this.applyArrangementSelectionVisuals();
-        this.arrangementSelectionHandler?.([]);
-      }
-      this.updateArrangementHover(event);
+      this.hoveredArrangementHandle = null;
+      this.hoveredArrangementInstanceId = null;
+      this.setArrangementPointerFeedback("orbit");
       return;
     }
 
@@ -1480,7 +1477,7 @@ export class ThreeViewport {
   }
 
   private setArrangementPointerFeedback(
-    mode: "idle" | "panel" | "move-handle" | "rotate-handle" | "move-active" | "rotate-active" | "orbit" | "pan",
+    mode: "idle" | "panel" | "move-handle" | "rotate-handle" | "move-active" | "rotate-active" | "orbit" | "pan" | "zoom",
   ): void {
     const cursor = mode === "panel" || mode === "move-handle"
       ? "grab"
@@ -1488,7 +1485,9 @@ export class ThreeViewport {
         ? "crosshair"
         : mode === "pan"
           ? "move"
-          : mode === "idle" ? "default" : "grabbing";
+          : mode === "zoom"
+            ? "ns-resize"
+            : mode === "idle" ? "default" : "grabbing";
     this.renderer.domElement.style.cursor = cursor;
     this.host.dataset.arrangementPointerMode = mode;
     if (this.hoveredArrangementHandle) {
