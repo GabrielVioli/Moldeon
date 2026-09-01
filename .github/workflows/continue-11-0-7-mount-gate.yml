@@ -29,6 +29,7 @@ jobs:
           sed -i 's/function createArrangementCandidateMarker(): THREE.Group {/function createArrangementCandidateMarker(): THREE.Mesh {/' apps/web/src/viewport/GlobalThreeViewport.ts
           python - <<'PY'
           from pathlib import Path
+
           p = Path("apps/web/src/viewport/ArrangementWorkspace.ts")
           s = p.read_text()
           old = "const correction = surface.addScaledVector(normal, clearanceM).sub(desired);"
@@ -36,15 +37,26 @@ jobs:
           if s.count(old) != 1:
               raise SystemExit(f"crossing correction marker count={s.count(old)}")
           p.write_text(s.replace(old, new))
+
+          p = Path("apps/web/src/App.tsx")
+          s = p.read_text()
+          duplicate = "  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {\n  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"
+          single = "  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"
+          if s.count(duplicate) != 1:
+              raise SystemExit(f"App shortcut duplicate marker count={s.count(duplicate)}")
+          p.write_text(s.replace(duplicate, single))
+
+          p = Path("apps/web/src/viewport/GarmentViewport.tsx")
+          s = p.read_text()
+          broken = '{displayMode === "full-fitting" ? <div className="viewport-simulation-controls"      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'
+          fixed = '{displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'
+          if s.count(broken) != 1:
+              raise SystemExit(f"GarmentViewport fitting duplicate marker count={s.count(broken)}")
+          p.write_text(s.replace(broken, fixed))
           PY
           test "$(git diff --name-only | wc -l)" -eq 9
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
-      - name: Inspect generated diffs
-        shell: bash
-        run: |
-          git diff -- apps/web/src/App.tsx
-          git diff -- apps/web/src/viewport/GarmentViewport.tsx
       - name: Install
         run: npm ci
       - name: Focused tests
@@ -75,5 +87,5 @@ jobs:
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
           git add apps/web/src/App.tsx apps/web/src/avatar/BodySurfaceQuery.test.ts apps/web/src/avatar/BodySurfaceQuery.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.ts apps/web/src/viewport/ArrangementWorkspace.test.ts apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/GlobalThreeViewport.ts
-          git commit -m "fix(11.0.7): make mount manipulation kinematic"
+          git commit -m "fix(11.0.7): materialize kinematic mount workspace"
           git push origin HEAD:recovery/11.0.7-canonical-3d-arrangement-workspace
