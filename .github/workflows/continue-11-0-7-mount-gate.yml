@@ -53,8 +53,16 @@ jobs:
           if s.count(broken) != 1:
               raise SystemExit(f"GarmentViewport fitting duplicate marker count={s.count(broken)}")
           p.write_text(s.replace(broken, fixed))
+
+          p = Path("apps/web/src/responsive-workspace-polish.css")
+          s = p.read_text()
+          old = "  width: min(900px, calc(100% - 32px));"
+          new = "  width: min(920px, calc(100% - 32px));"
+          if s.count(old) != 1:
+              raise SystemExit(f"toolbar width marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
           PY
-          test "$(git diff --name-only | wc -l)" -eq 9
+          test "$(git diff --name-only | wc -l)" -eq 10
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
       - name: Install
@@ -82,11 +90,11 @@ jobs:
       - name: Push gated checkpoint
         shell: bash
         run: |
-          test "$(git diff --name-only | wc -l)" -eq 9
+          test "$(git diff --name-only | wc -l)" -eq 10
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
           git config user.name "Gabriel Vinicius"
           git config user.email "82556581+GabrielVioli@users.noreply.github.com"
-          git add apps/web/src/App.tsx apps/web/src/avatar/BodySurfaceQuery.test.ts apps/web/src/avatar/BodySurfaceQuery.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.ts apps/web/src/viewport/ArrangementWorkspace.test.ts apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/GlobalThreeViewport.ts
+          git add apps/web/src/App.tsx apps/web/src/avatar/BodySurfaceQuery.test.ts apps/web/src/avatar/BodySurfaceQuery.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.ts apps/web/src/responsive-workspace-polish.css apps/web/src/viewport/ArrangementWorkspace.test.ts apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/GlobalThreeViewport.ts
           git commit -m "fix(11.0.7): materialize kinematic mount workspace"
           git push origin HEAD:recovery/11.0.7-canonical-3d-arrangement-workspace
