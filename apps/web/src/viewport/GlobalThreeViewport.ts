@@ -53,6 +53,7 @@ import {
   createCameraDragPlane,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
+  resolveDeterministicStagingLayout,
   resolveArrangementTransform,
   restoreMeshMaterialGeometry,
   updateSurfaceCandidate,
@@ -136,6 +137,7 @@ export class ThreeViewport {
   private avatarSignature: string | null = null;
   private avatarLoadController: AbortController | null = null;
   private hasFramedScene = false;
+  private lastFramedAssemblyRevision: string | null = null;
   private frameId: number | null = null;
   private lastFrameAt = 0;
   private disposed = false;
@@ -462,6 +464,7 @@ export class ThreeViewport {
   }
 
   updateGarment(input: ResolvedAssemblyInput, mode: ThreeViewportMode = "fitting"): string[] {
+    const enteringAssembly = mode === "assembly" && this.viewportMode !== "assembly";
     this.viewportMode = mode;
     this.currentInput = input;
     this.host.dataset.viewportMode = mode;
@@ -545,9 +548,12 @@ export class ThreeViewport {
         );
         this.host.dataset.garmentInstanceCount = String(this.garmentMeshes.length);
         this.host.dataset.garmentInstanceIds = this.garmentMeshes.map((item) => item.key).join(",");
-        if (!this.hasFramedScene || avatarConfiguration.changed) {
+        if (!this.hasFramedScene
+          || enteringAssembly
+          || this.lastFramedAssemblyRevision !== input.arrangementRevision) {
           this.frameDressedScene();
           this.hasFramedScene = true;
+          this.lastFramedAssemblyRevision = input.arrangementRevision;
         }
         this.requestRender();
         return;
@@ -798,9 +804,12 @@ export class ThreeViewport {
     this.avatarGroup.updateMatrixWorld(true);
     this.proceduralAvatarGroup.updateMatrixWorld(true);
     this.garmentGroup.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.avatarGroup);
-    if (this.proceduralAvatarGroup.visible) box.expandByObject(this.proceduralAvatarGroup);
-    box.expandByObject(this.garmentGroup);
+    const box = new THREE.Box3();
+    if (this.avatarGroup.visible && this.avatarGroup.children.length > 0) box.expandByObject(this.avatarGroup);
+    if (this.proceduralAvatarGroup.visible && this.proceduralAvatarGroup.children.length > 0) {
+      box.expandByObject(this.proceduralAvatarGroup);
+    }
+    if (this.garmentGroup.visible && this.garmentGroup.children.length > 0) box.expandByObject(this.garmentGroup);
     this.frameBox(box, this.camera.aspect < 0.8 ? 0.42 : 0.28);
   }
 
@@ -933,11 +942,26 @@ export class ThreeViewport {
     );
     const states: Record<string, "POSICIONAR" | "AJUSTADO"> = {};
     const body = avatar.humanBody.visualMesh;
+    const stagingPanels: Array<{ instanceId: string; sizeM: [number, number, number] }> = [];
     for (const item of this.garmentMeshes) {
       const placement = placements.get(item.key);
       if (!placement) continue;
       restoreMeshMaterialGeometry(item.mesh, item.flat);
-      placeMeshCentroid(item.mesh, resolveArrangementTransform(placement, avatar));
+      if (placement.presentationMode === "staging") {
+        item.mesh.geometry.computeBoundingBox();
+        const size = item.mesh.geometry.boundingBox?.getSize(new THREE.Vector3()) ?? new THREE.Vector3();
+        stagingPanels.push({ instanceId: item.key, sizeM: [size.x, size.y, size.z] });
+      }
+    }
+    const stagingTransforms = resolveDeterministicStagingLayout(stagingPanels, body);
+    for (const item of this.garmentMeshes) {
+      const placement = placements.get(item.key);
+      if (!placement) continue;
+      const transform = placement.presentationMode === "staging"
+        ? stagingTransforms.get(item.key)
+        : resolveArrangementTransform(placement, avatar);
+      if (!transform) continue;
+      placeMeshCentroid(item.mesh, transform);
       if (placement.presentationMode === "authored" && placement.surfaceAttachment) {
         const result = adjustMeshToBodySurface(item.mesh, body, placement.surfaceAttachment, item.flat, {
           clearanceMm: Math.max(12, placement.surfaceAttachment.normalOffsetMm),

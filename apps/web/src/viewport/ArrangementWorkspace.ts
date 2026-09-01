@@ -20,6 +20,11 @@ export interface ArrangementTransform {
   orientationDeg: [number, number, number];
 }
 
+export interface StagingPanelBounds {
+  instanceId: string;
+  sizeM: [number, number, number];
+}
+
 export interface ArrangementCommit {
   instanceId: string;
   positionMm: [number, number, number];
@@ -380,9 +385,92 @@ export function resolveArrangementTransform(
     }
   }
   return {
-    positionM: (placement.positionMm ?? [-900, 1_350, 0]).map((value) => value * 0.001) as [number, number, number],
+    positionM: bodyCenter(avatar.humanBody.visualMesh),
     orientationDeg: placement.orientationDeg ?? [0, 0, 0],
   };
+}
+
+/**
+ * Runtime-only tray for panels without confirmed placement. The packing is
+ * derived from canonical identities, real panel bounds and the current body;
+ * it never becomes an arrangementAnchor and never changes panel scale.
+ */
+export function resolveDeterministicStagingLayout(
+  panels: readonly StagingPanelBounds[],
+  body: HumanBodyMesh,
+): Map<string, ArrangementTransform> {
+  const ordered = panels
+    .map((panel) => ({
+      instanceId: panel.instanceId,
+      width: Math.max(0.001, Math.abs(panel.sizeM[0])),
+      height: Math.max(0.001, Math.abs(panel.sizeM[1])),
+      depth: Math.max(0, Math.abs(panel.sizeM[2])),
+    }))
+    .sort((left, right) => left.instanceId.localeCompare(right.instanceId));
+  const bodyHeight = Math.max(0.4, body.bounds.max[1] - body.bounds.min[1]);
+  const verticalMargin = Math.min(0.12, bodyHeight * 0.06);
+  const bottom = body.bounds.min[1] + verticalMargin;
+  const top = body.bounds.max[1] - verticalMargin;
+  const availableHeight = Math.max(0.2, top - bottom);
+  const centerY = (body.bounds.min[1] + body.bounds.max[1]) * 0.5;
+  const horizontalGap = Math.max(0.055, bodyHeight * 0.032);
+  const verticalGap = Math.max(0.045, bodyHeight * 0.026);
+  const frontClearance = Math.max(0.05, bodyHeight * 0.03);
+  const result = new Map<string, ArrangementTransform>();
+
+  layoutStagingSide(ordered.filter((_, index) => index % 2 === 0), -1);
+  layoutStagingSide(ordered.filter((_, index) => index % 2 === 1), 1);
+  return result;
+
+  function layoutStagingSide(
+    sidePanels: typeof ordered,
+    side: -1 | 1,
+  ): void {
+    const lanes: Array<{ panels: typeof ordered; width: number; height: number }> = [];
+    for (const panel of sidePanels) {
+      let lane = lanes[lanes.length - 1];
+      const nextHeight = lane
+        ? lane.height + verticalGap + panel.height
+        : panel.height;
+      if (!lane || (lane.panels.length > 0 && nextHeight > availableHeight)) {
+        lane = { panels: [], width: 0, height: 0 };
+        lanes.push(lane);
+      }
+      lane.height += (lane.panels.length > 0 ? verticalGap : 0) + panel.height;
+      lane.width = Math.max(lane.width, panel.width);
+      lane.panels.push(panel);
+    }
+
+    let outwardOffset = 0;
+    for (const lane of lanes) {
+      let cursorY = centerY + lane.height * 0.5;
+      for (const panel of lane.panels) {
+        const y = lane.height > availableHeight
+          ? centerY
+          : cursorY - panel.height * 0.5;
+        if (lane.height <= availableHeight) cursorY -= panel.height + verticalGap;
+        const bodyEdge = side < 0 ? body.bounds.min[0] : body.bounds.max[0];
+        const x = bodyEdge + side * (horizontalGap + outwardOffset + panel.width * 0.5);
+        result.set(panel.instanceId, {
+          positionM: [
+            x,
+            y,
+            body.bounds.max[2] + frontClearance + panel.depth * 0.5,
+          ],
+          orientationDeg: [0, 0, 0],
+        });
+      }
+      outwardOffset += lane.width + horizontalGap;
+    }
+  }
+}
+
+function bodyCenter(body: HumanBodyMesh): [number, number, number] {
+  return [
+    (body.bounds.min[0] + body.bounds.max[0]) * 0.5,
+    (body.bounds.min[1] + body.bounds.max[1]) * 0.5,
+    (body.bounds.min[2] + body.bounds.max[2]) * 0.5,
+  ];
 }
 
 export function placeMeshCentroid(

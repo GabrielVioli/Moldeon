@@ -122,6 +122,9 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     expect(input.garmentProjection.pieces.every((piece) =>
       piece.previewPlacements?.every((preview) => preview.presentationMode === "staging"),
     )).toBe(true);
+    expect(input.garmentProjection.pieces.every((piece) =>
+      piece.previewPlacements?.every((preview) => preview.positionMm === undefined),
+    )).toBe(true);
     expect(state.instances).toHaveLength(2);
     expect(state.instances.map((instance) => instance.id).sort()).toEqual(input.panelInstances.map((instance) => instance.id).sort());
   });
@@ -156,6 +159,7 @@ describe("ResolvedAssemblyInput canonical contract", () => {
       id: "visual-only:panel:1",
       presentationMode: "staging",
     });
+    expect(input.garmentProjection.pieces[0].previewPlacements?.[0]?.positionMm).toBeUndefined();
   });
 
   it("does not let templateId or a legacy arrangement scale alter physical assembly", () => {

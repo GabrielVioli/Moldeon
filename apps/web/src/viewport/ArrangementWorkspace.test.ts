@@ -17,6 +17,7 @@ import {
   createCameraDragPlane,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
+  resolveDeterministicStagingLayout,
   resolveArrangementTransform,
   updateSurfaceCandidate,
 } from "./ArrangementWorkspace";
@@ -54,6 +55,61 @@ describe("canonical 3D arrangement workspace", () => {
       expect.closeTo(20, 5),
       expect.closeTo(30, 5),
     ]));
+  });
+
+  it("packs unassigned panels beside the current body deterministically without overlap", () => {
+    const body = stagingBody();
+    const panels = [
+      { instanceId: "panel-d", sizeM: [0.28, 0.46, 0] as [number, number, number] },
+      { instanceId: "panel-b", sizeM: [0.24, 0.52, 0] as [number, number, number] },
+      { instanceId: "panel-a", sizeM: [0.31, 0.4, 0] as [number, number, number] },
+      { instanceId: "panel-c", sizeM: [0.2, 0.34, 0] as [number, number, number] },
+    ];
+    const layout = resolveDeterministicStagingLayout(panels, body);
+    const shuffled = resolveDeterministicStagingLayout([...panels].reverse(), body);
+
+    expect(layout.size).toBe(panels.length);
+    for (const panel of panels) {
+      expect(layout.get(panel.instanceId)).toEqual(shuffled.get(panel.instanceId));
+      const transform = layout.get(panel.instanceId)!;
+      const [x, y, z] = transform.positionM;
+      const outsideLeft = x + panel.sizeM[0] * 0.5 < body.bounds.min[0];
+      const outsideRight = x - panel.sizeM[0] * 0.5 > body.bounds.max[0];
+      expect(outsideLeft || outsideRight).toBe(true);
+      expect(y).toBeGreaterThan(body.bounds.min[1]);
+      expect(y).toBeLessThan(body.bounds.max[1]);
+      expect(z).toBeGreaterThan(body.bounds.max[2]);
+      expect(transform.orientationDeg).toEqual([0, 0, 0]);
+    }
+
+    const boxes = panels.map((panel) => {
+      const [x, y] = layout.get(panel.instanceId)!.positionM;
+      return {
+        minX: x - panel.sizeM[0] * 0.5,
+        maxX: x + panel.sizeM[0] * 0.5,
+        minY: y - panel.sizeM[1] * 0.5,
+        maxY: y + panel.sizeM[1] * 0.5,
+      };
+    });
+    for (let first = 0; first < boxes.length; first += 1) {
+      for (let second = first + 1; second < boxes.length; second += 1) {
+        const separated = boxes[first].maxX <= boxes[second].minX
+          || boxes[second].maxX <= boxes[first].minX
+          || boxes[first].maxY <= boxes[second].minY
+          || boxes[second].maxY <= boxes[first].minY;
+        expect(separated).toBe(true);
+      }
+    }
+  });
+
+  it("keeps an oversized staging panel at full size in a finite body-relative slot", () => {
+    const body = stagingBody();
+    const panel = { instanceId: "oversized", sizeM: [0.9, 2.2, 0] as [number, number, number] };
+    const transform = resolveDeterministicStagingLayout([panel], body).get(panel.instanceId)!;
+
+    expect(transform.positionM.every(Number.isFinite)).toBe(true);
+    expect(transform.positionM[1]).toBeCloseTo(0.875, 6);
+    expect(transform.positionM[0] + panel.sizeM[0] * 0.5).toBeLessThan(body.bounds.min[0]);
   });
 
   it("preserves the exact grab point on a stable camera-parallel free-drag plane", () => {
@@ -230,6 +286,13 @@ function planarBody(): HumanBodyMesh {
     bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
     topologySignature: "body",
     sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function stagingBody(): HumanBodyMesh {
+  return {
+    ...planarBody(),
+    bounds: { min: [-0.35, 0, -0.2], max: [0.35, 1.75, 0.25] },
   };
 }
 

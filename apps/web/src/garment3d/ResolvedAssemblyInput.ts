@@ -302,7 +302,6 @@ function projectPhysicalInstancesForAssembly(
         .filter((instance) => instance.sourcePatternId === piece.id)
         .sort((left, right) => left.copyIndex - right.copyIndex || left.id.localeCompare(right.id));
       if (physical.length === 0) return piece;
-      const orderedInstances = [...instances].sort((left, right) => left.id.localeCompare(right.id));
       const previewPlacements = physical.map((instance) => {
         const anchor = instance.arrangementAnchor;
         if (instance.placementStatus !== "confirmed" || !anchor) {
@@ -318,10 +317,6 @@ function projectPhysicalInstancesForAssembly(
             offsetZMm: 0,
             scale: 1,
             mirrorX: instance.mirrored,
-            positionMm: deterministicStagingPositionMm(
-              orderedInstances.findIndex((candidate) => candidate.id === instance.id),
-            ),
-            orientationDeg: [0, 0, 0] as [number, number, number],
             presentationMode: "staging" as const,
           };
         }
@@ -352,13 +347,6 @@ function projectPhysicalInstancesForAssembly(
       };
     }),
   };
-}
-
-export function deterministicStagingPositionMm(index: number): [number, number, number] {
-  const safeIndex = Math.max(0, index);
-  const column = safeIndex % 3;
-  const row = Math.floor(safeIndex / 3);
-  return [-900 + column * 300, 1_350 - row * 360, 0];
 }
 
 export function patternDefinitionGeometrySignature(definition: PatternDefinitionV3): string {
