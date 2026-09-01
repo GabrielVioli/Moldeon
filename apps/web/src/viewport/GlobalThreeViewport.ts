@@ -448,9 +448,10 @@ export class ThreeViewport {
     this.requestRender();
   }
 
-  adjustArrangementSelectionToBody(): void {
+  adjustArrangementSelectionToBody(): { adjusted: number; tooFar: number; failed: number } {
     const body = this.currentAvatarModel?.humanBody.visualMesh;
-    if (this.viewportMode !== "assembly" || !body || this.selectedInstanceIds.size === 0) return;
+    const outcome = { adjusted: 0, tooFar: 0, failed: 0 };
+    if (this.viewportMode !== "assembly" || !body || this.selectedInstanceIds.size === 0) return outcome;
     const commits: ArrangementCommit[] = [];
     const diagnostics: Record<string, unknown> = {};
     for (const item of this.garmentMeshes) {
@@ -458,32 +459,42 @@ export class ThreeViewport {
       const persistedAttachment = this.surfaceAttachmentForInstance(item.key);
       const persistedFrame = persistedAttachment ? resolveBodySurfaceAttachment(body, persistedAttachment) : null;
       const centroid = meshWorldCentroid(item.mesh);
-      const surface = persistedFrame ?? closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 1.5);
-      if (!surface) continue;
+      const persistedIsLocal = persistedFrame
+        ? new THREE.Vector3(...persistedFrame.position).distanceTo(centroid) <= 0.06
+        : false;
+      const surface = persistedIsLocal
+        ? persistedFrame
+        : closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.06);
+      if (!surface) {
+        outcome.tooFar += 1;
+        diagnostics[item.key] = { conformed: false, reason: "too-far" };
+        continue;
+      }
       const result = adjustMeshToBodySurface(item.mesh, body, surface.attachment, item.flat, {
         clearanceMm: Math.max(12, surface.attachment.normalOffsetMm),
+        captureDistanceMm: 60,
+        maximumVertexProjectionDistanceMm: 120,
       });
-      const audit = auditMeshBodyClearance(item.mesh, body, 4, 128);
-      diagnostics[item.key] = { ...result, exteriorAudit: audit };
-      if (audit.penetratingSamples > 0) {
-        const barrier = createBodyBarrierState(item.mesh, 64);
-        constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 12, maximumPasses: 5 });
+      diagnostics[item.key] = result;
+      if (!result.conformed) {
+        if (result.reason === "too-far") outcome.tooFar += 1;
+        else outcome.failed += 1;
+        continue;
       }
-      commits.push(captureMeshArrangement(item.key, item.mesh, {
-        ...surface.attachment,
-        barycentric: [...surface.attachment.barycentric],
-        normalOffsetMm: Math.max(12, surface.attachment.normalOffsetMm),
-      }));
+      outcome.adjusted += 1;
+      commits.push(captureMeshArrangement(item.key, item.mesh, result.surfaceAttachment));
     }
+    this.host.dataset.arrangementConformOperations = String(
+      Number(this.host.dataset.arrangementConformOperations ?? "0") + 1,
+    );
+    this.host.dataset.arrangementConformDiagnostics = JSON.stringify(diagnostics);
+    this.host.dataset.arrangementConformOutcome = JSON.stringify(outcome);
     if (commits.length > 0) {
-      this.host.dataset.arrangementConformOperations = String(
-        Number(this.host.dataset.arrangementConformOperations ?? "0") + 1,
-      );
-      this.host.dataset.arrangementConformDiagnostics = JSON.stringify(diagnostics);
       this.arrangementCommitHandler?.(commits);
       this.updateArrangementGizmo();
       this.requestRender();
     }
+    return outcome;
   }
 
   toggleArrangementPin(): boolean {

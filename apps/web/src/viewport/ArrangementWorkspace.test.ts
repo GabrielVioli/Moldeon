@@ -64,6 +64,22 @@ describe("canonical 3D arrangement workspace", () => {
     ]));
   });
 
+  it("keeps an authored rigid transform authoritative over a conform attachment", () => {
+    const transform = resolveArrangementTransform({
+      ...placement,
+      surfaceAttachment: {
+        version: 1,
+        topologySignature: "body",
+        triangleIndex: 0,
+        barycentric: [0.25, 0.25, 0.5],
+        normalOffsetMm: 12,
+      },
+    }, { humanBody: { visualMesh: planarBody() } } as AvatarParametricModel);
+
+    expect(transform.positionM).toEqual([0.1, 1, -0.2]);
+    expect(transform.orientationDeg).toEqual([10, 20, 30]);
+  });
+
   it("packs unassigned panels beside the current body deterministically without overlap", () => {
     const body = stagingBody();
     const panels = [
@@ -275,9 +291,11 @@ describe("canonical 3D arrangement workspace", () => {
     const geometry = new THREE.PlaneGeometry(0.1, 0.1, 1, 1);
     const mesh = new THREE.Mesh(geometry);
     const reference = new Float32Array((geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
-    mesh.rotation.set(0.35, 0.2, 0.1);
-    mesh.position.set(0, 0, 0.08);
+    mesh.rotation.set(0, 0, 0.35);
+    mesh.position.set(0.25, 0.1, 0.02);
     mesh.updateMatrixWorld(true);
+    const authoredPosition = mesh.position.clone();
+    const authoredOrientation = mesh.quaternion.clone();
 
     const result = adjustMeshToBodySurface(mesh, body, {
       version: 1,
@@ -289,8 +307,37 @@ describe("canonical 3D arrangement workspace", () => {
 
     expect(result.metricDistortionMax).toBeLessThanOrEqual(0.008);
     expect(result.minimumClearanceMm).toBeGreaterThanOrEqual(6);
+    expect(result.anchorTangentialDisplacementMm).toBeLessThan(1e-4);
+    expect(mesh.position.distanceTo(authoredPosition)).toBeLessThan(1e-10);
+    expect(mesh.quaternion.angleTo(authoredOrientation)).toBeLessThan(1e-7);
     expect(mesh.scale.toArray()).toEqual([1, 1, 1]);
     expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
+  });
+
+  it("rejects conform far from the body without changing geometry or placement", () => {
+    const body = planarBody();
+    const geometry = new THREE.PlaneGeometry(0.1, 0.1, 1, 1);
+    const mesh = new THREE.Mesh(geometry);
+    mesh.position.set(-0.32, 0.18, 0.25);
+    mesh.rotation.set(0.1, -0.2, 0.3);
+    mesh.updateMatrixWorld(true);
+    const beforePositions = Array.from((geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
+    const beforePosition = mesh.position.clone();
+    const beforeOrientation = mesh.quaternion.clone();
+
+    const result = adjustMeshToBodySurface(mesh, body, {
+      version: 1,
+      topologySignature: body.topologySignature,
+      triangleIndex: 0,
+      barycentric: [0.25, 0.25, 0.5],
+      normalOffsetMm: 12,
+    }, new Float32Array(beforePositions));
+
+    expect(result.conformed).toBe(false);
+    expect(result.reason).toBe("too-far");
+    expect(Array.from((geometry.getAttribute("position") as THREE.BufferAttribute).array)).toEqual(beforePositions);
+    expect(mesh.position.distanceTo(beforePosition)).toBeLessThan(1e-10);
+    expect(mesh.quaternion.angleTo(beforeOrientation)).toBeLessThan(1e-7);
   });
 
   it("flipping panel face does not invert the body-outward placement direction", () => {
@@ -299,7 +346,9 @@ describe("canonical 3D arrangement workspace", () => {
     const mesh = new THREE.Mesh(geometry);
     const reference = new Float32Array((geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
     mesh.rotateY(Math.PI);
+    mesh.position.z = 0.02;
     mesh.updateMatrixWorld(true);
+    const authoredOrientation = mesh.quaternion.clone();
 
     adjustMeshToBodySurface(mesh, body, {
       version: 1,
@@ -311,6 +360,7 @@ describe("canonical 3D arrangement workspace", () => {
 
     expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
     expect(captureMeshArrangement("panel", mesh).positionMm[2]).toBeGreaterThan(0);
+    expect(mesh.quaternion.angleTo(authoredOrientation)).toBeLessThan(1e-7);
   });
 
   it("derives presentation state rather than persisting simulation lifecycle", () => {

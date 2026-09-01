@@ -65,6 +65,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [selectionPinned, setSelectionPinned] = useState(false);
   const [arrangementTool, setArrangementTool] = useState<ArrangementTool>("move");
   const [arrangementAxis, setArrangementAxis] = useState<ArrangementAxis>("free");
+  const [arrangementNotice, setArrangementNotice] = useState<string | null>(null);
   const arrangementToolRef = useRef<ArrangementTool>(arrangementTool);
   const arrangementAxisRef = useRef<ArrangementAxis>(arrangementAxis);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
@@ -272,9 +273,9 @@ export const GarmentViewport = memo(function GarmentViewport({
             <strong>{selectedArrangementIds.length > 0
               ? `${selectedArrangementIds.length} selecionada(s) · ${selectedArrangementState}`
               : "Selecione uma peça"}</strong>
-            <small>{arrangementTool === "move"
+            <small role={arrangementNotice ? "status" : undefined}>{arrangementNotice ?? (arrangementTool === "move"
               ? arrangementAxis === "free" ? "Arraste a peça livremente" : `Arraste o handle ${arrangementAxis.toUpperCase()}`
-              : `Arraste o arco ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`}</small>
+              : `Arraste o arco ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`)}</small>
           </div>
           <div className="viewport-arrangement-actions">
             <button
@@ -297,7 +298,13 @@ export const GarmentViewport = memo(function GarmentViewport({
                 <button key={axis} type="button" aria-pressed={arrangementAxis === axis} onClick={() => setArrangementAxis(axis)}>{axis.toUpperCase()}</button>
               ))}
             </div>
-            <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.adjustArrangementSelectionToBody()}>Ajustar</button>
+            <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => {
+              const outcome = viewportRef.current?.adjustArrangementSelectionToBody();
+              if (!outcome) return;
+              if (outcome.tooFar > 0) setArrangementNotice("Aproxime o painel do corpo para ajustar.");
+              else if (outcome.failed > 0) setArrangementNotice("Não foi possível ajustar sem deformar o molde.");
+              else if (outcome.adjusted > 0) setArrangementNotice("Ajustado no placement atual.");
+            }}>Ajustar</button>
             <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar face</button>
             <button
               type="button"

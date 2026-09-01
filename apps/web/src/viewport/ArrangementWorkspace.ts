@@ -40,6 +40,8 @@ export interface SurfaceCandidatePolicy {
 
 export interface SurfaceConformOptions {
   clearanceMm?: number;
+  captureDistanceMm?: number;
+  maximumVertexProjectionDistanceMm?: number;
   maximumMetricDistortion?: number;
   minimumProjectedVertexRatio?: number;
 }
@@ -49,7 +51,10 @@ export interface SurfaceConformResult {
   metricDistortionMax: number;
   minimumClearanceMm: number;
   projectedVertexRatio: number;
-  reason?: "surface-unavailable" | "coverage" | "metric" | "clearance";
+  anchorTangentialDisplacementMm: number;
+  anchorNormalDisplacementMm: number;
+  surfaceAttachment?: ArrangementCommit["surfaceAttachment"];
+  reason?: "surface-unavailable" | "too-far" | "coverage" | "metric" | "clearance";
 }
 
 export interface BodyBarrierState {
@@ -442,6 +447,15 @@ export function resolveArrangementTransform(
   placement: PatternPreviewPlacement,
   avatar: AvatarParametricModel,
 ): ArrangementTransform {
+  // A direct 3D arrangement is authoritative. A surface attachment records the
+  // local body neighbourhood used by conform; it must not replace the authored
+  // rigid transform when both are present.
+  if (placement.positionMm) {
+    return {
+      positionM: placement.positionMm.map((value) => value * 0.001) as [number, number, number],
+      orientationDeg: placement.orientationDeg ?? [0, 0, placement.rotationDeg],
+    };
+  }
   if (placement.surfaceAttachment) {
     const frame = resolveBodySurfaceAttachment(avatar.humanBody.visualMesh, placement.surfaceAttachment);
     if (frame) {
@@ -450,12 +464,6 @@ export function resolveArrangementTransform(
         orientationDeg: placement.orientationDeg ?? frameEulerDeg(frame.tangent, frame.axis, frame.outwardNormal),
       };
     }
-  }
-  if (placement.positionMm) {
-    return {
-      positionM: placement.positionMm.map((value) => value * 0.001) as [number, number, number],
-      orientationDeg: placement.orientationDeg ?? [0, 0, placement.rotationDeg],
-    };
   }
   if (placement.bodyAnchorId) {
     const anchor = anchorById(avatar, placement.bodyAnchorId);
@@ -595,11 +603,11 @@ export function restoreMeshMaterialGeometry(
 }
 
 /**
- * One-shot geometric body conform used only after a placement gesture or an
- * explicit Adjust action. It never runs XPBD. The panel is first placed in a
- * rigid tangent pose with positive body-normal clearance. A local projection
- * is accepted only if edge metric and clearance remain inside the gate;
- * otherwise the rigid external pose is preserved.
+ * One-shot geometric body conform used only after an explicit Adjust action.
+ * The current Object3D transform is the authored placement and is never
+ * replaced by a body frame. Only vertices are projected, and only against the
+ * body surface local to the current material anchor. When the local/metric/
+ * clearance gate fails the exact input geometry and transform are restored.
  */
 export function adjustMeshToBodySurface(
   mesh: THREE.Mesh,
@@ -609,50 +617,66 @@ export function adjustMeshToBodySurface(
   options: SurfaceConformOptions = {},
 ): SurfaceConformResult {
   const clearanceMm = Math.max(1, options.clearanceMm ?? attachmentValue.normalOffsetMm ?? 12);
+  const captureDistanceMm = Math.max(clearanceMm, options.captureDistanceMm ?? 60);
+  const maximumVertexProjectionDistanceMm = Math.max(
+    captureDistanceMm,
+    options.maximumVertexProjectionDistanceMm ?? 120,
+  );
   const maximumMetricDistortion = options.maximumMetricDistortion ?? 0.008;
   const minimumProjectedVertexRatio = options.minimumProjectedVertexRatio ?? 0.65;
   const attachment = { ...attachmentValue, normalOffsetMm: clearanceMm };
-  const frame = resolveBodySurfaceAttachment(body, attachment);
+  const positionAttribute = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const positions = positionAttribute.array as Float32Array;
+  const originalPositions = new Float32Array(positions);
+
+  mesh.updateMatrixWorld(true);
+  mesh.geometry.computeBoundingBox();
+  const originalLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+  const authoredAnchorWorld = mesh.localToWorld(originalLocalAnchor.clone());
+
+  let frame = resolveBodySurfaceAttachment(body, attachment);
+  if (!frame || new THREE.Vector3(...frame.position).distanceTo(authoredAnchorWorld) * 1_000 > captureDistanceMm) {
+    frame = closestBodySurfacePoint(
+      body,
+      [authoredAnchorWorld.x, authoredAnchorWorld.y, authoredAnchorWorld.z],
+      clearanceMm,
+      captureDistanceMm * 0.001,
+    );
+  }
   if (!frame) {
     return {
       conformed: false,
       metricDistortionMax: 0,
       minimumClearanceMm: 0,
       projectedVertexRatio: 0,
-      reason: "surface-unavailable",
+      anchorTangentialDisplacementMm: 0,
+      anchorNormalDisplacementMm: 0,
+      reason: "too-far",
     };
   }
 
   if (materialReferencePositions) restoreMeshMaterialGeometry(mesh, materialReferencePositions);
-  alignMeshToSurfaceFrame(mesh, frame);
-
-  const positionAttribute = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-  const positions = positionAttribute.array as Float32Array;
-  const rigidPositions = new Float32Array(positions);
+  const flatPositions = new Float32Array(positions);
   const metricReference = materialReferencePositions && materialReferencePositions.length === positions.length
     ? materialReferencePositions
-    : rigidPositions;
+    : flatPositions;
   const bodyNormal = new THREE.Vector3(...frame.outwardNormal).normalize();
   let projected = 0;
   let minimumClearanceMm = Number.POSITIVE_INFINITY;
   const world = new THREE.Vector3();
-  const rayOrigin = new THREE.Vector3();
   const localTarget = new THREE.Vector3();
 
   mesh.updateMatrixWorld(true);
   for (let index = 0; index < positionAttribute.count; index += 1) {
     world.fromBufferAttribute(positionAttribute, index).applyMatrix4(mesh.matrixWorld);
-    rayOrigin.copy(world).addScaledVector(bodyNormal, 0.35);
-    const hit = raycastBodySurface(
+    const hit = closestBodySurfacePoint(
       body,
-      [rayOrigin.x, rayOrigin.y, rayOrigin.z],
-      [-bodyNormal.x, -bodyNormal.y, -bodyNormal.z],
+      [world.x, world.y, world.z],
       clearanceMm,
-      0.7,
+      maximumVertexProjectionDistanceMm * 0.001,
     );
     if (!hit) continue;
     const target = new THREE.Vector3(...hit.position);
-    if (target.distanceTo(world) > 0.22) continue;
     localTarget.copy(target);
     mesh.worldToLocal(localTarget);
     positions[index * 3] = localTarget.x;
@@ -669,9 +693,37 @@ export function adjustMeshToBodySurface(
 
   const projectedVertexRatio = positionAttribute.count > 0 ? projected / positionAttribute.count : 0;
   positionAttribute.needsUpdate = true;
+  mesh.geometry.computeBoundingBox();
+  const conformedLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+  const conformedAnchorWorld = mesh.localToWorld(conformedLocalAnchor.clone());
+  const anchorDisplacement = conformedAnchorWorld.clone().sub(authoredAnchorWorld);
+  const normalDisplacement = bodyNormal.clone().multiplyScalar(anchorDisplacement.dot(bodyNormal));
+  const tangentialDisplacement = anchorDisplacement.clone().sub(normalDisplacement);
+
+  // Nearest-surface projection is normal in the continuous limit, but triangle
+  // discretisation can introduce a small lateral drift. Remove that component
+  // in geometry space while preserving the permitted normal clearance change.
+  if (tangentialDisplacement.lengthSq() > 1e-16) {
+    const inverseLinear = new THREE.Matrix3().setFromMatrix4(mesh.matrixWorld.clone().invert());
+    const localCorrection = tangentialDisplacement.clone().multiplyScalar(-1).applyMatrix3(inverseLinear);
+    for (let index = 0; index < positionAttribute.count; index += 1) {
+      positions[index * 3] += localCorrection.x;
+      positions[index * 3 + 1] += localCorrection.y;
+      positions[index * 3 + 2] += localCorrection.z;
+    }
+    positionAttribute.needsUpdate = true;
+  }
+
   mesh.geometry.computeVertexNormals();
   mesh.geometry.computeBoundingBox();
   mesh.geometry.computeBoundingSphere();
+  const finalLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+  const finalAnchorWorld = mesh.localToWorld(finalLocalAnchor.clone());
+  const finalAnchorDisplacement = finalAnchorWorld.clone().sub(authoredAnchorWorld);
+  const anchorNormalDisplacementMm = finalAnchorDisplacement.dot(bodyNormal) * 1_000;
+  const anchorTangentialDisplacementMm = finalAnchorDisplacement
+    .addScaledVector(bodyNormal, -finalAnchorDisplacement.dot(bodyNormal))
+    .length() * 1_000;
   const metricDistortionMax = maximumEdgeMetricDistortion(mesh.geometry, metricReference, positions);
   const exteriorAudit = auditMeshBodyClearance(mesh, body, clearanceMm * 0.5, Math.max(96, positionAttribute.count));
   minimumClearanceMm = Math.min(minimumClearanceMm, exteriorAudit.minimumSignedClearanceMm);
@@ -682,20 +734,19 @@ export function adjustMeshToBodySurface(
   const metricValid = metricDistortionMax <= maximumMetricDistortion;
 
   if (!coverageValid || !metricValid || !clearanceValid) {
-    positions.set(rigidPositions);
+    positions.set(originalPositions);
     positionAttribute.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     mesh.geometry.computeBoundingBox();
     mesh.geometry.computeBoundingSphere();
     mesh.updateMatrixWorld(true);
-    const rigidBarrier = createBodyBarrierState(mesh, 64);
-    constrainMeshOutsideBody(mesh, body, rigidBarrier, { clearanceMm, maximumPasses: 4 });
-    const rigidAudit = auditMeshBodyClearance(mesh, body, clearanceMm * 0.5, 128);
     return {
       conformed: false,
       metricDistortionMax,
-      minimumClearanceMm: rigidAudit.minimumSignedClearanceMm,
+      minimumClearanceMm,
       projectedVertexRatio,
+      anchorTangentialDisplacementMm,
+      anchorNormalDisplacementMm,
       reason: !coverageValid ? "coverage" : !metricValid ? "metric" : "clearance",
     };
   }
@@ -706,6 +757,13 @@ export function adjustMeshToBodySurface(
     metricDistortionMax,
     minimumClearanceMm,
     projectedVertexRatio,
+    anchorTangentialDisplacementMm,
+    anchorNormalDisplacementMm,
+    surfaceAttachment: {
+      ...frame.attachment,
+      barycentric: [...frame.attachment.barycentric],
+      normalOffsetMm: clearanceMm,
+    },
   };
 }
 
@@ -770,31 +828,6 @@ export function applyAuthoredArrangementToAssemblyState(
       }
     }
   }
-}
-
-function alignMeshToSurfaceFrame(mesh: THREE.Mesh, frame: BodySurfaceFrame): void {
-  const bodyNormal = new THREE.Vector3(...frame.outwardNormal).normalize();
-  const tangent = new THREE.Vector3(...frame.tangent).normalize();
-  const currentNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion).normalize();
-  const parity = currentNormal.dot(bodyNormal) < 0 ? -1 : 1;
-  const panelNormal = bodyNormal.clone().multiplyScalar(parity);
-  const axis = new THREE.Vector3().crossVectors(panelNormal, tangent).normalize();
-  const currentX = new THREE.Vector3(1, 0, 0).applyQuaternion(mesh.quaternion);
-  currentX.addScaledVector(bodyNormal, -currentX.dot(bodyNormal));
-  const roll = currentX.lengthSq() > 1e-12
-    ? Math.atan2(currentX.normalize().dot(axis), currentX.dot(tangent))
-    : 0;
-  const quaternion = new THREE.Quaternion().setFromRotationMatrix(
-    new THREE.Matrix4().makeBasis(tangent, axis, panelNormal),
-  );
-  quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
-  mesh.geometry.computeBoundingBox();
-  const localCenter = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
-  mesh.quaternion.copy(quaternion);
-  const rotatedCenter = localCenter.clone().applyQuaternion(mesh.quaternion);
-  mesh.position.set(...frame.position).sub(rotatedCenter);
-  mesh.scale.setScalar(1);
-  mesh.updateMatrixWorld(true);
 }
 
 function maximumEdgeMetricDistortion(
