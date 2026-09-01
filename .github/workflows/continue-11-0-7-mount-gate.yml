@@ -3,17 +3,21 @@ on:
   push:
     branches: [automation/11-0-7-mount-gate]
 permissions:
-  contents: read
+  contents: write
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           ref: recovery/11.0.7-canonical-3d-arrangement-workspace
           fetch-depth: 0
-      - name: Apply scoped patch and inspect controls
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Apply scoped patch
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = c91b816a5bb8eee0cdbd56fafd55a5be114ce632
@@ -25,12 +29,91 @@ jobs:
           sed -i 's/function createArrangementCandidateMarker(): THREE.Group {/function createArrangementCandidateMarker(): THREE.Mesh {/' apps/web/src/viewport/GlobalThreeViewport.ts
           python - <<'PY'
           from pathlib import Path
+
           p = Path("apps/web/src/viewport/ArrangementWorkspace.ts")
-          s = p.read_text(); old = "const correction = surface.addScaledVector(normal, clearanceM).sub(desired);"; new = "const signedAtCrossing = desired.clone().sub(surface).dot(normal);\n              const correction = normal.clone().multiplyScalar(clearanceM - signedAtCrossing);"; assert s.count(old) == 1; p.write_text(s.replace(old,new))
-          p = Path("apps/web/src/App.tsx"); s=p.read_text(); old="  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {\n  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"; new="  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"; assert s.count(old)==1; p.write_text(s.replace(old,new))
-          p=Path("apps/web/src/viewport/GarmentViewport.tsx"); s=p.read_text(); old='{displayMode === "full-fitting" ? <div className="viewport-simulation-controls"      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'; new='{displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'; assert s.count(old)==1; p.write_text(s.replace(old,new))
+          s = p.read_text()
+          old = "const correction = surface.addScaledVector(normal, clearanceM).sub(desired);"
+          new = "const signedAtCrossing = desired.clone().sub(surface).dot(normal);\n              const correction = normal.clone().multiplyScalar(clearanceM - signedAtCrossing);"
+          if s.count(old) != 1: raise SystemExit(f"crossing correction marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
+
+          p = Path("apps/web/src/App.tsx")
+          s = p.read_text()
+          old = "  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {\n  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"
+          new = "  useEffect(() => {\n    const handleShortcut = (event: KeyboardEvent) => {"
+          if s.count(old) != 1: raise SystemExit(f"App shortcut duplicate marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
+
+          p = Path("apps/web/src/viewport/GarmentViewport.tsx")
+          s = p.read_text()
+          old = '{displayMode === "full-fitting" ? <div className="viewport-simulation-controls"      {displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'
+          new = '{displayMode === "full-fitting" ? <div className="viewport-simulation-controls" aria-label="Controles da simulação">'
+          if s.count(old) != 1: raise SystemExit(f"GarmentViewport fitting duplicate marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
+
+          p = Path("apps/web/src/responsive-workspace-polish.css")
+          s = p.read_text()
+          old = '''.viewport-arrangement-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 5px;
+            min-width: 0;
+          }'''
+          new = '''.viewport-arrangement-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 5px;
+            min-width: 0;
+            max-width: 100%;
+          }
+
+          .arrangement-axis-controls {
+            display: flex;
+            flex: 0 1 auto;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 5px;
+            min-width: 0;
+            max-width: 100%;
+          }'''
+          if s.count(old) != 1: raise SystemExit(f"arrangement actions marker count={s.count(old)}")
+          p.write_text(s.replace(old, new))
           PY
-          echo '--- arrangement control JSX ---'
-          grep -n -A120 -B20 'viewport-arrangement-controls' apps/web/src/viewport/GarmentViewport.tsx
-          echo '--- arrangement-related class names ---'
-          grep -nE 'axis|gizmo|arrangement-' apps/web/src/viewport/GarmentViewport.tsx | head -120
+          test "$(git diff --name-only | wc -l)" -eq 10
+          ! git diff --name-only | grep '^apps/web/src/physics/'
+          git diff --check
+      - name: Install
+        run: npm ci
+      - name: Focused tests
+        working-directory: apps/web
+        run: npm test -- --run src/avatar/BodySurfaceQuery.test.ts src/viewport/ArrangementWorkspace.test.ts src/garment3d/ResolvedAssemblyInput.test.ts src/state/assemblyHistory.test.ts src/domain/patternDocumentV3.test.ts src/avatar/HumanBodyModel.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Chromium harness
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts playwright-core
+          git checkout -- package-lock.json
+          cd apps/web
+          npm run dev:fallback -- --host 127.0.0.1 > /tmp/moldeon-mount.log 2>&1 &
+          cd ../..
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:5173 >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:5173 >/dev/null || { cat /tmp/moldeon-mount.log; exit 1; }
+          git show origin/automation/11-0-7-mount-gate:scripts/verify-11-0-7-mount.mjs > .mount-gate.mjs
+          export MOLDEON_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$MOLDEON_CHROME"
+          node .mount-gate.mjs
+          rm -f .mount-gate.mjs
+      - name: Push gated checkpoint
+        shell: bash
+        run: |
+          test "$(git diff --name-only | wc -l)" -eq 10
+          ! git diff --name-only | grep '^apps/web/src/physics/'
+          git diff --check
+          git config user.name "Gabriel Vinicius"
+          git config user.email "82556581+GabrielVioli@users.noreply.github.com"
+          git add apps/web/src/App.tsx apps/web/src/avatar/BodySurfaceQuery.test.ts apps/web/src/avatar/BodySurfaceQuery.ts apps/web/src/garment3d/ResolvedAssemblyInput.test.ts apps/web/src/garment3d/ResolvedAssemblyInput.ts apps/web/src/responsive-workspace-polish.css apps/web/src/viewport/ArrangementWorkspace.test.ts apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/GlobalThreeViewport.ts
+          git commit -m "fix(11.0.7): materialize kinematic mount workspace"
+          git push origin HEAD:recovery/11.0.7-canonical-3d-arrangement-workspace
