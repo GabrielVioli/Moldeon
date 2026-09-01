@@ -60,7 +60,7 @@ const initial = await page.evaluate(() => {
 });
 if (!initial.panel || !initial.body) throw new Error(`ARRANGEMENT_POINTS_UNAVAILABLE ${JSON.stringify(initial)}`);
 if (initial.viewportWidth < initial.workspaceWidth * 0.94 || initial.viewportHeight < initial.workspaceHeight * 0.94) throw new Error(`MONTAR_NOT_PRIMARY_WORKSPACE ${JSON.stringify(initial)}`);
-if (initial.toolbarScrollWidth > initial.toolbarClientWidth + 2) throw new Error(`ARRANGEMENT_TOOLBAR_OVERFLOW ${JSON.stringify(initial)}`);
+if (initial.overflowDescendants.length > 0) throw new Error(`ARRANGEMENT_TOOLBAR_VISIBLE_OVERFLOW ${JSON.stringify(initial)}`);
 if (initial.canvasCount !== 1) throw new Error(`WEBGL_CANVAS_COUNT ${initial.canvasCount}`);
 
 const latencies = [];
@@ -84,8 +84,12 @@ await page.getByRole("button", { name: "Girar", exact: true }).click();
 for (const axis of ["X", "Y", "Z"]) { await page.getByRole("button", { name: axis, exact: true }).click(); const rotatePoint = await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.instanceScreenPosition("browser-panel:panel:1") ?? null); if (!rotatePoint) throw new Error(`ROTATE_POINT_MISSING_${axis}`); const before = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0); await page.mouse.move(rotatePoint[0], rotatePoint[1]); await page.mouse.down(); await page.mouse.move(rotatePoint[0] + 60, rotatePoint[1] + 10, { steps: 6 }); await page.mouse.up(); const after = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0); if (after !== before + 1) throw new Error(`ROTATE_COMMIT_COUNT_${axis} ${before}->${after}`); }
 await page.getByRole("button", { name: "Virar face", exact: true }).click(); await page.getByRole("button", { name: "Mover", exact: true }).click();
 await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(250);
-const mobile = await viewport.evaluate((host) => { const toolbar = host.querySelector(".viewport-arrangement-controls"); return { viewportWidth: host.getBoundingClientRect().width, viewportHeight: host.getBoundingClientRect().height, toolbarClientWidth: toolbar?.clientWidth ?? 0, toolbarScrollWidth: toolbar?.scrollWidth ?? 0, buttonSizes: [...host.querySelectorAll(".viewport-arrangement-controls button")].map((button) => { const bounds = button.getBoundingClientRect(); return [Math.round(bounds.width), Math.round(bounds.height)]; }) }; });
-if (mobile.toolbarScrollWidth > mobile.toolbarClientWidth + 2) throw new Error(`MOBILE_TOOLBAR_OVERFLOW ${JSON.stringify(mobile)}`);
+const mobile = await viewport.evaluate((host) => {
+  const toolbar = host.querySelector(".viewport-arrangement-controls"); const rect = toolbar?.getBoundingClientRect();
+  const overflowDescendants = toolbar ? [...toolbar.querySelectorAll("*")].map((node) => { const r = node.getBoundingClientRect(); return { tag: node.tagName, className: node.className || "", left: r.left, right: r.right }; }).filter((item) => item.right > (rect?.right ?? Infinity) + 1 || item.left < (rect?.left ?? -Infinity) - 1) : [];
+  return { viewportWidth: host.getBoundingClientRect().width, viewportHeight: host.getBoundingClientRect().height, toolbarClientWidth: toolbar?.clientWidth ?? 0, toolbarScrollWidth: toolbar?.scrollWidth ?? 0, overflowDescendants, buttonSizes: [...host.querySelectorAll(".viewport-arrangement-controls button")].map((button) => { const bounds = button.getBoundingClientRect(); return [Math.round(bounds.width), Math.round(bounds.height)]; }) };
+});
+if (mobile.overflowDescendants.length > 0) throw new Error(`MOBILE_TOOLBAR_VISIBLE_OVERFLOW ${JSON.stringify(mobile)}`);
 if (mobile.buttonSizes.some(([width, height]) => width < 44 || height < 44)) throw new Error(`MOBILE_TOUCH_TARGET ${JSON.stringify(mobile.buttonSizes)}`);
 const sorted = [...latencies].sort((a, b) => a - b); const percentile = (p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0;
 console.log(JSON.stringify({ drags: latencies.length, pointerUpNextTaskMs: { p95: percentile(0.95), p99: percentile(0.99), max: Math.max(...latencies) }, afterDrags, mobile, consoleErrors }, null, 2));
