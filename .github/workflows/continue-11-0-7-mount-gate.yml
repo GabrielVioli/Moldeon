@@ -40,15 +40,11 @@ jobs:
           test "$(git diff --name-only | wc -l)" -eq 9
           ! git diff --name-only | grep '^apps/web/src/physics/'
           git diff --check
-      - name: Inspect generated TypeScript
+      - name: Inspect generated diffs
         shell: bash
         run: |
-          echo '--- App.tsx 900-970 ---'
-          nl -ba apps/web/src/App.tsx | sed -n '900,970p'
-          echo '--- GarmentViewport.tsx 285-355 ---'
-          nl -ba apps/web/src/viewport/GarmentViewport.tsx | sed -n '285,355p'
-          echo '--- GarmentViewport.tsx 500-540 ---'
-          nl -ba apps/web/src/viewport/GarmentViewport.tsx | sed -n '500,540p'
+          git diff -- apps/web/src/App.tsx
+          git diff -- apps/web/src/viewport/GarmentViewport.tsx
       - name: Install
         run: npm ci
       - name: Focused tests
