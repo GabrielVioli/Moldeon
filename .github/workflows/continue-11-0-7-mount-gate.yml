@@ -74,10 +74,11 @@ jobs:
           cd ../..
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:5173 >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:5173 >/dev/null || { cat /tmp/moldeon-mount.log; exit 1; }
-          git show origin/automation/11-0-7-mount-gate:scripts/verify-11-0-7-mount.mjs > /tmp/gate.mjs
+          git show origin/automation/11-0-7-mount-gate:scripts/verify-11-0-7-mount.mjs > .mount-gate.mjs
           export MOLDEON_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
           test -n "$MOLDEON_CHROME"
-          node /tmp/gate.mjs
+          node .mount-gate.mjs
+          rm -f .mount-gate.mjs
       - name: Push gated checkpoint
         shell: bash
         run: |
