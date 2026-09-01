@@ -1,6 +1,186 @@
-import { inflateSync } from "node:zlib";
-import { writeFileSync } from "node:fs";
-const payload = "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";
-const path = "/tmp/verify-11-0-7-mount-expanded.mjs";
-writeFileSync(path, inflateSync(Buffer.from(payload, "base64")));
-await import(`file://${path}`);
+import fs from "node:fs";
+import { chromium } from "playwright-core";
+
+const executablePath = process.env.MOLDEON_CHROME
+  ?? [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  ].find((candidate) => fs.existsSync(candidate));
+if (!executablePath) throw new Error("CHROMIUM_EXECUTABLE_NOT_FOUND");
+
+const baseURL = process.env.MOLDEON_URL ?? "http://127.0.0.1:5173";
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+const page = await context.newPage();
+const consoleErrors = [];
+page.on("console", (message) => {
+  if (message.type() === "error") consoleErrors.push(message.text());
+});
+page.on("pageerror", (error) => consoleErrors.push(error.stack ?? error.message));
+page.on("dialog", (dialog) => dialog.accept("Painel browser 11.0.7"));
+
+await page.goto(baseURL, { waitUntil: "networkidle" });
+await page.evaluate(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
+await page.reload({ waitUntil: "networkidle" });
+
+const bodyText = (await page.locator("body").innerText()).trim();
+if (!bodyText) throw new Error("BLANK_PAGE");
+if (await page.locator(".vite-error-overlay, [data-nextjs-dialog]").count()) throw new Error("ERROR_OVERLAY");
+
+await page.evaluate(async () => {
+  const [{ useEditorStore }, { createBlankGarment }, { createDefaultFabricSource }] = await Promise.all([
+    import("/src/state/editorStore.ts"),
+    import("/src/domain/blankGarment.ts"),
+    import("/src/domain/fabric.ts"),
+  ]);
+  const blank = createBlankGarment();
+  const fabric = createDefaultFabricSource();
+  useEditorStore.getState().loadGarment({
+    ...blank,
+    name: "Gate browser 11.0.7",
+    fabrics: [fabric],
+    pieces: [{
+      id: "browser-panel",
+      name: "Painel browser",
+      seamAllowanceMm: 0,
+      cutQuantity: 1,
+      cutOnFold: false,
+      fabricId: fabric.id,
+      points: [
+        { id: "browser-a", xMm: 0, yMm: 0 },
+        { id: "browser-b", xMm: 240, yMm: 0 },
+        { id: "browser-c", xMm: 240, yMm: 360 },
+        { id: "browser-d", xMm: 0, yMm: 360 },
+      ],
+    }],
+  });
+});
+await page.waitForTimeout(250);
+await page.getByRole("button", { name: "Montar", exact: true }).click();
+const viewport = page.locator('[data-testid="dressed-avatar-viewport"]');
+await viewport.waitFor({ state: "visible", timeout: 10_000 });
+await page.waitForFunction(() => {
+  const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
+  return host?.dataset.assemblyStatus === "ready";
+}, undefined, { timeout: 30_000 });
+
+const initial = await page.evaluate(() => {
+  const bridge = window.__MOLDEON_VIEWPORT_DEV__;
+  const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
+  const workspace = document.querySelector(".workspace");
+  const toolbar = host?.querySelector(".viewport-arrangement-controls");
+  const viewportRect = host?.getBoundingClientRect();
+  const workspaceRect = workspace?.getBoundingClientRect();
+  return {
+    panel: bridge?.instanceScreenPosition("browser-panel:panel:1") ?? null,
+    body: bridge?.bodyScreenPosition() ?? null,
+    viewportWidth: viewportRect?.width ?? 0,
+    viewportHeight: viewportRect?.height ?? 0,
+    workspaceWidth: workspaceRect?.width ?? 0,
+    workspaceHeight: workspaceRect?.height ?? 0,
+    toolbarClientWidth: toolbar?.clientWidth ?? 0,
+    toolbarScrollWidth: toolbar?.scrollWidth ?? 0,
+    canvasCount: document.querySelectorAll("canvas.three-canvas").length,
+    assemblySolves: Number(host?.dataset.arrangementAssemblySolves ?? 0),
+    xpbdInitializations: Number(host?.dataset.arrangementXpbdInitializations ?? 0),
+  };
+});
+if (!initial.panel || !initial.body) throw new Error(`ARRANGEMENT_POINTS_UNAVAILABLE ${JSON.stringify(initial)}`);
+if (initial.viewportWidth < initial.workspaceWidth * 0.94 || initial.viewportHeight < initial.workspaceHeight * 0.94) {
+  throw new Error(`MONTAR_NOT_PRIMARY_WORKSPACE ${JSON.stringify(initial)}`);
+}
+if (initial.toolbarScrollWidth > initial.toolbarClientWidth + 2) {
+  throw new Error(`ARRANGEMENT_TOOLBAR_OVERFLOW ${JSON.stringify(initial)}`);
+}
+if (initial.canvasCount !== 1) throw new Error(`WEBGL_CANVAS_COUNT ${initial.canvasCount}`);
+
+const latencies = [];
+for (let index = 0; index < 10; index += 1) {
+  const point = await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.instanceScreenPosition("browser-panel:panel:1") ?? null);
+  if (!point) throw new Error(`PANEL_POSITION_MISSING_${index}`);
+  const targetX = initial.body[0] + ((index % 2 === 0) ? 35 : -35);
+  const targetY = initial.body[1] + ((index % 3) - 1) * 42;
+  await page.mouse.move(point[0], point[1]);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 8 });
+  const start = Date.now();
+  await page.mouse.up();
+  await page.waitForTimeout(0);
+  latencies.push(Date.now() - start);
+}
+
+const afterDrags = await viewport.evaluate((host) => ({
+  commits: Number(host.dataset.arrangementGestureCommits ?? 0),
+  assemblySolves: Number(host.dataset.arrangementAssemblySolves ?? 0),
+  xpbdInitializations: Number(host.dataset.arrangementXpbdInitializations ?? 0),
+  commitPath: host.dataset.arrangementCommitPath ?? null,
+  simulationStatus: host.dataset.simulationStatus ?? null,
+}));
+if (afterDrags.commits < 10) throw new Error(`DRAG_COMMIT_COUNT ${afterDrags.commits}`);
+if (afterDrags.assemblySolves !== initial.assemblySolves) throw new Error(`ASSEMBLY_SOLVE_DURING_DRAG ${initial.assemblySolves}->${afterDrags.assemblySolves}`);
+if (afterDrags.xpbdInitializations !== 0) throw new Error(`MONTAR_XPBD_INIT ${afterDrags.xpbdInitializations}`);
+if (afterDrags.simulationStatus !== "disabled-in-montar") throw new Error(`MONTAR_SIMULATION_STATE ${afterDrags.simulationStatus}`);
+
+await page.getByRole("button", { name: "Ajustar", exact: true }).click();
+await page.waitForTimeout(100);
+const conformDiagnostics = await viewport.evaluate((host) => {
+  const raw = host.dataset.arrangementConformDiagnostics;
+  return raw ? JSON.parse(raw) : null;
+});
+if (!conformDiagnostics) throw new Error("CONFORM_DIAGNOSTICS_MISSING");
+for (const result of Object.values(conformDiagnostics)) {
+  if ((result?.minimumClearanceMm ?? 0) <= 0) throw new Error(`CONFORM_INSIDE_BODY ${JSON.stringify(result)}`);
+  if ((result?.metricDistortionMax ?? 0) > 0.0085 && result?.conformed) throw new Error(`CONFORM_METRIC_GATE_FAILED ${JSON.stringify(result)}`);
+}
+
+await page.getByRole("button", { name: "Girar", exact: true }).click();
+for (const axis of ["X", "Y", "Z"]) {
+  await page.getByRole("button", { name: axis, exact: true }).click();
+  const rotatePoint = await page.evaluate(() => window.__MOLDEON_VIEWPORT_DEV__?.instanceScreenPosition("browser-panel:panel:1") ?? null);
+  if (!rotatePoint) throw new Error(`ROTATE_POINT_MISSING_${axis}`);
+  const before = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0);
+  await page.mouse.move(rotatePoint[0], rotatePoint[1]);
+  await page.mouse.down();
+  await page.mouse.move(rotatePoint[0] + 60, rotatePoint[1] + 10, { steps: 6 });
+  await page.mouse.up();
+  const after = Number(await viewport.getAttribute("data-arrangement-gesture-commits") ?? 0);
+  if (after !== before + 1) throw new Error(`ROTATE_COMMIT_COUNT_${axis} ${before}->${after}`);
+}
+await page.getByRole("button", { name: "Virar face", exact: true }).click();
+await page.getByRole("button", { name: "Mover", exact: true }).click();
+
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(250);
+const mobile = await viewport.evaluate((host) => {
+  const toolbar = host.querySelector(".viewport-arrangement-controls");
+  return {
+    viewportWidth: host.getBoundingClientRect().width,
+    viewportHeight: host.getBoundingClientRect().height,
+    toolbarClientWidth: toolbar?.clientWidth ?? 0,
+    toolbarScrollWidth: toolbar?.scrollWidth ?? 0,
+    buttonSizes: [...host.querySelectorAll(".viewport-arrangement-controls button")].map((button) => {
+      const bounds = button.getBoundingClientRect();
+      return [Math.round(bounds.width), Math.round(bounds.height)];
+    }),
+  };
+});
+if (mobile.toolbarScrollWidth > mobile.toolbarClientWidth + 2) throw new Error(`MOBILE_TOOLBAR_OVERFLOW ${JSON.stringify(mobile)}`);
+if (mobile.buttonSizes.some(([width, height]) => width < 44 || height < 44)) throw new Error(`MOBILE_TOUCH_TARGET ${JSON.stringify(mobile.buttonSizes)}`);
+
+const sorted = [...latencies].sort((a, b) => a - b);
+const percentile = (p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0;
+console.log(JSON.stringify({
+  drags: latencies.length,
+  pointerUpNextTaskMs: { p95: percentile(0.95), p99: percentile(0.99), max: Math.max(...latencies) },
+  afterDrags,
+  mobile,
+  consoleErrors,
+}, null, 2));
+await browser.close();
+if (consoleErrors.length > 0) process.exitCode = 2;
