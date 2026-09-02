@@ -2286,8 +2286,19 @@ function draw(
   }
 }
 
+function chooseRulerMajorStepMm(minimumMm: number): number {
+  const minimum = Math.max(1, minimumMm);
+  const power = 10 ** Math.floor(Math.log10(minimum));
+  for (const multiple of [1, 2, 5, 10]) {
+    const step = power * multiple;
+    if (step >= minimum) return step;
+  }
+  return power * 10;
+}
+
 function drawRulers(context: CanvasRenderingContext2D, width: number, height: number, camera: Camera2D) {
-  const rulerSize = 28;
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const rulerSize = coarsePointer ? 24 : 28;
   context.save();
   context.fillStyle = "#e9e7e2";
   context.fillRect(0, 0, width, rulerSize);
@@ -2301,38 +2312,45 @@ function drawRulers(context: CanvasRenderingContext2D, width: number, height: nu
   context.stroke();
 
   context.fillStyle = "#505258";
-  context.font = "11px system-ui, sans-serif";
+  context.font = `${coarsePointer ? 10 : 11}px system-ui, sans-serif`;
   context.textBaseline = "top";
+  context.strokeStyle = "#9c9994";
 
-  const minorPx = 10 * camera.zoom;
-  const majorPx = 50 * camera.zoom;
+  const targetMajorPx = coarsePointer ? 88 : 64;
+  const majorMm = chooseRulerMajorStepMm(targetMajorPx / Math.max(camera.zoom, 0.0001));
+  const minorMm = majorMm / 5;
+  const majorPx = majorMm * camera.zoom;
+  const minorPx = Math.max(4, minorMm * camera.zoom);
+  const majorToleranceMm = Math.max(0.001, minorMm * 0.08);
+
   for (let x = ((camera.panX % minorPx) + minorPx) % minorPx; x < width; x += minorPx) {
-    const isMajor = Math.abs((x - (camera.panX % majorPx + majorPx) % majorPx)) < 0.0001 || (x % majorPx === 0);
-    const tickHeight = isMajor ? 10 : 6;
+    const worldX = (x - camera.panX) / camera.zoom;
+    const nearestMajor = Math.round(worldX / majorMm) * majorMm;
+    const isMajor = Math.abs(worldX - nearestMajor) <= majorToleranceMm;
+    const tickHeight = isMajor ? 10 : 5;
     context.beginPath();
     context.moveTo(x + 0.5, rulerSize - 1);
     context.lineTo(x + 0.5, rulerSize - 1 - tickHeight);
     context.stroke();
-    if (isMajor) {
-      const worldX = (x - camera.panX) / camera.zoom;
-      context.fillText(`${Math.round(worldX)} mm`, x + 4, 2);
+    if (isMajor && x >= rulerSize + 4 && x <= width - 54) {
+      context.fillText(`${Math.round(nearestMajor)} mm`, x + 4, 2);
     }
   }
 
   context.textAlign = "left";
   for (let y = ((camera.panY % minorPx) + minorPx) % minorPx; y < height; y += minorPx) {
-    const isMajor = Math.abs((y - (camera.panY % majorPx + majorPx) % majorPx)) < 0.0001 || (y % majorPx === 0);
-    const tickWidth = isMajor ? 10 : 6;
+    const worldY = (y - camera.panY) / camera.zoom;
+    const nearestMajor = Math.round(worldY / majorMm) * majorMm;
+    const isMajor = Math.abs(worldY - nearestMajor) <= majorToleranceMm;
+    const tickWidth = isMajor ? 10 : 5;
     context.beginPath();
     context.moveTo(rulerSize - 1, y + 0.5);
     context.lineTo(rulerSize - 1 - tickWidth, y + 0.5);
     context.stroke();
-    if (isMajor) {
-      const worldY = (y - camera.panY) / camera.zoom;
-      context.fillText(`${Math.round(worldY)} mm`, 4, y + 2);
+    if (isMajor && y >= rulerSize + 2 && y <= height - 16) {
+      context.fillText(`${Math.round(nearestMajor)} mm`, 3, y + 2);
     }
   }
-
   context.restore();
 }
 

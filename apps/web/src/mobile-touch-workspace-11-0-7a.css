@@ -1,0 +1,403 @@
+/*
+ * 11.0.7a mobile interaction layer.
+ * Loaded after the reviewed PR #14 mobile CSS. This file only changes
+ * presentation/touch affordances and the arrangement toolbar layout.
+ */
+
+.arrangement-mobile-multiselect,
+.arrangement-mobile-more {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .three-canvas,
+  .viewport-host,
+  .editor-core-canvas-shell,
+  .pattern-canvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .viewport-arrangement-controls button,
+  .viewport-arrangement-controls summary,
+  .body-reference-2d-controls button,
+  .body-reference-2d-controls select,
+  .body-reference-controls button,
+  .body-reference-controls select {
+    min-width: 44px;
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-11a-surface: rgba(250, 249, 246, 0.97);
+    --mobile-11a-border: rgba(71, 67, 60, 0.22);
+    --mobile-11a-shadow: 0 8px 24px rgba(31, 28, 23, 0.14);
+  }
+
+  /* The lower 3D tab already owns preview navigation on phones. */
+  .toolbar-preview-button {
+    display: none !important;
+  }
+
+  .toolbar-actions {
+    gap: 3px;
+  }
+
+  /* Preserve 44px hit targets while visually shrinking the chrome. */
+  .workspace-mode-switch,
+  .workspace-mode-switch button {
+    min-height: 40px;
+  }
+
+  .workspace-mode-switch button {
+    font-size: 10px;
+  }
+
+  /* 3D: canvas first, controls second. */
+  .viewport-arrangement-controls {
+    top: auto !important;
+    right: max(7px, env(safe-area-inset-right)) !important;
+    bottom: max(7px, env(safe-area-inset-bottom)) !important;
+    left: max(7px, env(safe-area-inset-left)) !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 4px !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0;
+    padding: 5px !important;
+    border-radius: 14px !important;
+    background: var(--mobile-11a-surface) !important;
+    box-shadow: var(--mobile-11a-shadow) !important;
+    transform: none !important;
+    backdrop-filter: blur(12px);
+  }
+
+  .viewport-arrangement-status {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 22px;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    padding: 0 5px !important;
+  }
+
+  .viewport-arrangement-status strong {
+    max-width: 100%;
+    font-size: 11px !important;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .viewport-arrangement-status small {
+    display: none !important;
+  }
+
+  .viewport-arrangement-actions {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+
+  .viewport-arrangement-actions > .arrangement-axis-controls,
+  .viewport-arrangement-actions > .arrangement-secondary-action,
+  .viewport-arrangement-actions > .arrangement-desktop-more {
+    display: none !important;
+  }
+
+  .arrangement-mobile-multiselect,
+  .arrangement-mobile-more {
+    display: block !important;
+  }
+
+  .viewport-arrangement-controls button,
+  .viewport-arrangement-controls summary {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    height: 46px;
+    padding: 0 5px !important;
+    border-radius: 11px !important;
+    font-size: 10px !important;
+  }
+
+  .viewport-arrangement-controls button[aria-pressed="true"] {
+    border-color: #8f6d15 !important;
+    background: #f2dda1 !important;
+  }
+
+  .arrangement-mobile-more {
+    position: relative;
+  }
+
+  .arrangement-mobile-more > summary {
+    display: grid !important;
+    place-items: center;
+    list-style: none;
+  }
+
+  .arrangement-mobile-more > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .arrangement-mobile-more > div {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: calc(100% + 6px) !important;
+    top: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(86px, 1fr));
+    gap: 5px !important;
+    width: min(280px, calc(100vw - 20px));
+    max-height: min(46dvh, 360px);
+    padding: 6px !important;
+    border: 1px solid var(--mobile-11a-border);
+    border-radius: 13px !important;
+    background: var(--mobile-11a-surface) !important;
+    box-shadow: var(--mobile-11a-shadow) !important;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .arrangement-mobile-more .arrangement-rotation-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  /* The label is diagnostic chrome, not part of the creation surface. */
+  .workspace.mode-assembly .viewport-label,
+  .workspace.mode-modeling .viewport-label {
+    display: none !important;
+  }
+
+  /* Body reference control lives in a corner and never over the waist/hips. */
+  .body-reference-2d-controls,
+  .body-reference-controls {
+    position: absolute !important;
+    z-index: 34 !important;
+    top: 60px !important;
+    right: max(7px, env(safe-area-inset-right)) !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: auto !important;
+    max-width: min(218px, calc(100% - 112px)) !important;
+    min-height: 42px !important;
+    padding: 3px 5px !important;
+    gap: 4px !important;
+    border-radius: 12px !important;
+    background: var(--mobile-11a-surface) !important;
+    box-shadow: var(--mobile-11a-shadow) !important;
+    transform: none !important;
+  }
+
+  .body-reference-2d-controls label,
+  .body-reference-controls label {
+    gap: 3px !important;
+    font-size: 10px !important;
+    white-space: nowrap;
+  }
+
+  .body-reference-2d-controls select,
+  .body-reference-controls select {
+    min-width: 72px !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    font-size: 16px !important;
+  }
+
+  /* Sheets stay low and out of the selected geometry. */
+  .editor-core-numeric-panel {
+    max-height: min(24dvh, 190px) !important;
+  }
+
+  .context-bar {
+    max-height: min(24dvh, 190px) !important;
+  }
+
+  .editor-core-numeric-panel input {
+    font-size: 16px !important;
+  }
+
+  .canvas-navigation {
+    max-width: calc(100% - 14px) !important;
+  }
+
+  .canvas-navigation button {
+    min-width: 40px !important;
+  }
+
+  /* Prevent accidental browser page gestures while the user is working. */
+  .canvas-stack,
+  .preview-panel,
+  .viewport-host {
+    overscroll-behavior: none;
+  }
+
+  /* Standalone/PWA respects iPhone safe areas. */
+  @media (display-mode: standalone) {
+    .toolbar {
+      padding-top: max(2px, env(safe-area-inset-top));
+    }
+  }
+}
+
+/* Portrait phones: bottom controls are easy to reach with a thumb. */
+@media (max-width: 760px) and (orientation: portrait) {
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 42px minmax(0, 1fr) !important;
+  }
+
+  .viewport-arrangement-controls {
+    max-height: min(112px, 18dvh);
+  }
+
+  .workspace.mode-assembly .assembly-panel {
+    max-height: min(24dvh, 200px) !important;
+  }
+}
+
+/* Landscape phone: top chrome collapses to one row and 3D actions become a side rail. */
+@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+  .toolbar {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    grid-template-rows: 44px !important;
+    min-height: 44px !important;
+    height: 44px;
+    gap: 3px !important;
+    padding: 0 max(5px, env(safe-area-inset-right)) 0 max(5px, env(safe-area-inset-left)) !important;
+  }
+
+  .workspace-mode-switch {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  .workspace-mode-switch,
+  .workspace-mode-switch button,
+  .history-button,
+  .toolbar-overflow > summary,
+  .tool-button {
+    min-height: 40px !important;
+    height: 40px !important;
+  }
+
+  .workspace-mode-switch button {
+    padding-inline: 7px !important;
+    font-size: 9px !important;
+  }
+
+  .tool-buttons {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+  }
+
+  .tool-button {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    flex: 0 0 40px !important;
+  }
+
+  .toolbar-actions {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 36px minmax(0, 1fr) !important;
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 36px !important;
+    height: 36px;
+    padding-block: 1px !important;
+  }
+
+  .workspace-tab {
+    min-height: 34px !important;
+    height: 34px;
+  }
+
+  .viewport-arrangement-controls {
+    top: max(6px, env(safe-area-inset-top)) !important;
+    right: max(6px, env(safe-area-inset-right)) !important;
+    bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+    width: 188px !important;
+    max-width: 188px !important;
+    max-height: none !important;
+    align-content: start;
+  }
+
+  .viewport-arrangement-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .viewport-arrangement-controls button,
+  .viewport-arrangement-controls summary {
+    min-height: 42px !important;
+    height: 42px;
+  }
+
+  .arrangement-mobile-more > div {
+    right: calc(100% + 6px) !important;
+    bottom: 0 !important;
+    width: min(300px, 46vw) !important;
+    max-height: calc(100dvh - 92px) !important;
+  }
+
+  .body-reference-2d-controls,
+  .body-reference-controls {
+    top: 6px !important;
+    right: max(6px, env(safe-area-inset-right)) !important;
+  }
+
+  .editor-core-numeric-panel,
+  .context-bar {
+    top: max(6px, env(safe-area-inset-top)) !important;
+    right: max(6px, env(safe-area-inset-right)) !important;
+    bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+    width: min(46vw, 390px) !important;
+    max-height: none !important;
+  }
+
+  .canvas-navigation {
+    right: max(6px, env(safe-area-inset-right)) !important;
+    bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+  }
+
+  .pieces-panel {
+    width: min(56vw, 480px) !important;
+    right: auto !important;
+  }
+}

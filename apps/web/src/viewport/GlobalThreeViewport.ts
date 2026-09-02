@@ -73,6 +73,22 @@ export type RenderBackend = "webgpu" | "webgl2";
 export type ThreeViewportMode = "assembly" | "fitting";
 export type ArrangementTool = "move" | "rotate";
 export type ArrangementAxis = "free" | "x" | "y" | "z";
+
+export function shouldExtendArrangementSelection(input: {
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  pointerType: string;
+  touchMultiSelect: boolean;
+}): boolean {
+  return input.ctrlKey || input.metaKey || input.shiftKey
+    || (input.pointerType === "touch" && input.touchMultiSelect);
+}
+
+export function arrangementGizmoTargetPixels(width: number, height: number, coarsePointer: boolean): number {
+  if (!coarsePointer || Math.min(width, height) > 900) return 86;
+  return width > height ? 64 : 70;
+}
 export type SimulationLifecycleState = "paused" | "running";
 export interface SimulationDevSettings {
   gravityScale: 0 | 0.25 | 1;
@@ -188,6 +204,7 @@ export class ThreeViewport {
   private arrangementAxisHandler?: (axis: ArrangementAxis) => void;
   private arrangementTool: ArrangementTool = "move";
   private arrangementAxis: ArrangementAxis = "free";
+  private arrangementTouchMultiSelect = false;
   private dragState: ArrangementDragState | null = null;
   private hoveredArrangementHandle: Pick<ArrangementHandleHit, "tool" | "axis"> | null = null;
   private hoveredArrangementInstanceId: string | null = null;
@@ -269,6 +286,8 @@ export class ThreeViewport {
     this.controls.minDistance = 0.45;
     this.controls.maxDistance = 12;
     this.controls.screenSpacePanning = true;
+    this.controls.touches.ONE = THREE.TOUCH.ROTATE;
+    this.controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
     this.controls.addEventListener("change", this.requestRender);
     this.renderer.domElement.addEventListener("pointerdown", this.handleArrangementPointerDown, { capture: true });
     this.renderer.domElement.addEventListener("pointermove", this.handleArrangementPointerMove, { capture: true });
@@ -361,6 +380,13 @@ export class ThreeViewport {
     this.arrangementAxis = this.arrangementTool === "rotate" && axis === "free" ? "z" : axis;
     this.host.dataset.arrangementAxis = this.arrangementAxis;
     this.updateArrangementGizmo();
+    this.requestRender();
+  }
+
+  setArrangementTouchMultiSelect(enabled: boolean): void {
+    this.arrangementTouchMultiSelect = enabled;
+    this.host.dataset.arrangementTouchMultiSelect = String(enabled);
+    if (enabled) this.setArrangementPointerFeedback("panel");
     this.requestRender();
   }
 
@@ -1076,7 +1102,13 @@ export class ThreeViewport {
     if (garmentHit) {
       const item = this.garmentMeshes.find((candidate) => candidate.mesh === garmentHit.object);
       if (!item) return;
-      const extendSelection = event.ctrlKey || event.metaKey || event.shiftKey;
+      const extendSelection = shouldExtendArrangementSelection({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        pointerType: event.pointerType,
+        touchMultiSelect: this.arrangementTouchMultiSelect,
+      });
       if (extendSelection) {
         if (this.selectedInstanceIds.has(item.key)) this.selectedInstanceIds.delete(item.key);
         else this.selectedInstanceIds.add(item.key);
@@ -1657,7 +1689,14 @@ export class ThreeViewport {
     const depth = Math.max(0.08, center.clone().sub(this.camera.position).dot(cameraDirection));
     const viewportHeight = Math.max(1, this.renderer.domElement.clientHeight);
     const worldPerPixel = perspectiveWorldUnitsPerPixel(depth, this.camera.fov, viewportHeight);
-    const scale = worldPerPixel * 86 / 0.285;
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const targetPixels = arrangementGizmoTargetPixels(
+      this.renderer.domElement.clientWidth,
+      this.renderer.domElement.clientHeight,
+      coarsePointer,
+    );
+    const scale = worldPerPixel * targetPixels / 0.285;
+    this.host.dataset.arrangementGizmoTargetPx = String(targetPixels);
     this.arrangementGizmo.scale.setScalar(Math.max(0.01, scale));
     this.arrangementGizmo.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
