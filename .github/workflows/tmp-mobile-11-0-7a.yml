@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   mobile:
-    if: github.event.head_commit.message == 'chore(mobile): run 11.0.7a touch workspace patch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
