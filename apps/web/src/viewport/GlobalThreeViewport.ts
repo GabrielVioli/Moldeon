@@ -460,11 +460,11 @@ export class ThreeViewport {
       const persistedFrame = persistedAttachment ? resolveBodySurfaceAttachment(body, persistedAttachment) : null;
       const centroid = meshWorldCentroid(item.mesh);
       const persistedIsLocal = persistedFrame
-        ? new THREE.Vector3(...persistedFrame.position).distanceTo(centroid) <= 0.06
+        ? new THREE.Vector3(...persistedFrame.position).distanceTo(centroid) <= 0.24
         : false;
       const surface = persistedIsLocal
         ? persistedFrame
-        : closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.06);
+        : closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.24);
       if (!surface) {
         outcome.tooFar += 1;
         diagnostics[item.key] = { conformed: false, reason: "too-far" };
@@ -472,8 +472,8 @@ export class ThreeViewport {
       }
       const result = adjustMeshToBodySurface(item.mesh, body, surface.attachment, item.flat, {
         clearanceMm: Math.max(12, surface.attachment.normalOffsetMm),
-        captureDistanceMm: 60,
-        maximumVertexProjectionDistanceMm: 120,
+        captureDistanceMm: 240,
+        maximumVertexProjectionDistanceMm: 240,
       });
       diagnostics[item.key] = result;
       if (!result.conformed) {

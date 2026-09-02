@@ -614,29 +614,51 @@ export function adjustMeshToBodySurface(
   materialReferencePositions?: Float32Array,
   options: SurfaceConformOptions = {},
 ): SurfaceConformResult {
-  const requestedClearanceMm = Math.max(1, options.clearanceMm ?? attachmentValue.normalOffsetMm ?? 12);
-  const captureDistanceMm = Math.max(requestedClearanceMm, options.captureDistanceMm ?? 60);
+  const targetClearanceMm = Math.max(1, options.clearanceMm ?? attachmentValue.normalOffsetMm ?? 12);
+  const captureDistanceMm = Math.max(targetClearanceMm, options.captureDistanceMm ?? 240);
   const maximumVertexProjectionDistanceMm = Math.max(
     captureDistanceMm,
-    options.maximumVertexProjectionDistanceMm ?? 120,
+    options.maximumVertexProjectionDistanceMm ?? 240,
   );
   const maximumMetricDistortion = options.maximumMetricDistortion ?? 0.008;
   const minimumProjectedVertexRatio = options.minimumProjectedVertexRatio ?? 0.65;
   const positionAttribute = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
   const positions = positionAttribute.array as Float32Array;
   const originalPositions = new Float32Array(positions);
+  const originalMeshPosition = mesh.position.clone();
+  const originalMeshQuaternion = mesh.quaternion.clone();
+  const originalMeshScale = mesh.scale.clone();
 
-  // The bounding-box centroid is the current arrangement pivot used by
-  // placeMeshCentroid() and captureMeshArrangement(). Keep it authoritative so
-  // an Adjust commit round-trips to the exact position the user authored.
+  const restoreExactInput = (): void => {
+    positions.set(originalPositions);
+    positionAttribute.needsUpdate = true;
+    mesh.position.copy(originalMeshPosition);
+    mesh.quaternion.copy(originalMeshQuaternion);
+    mesh.scale.copy(originalMeshScale);
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
+    mesh.updateMatrixWorld(true);
+  };
+
+  const translateWorld = (deltaWorld: THREE.Vector3): void => {
+    if (deltaWorld.lengthSq() <= 1e-18) return;
+    const worldOrigin = mesh.getWorldPosition(new THREE.Vector3()).add(deltaWorld);
+    if (mesh.parent) {
+      mesh.parent.updateMatrixWorld(true);
+      mesh.parent.worldToLocal(worldOrigin);
+    }
+    mesh.position.copy(worldOrigin);
+    mesh.updateMatrixWorld(true);
+  };
+
+  // Mover/Girar author the body region. Adjust may only change depth along the
+  // local body normal plus vertex-level curvature; it must not slide the panel
+  // tangentially, recenter it, or alter its authored orientation.
   mesh.updateMatrixWorld(true);
   mesh.geometry.computeBoundingBox();
   const originalLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
   const authoredAnchorWorld = mesh.localToWorld(originalLocalAnchor.clone());
-
-  // Always resolve from the CURRENT pivot. A persisted surface attachment is
-  // conform metadata from an earlier state and must never pull the panel back
-  // to a stale triangle or body region.
   const frame = closestBodySurfacePoint(
     body,
     [authoredAnchorWorld.x, authoredAnchorWorld.y, authoredAnchorWorld.z],
@@ -658,31 +680,40 @@ export function adjustMeshToBodySurface(
   const bodyNormal = new THREE.Vector3(...frame.outwardNormal).normalize();
   const rawAnchorSurface = new THREE.Vector3(...frame.position);
   const authoredNormalOffsetMm = authoredAnchorWorld.clone().sub(rawAnchorSurface).dot(bodyNormal) * 1_000;
-
-  // If the authored pivot is already inside, preserving placement and forcing
-  // an outward result are mutually exclusive. Reject instead of moving the
-  // whole object out of the body behind the user's back.
-  if (!Number.isFinite(authoredNormalOffsetMm) || authoredNormalOffsetMm <= 0.5) {
+  if (!Number.isFinite(authoredNormalOffsetMm)) {
+    restoreExactInput();
     return {
       conformed: false,
       metricDistortionMax: 0,
-      minimumClearanceMm: Number.isFinite(authoredNormalOffsetMm) ? authoredNormalOffsetMm : 0,
+      minimumClearanceMm: 0,
       projectedVertexRatio: 0,
       anchorTangentialDisplacementMm: 0,
       anchorNormalDisplacementMm: 0,
-      reason: "clearance",
+      reason: "surface-unavailable",
     };
   }
 
-  // Conform at the clearance the user actually authored. This extracts local
-  // body curvature without translating the panel toward a hard-coded shell.
-  const projectionOffsetMm = Math.max(1, Math.min(captureDistanceMm, authoredNormalOffsetMm));
-  const requiredClearanceMm = Math.max(
-    0.5,
-    Math.min(requestedClearanceMm * 0.5, projectionOffsetMm * 0.5),
+  // This is the only rigid translation Adjust is allowed to introduce. It makes
+  // a panel visibly floating in front of the correct body region actually reach
+  // the skin shell while preserving its tangential placement.
+  const requestedNormalShiftMm = targetClearanceMm - authoredNormalOffsetMm;
+  const targetAnchorWorld = authoredAnchorWorld.clone().addScaledVector(
+    bodyNormal,
+    requestedNormalShiftMm * 0.001,
   );
 
-  if (materialReferencePositions) restoreMeshMaterialGeometry(mesh, materialReferencePositions);
+  // Restore the immutable material geometry, but keep the currently authored
+  // world anchor. This also makes repeated Adjust operations deterministic.
+  if (materialReferencePositions) {
+    restoreMeshMaterialGeometry(mesh, materialReferencePositions);
+    mesh.updateMatrixWorld(true);
+    mesh.geometry.computeBoundingBox();
+    const restoredLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+    const restoredAnchorWorld = mesh.localToWorld(restoredLocalAnchor.clone());
+    translateWorld(authoredAnchorWorld.clone().sub(restoredAnchorWorld));
+  }
+  translateWorld(bodyNormal.clone().multiplyScalar(requestedNormalShiftMm * 0.001));
+
   const flatPositions = new Float32Array(positions);
   const metricReference = materialReferencePositions && materialReferencePositions.length === positions.length
     ? materialReferencePositions
@@ -698,12 +729,13 @@ export function adjustMeshToBodySurface(
     const hit = closestBodySurfacePoint(
       body,
       [world.x, world.y, world.z],
-      projectionOffsetMm,
+      targetClearanceMm,
       maximumVertexProjectionDistanceMm * 0.001,
     );
     if (!hit) continue;
     const hitNormal = new THREE.Vector3(...hit.outwardNormal).normalize();
-    // A nearby opposite-facing sheet is not part of this local conform patch.
+    // Nearby opposite-facing surfaces (back/front or the other side of a limb)
+    // are not part of the local conform patch selected by the current placement.
     if (hitNormal.dot(bodyNormal) < -0.25) continue;
 
     const target = new THREE.Vector3(...hit.position);
@@ -724,16 +756,16 @@ export function adjustMeshToBodySurface(
   const projectedVertexRatio = positionAttribute.count > 0 ? projected / positionAttribute.count : 0;
   positionAttribute.needsUpdate = true;
 
-  // Projection contains a rigid translation component. Remove ALL of it,
-  // including normal displacement, so the arrangement pivot stays at T0 and
-  // the only surviving change is differential curvature of the vertices.
+  // Projection can contain a small rigid component. Remove that component
+  // relative to the desired skin-shell anchor. The final anchor therefore has
+  // zero tangential drift and exactly the intentional normal move.
   mesh.geometry.computeBoundingBox();
   const conformedLocalAnchor = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
   const conformedAnchorWorld = mesh.localToWorld(conformedLocalAnchor.clone());
-  const anchorDisplacement = conformedAnchorWorld.clone().sub(authoredAnchorWorld);
-  if (anchorDisplacement.lengthSq() > 1e-16) {
+  const anchorError = conformedAnchorWorld.clone().sub(targetAnchorWorld);
+  if (anchorError.lengthSq() > 1e-16) {
     const inverseLinear = new THREE.Matrix3().setFromMatrix4(mesh.matrixWorld.clone().invert());
-    const localCorrection = anchorDisplacement.clone().multiplyScalar(-1).applyMatrix3(inverseLinear);
+    const localCorrection = anchorError.clone().multiplyScalar(-1).applyMatrix3(inverseLinear);
     for (let index = 0; index < positionAttribute.count; index += 1) {
       positions[index * 3] += localCorrection.x;
       positions[index * 3 + 1] += localCorrection.y;
@@ -756,6 +788,7 @@ export function adjustMeshToBodySurface(
     .length() * 1_000;
 
   const metricDistortionMax = maximumEdgeMetricDistortion(mesh.geometry, metricReference, positions);
+  const requiredClearanceMm = Math.max(0.5, targetClearanceMm * 0.5);
   const exteriorAudit = auditMeshBodyClearance(
     mesh,
     body,
@@ -768,16 +801,11 @@ export function adjustMeshToBodySurface(
     && exteriorAudit.penetratingSamples === 0;
   const coverageValid = projectedVertexRatio >= minimumProjectedVertexRatio;
   const metricValid = metricDistortionMax <= maximumMetricDistortion;
-  const placementValid = anchorTangentialDisplacementMm <= 0.05
-    && Math.abs(anchorNormalDisplacementMm) <= 0.05;
+  const tangentialPlacementValid = anchorTangentialDisplacementMm <= 0.05;
+  const normalPlacementValid = Math.abs(anchorNormalDisplacementMm - requestedNormalShiftMm) <= 0.05;
 
-  if (!coverageValid || !metricValid || !clearanceValid || !placementValid) {
-    positions.set(originalPositions);
-    positionAttribute.needsUpdate = true;
-    mesh.geometry.computeVertexNormals();
-    mesh.geometry.computeBoundingBox();
-    mesh.geometry.computeBoundingSphere();
-    mesh.updateMatrixWorld(true);
+  if (!coverageValid || !metricValid || !clearanceValid || !tangentialPlacementValid || !normalPlacementValid) {
+    restoreExactInput();
     return {
       conformed: false,
       metricDistortionMax,
@@ -806,7 +834,7 @@ export function adjustMeshToBodySurface(
     surfaceAttachment: {
       ...frame.attachment,
       barycentric: [...frame.attachment.barycentric],
-      normalOffsetMm: projectionOffsetMm,
+      normalOffsetMm: targetClearanceMm,
     },
   };
 }

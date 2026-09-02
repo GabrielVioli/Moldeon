@@ -308,7 +308,9 @@ describe("canonical 3D arrangement workspace", () => {
     expect(result.metricDistortionMax).toBeLessThanOrEqual(0.008);
     expect(result.minimumClearanceMm).toBeGreaterThanOrEqual(6);
     expect(result.anchorTangentialDisplacementMm).toBeLessThan(1e-4);
-    expect(mesh.position.distanceTo(authoredPosition)).toBeLessThan(1e-10);
+    expect(mesh.position.x).toBeCloseTo(authoredPosition.x, 8);
+    expect(mesh.position.y).toBeCloseTo(authoredPosition.y, 8);
+    expect(result.anchorNormalDisplacementMm).toBeCloseTo(-8, 3);
     expect(mesh.quaternion.angleTo(authoredOrientation)).toBeLessThan(1e-7);
     expect(mesh.scale.toArray()).toEqual([1, 1, 1]);
     expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
