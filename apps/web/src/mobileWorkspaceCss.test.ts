@@ -20,6 +20,10 @@ describe("mobile workspace CSS contract", () => {
     expect(css).toContain("(orientation: landscape)");
     expect(css).toContain("arrangement-mobile-multiselect");
     expect(css).toContain("env(safe-area-inset-bottom)");
+    expect(css).toContain(".status-bar,");
+    expect(css).toContain(".panel-titlebar");
+    expect(css).toContain(".pieces-panel:has(.pieces-list:empty)");
+    expect(css).toContain("button:nth-of-type(4)::after");
   });
 
   it("supports standalone installation without forcing one orientation", () => {
