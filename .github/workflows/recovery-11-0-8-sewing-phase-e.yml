@@ -66,6 +66,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             apps/web/src/viewport/GlobalThreeViewport.ts \
-            apps/web/src/components/AssemblyPanel.tsx
+            apps/web/src/components/AssemblyPanel.tsx \
+            apps/web/src/state/assemblyHistory.test.ts
           git commit -m "feat(sewing): move sewn components and expose direction"
           git push origin HEAD:recovery/11.0.8-sewing-2d-3d-authoring
