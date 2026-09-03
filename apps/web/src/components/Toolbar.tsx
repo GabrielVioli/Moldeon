@@ -65,6 +65,7 @@ export const Toolbar = memo(function Toolbar({
     // exit path on desktop and touch, so users never need to enter another
     // modeling tool just to leave sewing mode.
     if (tool === "seam" && activeTool === "seam") {
+      useEditorStore.getState().cancelSeamProposal();
       onSelectTool("select");
       return;
     }

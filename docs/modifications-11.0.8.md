@@ -249,3 +249,28 @@ Somente se este checkpoint for aceito manualmente:
 4. Parar novamente para gate humano antes de Edit/STEP-0.
 
 Não iniciar Fase F antes da aceitação manual deste checkpoint.
+
+
+## Fases F–H implementadas para gate manual
+
+Após a aceitação visual da Fase E, o authoring foi ampliado sem tocar `physics/**`:
+
+- **Fase F — arc-length + ranges parciais:** o hit 2D e o hit 3D agora preservam o parâmetro `t` exato da borda material; ranges parciais continuam usando `EdgeRange(startT/endT)` e o compiler físico existente continua resolvendo a correspondência pelo comprimento acumulado da chain.
+- **Fase G — Free Sewing:** modo `Livre` usa dois toques/clicks na mesma borda para marcar início e fim. O range resultante é canônico, funciona em 2D ou 3D e preserva `PanelInstanceV3` quando a seleção veio do 3D.
+- **Fase H — 1:N / N:M:** modo `Vários trechos` mantém Side A aberto até `Concluir lado A`, acumula Side B e usa `Revisar costura` antes do commit. Ordem autoral dos `EdgeRange[]` é preservada e os bindings físicos permanecem explícitos.
+- Segment Sewing rápido 1:1 continua sendo o caminho padrão e não ganhou passos extras.
+- Sair de `Costurar` agora também limpa draft/proposal/free-endpoint transitórios, sem alterar seams já confirmadas.
+- UI mostra comprimento material acumulado de A/B durante chains e feedback do primeiro endpoint no Free Sewing.
+
+Gate humano necessário antes de Fase I/J:
+
+1. Segmento 1:1 continua funcionando em dois clicks/taps.
+2. Livre: dois pontos na mesma borda produzem apenas o subrange entre eles.
+3. Testar Livre 2D→3D e 3D→2D.
+4. `Vários trechos`: 1:N e N:M preservam a ordem visual e geram threads coerentes.
+5. `same/opposite` e `Inverter direção` continuam coerentes após ranges parciais/chains.
+6. Threads não aparecem fora dos ranges selecionados.
+7. Painéis costurados continuam se movendo juntos; componentes não relacionados continuam independentes.
+8. Costurar continua com XPBD OFF.
+
+Não iniciar STEP-0 antes deste gate.

@@ -223,7 +223,7 @@ export class ThreeViewport {
   private hoveredArrangementHandle: Pick<ArrangementHandleHit, "tool" | "axis"> | null = null;
   private hoveredArrangementInstanceId: string | null = null;
   private sewingState: SewingViewportState = { active: false, first: [], second: [], proposal: null };
-  private sewingEdgeSelectHandler?: (range: EdgeRange, panelInstanceId: string) => void;
+  private sewingEdgeSelectHandler?: (range: EdgeRange, panelInstanceId: string, hitT: number) => void;
   private readonly arrangementPointerMoveMs: number[] = [];
   private readonly arrangementFrameMs: number[] = [];
   private readonly arrangementReleaseMs: number[] = [];
@@ -395,7 +395,7 @@ export class ThreeViewport {
 
   setSewingState(
     state: SewingViewportState,
-    onEdgeSelect?: (range: EdgeRange, panelInstanceId: string) => void,
+    onEdgeSelect?: (range: EdgeRange, panelInstanceId: string, hitT: number) => void,
   ): void {
     this.sewingState = {
       active: state.active,
@@ -1112,7 +1112,7 @@ export class ThreeViewport {
     if (this.sewingState.active && event.button === 0) {
       const edge = this.raycastSewingEdge(event);
       if (edge) {
-        this.sewingEdgeSelectHandler?.(edge.range, edge.panelInstanceId);
+        this.sewingEdgeSelectHandler?.(edge.range, edge.panelInstanceId, edge.t);
         event.preventDefault();
         event.stopImmediatePropagation();
       }

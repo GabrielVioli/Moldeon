@@ -2653,3 +2653,60 @@ button {
     height: 100%;
   }
 }
+
+
+/* 11.0.8 sewing F-H authoring controls */
+.sewing-authoring-strip {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 10px;
+  border: 1px solid #c9c1b6;
+  border-radius: 10px;
+  background: #f8f5f0;
+}
+.sewing-authoring-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sewing-authoring-modes button {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+.sewing-authoring-modes button.active {
+  border-color: #4f6678;
+  background: #e8eef2;
+  box-shadow: inset 0 0 0 1px #4f6678;
+}
+.sewing-authoring-help {
+  color: #5f5850;
+  line-height: 1.35;
+}
+.sewing-chain-status {
+  display: grid;
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid #d9d1c6;
+  font-size: 12px;
+}
+.sewing-chain-status > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+@media (max-width: 760px) {
+  .sewing-authoring-strip {
+    margin: 6px 0 9px;
+    padding: 8px;
+  }
+  .sewing-authoring-modes button,
+  .sewing-chain-status button {
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+  .sewing-authoring-help {
+    font-size: 11px;
+  }
+}

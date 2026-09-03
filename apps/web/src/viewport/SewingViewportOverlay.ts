@@ -120,7 +120,7 @@ export class SewingViewportOverlay {
     this.refreshColors();
   }
 
-  edgeAtIntersection(intersection: THREE.Intersection): { range: EdgeRange; panelInstanceId: string; segmentIndex: number } | null {
+  edgeAtIntersection(intersection: THREE.Intersection): { range: EdgeRange; panelInstanceId: string; segmentIndex: number; t: number } | null {
     if (intersection.object !== this.edgeLines || intersection.index === undefined) return null;
     const segmentIndex = Math.floor(intersection.index / 2);
     const segment = this.edgeSegments[segmentIndex];
@@ -128,6 +128,7 @@ export class SewingViewportOverlay {
       range: { ...segment.edge, startT: 0, endT: 1 },
       panelInstanceId: segment.mesh.key,
       segmentIndex,
+      t: edgeIntersectionT(intersection.point, segment),
     } : null;
   }
 
@@ -355,6 +356,24 @@ function cloneReference(reference: GlobalPointReference): GlobalPointReference {
     particleIndices: [...reference.particleIndices],
     weights: [...reference.weights],
   };
+}
+
+
+function edgeIntersectionT(point: THREE.Vector3, segment: EdgeSegment): number {
+  segment.mesh.mesh.updateMatrixWorld(true);
+  const source = segment.mesh.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const first = new THREE.Vector3()
+    .fromBufferAttribute(source, segment.firstVertex)
+    .applyMatrix4(segment.mesh.mesh.matrixWorld);
+  const second = new THREE.Vector3()
+    .fromBufferAttribute(source, segment.secondVertex)
+    .applyMatrix4(segment.mesh.mesh.matrixWorld);
+  const delta = second.clone().sub(first);
+  const denominator = delta.lengthSq();
+  const alpha = denominator <= 1e-12
+    ? 0
+    : THREE.MathUtils.clamp(point.clone().sub(first).dot(delta) / denominator, 0, 1);
+  return segment.edge.startT + (segment.edge.endT - segment.edge.startT) * alpha;
 }
 
 function writeEdgePositions(geometry: THREE.BufferGeometry, segments: readonly EdgeSegment[]): void {

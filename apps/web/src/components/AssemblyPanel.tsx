@@ -5,6 +5,7 @@ import {
   type SeamCompatibility,
 } from "../domain/assembly";
 import {
+  edgeRangeSequenceLength,
   getPatternEdges,
   type SeamDistribution,
   type SeamDirection,
@@ -42,6 +43,14 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const proposal = useEditorStore((state) => state.seamProposal);
   const cancelProposal = useEditorStore((state) => state.cancelSeamProposal);
   const confirmProposal = useEditorStore((state) => state.confirmSeamProposal);
+  const seamDraft = useEditorStore((state) => state.seamDraft);
+  const seamAuthoringMode = useEditorStore((state) => state.seamAuthoringMode);
+  const seamChainMode = useEditorStore((state) => state.seamChainMode);
+  const seamFreeStart = useEditorStore((state) => state.seamFreeStart);
+  const setSeamAuthoringMode = useEditorStore((state) => state.setSeamAuthoringMode);
+  const setSeamChainMode = useEditorStore((state) => state.setSeamChainMode);
+  const finishSeamDraftSide = useEditorStore((state) => state.finishSeamDraftSide);
+  const reviewSeamDraft = useEditorStore((state) => state.reviewSeamDraft);
   const updateSeam = useEditorStore((state) => state.updateSeam);
   const removeSeam = useEditorStore((state) => state.removeSeam);
   const selectedSeamId = useEditorStore((state) => state.selectedSeamId);
@@ -63,6 +72,8 @@ export const AssemblyPanel = memo(function AssemblyPanel({
     garment.pieces.find((piece) => piece.id === activePieceId) ??
     garment.pieces[0];
   const seamGroups = groupSeamsByRelation(garment.seams);
+  const firstDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.first) : 0;
+  const secondDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.second) : 0;
 
   return (
     <aside
@@ -93,6 +104,61 @@ export const AssemblyPanel = memo(function AssemblyPanel({
           união na própria prancheta.
         </p>
       )}
+
+
+      {!proposal ? (
+        <section className="sewing-authoring-strip" aria-label="Configuração da ferramenta Costurar">
+          <div className="sewing-authoring-modes" role="group" aria-label="Tipo de seleção de costura">
+            <button
+              type="button"
+              className={seamAuthoringMode === "segment" ? "active" : ""}
+              aria-pressed={seamAuthoringMode === "segment"}
+              onClick={() => setSeamAuthoringMode("segment")}
+            >Segmento</button>
+            <button
+              type="button"
+              className={seamAuthoringMode === "free" ? "active" : ""}
+              aria-pressed={seamAuthoringMode === "free"}
+              onClick={() => setSeamAuthoringMode("free")}
+            >Livre</button>
+            <button
+              type="button"
+              className={seamChainMode ? "active" : ""}
+              aria-pressed={seamChainMode}
+              onClick={() => setSeamChainMode(!seamChainMode)}
+            >Vários trechos</button>
+          </div>
+          <small className="sewing-authoring-help">
+            {seamAuthoringMode === "free"
+              ? seamFreeStart
+                ? `Início marcado em ${Math.round(seamFreeStart.t * 100)}%. Toque novamente na mesma borda para fechar a faixa.`
+                : "Livre: dois toques na mesma borda definem início e fim do EdgeRange."
+              : "Segmento: um toque seleciona a borda material inteira."}
+          </small>
+          {seamChainMode ? (
+            <div className="sewing-chain-status" role="status">
+              <span>
+                Lado A: {seamDraft?.first.length ?? 0} trecho(s) · {(firstDraftLengthMm / 10).toFixed(1)} cm
+              </span>
+              <span>
+                Lado B: {seamDraft?.second.length ?? 0} trecho(s) · {(secondDraftLengthMm / 10).toFixed(1)} cm
+              </span>
+              <div>
+                {seamDraft?.activeSide === "first" || !seamDraft ? (
+                  <button type="button" disabled={!seamDraft?.first.length} onClick={finishSeamDraftSide}>
+                    Concluir lado A
+                  </button>
+                ) : (
+                  <button type="button" disabled={!seamDraft.second.length} onClick={reviewSeamDraft}>
+                    Revisar costura
+                  </button>
+                )}
+                <button type="button" onClick={cancelProposal}>Cancelar seleção</button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="assembly-section">
         <h3>Costuras</h3>

@@ -101,6 +101,9 @@ export interface EditorState {
     firstPanelInstanceIds?: string[];
     secondPanelInstanceIds?: string[];
   } | null;
+  seamAuthoringMode: "segment" | "free";
+  seamChainMode: boolean;
+  seamFreeStart: { edge: EdgeRange; t: number; panelInstanceId?: string } | null;
   seamFirstEdge: EdgeRange | null;
   nearbySeamSuggestion: { first: EdgeRange; second: EdgeRange } | null;
   cutDraft: { pieceId: string; start: PatternVector; end: PatternVector; phase: "placing" | "ready"; error?: string } | null;
@@ -135,8 +138,10 @@ export interface EditorState {
   setSeamAllowance(valueMm: number): void;
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
   proposeSeam(first: EdgeRange | EdgeRange[], second: EdgeRange | EdgeRange[]): void;
-  selectSeamRange(edge: EdgeRange, panelInstanceId?: string): void;
-  addSeamDraftRange(edge: EdgeRange): void;
+  setSeamAuthoringMode(mode: "segment" | "free"): void;
+  setSeamChainMode(enabled: boolean): void;
+  selectSeamRange(edge: EdgeRange, panelInstanceId?: string, hitT?: number): void;
+  addSeamDraftRange(edge: EdgeRange, panelInstanceId?: string): void;
   finishSeamDraftSide(): void;
   reviewSeamDraft(): void;
   selectFirstSeamEdge(edge: EdgeRange | null): void;
@@ -240,6 +245,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   seamIssues: [],
   seamProposal: null,
   seamDraft: null,
+  seamAuthoringMode: "segment",
+  seamChainMode: false,
+  seamFreeStart: null,
   seamFirstEdge: null,
   nearbySeamSuggestion: null,
   cutDraft: null,
@@ -269,6 +277,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   restoreGarment: (garment, requestedPieceId, backend) => {
     history.clear();
+    set({ seamAuthoringMode: "segment", seamChainMode: false, seamFreeStart: null });
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces.find((piece) => piece.id === requestedPieceId) ?? normalized.pieces[0];
     if (!activePiece) {
@@ -289,6 +298,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         seamIssues: [],
         seamProposal: null,
         seamDraft: null,
+        seamFreeStart: null,
         seamFirstEdge: null,
         nearbySeamSuggestion: null,
         cutDraft: null,
@@ -328,6 +338,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   loadGarment: (garment) => {
     history.clear();
+    set({ seamAuthoringMode: "segment", seamChainMode: false, seamFreeStart: null });
     const normalized = migrateLegacyDocument(garment);
     const activePiece = normalized.pieces[0];
     if (!activePiece) {
@@ -344,6 +355,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         seamIssues: [],
         seamProposal: null,
         seamDraft: null,
+        seamFreeStart: null,
         seamFirstEdge: null,
         nearbySeamSuggestion: null,
         cutDraft: null,
@@ -955,76 +967,116 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       seamIssues: [],
       seamDraft: null,
+      seamFreeStart: null,
       seamFirstEdge: null,
     };
   }),
-  selectSeamRange: (edge, panelInstanceId) => set((state) => {
-    const draft = state.seamDraft;
-    if (!draft) {
-      return {
-        seamDraft: {
-          first: [{ ...edge }],
-          second: [],
-          activeSide: "second" as const,
-          ...(panelInstanceId ? { firstPanelInstanceIds: [panelInstanceId] } : {}),
-        },
-        seamFirstEdge: { ...edge },
-        seamProposal: null,
-        seamIssues: [],
+  setSeamAuthoringMode: (mode) => set((state) => state.seamAuthoringMode === mode ? {} : {
+    seamAuthoringMode: mode,
+    seamProposal: null,
+    seamDraft: null,
+    seamFreeStart: null,
+    seamFirstEdge: null,
+    seamIssues: [],
+  }),
+  setSeamChainMode: (enabled) => set((state) => state.seamChainMode === enabled ? {} : ({
+    seamChainMode: enabled,
+    seamProposal: null,
+    seamDraft: null,
+    seamFreeStart: null,
+    seamFirstEdge: null,
+    seamIssues: [],
+  })),
+  selectSeamRange: (edge, panelInstanceId, hitT) => set((state) => {
+    if (state.seamAuthoringMode === "free") {
+      const t = Math.max(0, Math.min(1, hitT ?? ((edge.startT + edge.endT) * 0.5)));
+      const pending = state.seamFreeStart;
+      const sameMaterialEdge = Boolean(
+        pending
+        && pending.edge.pieceId === edge.pieceId
+        && pending.edge.edgeId === edge.edgeId
+        && (!pending.panelInstanceId || !panelInstanceId || pending.panelInstanceId === panelInstanceId),
+      );
+      if (!pending || !sameMaterialEdge) {
+        return {
+          seamFreeStart: {
+            edge: { ...edge, startT: t, endT: t },
+            t,
+            ...(panelInstanceId ? { panelInstanceId } : {}),
+          },
+          seamProposal: null,
+          seamIssues: [],
+        };
+      }
+      if (Math.abs(t - pending.t) <= 1e-4) return {};
+      const completed: EdgeRange = {
+        pieceId: edge.pieceId,
+        edgeId: edge.edgeId,
+        startT: Math.min(pending.t, t),
+        endT: Math.max(pending.t, t),
       };
+      return completeSeamRangeSelection(
+        state,
+        completed,
+        pending.panelInstanceId ?? panelInstanceId,
+        { seamFreeStart: null },
+      );
     }
-    if (draft.activeSide !== "second" || draft.first.length === 0) return {};
-    const secondRanges = [{ ...edge }];
-    const physicalBindings = inferSeamProposalBindings(
-      state.garment,
-      draft.first,
-      secondRanges,
-      draft.firstPanelInstanceIds,
-      panelInstanceId ? [panelInstanceId] : undefined,
+    return completeSeamRangeSelection(
+      state,
+      { ...edge, startT: 0, endT: 1 },
+      panelInstanceId,
+      { seamFreeStart: null },
     );
-    return {
-      seamProposal: {
-        first: { ...draft.first[0] },
-        second: { ...edge },
-        firstRanges: structuredClone(draft.first),
-        secondRanges,
-        ...(physicalBindings ? { physicalBindings } : {}),
-        compatibility: analyzeSeamCompatibility(state.garment, draft.first, secondRanges),
-      },
-      seamIssues: [],
-      seamDraft: null,
-      seamFirstEdge: null,
-    };
   }),
-  addSeamDraftRange: (edge) => set((state) => {
-    const draft = state.seamDraft ?? { first: [], second: [], activeSide: "first" as const };
-    const side = draft.activeSide;
-    const ranges = draft[side];
-    if (ranges.some((range) => sameEdgeRange(range, edge))) return {};
-    const next = { ...draft, [side]: [...ranges, { ...edge }] };
+  addSeamDraftRange: (edge, panelInstanceId) => set((state) => {
+    const next = appendRangeToSeamDraft(state.seamDraft, edge, panelInstanceId);
+    if (next === state.seamDraft) return {};
     return {
       seamDraft: next,
       seamFirstEdge: next.first[0] ?? null,
       seamProposal: null,
+      seamFreeStart: null,
       seamIssues: [],
     };
   }),
   finishSeamDraftSide: () => set((state) => {
-    if (!state.seamDraft || state.seamDraft.first.length === 0) return {};
-    return { seamDraft: { ...state.seamDraft, activeSide: "second" }, seamIssues: [] };
+    if (!state.seamDraft || state.seamDraft.first.length === 0 || state.seamDraft.activeSide !== "first") return {};
+    return { seamDraft: { ...state.seamDraft, activeSide: "second" }, seamFreeStart: null, seamIssues: [] };
   }),
-  reviewSeamDraft: () => {
-    const draft = get().seamDraft;
-    if (!draft || draft.first.length === 0 || draft.second.length === 0) return;
-    get().proposeSeam(draft.first, draft.second);
-  },
+  reviewSeamDraft: () => set((state) => {
+    const draft = state.seamDraft;
+    if (!draft || draft.first.length === 0 || draft.second.length === 0) return {};
+    const physicalBindings = inferSeamProposalBindings(
+      state.garment,
+      draft.first,
+      draft.second,
+      draft.firstPanelInstanceIds,
+      draft.secondPanelInstanceIds,
+    );
+    return {
+      seamProposal: {
+        first: { ...draft.first[0] },
+        second: { ...draft.second[0] },
+        firstRanges: structuredClone(draft.first),
+        secondRanges: structuredClone(draft.second),
+        ...(physicalBindings ? { physicalBindings } : {}),
+        compatibility: analyzeSeamCompatibility(state.garment, draft.first, draft.second),
+      },
+      seamDraft: null,
+      seamFreeStart: null,
+      seamFirstEdge: null,
+      seamIssues: [],
+    };
+  }),
   selectFirstSeamEdge: (seamFirstEdge) => set({
     seamFirstEdge,
     seamDraft: seamFirstEdge ? { first: [{ ...seamFirstEdge }], second: [], activeSide: "first" } : null,
     seamProposal: null,
+    seamFreeStart: null,
   }),
   setNearbySeamSuggestion: (nearbySeamSuggestion) => set({ nearbySeamSuggestion }),
-  cancelSeamProposal: () => set({ seamProposal: null, seamDraft: null, seamFirstEdge: null }),
+  cancelSeamProposal: () => set({ seamProposal: null, seamDraft: null, seamFreeStart: null, seamFirstEdge: null }),
   confirmSeamProposal: (options) => {
     const state = get();
     const proposal = state.seamProposal;
@@ -1130,7 +1182,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ selectedEdgeId: replacement?.id ?? null });
   },
   setMeasureDraft: (measureDraft) => set({ measureDraft }),
-  cancelIntent: () => set({ seamProposal: null, seamDraft: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
+  cancelIntent: () => set({ seamProposal: null, seamDraft: null, seamFreeStart: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
   updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
     ...document,
     garment: {
@@ -1494,6 +1546,7 @@ function applyDocumentState(
     seamIssues: collectSeamIssues(garment),
     seamProposal: null,
     seamDraft: null,
+    seamFreeStart: null,
     seamFirstEdge: null,
     nearbySeamSuggestion: null,
     cutDraft: null,
@@ -1665,6 +1718,108 @@ function sameEdgeRange(first: EdgeRange, second: EdgeRange): boolean {
     && first.edgeId === second.edgeId
     && Math.abs(first.startT - second.startT) <= 1e-7
     && Math.abs(first.endT - second.endT) <= 1e-7;
+}
+
+
+function completeSeamRangeSelection(
+  state: EditorState,
+  edge: EdgeRange,
+  panelInstanceId?: string,
+  additional: Partial<EditorState> = {},
+): Partial<EditorState> {
+  if (state.seamChainMode) {
+    const next = appendRangeToSeamDraft(state.seamDraft, edge, panelInstanceId);
+    return {
+      ...additional,
+      seamDraft: next,
+      seamFirstEdge: next.first[0] ?? null,
+      seamProposal: null,
+      seamIssues: [],
+    };
+  }
+
+  const draft = state.seamDraft;
+  if (!draft) {
+    return {
+      ...additional,
+      seamDraft: {
+        first: [{ ...edge }],
+        second: [],
+        activeSide: "second",
+        ...(panelInstanceId ? { firstPanelInstanceIds: [panelInstanceId] } : {}),
+      },
+      seamFirstEdge: { ...edge },
+      seamProposal: null,
+      seamIssues: [],
+    };
+  }
+  if (draft.activeSide !== "second" || draft.first.length === 0) return additional;
+  const secondRanges = [{ ...edge }];
+  const secondPanelInstanceIds = panelInstanceId ? [panelInstanceId] : undefined;
+  const physicalBindings = inferSeamProposalBindings(
+    state.garment,
+    draft.first,
+    secondRanges,
+    draft.firstPanelInstanceIds,
+    secondPanelInstanceIds,
+  );
+  return {
+    ...additional,
+    seamProposal: {
+      first: { ...draft.first[0] },
+      second: { ...edge },
+      firstRanges: structuredClone(draft.first),
+      secondRanges,
+      ...(physicalBindings ? { physicalBindings } : {}),
+      compatibility: analyzeSeamCompatibility(state.garment, draft.first, secondRanges),
+    },
+    seamIssues: [],
+    seamDraft: null,
+    seamFirstEdge: null,
+  };
+}
+
+function appendRangeToSeamDraft(
+  draft: EditorState["seamDraft"],
+  edge: EdgeRange,
+  panelInstanceId?: string,
+): NonNullable<EditorState["seamDraft"]> {
+  const base = draft ?? { first: [], second: [], activeSide: "first" as const };
+  if (base.activeSide === "first") {
+    if (base.first.some((range) => sameEdgeRange(range, edge))) return base;
+    const firstPanelInstanceIds = appendAlignedInstanceId(
+      base.first,
+      base.firstPanelInstanceIds,
+      panelInstanceId,
+    );
+    return {
+      ...base,
+      first: [...base.first, { ...edge }],
+      ...(firstPanelInstanceIds ? { firstPanelInstanceIds } : {}),
+    };
+  }
+  if (base.second.some((range) => sameEdgeRange(range, edge))) return base;
+  const secondPanelInstanceIds = appendAlignedInstanceId(
+    base.second,
+    base.secondPanelInstanceIds,
+    panelInstanceId,
+  );
+  return {
+    ...base,
+    second: [...base.second, { ...edge }],
+    ...(secondPanelInstanceIds ? { secondPanelInstanceIds } : {}),
+  };
+}
+
+function appendAlignedInstanceId(
+  ranges: readonly EdgeRange[],
+  current: readonly string[] | undefined,
+  panelInstanceId: string | undefined,
+): string[] | undefined {
+  if (!current && !panelInstanceId) return undefined;
+  const result = ranges.map((_, index) => current?.[index] ?? "");
+  result.push(panelInstanceId ?? "");
+  return result;
 }
 
 function inferSeamProposalBindings(

@@ -159,7 +159,7 @@ export const GarmentViewport = memo(function GarmentViewport({
           first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
           second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
           proposal: proposalSeam,
-        }, (range, panelInstanceId) => useEditorStore.getState().selectSeamRange(range, panelInstanceId));
+        }, (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT));
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
@@ -292,7 +292,7 @@ export const GarmentViewport = memo(function GarmentViewport({
       first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
       second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
       proposal: proposalSeam,
-    }, (range, panelInstanceId) => useEditorStore.getState().selectSeamRange(range, panelInstanceId));
+    }, (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT));
   }, [proposalSeam, seamDraft, seamProposal, sewingActive]);
 
   return (

@@ -729,13 +729,17 @@ function PatternCanvasComponent({
     return true;
   }
 
-  function findEdgeRangeAt(clientX: number, clientY: number): EdgeRange | null {
+  function findEdgeHitAt(clientX: number, clientY: number) {
     const currentGarment = useEditorStore.getState().garment;
     return findNearestEdgeHit(
       currentGarment,
       screenToWorld(clientX, clientY),
       18 / cameraRef.current.zoom,
-    )?.range ?? null;
+    );
+  }
+
+  function findEdgeRangeAt(clientX: number, clientY: number): EdgeRange | null {
+    return findEdgeHitAt(clientX, clientY)?.range ?? null;
   }
 
   function activePieceLocalBounds() {
@@ -1078,15 +1082,15 @@ function PatternCanvasComponent({
     }
 
     if (toolRef.current === "seam") {
-      const edge = findEdgeRangeAt(event.clientX, event.clientY);
-      if (!edge) {
+      const edgeHit = findEdgeHitAt(event.clientX, event.clientY);
+      if (!edgeHit) {
         const world = screenToWorld(event.clientX, event.clientY);
         const piece = findPieceAtWorld(world.xMm, world.yMm);
         if (piece) event.shiftKey ? useEditorStore.getState().togglePieceSelection(piece.id) : selectPiece(piece.id);
         dragRef.current = null;
         return;
       }
-      useEditorStore.getState().selectSeamRange(edge);
+      useEditorStore.getState().selectSeamRange(edgeHit.range, undefined, edgeHit.t);
       scheduleDraw();
       return;
     }

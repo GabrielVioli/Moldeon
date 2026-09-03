@@ -439,4 +439,90 @@ describe("assembly document history", () => {
     state = useEditorStore.getState(); state.selectAllPieces(); state.deleteSelectedPieces();
     expect(useEditorStore.getState().garment.pieces.map((candidate) => candidate.id)).toEqual(["a"]);
   });
+
+  it("authors equal-length partial ranges with Free Sewing two-tap selection", () => {
+    const state = useEditorStore.getState();
+    const firstEdge = getPatternEdges(state.garment.pieces[0])[0];
+    const secondEdge = getPatternEdges(state.garment.pieces[1])[0];
+    const first = { pieceId: "a", edgeId: firstEdge.id, startT: 0, endT: 1 };
+    const second = { pieceId: "b", edgeId: secondEdge.id, startT: 0, endT: 1 };
+    const firstInstance = createPanelInstanceId("a", 0);
+    const secondInstance = createPanelInstanceId("b", 0);
+
+    state.setSeamAuthoringMode("free");
+    useEditorStore.getState().selectSeamRange(first, firstInstance, 0.2);
+    expect(useEditorStore.getState().seamFreeStart?.t).toBeCloseTo(0.2);
+    useEditorStore.getState().selectSeamRange(first, firstInstance, 0.8);
+    expect(useEditorStore.getState().seamDraft).toMatchObject({
+      first: [{ pieceId: "a", edgeId: firstEdge.id, startT: 0.2, endT: 0.8 }],
+      activeSide: "second",
+    });
+
+    useEditorStore.getState().selectSeamRange(second, secondInstance, 0.1);
+    useEditorStore.getState().selectSeamRange(second, secondInstance, 0.7);
+    const proposal = useEditorStore.getState().seamProposal;
+    expect(proposal?.firstRanges?.[0]).toMatchObject({ startT: 0.2, endT: 0.8 });
+    expect(proposal?.secondRanges?.[0]).toMatchObject({ startT: 0.1, endT: 0.7 });
+    expect(proposal?.compatibility.firstLengthMm).toBeCloseTo(60, 5);
+    expect(proposal?.compatibility.secondLengthMm).toBeCloseTo(60, 5);
+
+    useEditorStore.getState().confirmSeamProposal({ name: "Livre", direction: "same", treatment: "standard" });
+    const seam = useEditorStore.getState().garment.seams?.[0];
+    expect(seamSideRanges(seam!, "first")[0]).toMatchObject({ startT: 0.2, endT: 0.8 });
+    expect(seamSideRanges(seam!, "second")[0]).toMatchObject({ startT: 0.1, endT: 0.7 });
+    expect(seam?.physicalBindings?.[0]).toMatchObject({
+      first: [{ patternId: "a", panelInstanceId: firstInstance }],
+      second: [{ patternId: "b", panelInstanceId: secondInstance }],
+    });
+  });
+
+  it("authors an ordered N:M chain through the shared click flow", () => {
+    const state = useEditorStore.getState();
+    const firstEdges = getPatternEdges(state.garment.pieces[0]);
+    const secondEdges = getPatternEdges(state.garment.pieces[1]);
+    const firstInstance = createPanelInstanceId("a", 0);
+    const secondInstance = createPanelInstanceId("b", 0);
+
+    state.setSeamChainMode(true);
+    useEditorStore.getState().selectSeamRange({ pieceId: "a", edgeId: firstEdges[0].id, startT: 0, endT: 1 }, firstInstance);
+    useEditorStore.getState().selectSeamRange({ pieceId: "a", edgeId: firstEdges[1].id, startT: 0, endT: 1 }, firstInstance);
+    expect(useEditorStore.getState().seamDraft?.first).toHaveLength(2);
+    useEditorStore.getState().finishSeamDraftSide();
+    useEditorStore.getState().selectSeamRange({ pieceId: "b", edgeId: secondEdges[2].id, startT: 0, endT: 1 }, secondInstance);
+    useEditorStore.getState().selectSeamRange({ pieceId: "b", edgeId: secondEdges[3].id, startT: 0, endT: 1 }, secondInstance);
+    useEditorStore.getState().reviewSeamDraft();
+
+    expect(useEditorStore.getState().seamProposal?.firstRanges).toHaveLength(2);
+    expect(useEditorStore.getState().seamProposal?.secondRanges).toHaveLength(2);
+    useEditorStore.getState().confirmSeamProposal({ name: "N:M", direction: "opposite", treatment: "standard" });
+    const seam = useEditorStore.getState().garment.seams?.[0];
+    expect(seamSideRanges(seam!, "first").map((range) => range.edgeId)).toEqual([firstEdges[0].id, firstEdges[1].id]);
+    expect(seamSideRanges(seam!, "second").map((range) => range.edgeId)).toEqual([secondEdges[2].id, secondEdges[3].id]);
+  });
+
+  it("authors a length-matched 1:N chain by combining Free Sewing with multiple ranges", () => {
+    const state = useEditorStore.getState();
+    const firstEdge = getPatternEdges(state.garment.pieces[0])[0];
+    const secondEdges = getPatternEdges(state.garment.pieces[1]);
+    const firstInstance = createPanelInstanceId("a", 0);
+    const secondInstance = createPanelInstanceId("b", 0);
+
+    state.setSeamAuthoringMode("free");
+    useEditorStore.getState().setSeamChainMode(true);
+    useEditorStore.getState().selectSeamRange({ pieceId: "a", edgeId: firstEdge.id, startT: 0, endT: 1 }, firstInstance, 0);
+    useEditorStore.getState().selectSeamRange({ pieceId: "a", edgeId: firstEdge.id, startT: 0, endT: 1 }, firstInstance, 1);
+    useEditorStore.getState().finishSeamDraftSide();
+    for (const edge of [secondEdges[2], secondEdges[3]]) {
+      const range = { pieceId: "b", edgeId: edge.id, startT: 0, endT: 1 };
+      useEditorStore.getState().selectSeamRange(range, secondInstance, 0);
+      useEditorStore.getState().selectSeamRange(range, secondInstance, 0.5);
+    }
+    useEditorStore.getState().reviewSeamDraft();
+    const proposal = useEditorStore.getState().seamProposal;
+    expect(proposal?.firstRanges).toHaveLength(1);
+    expect(proposal?.secondRanges).toHaveLength(2);
+    expect(proposal?.compatibility.firstLengthMm).toBeCloseTo(100, 5);
+    expect(proposal?.compatibility.secondLengthMm).toBeCloseTo(100, 5);
+  });
+
 });
