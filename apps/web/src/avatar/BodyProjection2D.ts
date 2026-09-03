@@ -1,4 +1,4 @@
-import type { BodyAnchorId } from "../domain/pattern";
+import type { BodyAnchorId, PatternPreviewPlacement } from "../domain/pattern";
 import type { AvatarParametricModel, AvatarVector3 } from "./AvatarParametricModel";
 import type { HumanBodyLandmarkId, HumanBodyRegionId, HumanBodyVector3 } from "./HumanBodyModel";
 
@@ -35,6 +35,11 @@ export interface BodyProjection2D {
   regions: BodyProjectionRegion2D[];
   boundsMm: { minX: number; minY: number; maxX: number; maxY: number };
   sourceTopologySignature: string;
+}
+
+export interface BodyProjectionAnchorCandidate {
+  anchor: BodyProjectionAnchor2D;
+  distanceMm: number;
 }
 
 interface EdgeFaces {
@@ -133,6 +138,64 @@ export function projectPoint(point: readonly [number, number, number], view: Bod
       : view === "left" ? point[2]
         : -point[2];
   return { xMm: xM * 1000, yMm: -point[1] * 1000 };
+}
+
+/**
+ * Selects the discrete authoring anchor nearest to a 2D body-reference point
+ * without allowing front/back projection ambiguity to choose the far side of
+ * the body. This is only an initial seed; authored 3D transforms remain the
+ * persistent authority.
+ */
+export function selectBodyReferenceSeedAnchor(
+  avatar: AvatarParametricModel,
+  projection: BodyProjection2D,
+  point: BodyProjectionPoint2D,
+): BodyProjectionAnchorCandidate | undefined {
+  const candidates = projection.anchors
+    .filter((anchor) => isAnchorOnProjectionHemisphere(avatar, anchor, projection.view))
+    .map((anchor) => ({
+      anchor,
+      distanceMm: Math.hypot(point.xMm - anchor.xMm, point.yMm - anchor.yMm),
+    }))
+    .sort((left, right) => left.distanceMm - right.distanceMm || left.anchor.id.localeCompare(right.anchor.id));
+  return candidates[0];
+}
+
+export function shouldApplyBodyReferenceSeed(placement: PatternPreviewPlacement | undefined): boolean {
+  if (!placement) return true;
+  return placement.presentationMode !== "authored"
+    && !placement.positionMm
+    && !placement.surfaceAttachment;
+}
+
+export function isAnchorOnProjectionHemisphere(
+  avatar: AvatarParametricModel,
+  projectedAnchor: BodyProjectionAnchor2D,
+  view: BodyProjectionView,
+): boolean {
+  if (projectedAnchor.facing <= 0.05) return false;
+  if (view !== "front" && view !== "back") return true;
+
+  const anchor = avatar.anchors.find((candidate) => candidate.id === projectedAnchor.id);
+  if (!anchor) return false;
+  const bounds = avatar.humanBody.visualMesh.bounds;
+  const center: AvatarVector3 = [
+    (bounds.min[0] + bounds.max[0]) * 0.5,
+    (bounds.min[1] + bounds.max[1]) * 0.5,
+    (bounds.min[2] + bounds.max[2]) * 0.5,
+  ];
+  const front = avatar.humanBody.bodyFrame.front;
+  const side = view === "front" ? 1 : -1;
+  const depth = dot3([
+    anchor.position[0] - center[0],
+    anchor.position[1] - center[1],
+    anchor.position[2] - center[2],
+  ], front) * side;
+  const outward = dot3(anchor.outwardNormal, front) * side;
+
+  // Depth is the geometric hemisphere test. The normal additionally rejects
+  // tangential side anchors near the front/back dividing plane.
+  return depth > 1e-5 && outward > 0.05;
 }
 
 export function projectionViewDirection(view: BodyProjectionView): AvatarVector3 {

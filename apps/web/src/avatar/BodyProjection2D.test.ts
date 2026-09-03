@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
 import { buildAvatarParametricModel } from "./AvatarParametricModel";
-import { projectAvatarBody2D, projectPoint } from "./BodyProjection2D";
+import { projectAvatarBody2D, projectPoint, selectBodyReferenceSeedAnchor, shouldApplyBodyReferenceSeed } from "./BodyProjection2D";
 
 describe("11.0.6 synchronized HumanBodyModel 2D projection", () => {
   it.each(["front", "back", "left", "right"] as const)("derives the %s silhouette and landmarks from the calibrated visual mesh", (view) => {
@@ -77,5 +77,57 @@ describe("11.0.6 synchronized HumanBodyModel 2D projection", () => {
     // calibration state.
     expect(hipSpan(changed)).toBeGreaterThan(hipSpan(first));
     expect(changed.sourceTopologySignature).toBe(first.sourceTopologySignature);
+  });
+
+  it("uses the 2D view to seed opposite geometric body hemispheres", () => {
+    const avatar = buildAvatarParametricModel(DEFAULT_BODY_MEASUREMENTS, "feminine");
+    const point = { xMm: 0, yMm: -avatar.landmarks.waistY * 1000 };
+    const front = selectBodyReferenceSeedAnchor(avatar, projectAvatarBody2D(avatar, "front"), point);
+    const back = selectBodyReferenceSeedAnchor(avatar, projectAvatarBody2D(avatar, "back"), point);
+    expect(front).toBeDefined();
+    expect(back).toBeDefined();
+
+    const centerZ = (avatar.humanBody.visualMesh.bounds.min[2] + avatar.humanBody.visualMesh.bounds.max[2]) * 0.5;
+    const depth = (id: string) => avatar.anchors.find((anchor) => anchor.id === id)!.position[2] - centerZ;
+    expect(depth(front!.anchor.id)).toBeGreaterThan(0);
+    expect(depth(back!.anchor.id)).toBeLessThan(0);
+    expect(front!.anchor.id).not.toBe(back!.anchor.id);
+  });
+
+  it("keeps the absolute material scale out of view-aware seed selection", () => {
+    const avatar = buildAvatarParametricModel(DEFAULT_BODY_MEASUREMENTS, "feminine");
+    const projection = projectAvatarBody2D(avatar, "front");
+    const selected = selectBodyReferenceSeedAnchor(avatar, projection, { xMm: 100, yMm: -avatar.landmarks.hipY * 1000 });
+    expect(selected).toBeDefined();
+    expect(projectPoint([0.1, 0, 0], "front").xMm).toBe(100);
+  });
+
+  it("never overwrites an existing authored 3D arrangement", () => {
+    const base = {
+      id: "panel-instance",
+      pieceId: "panel",
+      region: "torso" as const,
+      surface: "front" as const,
+      bodySide: "center" as const,
+      rotationDeg: 0,
+      offsetXMm: 0,
+      offsetYMm: 0,
+      offsetZMm: 25,
+      scale: 1,
+    };
+    expect(shouldApplyBodyReferenceSeed(undefined)).toBe(true);
+    expect(shouldApplyBodyReferenceSeed({ ...base, bodyAnchorId: "torso-front" })).toBe(true);
+    expect(shouldApplyBodyReferenceSeed({ ...base, presentationMode: "authored" })).toBe(false);
+    expect(shouldApplyBodyReferenceSeed({ ...base, positionMm: [0, 1, -0.2] })).toBe(false);
+    expect(shouldApplyBodyReferenceSeed({
+      ...base,
+      surfaceAttachment: {
+        version: 1,
+        topologySignature: "body-test",
+        triangleIndex: 0,
+        barycentric: [1, 0, 0],
+        normalOffsetMm: 25,
+      },
+    })).toBe(false);
   });
 });

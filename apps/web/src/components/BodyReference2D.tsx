@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
-import { projectAvatarBody2D, projectPoint, type BodyProjectionPoint2D, type BodyProjectionView } from "../avatar/BodyProjection2D";
+import { isAnchorOnProjectionHemisphere, projectAvatarBody2D, projectPoint, selectBodyReferenceSeedAnchor, shouldApplyBodyReferenceSeed, type BodyProjectionPoint2D, type BodyProjectionView } from "../avatar/BodyProjection2D";
 import { bodyAnchorSpecification, placementFieldsForAnchor } from "../domain/bodyArrangement";
 import { createUnclassifiedBodyPlacement, type BodyAnchorId, type PatternPreviewPlacement, type PreviewBodySide, type PreviewSurface } from "../domain/pattern";
 import { samplePatternContour } from "../domain/polygonGeometry";
@@ -105,20 +105,14 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
     );
     const instanceId = createPanelInstanceId(piece.id, safeCopyIndex);
     const existingPlacement = piece.previewPlacements?.find((placement) => placement.id === instanceId);
+    if (!shouldApplyBodyReferenceSeed(existingPlacement)) return;
     const alreadyRelatedToBody = Boolean(existingPlacement?.bodyAnchorId ?? piece.bodyPlacement?.anchorId);
 
     const bodyPoint = {
       xMm: centerWorld.xMm - BODY_REFERENCE_ORIGIN_WORLD.xMm,
       yMm: centerWorld.yMm - BODY_REFERENCE_ORIGIN_WORLD.yMm,
     };
-    const candidates = projection.anchors
-      .filter((anchor) => anchor.facing > 0.05)
-      .map((anchor) => ({
-        anchor,
-        distanceMm: Math.hypot(bodyPoint.xMm - anchor.xMm, bodyPoint.yMm - anchor.yMm),
-      }))
-      .sort((left, right) => left.distanceMm - right.distanceMm || left.anchor.id.localeCompare(right.anchor.id));
-    const nearest = candidates[0];
+    const nearest = selectBodyReferenceSeedAnchor(avatar, projection, bodyPoint);
     if (!nearest) return;
 
     const panelHalfDiagonalMm = Math.hypot(
@@ -269,7 +263,7 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
           </>
         ) : null}
       </div>
-      {camera && projection ? (
+      {camera && projection && avatar ? (
         <svg className="body-reference-svg" aria-label={`Manequim 2D · ${VIEW_LABELS[view]}`}>
           <path className="body-reference-silhouette" d={silhouettePath} />
           {showLandmarks ? (
@@ -284,7 +278,9 @@ export const BodyReference2D = memo(function BodyReference2D({ camera }: { camer
               })}
             </>
           ) : null}
-          {projection.anchors.filter((anchor) => anchor.facing >= -0.05).map((anchor) => {
+          {projection.anchors.filter((anchor) => view === "front" || view === "back"
+            ? isAnchorOnProjectionHemisphere(avatar, anchor, view)
+            : anchor.facing >= -0.05).map((anchor) => {
             const point = toScreen(anchor);
             const selected = anchor.id === selectedAnchorId;
             return (
