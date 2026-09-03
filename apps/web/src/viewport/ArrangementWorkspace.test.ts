@@ -15,6 +15,7 @@ import {
   auditMeshBodyClearance,
   captureMeshArrangement,
   constrainMeshOutsideBody,
+  constrainRigidMeshGroupOutsideBody,
   createAxisDragPlane,
   createBodyBarrierState,
   createCameraDragPlane,
@@ -268,6 +269,138 @@ describe("canonical 3D arrangement workspace", () => {
     expect(minimumWorldZ(mesh)).toBeGreaterThan(0);
   });
 
+  it("keeps X/Y/Z axis parameters continuous in portrait, landscape and oblique views", () => {
+    for (const aspect of [390 / 844, 844 / 390]) {
+      const camera = new THREE.PerspectiveCamera(36, aspect, 0.01, 100);
+      camera.position.set(2, 1.5, 5);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld(true);
+      camera.updateProjectionMatrix();
+      for (const axis of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]) {
+        const parameters = [-0.2, -0.1, 0, 0.1, 0.2].map((expected) => {
+          const ndc = axis.clone().multiplyScalar(expected).project(camera);
+          const raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera);
+          return closestRayAxisParameter(raycaster.ray, new THREE.Vector3(), axis)!;
+        });
+        parameters.forEach((value, index) => expect(value).toBeCloseTo(-0.2 + index * 0.1, 5));
+        for (let index = 1; index < parameters.length; index += 1) {
+          expect(parameters[index] - parameters[index - 1]).toBeCloseTo(0.1, 5);
+        }
+      }
+    }
+  });
+
+  it("applies frozen no-body translation only on the selected X/Y/Z axis", () => {
+    for (const axis of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]) {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1));
+      const start = new THREE.Vector3(0.2, 0.4, 0.6);
+      applyFrozenRigidTranslation(mesh, start, new THREE.Quaternion(), axis.clone().multiplyScalar(0.17));
+      const actual = mesh.position.clone().sub(start);
+      expect(actual.distanceTo(axis.clone().multiplyScalar(0.17))).toBeLessThan(1e-9);
+    }
+  });
+
+  it("does not replace a first crossing with a stronger correction from a competing surface", () => {
+    const body = competingSurfaceBody();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+      -0.2, -0.2, 0,
+      -0.18, -0.2, 0,
+      0.145, -0.2, 0.16,
+    ], 3));
+    geometry.setIndex([0, 1, 2]);
+    const mesh = new THREE.Mesh(geometry);
+    mesh.position.z = 0.02;
+    mesh.updateMatrixWorld(true);
+    const barrier = createBodyBarrierState(mesh, 20);
+
+    mesh.position.z = -0.01;
+    mesh.updateMatrixWorld(true);
+    constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+
+    expect(Math.abs(mesh.position.x)).toBeLessThan(0.001);
+    expect(mesh.position.z).toBeGreaterThanOrEqual(0.0079);
+    mesh.position.set(0, 0, -0.012);
+    mesh.updateMatrixWorld(true);
+    const retained = constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+    expect(Math.abs(mesh.position.x)).toBeLessThan(0.001);
+    expect(mesh.position.z).toBeGreaterThanOrEqual(0.0079);
+    expect(retained.contactSource).toBe("persistent");
+  });
+
+  it("approaches, leaves and re-enters a body contact continuously without tangential drift", () => {
+    const body = planarBody();
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.08, 1, 1));
+    mesh.position.set(0.15, -0.1, 0.03);
+    mesh.updateMatrixWorld(true);
+    const barrier = createBodyBarrierState(mesh, 20);
+    const rawZ = [0.02, 0.012, 0.006, 0, -0.01, 0.006, 0.012, 0.025, 0.006];
+    const finalZ: number[] = [];
+    for (const z of rawZ) {
+      mesh.position.set(0.15, -0.1, z);
+      mesh.updateMatrixWorld(true);
+      const result = constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+      finalZ.push(mesh.position.z);
+      expect(result.correctionTangentialMm).toBeLessThan(1e-7);
+      expect(mesh.position.x).toBeCloseTo(0.15, 8);
+      expect(mesh.position.y).toBeCloseTo(-0.1, 8);
+    }
+    finalZ.forEach((z, index) => expect(z).toBeCloseTo(Math.max(rawZ[index], 0.008), 5));
+  });
+
+  it("crosses adjacent triangles without a correction jump", () => {
+    const body = quadBody();
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.04, 1, 1));
+    mesh.position.set(-0.15, -0.1, 0.012);
+    mesh.updateMatrixWorld(true);
+    const barrier = createBodyBarrierState(mesh, 20);
+    for (const x of [-0.12, -0.06, 0, 0.06, 0.12]) {
+      mesh.position.set(x, -0.1, 0.006);
+      mesh.updateMatrixWorld(true);
+      const result = constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+      expect(mesh.position.x).toBeCloseTo(x, 6);
+      expect(mesh.position.z).toBeCloseTo(0.008, 5);
+      expect(result.correctionTangentialMm).toBeLessThan(1e-7);
+    }
+  });
+
+  it("blocks X-axis crossing without creating Y/Z motion", () => {
+    const body = xPlaneBody();
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.08, 1, 1));
+    mesh.rotateY(Math.PI / 2);
+    mesh.position.set(0.03, 0.12, -0.15);
+    mesh.updateMatrixWorld(true);
+    const barrier = createBodyBarrierState(mesh, 20);
+    mesh.position.x = -0.01;
+    mesh.updateMatrixWorld(true);
+    constrainMeshOutsideBody(mesh, body, barrier, { clearanceMm: 8 });
+    expect(mesh.position.x).toBeCloseTo(0.008, 5);
+    expect(mesh.position.y).toBeCloseTo(0.12, 8);
+    expect(mesh.position.z).toBeCloseTo(-0.15, 8);
+  });
+
+  it.each([2, 4])("keeps a %i-panel body-barrier selection rigid", (count) => {
+    const body = planarBody();
+    const meshes = Array.from({ length: count }, (_, index) => {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.04, 1, 1));
+      mesh.position.set((index - (count - 1) * 0.5) * 0.12, -0.2, 0.03);
+      mesh.updateMatrixWorld(true);
+      return mesh;
+    });
+    const members = meshes.map((mesh, index) => ({ key: `panel-${index}`, mesh, state: createBodyBarrierState(mesh, 12) }));
+    const initialDistances = meshes.slice(1).map((mesh) => mesh.position.distanceTo(meshes[0].position));
+    for (const mesh of meshes) {
+      mesh.position.z = -0.01;
+      mesh.updateMatrixWorld(true);
+    }
+    constrainRigidMeshGroupOutsideBody(members, body, {}, { clearanceMm: 8 });
+    meshes.forEach((mesh) => expect(mesh.position.z).toBeCloseTo(0.008, 5));
+    meshes.slice(1).forEach((mesh, index) => {
+      expect(mesh.position.distanceTo(meshes[0].position)).toBeCloseTo(initialDistances[index], 8);
+    });
+  });
+
   it("keeps a body candidate through hysteresis and rejects an implausible triangle jump", () => {
     const grab = new THREE.Vector3(0, 0, 0);
     const near = frameAt([0.1, 0, 0], 1);
@@ -441,6 +574,48 @@ function stagingBody(): HumanBodyMesh {
   return {
     ...planarBody(),
     bounds: { min: [-0.35, 0, -0.2], max: [0.35, 1.75, 0.25] },
+  };
+}
+
+function competingSurfaceBody(): HumanBodyMesh {
+  return {
+    positions: new Float32Array([
+      -1, -1, 0, 1, -1, 0, 0, 1, 0,
+      0.2, -1, -1, 0.2, 1, -1, 0.2, 0, 1,
+    ]),
+    normals: new Float32Array([
+      0, 0, 1, 0, 0, 1, 0, 0, 1,
+      1, 0, 0, 1, 0, 0, 1, 0, 0,
+    ]),
+    indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+    regionIds: ["chest-front", "chest-front", "chest-front", "upper-arm-left", "upper-arm-left", "upper-arm-left"],
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
+    topologySignature: "competing-surfaces",
+    sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function quadBody(): HumanBodyMesh {
+  return {
+    positions: new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]),
+    normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+    indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+    regionIds: ["chest-front", "chest-front", "chest-front", "chest-front"],
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
+    topologySignature: "quad",
+    sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function xPlaneBody(): HumanBodyMesh {
+  return {
+    positions: new Float32Array([0, -1, -1, 0, 1, -1, 0, 0, 1]),
+    normals: new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0]),
+    indices: new Uint32Array([0, 1, 2]),
+    regionIds: ["upper-arm-left", "upper-arm-left", "upper-arm-left"],
+    bounds: { min: [-1, -1, -1], max: [1, 1, 1] },
+    topologySignature: "x-plane",
+    sourceAssetId: "canonical-female.glb",
   };
 }
 

@@ -52,13 +52,13 @@ import {
   captureMeshArrangement,
   closestRayAxisParameter,
   constrainMeshOutsideBody,
+  constrainRigidMeshGroupOutsideBody,
   createAxisDragPlane,
   createBodyBarrierState,
   createCameraDragPlane,
   intersectPointerRayWithDragPlane,
   placeMeshCentroid,
   perspectiveWorldUnitsPerPixel,
-  refreshBodyBarrierState,
   resolveDeterministicStagingLayout,
   resolveArrangementTransform,
   restoreMeshMaterialGeometry,
@@ -66,7 +66,9 @@ import {
   unwrapRotationAngle,
   updateSurfaceCandidate,
   type ArrangementCommit,
+  type BodyBarrierResult,
   type BodyBarrierState,
+  type RigidBodyBarrierGroupState,
 } from "./ArrangementWorkspace";
 
 export type RenderBackend = "webgpu" | "webgl2";
@@ -126,6 +128,7 @@ interface ArrangementDragState {
   axisOrigin: THREE.Vector3;
   axisStartParameter?: number;
   axisSolveMode?: "closest" | "plane" | "screen";
+  axisAlignment: number;
   axisScreenStart?: THREE.Vector2;
   axisWorldUnitsPerPixel?: number;
   initialTransforms: Map<string, ArrangementDragTransform>;
@@ -141,8 +144,11 @@ interface ArrangementDragState {
   rotationAccumulatedAngle: number;
   axis: ArrangementAxis;
   barriers: Map<string, BodyBarrierState>;
+  barrierGroupState: RigidBodyBarrierGroupState;
   surfaceAttachments: Map<string, ArrangementCommit["surfaceAttachment"]>;
   surfaceCandidate?: BodySurfaceFrame;
+  lastPointerClient: THREE.Vector2;
+  previousFinalPosition: THREE.Vector3;
   moved: boolean;
 }
 
@@ -1211,6 +1217,7 @@ export class ThreeViewport {
       axisOrigin: rotationPivot.clone(),
       axisStartParameter,
       axisSolveMode,
+      axisAlignment,
       axisScreenStart: new THREE.Vector2(event.clientX, event.clientY),
       axisWorldUnitsPerPixel,
       initialTransforms,
@@ -1226,7 +1233,10 @@ export class ThreeViewport {
       rotationAccumulatedAngle: 0,
       axis: effectiveAxis,
       barriers,
+      barrierGroupState: {},
       surfaceAttachments: new Map(),
+      lastPointerClient: new THREE.Vector2(event.clientX, event.clientY),
+      previousFinalPosition: active.mesh.position.clone(),
       moved: false,
     };
     this.controls.enabled = false;
@@ -1305,6 +1315,7 @@ export class ThreeViewport {
     const ray = this.pointerRay(event);
     const delta = new THREE.Vector3();
     let pointerWorldPoint = drag.translationStartPoint;
+    let currentAxisParameter: number | null = null;
     if (drag.axis !== "free") {
       const axis = arrangementAxisVector(drag.axis);
       const parameter = drag.axisSolveMode === "closest"
@@ -1315,6 +1326,7 @@ export class ThreeViewport {
             ? (drag.axisStartParameter ?? 0) + (drag.axisScreenStart.y - event.clientY) * drag.axisWorldUnitsPerPixel
             : null;
       if (parameter === null || parameter === undefined || drag.axisStartParameter === undefined) return;
+      currentAxisParameter = parameter;
       delta.copy(axis).multiplyScalar(parameter - drag.axisStartParameter);
     } else {
       const planePoint = intersectPointerRayWithDragPlane(ray, drag.dragPlane);
@@ -1327,7 +1339,48 @@ export class ThreeViewport {
       if (!initial) continue;
       applyFrozenRigidTranslation(item.mesh, initial.position, initial.quaternion, delta);
     }
-    if (body) this.constrainDraggedSelectionRigidly(body, drag);
+    const rawDesiredPosition = active.mesh.position.clone();
+    const barrierDiagnostic = body ? this.constrainDraggedSelectionRigidly(body, drag) : null;
+    const finalPosition = active.mesh.position.clone();
+
+    if (import.meta.env.DEV && drag.axis !== "free") {
+      const pointer = new THREE.Vector2(event.clientX, event.clientY);
+      const frameDisplacement = finalPosition.clone().sub(drag.previousFinalPosition);
+      this.host.dataset.arrangementAxisDragDiagnostic = JSON.stringify({
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerDeltaPx: pointer.clone().sub(drag.lastPointerClient).toArray(),
+        axis: drag.axis,
+        axisSolveMode: drag.axisSolveMode,
+        axisAlignment: drag.axisAlignment,
+        axisStartParameter: drag.axisStartParameter,
+        currentParameter: currentAxisParameter,
+        rawAxisDelta: currentAxisParameter !== null && drag.axisStartParameter !== undefined
+          ? currentAxisParameter - drag.axisStartParameter
+          : null,
+        rawDesiredWorldPosition: rawDesiredPosition.toArray(),
+        pointerAuthoredDeltaWorld: delta.toArray(),
+        barrier: barrierDiagnostic ? {
+          instanceId: barrierDiagnostic.instanceId,
+          corrected: barrierDiagnostic.result.corrected,
+          maximumCorrectionMm: barrierDiagnostic.result.maximumCorrectionMm,
+          correctionWorld: barrierDiagnostic.result.correctionWorld,
+          correctionNormalMm: barrierDiagnostic.result.correctionNormalMm,
+          correctionTangentialMm: barrierDiagnostic.result.correctionTangentialMm,
+          triangleIndex: barrierDiagnostic.result.surfaceAttachment?.triangleIndex,
+          outwardNormal: barrierDiagnostic.result.contactOutwardNormal,
+          responsibleSample: barrierDiagnostic.result.responsibleSample,
+          contactSource: barrierDiagnostic.result.contactSource,
+        } : null,
+        finalWorldPosition: finalPosition.toArray(),
+        frameDisplacementWorld: frameDisplacement.toArray(),
+        rawToFinalWorld: finalPosition.clone().sub(rawDesiredPosition).toArray(),
+      });
+      drag.lastPointerClient.copy(pointer);
+      drag.previousFinalPosition.copy(finalPosition);
+    }
 
     if (body && drag.axis === "free" && drag.initialTransforms.size === 1) {
       const barrierAttachment = drag.surfaceAttachments.get(drag.activeInstanceId);
@@ -1397,30 +1450,26 @@ export class ThreeViewport {
     event.stopImmediatePropagation();
   };
 
-  private constrainDraggedSelectionRigidly(body: AvatarParametricModel["humanBody"]["visualMesh"], drag: ArrangementDragState): void {
-    const selected = this.garmentMeshes.filter((item) => drag.initialTransforms.has(item.key));
-    for (const item of selected) {
-      const barrier = drag.barriers.get(item.key);
-      if (!barrier) continue;
-      const before = item.mesh.position.clone();
-      const result = constrainMeshOutsideBody(item.mesh, body, barrier, { clearanceMm: 8 });
-      if (result.surfaceAttachment && selected.length === 1) {
-        drag.surfaceAttachments.set(item.key, result.surfaceAttachment);
-      }
-      const commonCorrection = item.mesh.position.clone().sub(before);
-      if (commonCorrection.lengthSq() <= 1e-12) continue;
-      for (const companion of selected) {
-        if (companion.key === item.key) continue;
-        companion.mesh.position.add(commonCorrection);
-        companion.mesh.updateMatrixWorld(true);
-      }
+  private constrainDraggedSelectionRigidly(
+    body: AvatarParametricModel["humanBody"]["visualMesh"],
+    drag: ArrangementDragState,
+  ): { instanceId: string; result: BodyBarrierResult } | null {
+    const members = this.garmentMeshes.flatMap((item) => {
+      const state = drag.barriers.get(item.key);
+      if (!drag.initialTransforms.has(item.key) || !state) return [];
+      return [{
+        key: item.key,
+        mesh: item.mesh,
+        state,
+        priority: item.key === drag.activeInstanceId ? 0 : 1,
+      }];
+    });
+    const constrained = constrainRigidMeshGroupOutsideBody(members, body, drag.barrierGroupState, { clearanceMm: 8 });
+    if (!constrained) return null;
+    if (constrained.result.surfaceAttachment && members.length === 1) {
+      drag.surfaceAttachments.set(constrained.key, constrained.result.surfaceAttachment);
     }
-    if (selected.length > 1) {
-      for (const item of selected) {
-        const barrier = drag.barriers.get(item.key);
-        if (barrier) refreshBodyBarrierState(item.mesh, barrier);
-      }
-    }
+    return { instanceId: constrained.key, result: constrained.result };
   }
 
   private raycastArrangementGizmo(event: PointerEvent): ArrangementHandleHit | null {
