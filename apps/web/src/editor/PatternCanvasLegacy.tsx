@@ -944,7 +944,7 @@ function PatternCanvasComponent({
           dragRef.current = null;
           return;
         }
-        useEditorStore.getState().addSeamDraftRange(edge);
+        useEditorStore.getState().selectSeamRange(edge);
         scheduleDraw();
         return;
       }
@@ -1086,7 +1086,7 @@ function PatternCanvasComponent({
         dragRef.current = null;
         return;
       }
-      useEditorStore.getState().addSeamDraftRange(edge);
+      useEditorStore.getState().selectSeamRange(edge);
       scheduleDraw();
       return;
     }

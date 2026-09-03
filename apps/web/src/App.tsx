@@ -754,6 +754,7 @@ export function App() {
                 onBackendChange={setRenderBackend}
                 onArrangementCommit={handleArrangementCommit}
                 onArrangementInteractionChange={handleArrangementInteractionChange}
+                sewingActive={activeTool === "seam"}
               />
             </Suspense>
           ) : (

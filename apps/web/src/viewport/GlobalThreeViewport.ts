@@ -21,7 +21,7 @@ import {
   type GarmentRegistrationDiagnostic,
   type GarmentRegistrationStatus,
 } from "../physics/GarmentBodyRegistration";
-import type { BodyType } from "../domain/pattern";
+import type { BodyType, EdgeRange, Seam } from "../domain/pattern";
 import {
   buildGarmentAssemblyMeshes,
   canReuseGarmentAssemblyMesh,
@@ -32,7 +32,7 @@ import {
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
 import { serializePatternDocumentV3 } from "../domain/patternDocumentV3";
 import { AssemblyWorkerClient } from "../garment3d/AssemblyWorkerClient";
-import { measureIntrinsicDistortion, type GarmentAssemblyState } from "../garment3d/GarmentAssembly";
+import { buildGlobalStitchConstraints, measureIntrinsicDistortion, type GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
 import { buildXpbdInitialization } from "../physics/GarmentXpbdAdapter";
 import { XpbdWorkerClient } from "../physics/XpbdWorkerClient";
@@ -70,11 +70,17 @@ import {
   type BodyBarrierState,
   type RigidBodyBarrierGroupState,
 } from "./ArrangementWorkspace";
+import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 
 export type RenderBackend = "webgpu" | "webgl2";
 export type ThreeViewportMode = "assembly" | "fitting";
 export type ArrangementTool = "move" | "rotate";
 export type ArrangementAxis = "free" | "x" | "y" | "z";
+
+export interface SewingViewportState extends SewingOverlaySelection {
+  active: boolean;
+  proposal: Seam | null;
+}
 
 export function shouldExtendArrangementSelection(input: {
   ctrlKey: boolean;
@@ -169,6 +175,7 @@ export class ThreeViewport {
   private readonly registrationAxesGroup = new THREE.Group();
   private readonly arrangementCandidateMarker = createArrangementCandidateMarker();
   private readonly arrangementGizmo = createArrangementGizmo();
+  private readonly sewingOverlay = new SewingViewportOverlay();
   private readonly floor: THREE.Mesh;
   private readonly resizeObserver: ResizeObserver;
   private readonly profile: PerformanceProfile;
@@ -214,6 +221,8 @@ export class ThreeViewport {
   private dragState: ArrangementDragState | null = null;
   private hoveredArrangementHandle: Pick<ArrangementHandleHit, "tool" | "axis"> | null = null;
   private hoveredArrangementInstanceId: string | null = null;
+  private sewingState: SewingViewportState = { active: false, first: [], second: [], proposal: null };
+  private sewingEdgeSelectHandler?: (range: EdgeRange, panelInstanceId: string) => void;
   private readonly arrangementPointerMoveMs: number[] = [];
   private readonly arrangementFrameMs: number[] = [];
   private readonly arrangementReleaseMs: number[] = [];
@@ -316,6 +325,7 @@ export class ThreeViewport {
     this.scene.add(this.garmentGroup);
     this.scene.add(this.arrangementCandidateMarker);
     this.scene.add(this.arrangementGizmo);
+    this.scene.add(this.sewingOverlay.group);
     this.scene.add(this.floor);
     this.installArrangementPerformanceObserver();
 
@@ -380,6 +390,22 @@ export class ThreeViewport {
     this.hideArrangementCandidate();
     this.setArrangementPointerFeedback(this.hoveredArrangementInstanceId ? "panel" : "idle");
     this.updateArrangementGizmo();
+  }
+
+  setSewingState(
+    state: SewingViewportState,
+    onEdgeSelect?: (range: EdgeRange, panelInstanceId: string) => void,
+  ): void {
+    this.sewingState = {
+      active: state.active,
+      first: state.first.map((range) => ({ ...range })),
+      second: state.second.map((range) => ({ ...range })),
+      proposal: state.proposal ? structuredClone(state.proposal) : null,
+    };
+    this.sewingEdgeSelectHandler = onEdgeSelect;
+    this.refreshSewingOverlay();
+    if (!state.active && this.viewportMode === "assembly") this.setArrangementPointerFeedback("idle");
+    this.requestRender();
   }
 
   setArrangementAxis(axis: ArrangementAxis): void {
@@ -622,6 +648,7 @@ export class ThreeViewport {
       this.assemblyState = state;
       this.assemblyRevision = response.revision;
       this.pendingAssemblyRevision = null;
+      this.refreshSewingOverlay();
       this.host.dataset.simulationGeometryRevision = response.revision;
       this.host.dataset.assemblyStatus = response.diagnostics.assembly.invalid ? "invalid" : "ready";
       this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
@@ -864,6 +891,7 @@ export class ThreeViewport {
       delete (window as Window & { __MOLDEON_VIEWPORT_DEV__?: unknown }).__MOLDEON_VIEWPORT_DEV__;
     }
     this.clearGarment();
+    this.sewingOverlay.dispose();
     this.clearAvatar();
     this.clearDevBodyVisuals();
     disposeObject(this.registrationAxesGroup);
@@ -1080,6 +1108,15 @@ export class ThreeViewport {
 
   private readonly handleArrangementPointerDown = (event: PointerEvent): void => {
     if (this.viewportMode !== "assembly" || this.disposed || !event.isPrimary) return;
+    if (this.sewingState.active && event.button === 0) {
+      const edge = this.raycastSewingEdge(event);
+      if (edge) {
+        this.sewingEdgeSelectHandler?.(edge.range, edge.panelInstanceId);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
     if (event.button === 2) {
       this.hoveredArrangementHandle = null;
       this.hoveredArrangementInstanceId = null;
@@ -1257,6 +1294,13 @@ export class ThreeViewport {
     const startedAt = performance.now();
     const drag = this.dragState;
     if (!drag || drag.pointerId !== event.pointerId) {
+      if (this.sewingState.active && this.viewportMode === "assembly" && event.buttons === 0) {
+        const edge = this.raycastSewingEdge(event);
+        this.sewingOverlay.setHovered(edge?.segmentIndex ?? null);
+        this.renderer.domElement.style.cursor = edge ? "pointer" : "grab";
+        this.requestRender();
+        return;
+      }
       if (this.viewportMode === "assembly" && event.buttons === 0) this.updateArrangementHover(event);
       return;
     }
@@ -1600,6 +1644,32 @@ export class ThreeViewport {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(this.pointerNdc(event), this.camera);
     return raycaster.ray;
+  }
+
+  private raycastSewingEdge(event: PointerEvent): ReturnType<SewingViewportOverlay["edgeAtIntersection"]> {
+    this.sewingOverlay.refreshPositions();
+    const raycaster = new THREE.Raycaster();
+    const depth = this.camera.position.distanceTo(this.controls.target);
+    raycaster.params.Line = {
+      threshold: perspectiveWorldUnitsPerPixel(depth, this.camera.fov, this.renderer.domElement.clientHeight) * 22,
+    };
+    raycaster.setFromCamera(this.pointerNdc(event), this.camera);
+    const hit = raycaster.intersectObject(this.sewingOverlay.edgeLines, false)[0];
+    return hit ? this.sewingOverlay.edgeAtIntersection(hit) : null;
+  }
+
+  private refreshSewingOverlay(): void {
+    const proposalWarnings: string[] = [];
+    const proposalConstraints = this.assemblyState && this.sewingState.proposal
+      ? buildGlobalStitchConstraints(this.assemblyState.instances, [this.sewingState.proposal], proposalWarnings)
+      : [];
+    this.sewingOverlay.rebuild(this.garmentMeshes, this.assemblyState, this.sewingState, proposalConstraints);
+    this.sewingOverlay.setVisible(this.viewportMode === "assembly" && this.sewingState.active);
+    this.host.dataset.sewingThreadCount = String(
+      (this.assemblyState?.stitchConstraints.filter((constraint) => !constraint.seamGroupId.startsWith("dart:")).length ?? 0)
+      + proposalConstraints.length,
+    );
+    this.host.dataset.sewingProposalWarnings = JSON.stringify(proposalWarnings);
   }
 
   private pointerNdc(event: PointerEvent): THREE.Vector2 {
@@ -1985,6 +2055,7 @@ export class ThreeViewport {
     }
     this.controls.update(deltaSeconds);
     if (this.arrangementGizmo.visible) this.updateArrangementGizmo();
+    if (this.sewingOverlay.group.visible) this.sewingOverlay.refreshPositions();
     this.renderer.render(this.scene, this.camera);
     if (this.simulationRunning) this.requestRender();
   };

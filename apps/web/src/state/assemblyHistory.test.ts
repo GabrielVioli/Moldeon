@@ -5,6 +5,9 @@ import { useEditorStore } from "./editorStore";
 import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
 import { buildSemanticAvatarArrangement } from "../garment3d/SemanticAvatarArrangement";
 import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
+import { createPanelInstanceId } from "../domain/patternDocumentV3";
+import { buildGarmentAssemblyMeshes } from "../garment3d/GarmentThreeBridge";
+import { SewingViewportOverlay } from "../viewport/SewingViewportOverlay";
 
 const torsoFrontPlacement = {
   version: 1 as const,
@@ -107,6 +110,52 @@ describe("assembly document history", () => {
     expect(useEditorStore.getState().garment.seams).toBeUndefined();
     useEditorStore.getState().redo();
     expect(useEditorStore.getState().garment.seams![0]).toEqual(created);
+  });
+
+  it("creates a reversible 1:1 proposal with two quick edge selections", () => {
+    const state = useEditorStore.getState();
+    const firstEdge = getPatternEdges(state.garment.pieces[0])[0];
+    const secondEdge = getPatternEdges(state.garment.pieces[1])[0];
+    const first = { pieceId: "a", edgeId: firstEdge.id, startT: 0, endT: 1 };
+    const second = { pieceId: "b", edgeId: secondEdge.id, startT: 0, endT: 1 };
+
+    state.selectSeamRange(first, createPanelInstanceId("a", 0));
+    expect(useEditorStore.getState().seamDraft).toMatchObject({ first: [first], activeSide: "second" });
+    useEditorStore.getState().selectSeamRange(second, createPanelInstanceId("b", 0));
+    expect(useEditorStore.getState().seamProposal).toMatchObject({ first, second });
+
+    useEditorStore.getState().confirmSeamProposal({ name: "Rápida", direction: "opposite", treatment: "standard" });
+    const seam = useEditorStore.getState().garment.seams![0];
+    expect(seam.physicalBindings?.[0]).toMatchObject({
+      first: [{ patternId: "a", panelInstanceId: createPanelInstanceId("a", 0) }],
+      second: [{ patternId: "b", panelInstanceId: createPanelInstanceId("b", 0) }],
+    });
+    expect(buildResolvedAssemblyInput(useEditorStore.getState().garment).panelInstances).toHaveLength(2);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams).toBeUndefined();
+  });
+
+  it("renders confirmed threads from the canonical physical stitch correspondence", () => {
+    createSeam();
+    const garment = useEditorStore.getState().garment;
+    const input = buildResolvedAssemblyInput(garment);
+    const arrangement = buildSemanticAvatarArrangement(
+      input,
+      buildAvatarParametricModel(garment.measurements, garment.bodyType),
+    );
+    const meshes = buildGarmentAssemblyMeshes(arrangement.state, garment, { castShadow: false, receiveShadow: false });
+    const overlay = new SewingViewportOverlay();
+    overlay.rebuild(meshes, arrangement.state, { first: [], second: [] });
+
+    expect(overlay.edgeLines.geometry.getAttribute("position").count).toBeGreaterThan(0);
+    expect(overlay.threadLines.geometry.getAttribute("position").count)
+      .toBe(arrangement.state.stitchConstraints.length * 2);
+
+    overlay.dispose();
+    meshes.forEach((item) => {
+      item.mesh.geometry.dispose();
+      (item.mesh.material as { dispose(): void }).dispose();
+    });
   });
 
   it("reproduces the exact initial assembly positions after seam undo and redo", () => {

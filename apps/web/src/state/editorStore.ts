@@ -91,9 +91,16 @@ export interface EditorState {
     second: EdgeRange;
     firstRanges?: EdgeRange[];
     secondRanges?: EdgeRange[];
+    physicalBindings?: import("../domain/pattern").SeamPhysicalBinding[];
     compatibility: SeamCompatibility;
   } | null;
-  seamDraft: { first: EdgeRange[]; second: EdgeRange[]; activeSide: "first" | "second" } | null;
+  seamDraft: {
+    first: EdgeRange[];
+    second: EdgeRange[];
+    activeSide: "first" | "second";
+    firstPanelInstanceIds?: string[];
+    secondPanelInstanceIds?: string[];
+  } | null;
   seamFirstEdge: EdgeRange | null;
   nearbySeamSuggestion: { first: EdgeRange; second: EdgeRange } | null;
   cutDraft: { pieceId: string; start: PatternVector; end: PatternVector; phase: "placing" | "ready"; error?: string } | null;
@@ -128,6 +135,7 @@ export interface EditorState {
   setSeamAllowance(valueMm: number): void;
   addSeam(first: EdgeRange, second: EdgeRange, direction?: "forward" | "reverse"): void;
   proposeSeam(first: EdgeRange | EdgeRange[], second: EdgeRange | EdgeRange[]): void;
+  selectSeamRange(edge: EdgeRange, panelInstanceId?: string): void;
   addSeamDraftRange(edge: EdgeRange): void;
   finishSeamDraftSide(): void;
   reviewSeamDraft(): void;
@@ -935,13 +943,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const firstRanges = (Array.isArray(first) ? first : [first]).map((range) => ({ ...range }));
     const secondRanges = (Array.isArray(second) ? second : [second]).map((range) => ({ ...range }));
     if (!firstRanges[0] || !secondRanges[0]) return {};
+    const physicalBindings = inferSeamProposalBindings(state.garment, firstRanges, secondRanges);
     return {
       seamProposal: {
         first: { ...firstRanges[0] },
         second: { ...secondRanges[0] },
         firstRanges,
         secondRanges,
+        ...(physicalBindings ? { physicalBindings } : {}),
         compatibility: analyzeSeamCompatibility(state.garment, firstRanges, secondRanges),
+      },
+      seamIssues: [],
+      seamDraft: null,
+      seamFirstEdge: null,
+    };
+  }),
+  selectSeamRange: (edge, panelInstanceId) => set((state) => {
+    const draft = state.seamDraft;
+    if (!draft) {
+      return {
+        seamDraft: {
+          first: [{ ...edge }],
+          second: [],
+          activeSide: "second" as const,
+          ...(panelInstanceId ? { firstPanelInstanceIds: [panelInstanceId] } : {}),
+        },
+        seamFirstEdge: { ...edge },
+        seamProposal: null,
+        seamIssues: [],
+      };
+    }
+    if (draft.activeSide !== "second" || draft.first.length === 0) return {};
+    const secondRanges = [{ ...edge }];
+    const physicalBindings = inferSeamProposalBindings(
+      state.garment,
+      draft.first,
+      secondRanges,
+      draft.firstPanelInstanceIds,
+      panelInstanceId ? [panelInstanceId] : undefined,
+    );
+    return {
+      seamProposal: {
+        first: { ...draft.first[0] },
+        second: { ...edge },
+        firstRanges: structuredClone(draft.first),
+        secondRanges,
+        ...(physicalBindings ? { physicalBindings } : {}),
+        compatibility: analyzeSeamCompatibility(state.garment, draft.first, secondRanges),
       },
       seamIssues: [],
       seamDraft: null,
@@ -983,13 +1031,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!proposal) return;
     const firstRanges = proposal.firstRanges ?? [proposal.first];
     const secondRanges = proposal.secondRanges ?? [proposal.second];
+    const seamId = createDocumentId("seam");
     const seam: Seam = {
-      id: createDocumentId("seam"),
+      id: seamId,
       name: options.name.trim() || `Costura ${(state.garment.seams?.length ?? 0) + 1}`,
       first: { ...proposal.first },
       second: { ...proposal.second },
       ...(firstRanges.length > 1 ? { firstRanges: structuredClone(firstRanges) } : {}),
       ...(secondRanges.length > 1 ? { secondRanges: structuredClone(secondRanges) } : {}),
+      ...(proposal.physicalBindings ? {
+        physicalBindings: proposal.physicalBindings.map((binding, index) => ({
+          ...structuredClone(binding),
+          id: `${seamId}/binding-${index}`,
+        })),
+      } : {}),
       direction: options.direction,
       treatment: options.treatment,
       type: options.treatment,
@@ -1610,6 +1665,38 @@ function sameEdgeRange(first: EdgeRange, second: EdgeRange): boolean {
     && first.edgeId === second.edgeId
     && Math.abs(first.startT - second.startT) <= 1e-7
     && Math.abs(first.endT - second.endT) <= 1e-7;
+}
+
+function inferSeamProposalBindings(
+  garment: GarmentDraft,
+  first: readonly EdgeRange[],
+  second: readonly EdgeRange[],
+  firstInstanceIds?: readonly string[],
+  secondInstanceIds?: readonly string[],
+): import("../domain/pattern").SeamPhysicalBinding[] | undefined {
+  const references = (ranges: readonly EdgeRange[], selected?: readonly string[]) => {
+    const byPattern = new Map<string, string>();
+    ranges.forEach((range, index) => {
+      if (byPattern.has(range.pieceId)) return;
+      const explicit = selected?.[index];
+      if (explicit) {
+        byPattern.set(range.pieceId, explicit);
+        return;
+      }
+      const piece = garment.pieces.find((candidate) => candidate.id === range.pieceId);
+      if (!piece) return;
+      const instances = piece.previewPlacements?.map((placement) => placement.id)
+        ?? Array.from({ length: Math.max(1, piece.cutQuantity ?? 1) }, (_, copyIndex) => createPanelInstanceId(piece.id, copyIndex));
+      if (instances.length === 1) byPattern.set(range.pieceId, instances[0]);
+    });
+    const patternIds = [...new Set(ranges.map((range) => range.pieceId))];
+    if (patternIds.some((patternId) => !byPattern.has(patternId))) return null;
+    return patternIds.map((patternId) => ({ patternId, panelInstanceId: byPattern.get(patternId)! }));
+  };
+  const firstRefs = references(first, firstInstanceIds);
+  const secondRefs = references(second, secondInstanceIds);
+  if (!firstRefs || !secondRefs) return undefined;
+  return [{ id: "proposal-binding-0", first: firstRefs, second: secondRefs }];
 }
 
 function clonePieces(pieces: readonly PatternPiece[]): PatternPiece[] {

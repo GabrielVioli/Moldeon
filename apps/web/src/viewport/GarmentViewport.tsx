@@ -1,5 +1,7 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import type { Seam } from "../domain/pattern";
+import { useEditorStore } from "../state/editorStore";
 import {
   approvedAvatarForBody,
   AVATAR_NOT_CONFIGURED_MESSAGE,
@@ -22,6 +24,7 @@ interface GarmentViewportProps {
   onBackendChange(backend: "webgpu" | "webgl2"): void;
   onArrangementCommit?(commits: ArrangementCommit[]): void;
   onArrangementInteractionChange?(active: boolean): void;
+  sewingActive?: boolean;
 }
 
 export const GarmentViewport = memo(function GarmentViewport({
@@ -32,6 +35,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   onBackendChange,
   onArrangementCommit,
   onArrangementInteractionChange,
+  sewingActive = false,
 }: GarmentViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<ThreeViewport | null>(null);
@@ -70,6 +74,28 @@ export const GarmentViewport = memo(function GarmentViewport({
   const arrangementToolRef = useRef<ArrangementTool>(arrangementTool);
   const arrangementAxisRef = useRef<ArrangementAxis>(arrangementAxis);
   const touchMultiSelectRef = useRef(touchMultiSelect);
+  const seamDraft = useEditorStore((state) => state.seamDraft);
+  const seamProposal = useEditorStore((state) => state.seamProposal);
+  const proposalSeam = useMemo<Seam | null>(() => {
+    if (!seamProposal) return null;
+    const firstRanges = seamProposal.firstRanges ?? [seamProposal.first];
+    const secondRanges = seamProposal.secondRanges ?? [seamProposal.second];
+    return {
+      id: "__sewing-proposal__",
+      groupId: "__sewing-proposal__",
+      name: "Proposta",
+      first: { ...seamProposal.first },
+      second: { ...seamProposal.second },
+      firstRanges: structuredClone(firstRanges),
+      secondRanges: structuredClone(secondRanges),
+      direction: seamProposal.compatibility.recommendedDirection,
+      treatment: seamProposal.compatibility.recommendedTreatment,
+      type: seamProposal.compatibility.recommendedTreatment,
+      easeRatio: seamProposal.compatibility.differencePercent / 100,
+      ...(seamProposal.physicalBindings ? { physicalBindings: structuredClone(seamProposal.physicalBindings) } : {}),
+      active: true,
+    };
+  }, [seamProposal]);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
   const selectedArrangementState = selectedArrangementIds.length === 0
     ? null
@@ -128,6 +154,12 @@ export const GarmentViewport = memo(function GarmentViewport({
         viewport.setArrangementTool(arrangementToolRef.current);
         viewport.setArrangementAxis(arrangementAxisRef.current);
         viewport.setArrangementTouchMultiSelect(touchMultiSelectRef.current);
+        viewport.setSewingState({
+          active: sewingActive,
+          first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
+          second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
+          proposal: proposalSeam,
+        }, (range, panelInstanceId) => useEditorStore.getState().selectSeamRange(range, panelInstanceId));
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
@@ -254,6 +286,15 @@ export const GarmentViewport = memo(function GarmentViewport({
     viewportRef.current?.setArrangementTouchMultiSelect(touchMultiSelect);
   }, [touchMultiSelect]);
 
+  useEffect(() => {
+    viewportRef.current?.setSewingState({
+      active: sewingActive,
+      first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
+      second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
+      proposal: proposalSeam,
+    }, (range, panelInstanceId) => useEditorStore.getState().selectSeamRange(range, panelInstanceId));
+  }, [proposalSeam, seamDraft, seamProposal, sewingActive]);
+
   return (
     <div
       className="viewport-host"
@@ -262,6 +303,7 @@ export const GarmentViewport = memo(function GarmentViewport({
       data-simulation-ui-state={simulationState}
       data-viewport-layout={displayMode}
       data-arrangement-tool={arrangementTool}
+      data-sewing-active={sewingActive}
     >
       {error ? <div className="viewport-error">{error}</div> : null}
       {warnings.length > 0 ? (
@@ -276,7 +318,7 @@ export const GarmentViewport = memo(function GarmentViewport({
             ? `Manequim aprovado · ${approvedAvatar.assetId}`
             : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
-      {displayMode === "side-preview" ? (
+      {displayMode === "side-preview" && !sewingActive ? (
         <div className="viewport-arrangement-controls" aria-label="Ações da montagem 3D">
           <div className="viewport-arrangement-status">
             <strong>{selectedArrangementIds.length > 0

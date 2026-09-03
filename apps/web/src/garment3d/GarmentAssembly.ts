@@ -523,7 +523,7 @@ function addStructuralEdge(
   });
 }
 
-function buildGlobalStitchConstraints(
+export function buildGlobalStitchConstraints(
   instances: readonly AssemblyPanelInstance[],
   seams: readonly Seam[],
   warnings: string[],
