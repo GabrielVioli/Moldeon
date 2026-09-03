@@ -424,3 +424,50 @@ describe("ResolvedAssemblyInput canonical contract", () => {
     expect(constraints.at(-1)?.rangeB?.edgeId).toBe(direction === "same" ? secondRanges[1].edgeId : secondRanges[0].edgeId);
   });
 });
+
+
+describe("11.0.8 sewing revision isolation", () => {
+  it("changes sewing and simulation revisions without invalidating geometry or arrangement", () => {
+    const first = square("sew-a", placement("torso", "front", "center", "torso-front"));
+    const second = square("sew-b", placement("torso", "back", "center", "torso-back"));
+    const garment = draft([first, second]);
+    garment.seams = [{
+      id: "sew-revision",
+      name: "Revision seam",
+      first: { pieceId: first.id, edgeId: getPatternEdges(first)[0].id, startT: 0, endT: 1 },
+      second: { pieceId: second.id, edgeId: getPatternEdges(second)[0].id, startT: 0, endT: 1 },
+      direction: "opposite",
+      easeRatio: 0,
+      type: "standard",
+      treatment: "standard",
+      distribution: "uniform",
+      targetRatio: 1,
+      slackMm: 0,
+      active: true,
+    }];
+
+    const original = buildResolvedAssemblyInput(garment);
+    const reversedGarment = structuredClone(garment);
+    reversedGarment.seams![0].direction = "same";
+    const reversed = buildResolvedAssemblyInput(reversedGarment);
+
+    expect(reversed.geometryRevision).toBe(original.geometryRevision);
+    expect(reversed.arrangementRevision).toBe(original.arrangementRevision);
+    expect(reversed.sewingRevision).not.toBe(original.sewingRevision);
+    expect(reversed.simulationRevision).not.toBe(original.simulationRevision);
+
+    const inactiveGarment = structuredClone(reversedGarment);
+    inactiveGarment.seams![0].active = false;
+    const inactive = buildResolvedAssemblyInput(inactiveGarment);
+    expect(inactive.geometryRevision).toBe(original.geometryRevision);
+    expect(inactive.arrangementRevision).toBe(original.arrangementRevision);
+    expect(inactive.sewingRevision).not.toBe(reversed.sewingRevision);
+    expect(inactive.seamGroups).toHaveLength(1);
+    expect(inactive.seamGroups[0].active).toBe(false);
+    expect(inactive.assemblyDocument.seamGroups[0].active).toBe(false);
+    const inactiveAssembly = buildResolvedGarmentAssembly(inactive);
+    expect(inactiveAssembly.stitchConstraints.filter((constraint) =>
+      !constraint.seamGroupId.startsWith("dart:"),
+    )).toHaveLength(0);
+  });
+});

@@ -71,6 +71,16 @@ import {
 } from "./documentCommandHistory";
 import { createBlankGarment } from "../domain/blankGarment";
 
+export interface SeamEditUpdate {
+  name?: string;
+  direction?: SeamDirection;
+  treatment?: SeamTreatment;
+  distribution?: SeamDistribution;
+  targetRatio?: number;
+  slackMm?: number;
+  active?: boolean;
+}
+
 export interface EditorState {
   garment: GarmentDraft;
   baselinePieces: PatternPiece[];
@@ -163,16 +173,10 @@ export interface EditorState {
   splitSelectedSegment(): void;
   setMeasureDraft(draft: EditorState["measureDraft"]): void;
   cancelIntent(): void;
-  updateSeam(seamId: string, update: {
-    name?: string;
-    direction?: SeamDirection;
-    treatment?: SeamTreatment;
-    distribution?: SeamDistribution;
-    targetRatio?: number;
-    slackMm?: number;
-    active?: boolean;
-  }): void;
+  updateSeam(seamId: string, update: SeamEditUpdate): void;
+  updateSeams(updates: readonly { seamId: string; update: SeamEditUpdate }[]): void;
   removeSeam(seamId: string): void;
+  removeSeams(seamIds: readonly string[]): void;
   toggleSeamDirection(seamId: string): void;
   toggleSeamActive(seamId: string): void;
   addGuide(orientation: Guide["orientation"], positionMm: number): void;
@@ -573,6 +577,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       type: "standard",
       name: `Costura ${(state.garment.seams?.length ?? 0) + 1}`,
       treatment: "standard",
+      distribution: "uniform",
+      targetRatio: 1,
+      slackMm: 0,
+      active: true,
     };
     const issues = validateSeam(seam, state.garment);
     if (issues.length > 0) {
@@ -584,13 +592,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
     }));
   },
-  removeSeam: (seamId) => changeDocument(set, get, "seam", "Remover costura", (document) => ({
-    ...document,
-    garment: {
-      ...document.garment,
-      seams: (document.garment.seams ?? []).filter((seam) => seam.id !== seamId),
-    },
-  }), { selectedSeamId: null }),
+  removeSeam: (seamId) => get().removeSeams([seamId]),
+  removeSeams: (seamIds) => {
+    const ids = new Set(seamIds);
+    if (ids.size === 0) return;
+    const selectedSeamId = get().selectedSeamId;
+    changeDocument(set, get, "seam", ids.size === 1 ? "Remover costura" : "Remover grupo de costura", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        seams: (document.garment.seams ?? []).filter((seam) => !ids.has(seam.id)),
+      },
+    }), { selectedSeamId: selectedSeamId && !ids.has(selectedSeamId) ? selectedSeamId : null });
+  },
   toggleSeamDirection: (seamId) => changeDocument(set, get, "seam", "Inverter costura", (document) => ({
     ...document,
     garment: {
@@ -1100,6 +1114,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       direction: options.direction,
       treatment: options.treatment,
       type: options.treatment,
+      distribution: options.treatment === "ease" || options.treatment === "gather" ? "proportional" : "uniform",
+      targetRatio: Math.max(0.000001, 1 + proposal.compatibility.differencePercent / 100),
+      slackMm: 0,
+      active: true,
       easeRatio: proposal.compatibility.differencePercent / 100,
     };
     const issues = validateSeamForAssembly(seam, state.garment);
@@ -1111,7 +1129,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       garment: { ...document.garment, seams: [...(document.garment.seams ?? []), seam] },
     }));
-    set({ seamProposal: null, seamDraft: null, seamFirstEdge: null, seamIssues: [], nearbySeamSuggestion: null });
+    set({ seamProposal: null, seamDraft: null, seamFreeStart: null, seamFirstEdge: null, seamIssues: [], nearbySeamSuggestion: null });
   },
   setCutDraft: (cutDraft) => set({ cutDraft: cutDraft ? { ...cutDraft, phase: cutDraft.phase ?? "placing" } : null }),
   freezeCutDraft: () => set((state) => {
@@ -1183,15 +1201,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setMeasureDraft: (measureDraft) => set({ measureDraft }),
   cancelIntent: () => set({ seamProposal: null, seamDraft: null, seamFreeStart: null, seamFirstEdge: null, nearbySeamSuggestion: null, seamIssues: [], cutDraft: null, dartDraft: null, measureDraft: null }),
-  updateSeam: (seamId, update) => changeDocument(set, get, "seam", "Editar costura", (document) => ({
-    ...document,
-    garment: {
-      ...document.garment,
-      seams: (document.garment.seams ?? []).map((seam) => seam.id === seamId
-        ? { ...seam, ...update, ...(update.treatment ? { type: update.treatment } : {}) }
-        : seam),
-    },
-  })),
+  updateSeam: (seamId, update) => get().updateSeams([{ seamId, update }]),
+  updateSeams: (updates) => {
+    if (updates.length === 0) return;
+    const byId = new Map(updates.map(({ seamId, update }) => [seamId, update] as const));
+    const selectedSeamId = get().selectedSeamId;
+    changeDocument(set, get, "seam", updates.length === 1 ? "Editar costura" : "Editar grupo de costura", (document) => ({
+      ...document,
+      garment: {
+        ...document.garment,
+        seams: (document.garment.seams ?? []).map((seam) => {
+          const update = byId.get(seam.id);
+          return update
+            ? { ...seam, ...update, ...(update.treatment ? { type: update.treatment } : {}) }
+            : seam;
+        }),
+      },
+    }), { selectedSeamId });
+  },
   rotatePieceInWorkspace: (pieceId, deltaDeg) => {
     const state = workspaceStateFor(get().garment, pieceId);
     if (state.locked) return;

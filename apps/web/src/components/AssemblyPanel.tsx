@@ -7,6 +7,7 @@ import {
 import {
   edgeRangeSequenceLength,
   getPatternEdges,
+  seamSideRanges,
   type SeamDistribution,
   type SeamDirection,
   type SeamTreatment,
@@ -51,12 +52,10 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const setSeamChainMode = useEditorStore((state) => state.setSeamChainMode);
   const finishSeamDraftSide = useEditorStore((state) => state.finishSeamDraftSide);
   const reviewSeamDraft = useEditorStore((state) => state.reviewSeamDraft);
-  const updateSeam = useEditorStore((state) => state.updateSeam);
-  const removeSeam = useEditorStore((state) => state.removeSeam);
+  const updateSeams = useEditorStore((state) => state.updateSeams);
+  const removeSeams = useEditorStore((state) => state.removeSeams);
   const selectedSeamId = useEditorStore((state) => state.selectedSeamId);
   const selectSeam = useEditorStore((state) => state.selectSeam);
-  const toggleSeamDirection = useEditorStore((state) => state.toggleSeamDirection);
-  const toggleSeamActive = useEditorStore((state) => state.toggleSeamActive);
   const setGarmentEase = useEditorStore((state) => state.setGarmentEase);
   const setEdgeFinish = useEditorStore((state) => state.setEdgeFinish);
   const graph = useMemo(
@@ -74,6 +73,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const seamGroups = groupSeamsByRelation(garment.seams);
   const firstDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.first) : 0;
   const secondDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.second) : 0;
+  const [seamNameDrafts, setSeamNameDrafts] = useState<Record<string, string>>({});
 
   return (
     <aside
@@ -167,10 +167,18 @@ export const AssemblyPanel = memo(function AssemblyPanel({
         ) : (
           seamGroups.map((group) => {
             const representative = group[0];
+            const relationKey = representative.groupId ?? representative.id;
+            const relationLabel = seamRelationLabel(group);
             const selected = group.some((seam) => seam.id === selectedSeamId);
             const inactive = group.every((seam) => seam.active === false);
+            const firstRanges = group.flatMap((seam) => seamSideRanges(seam, "first"));
+            const secondRanges = group.flatMap((seam) => seamSideRanges(seam, "second"));
+            const firstLengthMm = edgeRangeSequenceLength(garment.pieces, firstRanges);
+            const secondLengthMm = edgeRangeSequenceLength(garment.pieces, secondRanges);
+            const deltaMm = secondLengthMm - firstLengthMm;
+            const deltaPercent = Math.abs(deltaMm) / Math.max(firstLengthMm, secondLengthMm, 1) * 100;
             return (
-            <div className={`assembly-row seam-editor-row${selected ? " is-selected" : ""}${inactive ? " is-inactive" : ""}`} key={representative.groupId ?? representative.id} onClick={() => selectSeam(representative.id)}>
+            <div className={`assembly-row seam-editor-row${selected ? " is-selected" : ""}${inactive ? " is-inactive" : ""}`} key={relationKey} onClick={() => selectSeam(representative.id)}>
               <button
                 type="button"
                 className="seam-select-button"
@@ -185,22 +193,37 @@ export const AssemblyPanel = memo(function AssemblyPanel({
               </button>
               <input
                 aria-label="Nome da costura"
-                value={seamRelationLabel(group)}
+                value={seamNameDrafts[relationKey] ?? relationLabel}
                 onClick={(event) => event.stopPropagation()}
-                onChange={(event) => {
-                  const label = event.currentTarget.value;
-                  group.forEach((seam, index) => updateSeam(seam.id, {
-                    name: group.length > 1 ? `${label} · trecho ${index + 1}` : label,
-                  }));
+                onChange={(event) => setSeamNameDrafts((current) => ({
+                  ...current,
+                  [relationKey]: event.currentTarget.value,
+                }))}
+                onBlur={(event) => {
+                  const label = event.currentTarget.value.trim() || relationLabel;
+                  updateSeams(group.map((seam, index) => ({
+                    seamId: seam.id,
+                    update: { name: group.length > 1 ? `${label} · trecho ${index + 1}` : label },
+                  })));
+                  setSeamNameDrafts((current) => {
+                    const next = { ...current };
+                    delete next[relationKey];
+                    return next;
+                  });
                 }}
+                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
               />
+              <div className={`seam-length-summary${deltaPercent > 2 ? " has-mismatch" : ""}`} aria-label="Comprimentos materiais da costura">
+                <span>A {firstLengthMm.toFixed(1)} mm</span>
+                <span>B {secondLengthMm.toFixed(1)} mm</span>
+                <strong>Δ {deltaMm >= 0 ? "+" : ""}{deltaMm.toFixed(1)} mm · {deltaPercent.toFixed(1)}%</strong>
+              </div>
               <select
                 aria-label="Tratamento"
                 value={representative.treatment ?? "standard"}
                 onChange={(event) => {
-                  for (const seam of group) updateSeam(seam.id, {
-                    treatment: event.currentTarget.value as SeamTreatment,
-                  });
+                  const treatment = event.currentTarget.value as SeamTreatment;
+                  updateSeams(group.map((seam) => ({ seamId: seam.id, update: { treatment } })));
                 }}
               >
                 {TREATMENTS.map((treatment) => (
@@ -214,7 +237,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                 value={representative.distribution ?? "uniform"}
                 onChange={(event) => {
                   const distribution = event.currentTarget.value as SeamDistribution;
-                  for (const seam of group) updateSeam(seam.id, { distribution });
+                  updateSeams(group.map((seam) => ({ seamId: seam.id, update: { distribution } })));
                 }}
               >
                 <option value="uniform">Uniforme</option>
@@ -232,7 +255,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                   value={representative.targetRatio ?? Math.max(0.01, 1 + representative.easeRatio)}
                   onChange={(event) => {
                     const targetRatio = Math.max(0.01, event.currentTarget.valueAsNumber || 1);
-                    for (const seam of group) updateSeam(seam.id, { targetRatio });
+                    updateSeams(group.map((seam) => ({ seamId: seam.id, update: { targetRatio } })));
                   }}
                 />
               </label>
@@ -246,17 +269,29 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                   value={representative.slackMm ?? 0}
                   onChange={(event) => {
                     const slackMm = Math.max(0, event.currentTarget.valueAsNumber || 0);
-                    for (const seam of group) updateSeam(seam.id, { slackMm });
+                    updateSeams(group.map((seam) => ({ seamId: seam.id, update: { slackMm } })));
                   }}
                 />
               </label>
-              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) if ((seam.active === false) === inactive) toggleSeamActive(seam.id); }}>
+              <button type="button" onClick={(event) => {
+                event.stopPropagation();
+                updateSeams(group.map((seam) => ({ seamId: seam.id, update: { active: inactive } })));
+              }}>
                 {inactive ? "Reativar" : "Desativar"}
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) toggleSeamDirection(seam.id); }}>
+              <button type="button" onClick={(event) => {
+                event.stopPropagation();
+                updateSeams(group.map((seam) => ({
+                  seamId: seam.id,
+                  update: { direction: seam.direction === "same" ? "opposite" : "same" },
+                })));
+              }}>
                 Inverter direção
               </button>
-              <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) removeSeam(seam.id); }}>
+              <button type="button" onClick={(event) => {
+                event.stopPropagation();
+                removeSeams(group.map((seam) => seam.id));
+              }}>
                 Excluir
               </button>
             </div>
@@ -408,10 +443,11 @@ function SeamProposalForm({
       aria-label="Confirmar proposta de costura"
     >
       <h3>Proposta de costura</h3>
-      <p>
-        {(compatibility.firstLengthMm / 10).toFixed(1)} cm ↔{" "}
-        {(compatibility.secondLengthMm / 10).toFixed(1)} cm
-      </p>
+      <div className={`seam-proposal-metrics${compatibility.differencePercent > 2 ? " has-mismatch" : ""}`}>
+        <span>Lado A <strong>{compatibility.firstLengthMm.toFixed(1)} mm</strong></span>
+        <span>Lado B <strong>{compatibility.secondLengthMm.toFixed(1)} mm</strong></span>
+        <span>Δ <strong>{(compatibility.secondLengthMm - compatibility.firstLengthMm) >= 0 ? "+" : ""}{(compatibility.secondLengthMm - compatibility.firstLengthMm).toFixed(1)} mm · {compatibility.differencePercent.toFixed(1)}%</strong></span>
+      </div>
       <p>{compatibility.message}</p>
       <input
         aria-label="Nome da nova costura"

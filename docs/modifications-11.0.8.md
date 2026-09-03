@@ -274,3 +274,59 @@ Gate humano necessário antes de Fase I/J:
 8. Costurar continua com XPBD OFF.
 
 Não iniciar STEP-0 antes deste gate.
+
+
+---
+
+## Refinement checkpoint after Phase H (11.0.8 authoring polish)
+
+This pass audits the Phase A-H implementation before the next manual gate. It deliberately does **not** start Phase J STEP-0 and does not touch `physics/**`.
+
+### Revision isolation
+
+`ResolvedAssemblyInput` now owns a dedicated `sewingRevision`.
+
+- `geometryRevision` contains geometry/physical-instance identity only.
+- `sewingRevision` contains canonical SeamGroup changes.
+- `arrangementRevision` remains placement/body-measurement driven.
+- `simulationRevision` includes `sewingRevision`, so Provar still rebuilds when sewing changes.
+
+In Montar/Costurar a seam-only edit no longer invalidates geometry or asks the Assembly Worker to rebuild topology/meshes. `ThreeViewport.updateSewingRelationships()` recompiles only stitch correspondence against the already-built PanelInstances.
+
+### Edit Sewing and inactive relationships
+
+Inactive SeamGroups stay in the resolved authoring document. The physical compiler continues to skip `active=false`, while the 3D overlay may render the same canonical correspondence in gray for editing. This separates semantic existence from physics participation.
+
+3D relationship threads are now selectable outside the Costurar tool and bridge back to the shared `selectedSeamId`. The selected relationship receives a high-contrast overlay; confirmed groups use a deterministic vertex-color palette without allocating one material per group.
+
+### Show / hide connections
+
+The 3D viewport has a compact `Mostrar conexões` / `Ocultar conexões` control. Thread visibility is a UI preference and never changes `SeamGroupV3.active`. Entering Costurar turns relationships on by default; the preference may remain outside the tool.
+
+### Hot-path cleanup
+
+Sewing edge hover no longer rewrites every edge/thread/notch BufferGeometry on each pointermove. Edge hit testing uses the cached world-space overlay. During authored 3D movement only thread/notch positions are refreshed, so relationship lines follow panels without remeshing or invoking the worker.
+
+The stale ordering in the initial assembly response was also removed: authored arrangement transforms are applied before sewing overlays are finalized.
+
+### Editor transaction cleanup
+
+Group edits now use `updateSeams()` / `removeSeams()` so a multi-part relation is one history command instead of N full document clones. The seam name field keeps an in-UI draft and commits on blur/Enter instead of creating a history snapshot on every keystroke.
+
+Confirmed seams also persist explicit canonical defaults (`distribution`, `targetRatio`, `slackMm`, `active`) rather than depending on projection defaults.
+
+### Material length visibility
+
+Existing seam rows and the proposal review show canonical 2D material lengths for Side A/Side B plus signed delta in mm and percentage. A mismatch receives visual emphasis but remains authorable.
+
+### Focused regressions added
+
+- seam reverse/active changes keep `geometryRevision` and `arrangementRevision` stable;
+- `sewingRevision` and `simulationRevision` change;
+- inactive SeamGroup remains persisted but produces zero active physical stitch constraints;
+- grouped seam editing is one undoable transaction;
+- edge visibility and thread visibility are independent.
+
+### Manual gate still required
+
+This checkpoint must still be validated manually for Segment, Free, mixed 2D/3D, N:M, direction, inactive visualization, 3D thread selection and mobile portrait/landscape. Phase J STEP-0 remains intentionally pending until that interaction gate is accepted.

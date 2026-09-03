@@ -2710,3 +2710,80 @@ button {
     font-size: 11px;
   }
 }
+
+
+/* 11.0.8 sewing relationship refinement */
+.viewport-sewing-visibility {
+  position: absolute;
+  z-index: 9;
+  top: 10px;
+  right: 10px;
+  min-height: 36px;
+  border: 1px solid rgba(72, 67, 61, .42);
+  border-radius: 9px;
+  background: rgba(250, 248, 244, .92);
+  backdrop-filter: blur(8px);
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 750;
+  color: #302c27;
+}
+
+.viewport-sewing-visibility[aria-pressed="true"] {
+  border-color: rgba(183, 42, 128, .66);
+  box-shadow: 0 0 0 2px rgba(183, 42, 128, .1);
+}
+
+.seam-length-summary,
+.seam-proposal-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  align-items: center;
+  font-size: 11px;
+  color: #5c554d;
+}
+
+.seam-length-summary {
+  grid-column: 1 / -1;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: #f3f0eb;
+}
+
+.seam-length-summary strong,
+.seam-proposal-metrics strong {
+  color: #302b26;
+}
+
+.seam-length-summary.has-mismatch,
+.seam-proposal-metrics.has-mismatch {
+  background: #fff0ec;
+  color: #8c332b;
+}
+
+.seam-proposal-metrics {
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f3f0eb;
+}
+
+.seam-editor-row.is-inactive .seam-length-summary {
+  opacity: .72;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .viewport-sewing-visibility {
+    min-height: 44px;
+    top: calc(8px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    padding-inline: 11px;
+  }
+
+  .seam-length-summary,
+  .seam-proposal-metrics {
+    font-size: 10px;
+    gap: 4px 7px;
+  }
+}

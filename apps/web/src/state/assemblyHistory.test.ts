@@ -152,6 +152,10 @@ describe("assembly document history", () => {
       .toBe(overlay.visualThreadCount * 2);
     expect(overlay.visualThreadCount).toBeGreaterThanOrEqual(arrangement.state.stitchConstraints.length);
     expect(overlay.directionNotchCount).toBeGreaterThan(0);
+    overlay.setVisibility(false, true);
+    expect(overlay.edgeLines.visible).toBe(false);
+    expect(overlay.threadLines.visible).toBe(true);
+    expect(overlay.notchLines.visible).toBe(true);
 
     overlay.dispose();
     meshes.forEach((item) => {
@@ -525,4 +529,42 @@ describe("assembly document history", () => {
     expect(proposal?.compatibility.secondLengthMm).toBeCloseTo(100, 5);
   });
 
+});
+
+
+describe("11.0.8 batched seam editing", () => {
+  beforeEach(() => useEditorStore.getState().loadGarment(draft()));
+
+  it("commits a grouped edit as one undoable document command", () => {
+    const seamId = createSeam("Batch seam");
+    const before = structuredClone(useEditorStore.getState().garment.seams![0]);
+    useEditorStore.getState().selectSeam(seamId);
+    useEditorStore.getState().updateSeams([{ seamId, update: {
+      name: "Batch edited",
+      direction: "same",
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 3.5,
+      active: false,
+    } }]);
+
+    expect(useEditorStore.getState().garment.seams![0]).toMatchObject({
+      name: "Batch edited",
+      direction: "same",
+      distribution: "center-biased",
+      targetRatio: 1.08,
+      slackMm: 3.5,
+      active: false,
+    });
+    expect(useEditorStore.getState().selectedSeamId).toBe(seamId);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().garment.seams![0]).toEqual(before);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().garment.seams![0]).toMatchObject({
+      name: "Batch edited",
+      direction: "same",
+      active: false,
+    });
+  });
 });

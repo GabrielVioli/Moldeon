@@ -10,6 +10,7 @@ import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 export interface SewingOverlaySelection {
   first: readonly EdgeRange[];
   second: readonly EdgeRange[];
+  selectedSeamId?: string | null;
 }
 
 interface EdgeSegment {
@@ -30,6 +31,7 @@ interface ThreadSegment {
   firstParticleStart: number;
   secondParticleStart: number;
   proposal: boolean;
+  inactive: boolean;
   progress: number;
 }
 
@@ -42,6 +44,8 @@ interface DirectionNotch {
   firstEnd: GlobalPointReference;
   secondStart: GlobalPointReference;
   secondEnd: GlobalPointReference;
+  seamId: string;
+  inactive: boolean;
   proposal: boolean;
 }
 
@@ -51,8 +55,16 @@ const SECOND_COLOR = new THREE.Color(0x54a8ff);
 const HOVER_COLOR = new THREE.Color(0xffffff);
 // High-contrast magenta is deliberately used for confirmed sewing threads.
 // Yellow disappeared against the avatar/floor in the manual CLO-style gate.
-const THREAD_COLOR = new THREE.Color(0xff3fb4);
+const CONFIRMED_THREAD_PALETTE = [
+  new THREE.Color(0xff3fb4), // magenta
+  new THREE.Color(0x7c5cff), // violet
+  new THREE.Color(0xff6b4a), // coral
+  new THREE.Color(0x00c2ff), // cyan-blue
+  new THREE.Color(0x5bd68a), // green
+] as const;
 const PROPOSAL_THREAD_COLOR = new THREE.Color(0x00f0ff);
+const INACTIVE_THREAD_COLOR = new THREE.Color(0x8f969f);
+const SELECTED_THREAD_COLOR = new THREE.Color(0xffffff);
 const MIN_VISUAL_THREADS_PER_PAIR = 14;
 const MAX_VISUAL_THREADS_PER_PAIR = 48;
 const REFERENCE_EPSILON = 1e-8;
@@ -92,11 +104,12 @@ export class SewingViewportOverlay {
     state: GarmentAssemblyState | null,
     selection: SewingOverlaySelection,
     proposalConstraints: readonly AssemblyStitchConstraint[] = [],
+    inactiveConstraints: readonly AssemblyStitchConstraint[] = [],
   ): void {
     this.selection = selection;
     this.edgeSegments = buildEdgeSegments(meshes);
     this.threadSegments = state
-      ? buildThreadSegments(meshes, state, proposalConstraints)
+      ? buildThreadSegments(meshes, state, proposalConstraints, inactiveConstraints)
       : [];
     this.directionNotches = buildDirectionNotches(this.threadSegments);
     resetGeometry(this.edgeLines.geometry, this.edgeSegments.length);
@@ -108,8 +121,11 @@ export class SewingViewportOverlay {
     this.refreshColors();
   }
 
-  setVisible(visible: boolean): void {
-    this.group.visible = visible;
+  setVisibility(edgesVisible: boolean, threadsVisible: boolean): void {
+    this.edgeLines.visible = edgesVisible;
+    this.threadLines.visible = threadsVisible;
+    this.notchLines.visible = threadsVisible;
+    this.group.visible = edgesVisible || threadsVisible;
   }
 
   setHovered(segmentIndex: number | null): void {
@@ -132,8 +148,19 @@ export class SewingViewportOverlay {
     } : null;
   }
 
+  threadAtIntersection(intersection: THREE.Intersection): { seamId: string; seamGroupId: string } | null {
+    if (intersection.object !== this.threadLines || intersection.index === undefined) return null;
+    const segment = this.threadSegments[Math.floor(intersection.index / 2)];
+    if (!segment || segment.proposal) return null;
+    return { seamId: segment.seamId, seamGroupId: segment.seamGroupId };
+  }
+
   refreshPositions(): void {
     writeEdgePositions(this.edgeLines.geometry, this.edgeSegments);
+    this.refreshThreads();
+  }
+
+  refreshThreads(): void {
     writeThreadPositions(this.threadLines.geometry, this.threadSegments);
     writeDirectionNotches(this.notchLines.geometry, this.directionNotches);
   }
@@ -165,22 +192,30 @@ export class SewingViewportOverlay {
     edgeColors.needsUpdate = true;
 
     const threadColors = this.threadLines.geometry.getAttribute("color") as THREE.BufferAttribute;
-    this.threadSegments.forEach((segment, index) => writeSegmentColor(
-      threadColors,
-      index,
-      segment.proposal ? PROPOSAL_THREAD_COLOR : THREAD_COLOR,
-    ));
+    this.threadSegments.forEach((segment, index) => {
+      const color = segment.proposal
+        ? PROPOSAL_THREAD_COLOR
+        : this.selection.selectedSeamId === segment.seamId
+          ? SELECTED_THREAD_COLOR
+          : segment.inactive
+            ? INACTIVE_THREAD_COLOR
+            : confirmedThreadColor(segment.seamGroupId);
+      writeSegmentColor(threadColors, index, color);
+    });
     threadColors.needsUpdate = true;
 
     const notchColors = this.notchLines.geometry.getAttribute("color") as THREE.BufferAttribute;
     this.directionNotches.forEach((notch, notchIndex) => {
       const base = notchIndex * 6;
-      for (let offset = 0; offset < 3; offset += 1) {
-        writeSegmentColor(notchColors, base + offset, notch.proposal ? PROPOSAL_THREAD_COLOR : FIRST_COLOR);
-      }
-      for (let offset = 3; offset < 6; offset += 1) {
-        writeSegmentColor(notchColors, base + offset, notch.proposal ? PROPOSAL_THREAD_COLOR : SECOND_COLOR);
-      }
+      const selected = this.selection.selectedSeamId === notch.seamId;
+      const firstColor = notch.proposal
+        ? PROPOSAL_THREAD_COLOR
+        : selected ? SELECTED_THREAD_COLOR : notch.inactive ? INACTIVE_THREAD_COLOR : FIRST_COLOR;
+      const secondColor = notch.proposal
+        ? PROPOSAL_THREAD_COLOR
+        : selected ? SELECTED_THREAD_COLOR : notch.inactive ? INACTIVE_THREAD_COLOR : SECOND_COLOR;
+      for (let offset = 0; offset < 3; offset += 1) writeSegmentColor(notchColors, base + offset, firstColor);
+      for (let offset = 3; offset < 6; offset += 1) writeSegmentColor(notchColors, base + offset, secondColor);
     });
     notchColors.needsUpdate = true;
   }
@@ -218,12 +253,15 @@ function buildThreadSegments(
   meshes: readonly GarmentAssemblyMeshData[],
   state: GarmentAssemblyState,
   proposalConstraints: readonly AssemblyStitchConstraint[],
+  inactiveConstraints: readonly AssemblyStitchConstraint[],
 ): ThreadSegment[] {
   const meshById = new Map(meshes.map((mesh) => [mesh.key, mesh]));
   const instanceById = new Map(state.instances.map((instance) => [instance.id, instance]));
-  const canonical = [...state.stitchConstraints.map((constraint) => ({ constraint, proposal: false })),
-    ...proposalConstraints.map((constraint) => ({ constraint, proposal: true }))]
-    .flatMap(({ constraint, proposal }) => {
+  const canonical = [
+    ...state.stitchConstraints.map((constraint) => ({ constraint, proposal: false, inactive: false })),
+    ...proposalConstraints.map((constraint) => ({ constraint, proposal: true, inactive: false })),
+    ...inactiveConstraints.map((constraint) => ({ constraint, proposal: false, inactive: true })),
+  ].flatMap(({ constraint, proposal, inactive }) => {
       if (!constraint.instanceA || !constraint.instanceB || constraint.seamGroupId.startsWith("dart:")) return [];
       const firstMesh = meshById.get(constraint.instanceA);
       const secondMesh = meshById.get(constraint.instanceB);
@@ -241,6 +279,7 @@ function buildThreadSegments(
         firstParticleStart: firstInstance.particleStart,
         secondParticleStart: secondInstance.particleStart,
         proposal,
+        inactive,
         progress: Number.isFinite(constraint.progress) ? constraint.progress! : 0,
       } satisfies ThreadSegment];
     });
@@ -258,7 +297,7 @@ function buildThreadSegments(
 function resampleCanonicalThreads(segments: readonly ThreadSegment[]): ThreadSegment[] {
   const grouped = new Map<string, ThreadSegment[]>();
   for (const segment of segments) {
-    const key = `${segment.proposal ? "proposal" : "confirmed"}/${segment.seamId}/${segment.firstMesh.key}/${segment.secondMesh.key}`;
+    const key = `${segment.proposal ? "proposal" : segment.inactive ? "inactive" : "confirmed"}/${segment.seamId}/${segment.firstMesh.key}/${segment.secondMesh.key}`;
     const group = grouped.get(key) ?? [];
     group.push(segment);
     grouped.set(key, group);
@@ -302,7 +341,7 @@ function resampleCanonicalThreads(segments: readonly ThreadSegment[]): ThreadSeg
 function buildDirectionNotches(segments: readonly ThreadSegment[]): DirectionNotch[] {
   const grouped = new Map<string, ThreadSegment[]>();
   for (const segment of segments) {
-    const key = `${segment.proposal ? "proposal" : "confirmed"}/${segment.seamId}/${segment.firstMesh.key}/${segment.secondMesh.key}`;
+    const key = `${segment.proposal ? "proposal" : segment.inactive ? "inactive" : "confirmed"}/${segment.seamId}/${segment.firstMesh.key}/${segment.secondMesh.key}`;
     const group = grouped.get(key) ?? [];
     group.push(segment);
     grouped.set(key, group);
@@ -323,9 +362,20 @@ function buildDirectionNotches(segments: readonly ThreadSegment[]): DirectionNot
       // canonical compiler, so the arrow visibly flips with Reverse.
       secondStart: cloneReference(first.secondReference),
       secondEnd: cloneReference(last.secondReference),
+      seamId: first.seamId,
+      inactive: first.inactive,
       proposal: first.proposal,
     } satisfies DirectionNotch];
   });
+}
+
+function confirmedThreadColor(seamGroupId: string): THREE.Color {
+  let hash = 2166136261;
+  for (let index = 0; index < seamGroupId.length; index += 1) {
+    hash ^= seamGroupId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return CONFIRMED_THREAD_PALETTE[(hash >>> 0) % CONFIRMED_THREAD_PALETTE.length];
 }
 
 function interpolateReference(

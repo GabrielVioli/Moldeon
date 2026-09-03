@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
-import type { Seam } from "../domain/pattern";
+import { seamSideRanges, type Seam } from "../domain/pattern";
 import { useEditorStore } from "../state/editorStore";
 import {
   approvedAvatarForBody,
@@ -71,11 +71,30 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [arrangementAxis, setArrangementAxis] = useState<ArrangementAxis>("free");
   const [arrangementNotice, setArrangementNotice] = useState<string | null>(null);
   const [touchMultiSelect, setTouchMultiSelect] = useState(false);
+  const [showSewingConnections, setShowSewingConnections] = useState(() => {
+    try {
+      return window.localStorage.getItem("moldeon.showSewingConnections") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const previousSewingActiveRef = useRef(sewingActive);
   const arrangementToolRef = useRef<ArrangementTool>(arrangementTool);
   const arrangementAxisRef = useRef<ArrangementAxis>(arrangementAxis);
   const touchMultiSelectRef = useRef(touchMultiSelect);
   const seamDraft = useEditorStore((state) => state.seamDraft);
   const seamProposal = useEditorStore((state) => state.seamProposal);
+  const selectedSeamId = useEditorStore((state) => state.selectedSeamId);
+  const selectedSeam = useMemo(
+    () => assemblyInput.garmentProjection.seams?.find((seam) => seam.id === selectedSeamId) ?? null,
+    [assemblyInput.garmentProjection.seams, selectedSeamId],
+  );
+  const sewingFirstRanges = seamProposal?.firstRanges
+    ?? seamDraft?.first
+    ?? (selectedSeam ? seamSideRanges(selectedSeam, "first") : []);
+  const sewingSecondRanges = seamProposal?.secondRanges
+    ?? seamDraft?.second
+    ?? (selectedSeam ? seamSideRanges(selectedSeam, "second") : []);
   const proposalSeam = useMemo<Seam | null>(() => {
     if (!seamProposal) return null;
     const firstRanges = seamProposal.firstRanges ?? [seamProposal.first];
@@ -156,10 +175,14 @@ export const GarmentViewport = memo(function GarmentViewport({
         viewport.setArrangementTouchMultiSelect(touchMultiSelectRef.current);
         viewport.setSewingState({
           active: sewingActive,
-          first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
-          second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
+          showThreads: showSewingConnections,
+          selectedSeamId,
+          first: sewingFirstRanges,
+          second: sewingSecondRanges,
           proposal: proposalSeam,
-        }, (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT));
+        },
+        (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT),
+        (seamId) => useEditorStore.getState().selectSeam(seamId));
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
@@ -226,6 +249,11 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [active, assemblyInput.arrangementRevision, displayMode]);
 
   useEffect(() => {
+    if (!active || displayMode !== "side-preview") return;
+    viewportRef.current?.updateSewingRelationships(assemblyInput);
+  }, [active, assemblyInput.sewingRevision, displayMode]);
+
+  useEffect(() => {
     if (!active) return;
     const frame = window.requestAnimationFrame(() => viewportRef.current?.refresh());
     return () => window.cancelAnimationFrame(frame);
@@ -272,6 +300,20 @@ export const GarmentViewport = memo(function GarmentViewport({
   }, [wireframe]);
 
   useEffect(() => {
+    if (sewingActive && !previousSewingActiveRef.current) setShowSewingConnections(true);
+    previousSewingActiveRef.current = sewingActive;
+  }, [sewingActive]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("moldeon.showSewingConnections", String(showSewingConnections));
+    } catch {
+      // Storage may be unavailable in private/restricted contexts; visibility
+      // remains a local UI preference and never affects SeamGroupV3.active.
+    }
+  }, [showSewingConnections]);
+
+  useEffect(() => {
     arrangementToolRef.current = arrangementTool;
     viewportRef.current?.setArrangementTool(arrangementTool);
   }, [arrangementTool]);
@@ -289,11 +331,15 @@ export const GarmentViewport = memo(function GarmentViewport({
   useEffect(() => {
     viewportRef.current?.setSewingState({
       active: sewingActive,
-      first: seamProposal?.firstRanges ?? seamDraft?.first ?? [],
-      second: seamProposal?.secondRanges ?? seamDraft?.second ?? [],
+      showThreads: showSewingConnections,
+      selectedSeamId,
+      first: sewingFirstRanges,
+      second: sewingSecondRanges,
       proposal: proposalSeam,
-    }, (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT));
-  }, [proposalSeam, seamDraft, seamProposal, sewingActive]);
+    },
+    (range, panelInstanceId, hitT) => useEditorStore.getState().selectSeamRange(range, panelInstanceId, hitT),
+    (seamId) => useEditorStore.getState().selectSeam(seamId));
+  }, [proposalSeam, seamDraft, seamProposal, sewingActive, showSewingConnections, selectedSeamId, selectedSeam]);
 
   return (
     <div
@@ -318,6 +364,16 @@ export const GarmentViewport = memo(function GarmentViewport({
             ? `Manequim aprovado · ${approvedAvatar.assetId}`
             : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
+      {displayMode === "side-preview" ? (
+        <button
+          type="button"
+          className="viewport-sewing-visibility"
+          aria-pressed={showSewingConnections}
+          onClick={() => setShowSewingConnections((visible) => !visible)}
+        >
+          {showSewingConnections ? "Ocultar conexões" : "Mostrar conexões"}
+        </button>
+      ) : null}
       {displayMode === "side-preview" && !sewingActive ? (
         <div className="viewport-arrangement-controls" aria-label="Ações da montagem 3D">
           <div className="viewport-arrangement-status">

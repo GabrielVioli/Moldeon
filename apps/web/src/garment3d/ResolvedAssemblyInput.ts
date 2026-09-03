@@ -33,6 +33,8 @@ export interface ResolvedAssemblyInput {
   geometrySignatures: ReadonlyMap<string, string>;
   signature: string;
   geometryRevision: string;
+  /** Changes only when canonical sewing relationships change. */
+  sewingRevision: string;
   arrangementRevision: string;
   simulationRevision: string;
   diagnostics: PatternDocumentValidationIssue[];
@@ -133,8 +135,8 @@ export function updateResolvedAssemblyArrangements(
   }));
   const simulationRevision = stableHash(JSON.stringify({
     arrangementRevision,
+    sewingRevision: input.sewingRevision,
     simulationInstances: simulationPanelInstances.map((instance) => instance.id),
-    seams: input.seamGroups,
     fabrics: document.fabrics.map((fabric) => ({ id: fabric.id, physics: fabric.physics })),
     simulationSettings: document.simulationSettings,
     body: document.body,
@@ -199,9 +201,11 @@ function finalizeResolvedAssemblyInput(
   const includedPatternIds = new Set(includedInstances.map((instance) => instance.sourcePatternId));
   const definitions = document.patternDefinitions.filter((definition) => includedPatternIds.has(definition.id));
   const definitionIds = new Set(definitions.map((definition) => definition.id));
+  // Keep inactive SeamGroupV3 relations in the resolved authoring document.
+  // Physical compilers already honor `active`; dropping them here made Edit Sewing
+  // unable to render/select an inactive relationship and coupled visibility to physics.
   const seamGroups = document.seamGroups.filter((group) =>
-    group.active
-    && [...group.first, ...group.second].every((range) => definitionIds.has(range.pieceId)),
+    [...group.first, ...group.second].every((range) => definitionIds.has(range.pieceId)),
   );
   const activePatternId = document.workspace.activePatternId;
   const assemblyDocument = parsePatternDocumentV3({
@@ -245,8 +249,11 @@ function finalizeResolvedAssemblyInput(
       copyIndex: instance.copyIndex,
       mirrored: instance.mirrored,
     })),
-    seams: seamGroups,
     fabrics: document.fabrics.map((fabric) => ({ id: fabric.id })),
+  }));
+  const sewingRevision = stableHash(JSON.stringify({
+    geometryRevision,
+    seams: seamGroups,
   }));
   const arrangementRevision = stableHash(JSON.stringify({
     geometryRevision,
@@ -264,8 +271,8 @@ function finalizeResolvedAssemblyInput(
   }));
   const simulationRevision = stableHash(JSON.stringify({
     arrangementRevision,
+    sewingRevision,
     simulationInstances: simulationInstances.map((instance) => instance.id),
-    seams: seamGroups,
     fabrics: document.fabrics.map((fabric) => ({ id: fabric.id, physics: fabric.physics })),
     simulationSettings: document.simulationSettings,
     body: document.body,
@@ -284,6 +291,7 @@ function finalizeResolvedAssemblyInput(
     geometrySignatures,
     signature,
     geometryRevision,
+    sewingRevision,
     arrangementRevision,
     simulationRevision,
     diagnostics: validatePatternDocumentV3(document),
