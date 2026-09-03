@@ -1,0 +1,71 @@
+name: Recovery 11.0.8 sewing Phase E patch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "recovery/11.0.8-sewing-2d-3d-authoring"
+    paths:
+      - "scripts/apply-11-0-8-sewn-component-selection.py"
+      - ".github/workflows/recovery-11-0-8-sewing-phase-e.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-11-0-8-sewing-phase-e
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: "recovery/11.0.8-sewing-2d-3d-authoring"
+          fetch-depth: 0
+
+      - name: Verify triggering commit is branch head
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Apply scoped sewn-component and direction patch
+        run: python3 scripts/apply-11-0-8-sewn-component-selection.py
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Focused sewing tests
+        run: npm run test --workspace @moldeon/web -- src/viewport/SewingInteraction.test.ts src/state/assemblyHistory.test.ts --reporter=verbose
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit validated Phase E patch
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/viewport/GlobalThreeViewport.ts \
+            apps/web/src/components/AssemblyPanel.tsx
+          git commit -m "feat(sewing): move sewn components and expose direction"
+          git push origin HEAD:recovery/11.0.8-sewing-2d-3d-authoring
