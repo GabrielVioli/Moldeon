@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GLOBAL = ROOT / "apps/web/src/viewport/GlobalThreeViewport.ts"
 ASSEMBLY_PANEL = ROOT / "apps/web/src/components/AssemblyPanel.tsx"
+ASSEMBLY_HISTORY_TEST = ROOT / "apps/web/src/state/assemblyHistory.test.ts"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -93,5 +94,20 @@ panel = replace_once(
     "reverse sewing label",
 )
 ASSEMBLY_PANEL.write_text(panel, encoding="utf-8")
+
+test = ASSEMBLY_HISTORY_TEST.read_text(encoding="utf-8")
+test = replace_once(
+    test,
+    '''    expect(overlay.threadLines.geometry.getAttribute("position").count)
+      .toBe(arrangement.state.stitchConstraints.length * 2);
+''',
+    '''    expect(overlay.threadLines.geometry.getAttribute("position").count)
+      .toBe(overlay.visualThreadCount * 2);
+    expect(overlay.visualThreadCount).toBeGreaterThanOrEqual(arrangement.state.stitchConstraints.length);
+    expect(overlay.directionNotchCount).toBeGreaterThan(0);
+''',
+    "CLO-style visual thread density expectation",
+)
+ASSEMBLY_HISTORY_TEST.write_text(test, encoding="utf-8")
 
 print("Applied 11.0.8 sewn-component movement + Phase E UI patch")
