@@ -61,6 +61,14 @@ export const Toolbar = memo(function Toolbar({
   canRedo,
 }: ToolbarProps) {
   const activateTool = (tool: EditorTool) => {
+    // Costurar is a modal authoring tool. Clicking it again is the explicit
+    // exit path on desktop and touch, so users never need to enter another
+    // modeling tool just to leave sewing mode.
+    if (tool === "seam" && activeTool === "seam") {
+      onSelectTool("select");
+      return;
+    }
+
     const before = useEditorStore.getState();
     const modelingTargetId = before.activePieceId
       && before.garment.pieces.some((piece) => piece.id === before.activePieceId)
@@ -103,21 +111,28 @@ export const Toolbar = memo(function Toolbar({
       </nav>
 
       <nav className="tool-buttons" aria-label="Ferramentas principais" data-testid="primary-tools">
-        {PRIMARY_TOOLS.map(({ tool, label, title, icon }) => (
-          <button
-            key={tool}
-            className={`tool-button${activeTool === tool ? " active" : ""}${tool === "seam" && workspaceMode === "assembly" ? " seam-tool is-essential" : tool === "seam" ? " seam-tool" : ""}`}
-            type="button"
-            onClick={() => activateTool(tool)}
-            aria-pressed={activeTool === tool}
-            aria-label={label}
-            title={title}
-            data-testid={`primary-tool-${tool}`}
-          >
-            <ToolGlyph name={icon} />
-            <span className="tool-label">{label}</span>
-          </button>
-        ))}
+        {PRIMARY_TOOLS.map(({ tool, label, title, icon }) => {
+          const active = activeTool === tool;
+          const seamExit = tool === "seam" && active;
+          const visibleLabel = seamExit ? "Sair" : label;
+          const accessibleLabel = seamExit ? "Sair do modo Costurar" : label;
+          const effectiveTitle = seamExit ? "Sair do modo Costurar" : title;
+          return (
+            <button
+              key={tool}
+              className={`tool-button${active ? " active" : ""}${tool === "seam" && workspaceMode === "assembly" ? " seam-tool is-essential" : tool === "seam" ? " seam-tool" : ""}`}
+              type="button"
+              onClick={() => activateTool(tool)}
+              aria-pressed={active}
+              aria-label={accessibleLabel}
+              title={effectiveTitle}
+              data-testid={`primary-tool-${tool}`}
+            >
+              <ToolGlyph name={icon} />
+              <span className="tool-label">{visibleLabel}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <div className="toolbar-actions">
