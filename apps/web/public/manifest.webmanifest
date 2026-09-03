@@ -1,0 +1,12 @@
+{
+  "name": "Moldeon",
+  "short_name": "Moldeon",
+  "description": "Modelagem 2D e montagem de roupas em 3D.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f1eb",
+  "theme_color": "#111214",
+  "lang": "pt-BR"
+}

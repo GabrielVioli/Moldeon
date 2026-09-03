@@ -1,0 +1,499 @@
+/*
+ * Mobile-first touch workspace.
+ *
+ * Loaded last on purpose. This layer changes presentation/interaction chrome
+ * only; domain, arrangement, garment3d and physics remain untouched.
+ */
+
+@media (pointer: coarse) {
+  .toolbar button,
+  .toolbar summary,
+  .workspace-tab,
+  .pieces-panel button,
+  .pieces-panel input[type="checkbox"],
+  .point-actions button,
+  .context-bar button,
+  .context-bar summary,
+  .canvas-navigation button,
+  .editor-core-numeric-panel button,
+  .editor-core-numeric-panel input,
+  .right-panel-toggle,
+  .right-panel-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .pattern-canvas,
+  .editor-core-canvas-shell {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .pieces-item,
+  .tool-button,
+  .workspace-tab,
+  .canvas-navigation,
+  .context-bar,
+  .editor-core-numeric-panel {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-touch-target: 44px;
+  }
+
+  html,
+  body,
+  #root,
+  .app-shell {
+    width: 100%;
+    height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  /* The mobile canvas needs the pixels more than the development footer does. */
+  .app-shell {
+    grid-template-rows: auto minmax(0, 1fr) 0;
+  }
+
+  .status-bar {
+    display: none !important;
+  }
+
+  /* Two compact rows: modes/actions, then tools. Keep every touch target >=44px. */
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 44px 46px;
+    min-height: 90px;
+    gap: 0 5px;
+    padding: 0 max(5px, env(safe-area-inset-right)) 0 max(5px, env(safe-area-inset-left));
+  }
+
+  .workspace-mode-switch {
+    align-self: center;
+    height: 44px;
+  }
+
+  .workspace-mode-switch button,
+  .history-button,
+  .toolbar-preview-button,
+  .toolbar-overflow > summary,
+  .tool-button {
+    min-height: 44px;
+  }
+
+  .workspace-mode-switch button {
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+
+  .history-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .toolbar-preview-button {
+    min-width: 50px;
+    height: 44px;
+  }
+
+  .toolbar-overflow > summary {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tool-buttons {
+    justify-content: space-evenly;
+    gap: 2px;
+    overflow: visible;
+  }
+
+  .tool-button {
+    width: 48px;
+    max-width: 48px;
+    height: 44px;
+    flex: 0 0 48px;
+    padding: 0;
+  }
+
+  .tool-glyph {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  /* Keep mode tabs tappable, but do not let them consume a large third band. */
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 46px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 46px;
+    padding: 3px 4px;
+  }
+
+  .workspace-tab {
+    min-height: 40px;
+    padding-inline: 6px;
+    font-size: 11px;
+  }
+
+  /* Title becomes a thin information strip instead of another toolbar. */
+  .editor-panel {
+    grid-template-rows: 38px minmax(0, 1fr);
+  }
+
+  .panel-titlebar {
+    min-height: 38px;
+    padding: 0 7px 0 10px;
+  }
+
+  .panel-titlebar strong {
+    max-width: 70vw;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .right-panel-toggle {
+    width: 44px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+  }
+
+  /* Piece list becomes one compact horizontal rail. */
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px minmax(0, 1fr);
+  }
+
+  .pieces-panel {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    grid-template-rows: 58px;
+    min-height: 58px;
+    max-height: 58px;
+    border-right: 0;
+    border-bottom: 1px solid #cbc8c1;
+    overflow: hidden;
+  }
+
+  .pieces-panel header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 2px;
+    width: 76px;
+    height: 58px;
+    min-height: 58px;
+    padding: 3px 2px 3px 6px;
+    border-bottom: 0;
+  }
+
+  .pieces-panel header strong {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+  }
+
+  .pieces-panel header button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .pieces-list {
+    align-items: center;
+    gap: 5px;
+    height: 58px;
+    min-height: 58px;
+    padding: 4px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .pieces-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pieces-item {
+    flex: 0 0 min(176px, 52vw);
+    min-height: 48px;
+    height: 48px;
+    scroll-snap-align: start;
+  }
+
+  .pieces-item > input[type="checkbox"],
+  .pieces-visibility,
+  .pieces-lock,
+  .pieces-more {
+    min-width: 36px;
+    width: 36px;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .pieces-name {
+    min-height: 44px;
+  }
+
+  /* Canvas owns the remaining viewport. Point actions float instead of stealing a row. */
+  .canvas-stack {
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .point-actions {
+    position: absolute !important;
+    z-index: 18;
+    top: 8px;
+    left: max(8px, env(safe-area-inset-left));
+    display: flex;
+    gap: 6px;
+    width: auto;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    pointer-events: auto;
+  }
+
+  .point-actions button {
+    min-width: 58px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 11px;
+    box-shadow: 0 3px 12px rgba(40, 35, 28, 0.1);
+    font-size: 11px;
+  }
+
+  .draft-banner,
+  .draft-error {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+  }
+
+  /* Numeric editing is a compact bottom sheet and never a canvas-blocking card in the middle. */
+  .editor-core-numeric-panel {
+    position: absolute !important;
+    z-index: 24 !important;
+    top: auto !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    bottom: calc(62px + env(safe-area-inset-bottom)) !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
+    width: auto !important;
+    max-height: min(38dvh, 300px) !important;
+    padding: 9px !important;
+    gap: 7px !important;
+    border-radius: 14px !important;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .editor-core-numeric-panel strong {
+    font-size: 13px;
+  }
+
+  .editor-core-numeric-panel button {
+    min-height: 44px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .editor-core-numeric-panel input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  /* Tool-specific actions are a bottom sheet. Finger room beats persistent chrome. */
+  .context-bar {
+    z-index: 23;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(62px + env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-width: none;
+    max-height: min(34dvh, 270px);
+    padding: 10px;
+    border-radius: 14px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .context-bar button,
+  .context-bar summary {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  /* Navigation becomes a thumb-friendly dock instead of a full-width slab. */
+  .canvas-navigation {
+    z-index: 25;
+    right: auto !important;
+    bottom: max(7px, env(safe-area-inset-bottom)) !important;
+    left: 50% !important;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    min-height: 50px;
+    padding: 3px 5px;
+    gap: 2px;
+    border-radius: 14px;
+    transform: translateX(-50%);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+
+  .canvas-navigation::-webkit-scrollbar {
+    display: none;
+  }
+
+  .canvas-navigation button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 9px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  /* Popovers become reachable touch sheets instead of tiny desktop menus. */
+  .pieces-popover {
+    right: 8px !important;
+    left: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(58dvh, 420px);
+    overflow: auto;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .pieces-popover button {
+    min-height: 46px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .right-panel-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* iPhone-sized portrait screens: protect the canvas from long labels. */
+@media (max-width: 430px) {
+  .workspace-mode-switch button {
+    padding-inline: 7px;
+    font-size: 10px;
+  }
+
+  .toolbar-actions {
+    gap: 2px;
+  }
+
+  .tool-button {
+    width: 46px;
+    max-width: 46px;
+    flex-basis: 46px;
+  }
+
+  .panel-titlebar strong {
+    max-width: 64vw;
+  }
+
+  .pieces-panel {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .pieces-panel header {
+    grid-template-columns: 1fr 44px;
+    width: 68px;
+    padding-left: 4px;
+  }
+
+  .pieces-panel header strong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .pieces-item {
+    flex-basis: min(164px, 56vw);
+  }
+
+  .canvas-navigation button {
+    padding-inline: 7px;
+  }
+}
+
+/* Landscape phones should become almost entirely canvas. */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 42px 42px;
+    min-height: 84px;
+  }
+
+  .workspace.mode-modeling,
+  .workspace.mode-assembly,
+  .workspace.mode-fitting,
+  .workspace.mode-preparation,
+  .workspace.is-right-panel-closed.mode-modeling,
+  .workspace.is-right-panel-closed.mode-assembly,
+  .workspace.is-right-panel-closed.mode-fitting,
+  .workspace.is-right-panel-closed.mode-preparation {
+    grid-template-rows: 40px minmax(0, 1fr);
+  }
+
+  .mobile-workspace-tabs {
+    min-height: 40px;
+  }
+
+  .editor-panel {
+    grid-template-rows: 32px minmax(0, 1fr);
+  }
+
+  .panel-titlebar {
+    min-height: 32px;
+  }
+
+  .editor-body {
+    grid-template-rows: 50px minmax(0, 1fr);
+  }
+
+  .pieces-panel,
+  .pieces-panel header,
+  .pieces-list {
+    min-height: 50px;
+    height: 50px;
+    max-height: 50px;
+  }
+
+  .pieces-item {
+    min-height: 44px;
+    height: 44px;
+  }
+}

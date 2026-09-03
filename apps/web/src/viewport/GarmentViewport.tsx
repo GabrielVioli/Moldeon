@@ -66,8 +66,10 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [arrangementTool, setArrangementTool] = useState<ArrangementTool>("move");
   const [arrangementAxis, setArrangementAxis] = useState<ArrangementAxis>("free");
   const [arrangementNotice, setArrangementNotice] = useState<string | null>(null);
+  const [touchMultiSelect, setTouchMultiSelect] = useState(false);
   const arrangementToolRef = useRef<ArrangementTool>(arrangementTool);
   const arrangementAxisRef = useRef<ArrangementAxis>(arrangementAxis);
+  const touchMultiSelectRef = useRef(touchMultiSelect);
   const approvedAvatar = approvedAvatarForBody(assemblyInput.document.body.type);
   const selectedArrangementState = selectedArrangementIds.length === 0
     ? null
@@ -84,6 +86,7 @@ export const GarmentViewport = memo(function GarmentViewport({
   arrangementInteractionRef.current = onArrangementInteractionChange;
   arrangementToolRef.current = arrangementTool;
   arrangementAxisRef.current = arrangementAxis;
+  touchMultiSelectRef.current = touchMultiSelect;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -124,6 +127,7 @@ export const GarmentViewport = memo(function GarmentViewport({
         );
         viewport.setArrangementTool(arrangementToolRef.current);
         viewport.setArrangementAxis(arrangementAxisRef.current);
+        viewport.setArrangementTouchMultiSelect(touchMultiSelectRef.current);
         viewport.setSimulationDevSettings(devSettingsRef.current);
         viewport.setWireframe(wireframeRef.current);
         onBackendChange(viewport.backend);
@@ -245,6 +249,11 @@ export const GarmentViewport = memo(function GarmentViewport({
     viewportRef.current?.setArrangementAxis(arrangementAxis);
   }, [arrangementAxis]);
 
+  useEffect(() => {
+    touchMultiSelectRef.current = touchMultiSelect;
+    viewportRef.current?.setArrangementTouchMultiSelect(touchMultiSelect);
+  }, [touchMultiSelect]);
+
   return (
     <div
       className="viewport-host"
@@ -271,22 +280,24 @@ export const GarmentViewport = memo(function GarmentViewport({
         <div className="viewport-arrangement-controls" aria-label="Ações da montagem 3D">
           <div className="viewport-arrangement-status">
             <strong>{selectedArrangementIds.length > 0
-              ? `${selectedArrangementIds.length} selecionada(s) · ${selectedArrangementState}`
+              ? `${selectedArrangementIds.length === 1 ? "1 selecionada" : `${selectedArrangementIds.length} selecionadas`} · ${selectedArrangementState}`
               : "Selecione uma peça"}</strong>
-            <small role={arrangementNotice ? "status" : undefined}>{arrangementNotice ?? (arrangementTool === "move"
-              ? arrangementAxis === "free" ? "Arraste a peça livremente" : `Arraste o handle ${arrangementAxis.toUpperCase()}`
-              : `Arraste o arco ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`)}</small>
+            <small role={arrangementNotice ? "status" : undefined}>{arrangementNotice ?? (touchMultiSelect
+              ? "Toque nas peças para adicionar ou remover da seleção"
+              : arrangementTool === "move"
+                ? arrangementAxis === "free" ? "Arraste a peça livremente" : `Arraste o handle ${arrangementAxis.toUpperCase()}`
+                : `Arraste o arco ${(arrangementAxis === "free" ? "z" : arrangementAxis).toUpperCase()}`)}</small>
           </div>
           <div className="viewport-arrangement-actions">
             <button
               type="button"
-              className="arrangement-tool-button"
+              className="arrangement-tool-button arrangement-primary-action"
               aria-pressed={arrangementTool === "move"}
               onClick={() => { setArrangementTool("move"); setArrangementAxis("free"); }}
             >Mover</button>
             <button
               type="button"
-              className="arrangement-tool-button"
+              className="arrangement-tool-button arrangement-primary-action"
               aria-pressed={arrangementTool === "rotate"}
               onClick={() => { setArrangementTool("rotate"); if (arrangementAxis === "free") setArrangementAxis("z"); }}
             >Girar</button>
@@ -298,28 +309,54 @@ export const GarmentViewport = memo(function GarmentViewport({
                 <button key={axis} type="button" aria-pressed={arrangementAxis === axis} onClick={() => setArrangementAxis(axis)}>{axis.toUpperCase()}</button>
               ))}
             </div>
-            <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => {
+            <button type="button" className="arrangement-primary-action" disabled={selectedArrangementIds.length === 0} onClick={() => {
               const outcome = viewportRef.current?.adjustArrangementSelectionToBody();
               if (!outcome) return;
               if (outcome.tooFar > 0) setArrangementNotice("Aproxime o painel do corpo para ajustar.");
               else if (outcome.failed > 0) setArrangementNotice("Não foi possível ajustar sem deformar o molde.");
               else if (outcome.adjusted > 0) setArrangementNotice("Ajustado no placement atual.");
             }}>Ajustar</button>
-            <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar face</button>
+            <button type="button" className="arrangement-secondary-action" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar face</button>
             <button
               type="button"
+              className="arrangement-secondary-action"
               disabled={selectedArrangementIds.length === 0}
               aria-pressed={selectionPinned}
               onClick={() => setSelectionPinned(viewportRef.current?.toggleArrangementPin() ?? false)}
             >{selectionPinned ? "Soltar" : "Fixar"}</button>
-            <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.focusArrangementSelection()}>Focar</button>
-            <details className="viewport-arrangement-more">
+            <button type="button" className="arrangement-secondary-action" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.focusArrangementSelection()}>Focar</button>
+            <details className="viewport-arrangement-more arrangement-desktop-more">
               <summary aria-label="Ajustes de rotação">Rotação fina</summary>
               <div className="arrangement-rotation-grid">
                 {(["x", "y", "z"] as const).flatMap((axis) => ([
                   <button key={`${axis}-minus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, -15)}>{axis.toUpperCase()} −15°</button>,
                   <button key={`${axis}-plus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, 15)}>{axis.toUpperCase()} +15°</button>,
                 ]))}
+              </div>
+            </details>
+            <button
+              type="button"
+              className="arrangement-mobile-multiselect"
+              aria-pressed={touchMultiSelect}
+              onClick={() => setTouchMultiSelect((current) => !current)}
+            >{touchMultiSelect ? "Concluir" : "Várias"}</button>
+            <details className="viewport-arrangement-more arrangement-mobile-more">
+              <summary aria-label="Mais ações da montagem">Mais</summary>
+              <div>
+                <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.flipArrangementSelection()}>Virar face</button>
+                <button
+                  type="button"
+                  disabled={selectedArrangementIds.length === 0}
+                  aria-pressed={selectionPinned}
+                  onClick={() => setSelectionPinned(viewportRef.current?.toggleArrangementPin() ?? false)}
+                >{selectionPinned ? "Soltar" : "Fixar"}</button>
+                <button type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.focusArrangementSelection()}>Focar</button>
+                <div className="arrangement-rotation-grid">
+                  {(["x", "y", "z"] as const).flatMap((axis) => ([
+                    <button key={`mobile-${axis}-minus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, -15)}>{axis.toUpperCase()} −15°</button>,
+                    <button key={`mobile-${axis}-plus`} type="button" disabled={selectedArrangementIds.length === 0} onClick={() => viewportRef.current?.rotateArrangementSelection(axis, 15)}>{axis.toUpperCase()} +15°</button>,
+                  ]))}
+                </div>
               </div>
             </details>
           </div>

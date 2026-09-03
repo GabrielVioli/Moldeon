@@ -5,6 +5,9 @@ import "./styles.css";
 import "./recovery.css";
 import "./responsive-workspace.css";
 import "./responsive-workspace-polish.css";
+import "./mobile-touch-workspace.css";
+import "./mobile-touch-workspace-v2.css";
+import "./mobile-touch-workspace-11-0-7a.css";
 
 if (import.meta.env.DEV) {
   void import("./dev/phase0AuditBridge").then(({ installPhase0AuditBridge }) =>
