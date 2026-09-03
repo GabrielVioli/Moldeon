@@ -71,6 +71,7 @@ import {
   type RigidBodyBarrierGroupState,
 } from "./ArrangementWorkspace";
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
+import { connectedSewingInstanceIds } from "./SewingInteraction";
 
 export type RenderBackend = "webgpu" | "webgl2";
 export type ThreeViewportMode = "assembly" | "fitting";
@@ -1152,12 +1153,29 @@ export class ThreeViewport {
         pointerType: event.pointerType,
         touchMultiSelect: this.arrangementTouchMultiSelect,
       });
+      // A confirmed seam makes its active physical connected component a
+      // rigid arrangement selection. We reuse the already-stable multi-select
+      // drag path instead of inventing a sewing movement solver: one authored
+      // translation/rotation is applied to every connected PanelInstanceV3.
+      const sewnComponentIds = new Set(connectedSewingInstanceIds(
+        this.assemblyState?.stitchConstraints ?? [],
+        item.key,
+      ));
       if (extendSelection) {
-        if (this.selectedInstanceIds.has(item.key)) this.selectedInstanceIds.delete(item.key);
-        else this.selectedInstanceIds.add(item.key);
-      } else if (!this.selectedInstanceIds.has(item.key)) {
-        this.selectedInstanceIds.clear();
-        this.selectedInstanceIds.add(item.key);
+        const removeComponent = [...sewnComponentIds].every((instanceId) =>
+          this.selectedInstanceIds.has(instanceId),
+        );
+        for (const instanceId of sewnComponentIds) {
+          if (removeComponent) this.selectedInstanceIds.delete(instanceId);
+          else this.selectedInstanceIds.add(instanceId);
+        }
+      } else {
+        const selectionAlreadyMatchesComponent = this.selectedInstanceIds.size === sewnComponentIds.size
+          && [...sewnComponentIds].every((instanceId) => this.selectedInstanceIds.has(instanceId));
+        if (!selectionAlreadyMatchesComponent) {
+          this.selectedInstanceIds.clear();
+          for (const instanceId of sewnComponentIds) this.selectedInstanceIds.add(instanceId);
+        }
       }
       active = this.selectedInstanceIds.has(item.key) && item.mesh.userData.arrangementPinned !== true
         ? item
@@ -1665,10 +1683,12 @@ export class ThreeViewport {
       : [];
     this.sewingOverlay.rebuild(this.garmentMeshes, this.assemblyState, this.sewingState, proposalConstraints);
     this.sewingOverlay.setVisible(this.viewportMode === "assembly" && this.sewingState.active);
-    this.host.dataset.sewingThreadCount = String(
+    this.host.dataset.sewingPhysicalThreadCount = String(
       (this.assemblyState?.stitchConstraints.filter((constraint) => !constraint.seamGroupId.startsWith("dart:")).length ?? 0)
       + proposalConstraints.length,
     );
+    this.host.dataset.sewingThreadCount = String(this.sewingOverlay.visualThreadCount);
+    this.host.dataset.sewingDirectionNotchCount = String(this.sewingOverlay.directionNotchCount);
     this.host.dataset.sewingProposalWarnings = JSON.stringify(proposalWarnings);
   }
 

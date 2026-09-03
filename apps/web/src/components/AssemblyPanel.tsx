@@ -188,7 +188,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
                 {inactive ? "Reativar" : "Desativar"}
               </button>
               <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) toggleSeamDirection(seam.id); }}>
-                Inverter
+                Inverter direção
               </button>
               <button type="button" onClick={(event) => { event.stopPropagation(); for (const seam of group) removeSeam(seam.id); }}>
                 Excluir

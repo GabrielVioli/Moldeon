@@ -149,7 +149,9 @@ describe("assembly document history", () => {
 
     expect(overlay.edgeLines.geometry.getAttribute("position").count).toBeGreaterThan(0);
     expect(overlay.threadLines.geometry.getAttribute("position").count)
-      .toBe(arrangement.state.stitchConstraints.length * 2);
+      .toBe(overlay.visualThreadCount * 2);
+    expect(overlay.visualThreadCount).toBeGreaterThanOrEqual(arrangement.state.stitchConstraints.length);
+    expect(overlay.directionNotchCount).toBeGreaterThan(0);
 
     overlay.dispose();
     meshes.forEach((item) => {
