@@ -37,6 +37,22 @@ jobs:
       - name: Apply refinement pass 2
         run: python3 scripts/refine-11-0-8-sewing-pass2.py
 
+      - name: Make overlay assertion capacity-aware
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/web/src/state/assemblyHistory.test.ts")
+          text = path.read_text(encoding="utf-8")
+          old = '''    expect(overlay.threadLines.geometry.getAttribute("position").count)
+              .toBe(overlay.visualThreadCount * 2);'''
+          new = '''    expect(overlay.threadLines.geometry.drawRange.count)
+              .toBe(overlay.visualThreadCount * 2);'''
+          if old not in text:
+              raise SystemExit("thread draw-count assertion not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Diff check
         run: git diff --check
 
