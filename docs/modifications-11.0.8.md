@@ -1,166 +1,251 @@
-# Moldeon 11.0.8 — checkpoint da Fase D
+# Moldeon 11.0.8 — checkpoint pós-Fase E
 
-## Estado do checkpoint
+## Estado atual
 
 - Branch: `recovery/11.0.8-sewing-2d-3d-authoring`.
-- SHA-base final da 11.0.7: `c8b341075d3e2fda0b5c979b7ca13fbbfb10c27c`.
-- SHA do checkpoint funcional das Fases A–D: `d661e7ecc06cbff22df1bff137187f16defffcea`.
-- Este documento é o handoff do código já publicado nesse SHA; o commit documental posterior não altera produto.
-- `docs/chat.md` foi consultado somente como possível fonte de continuação. Não havia informação técnica adicional da 11.0.8 que justificasse copiar histórico local; este handoff é autossuficiente e não depende daquele arquivo.
+- SHA-base final/manual da 11.0.7: `c8b341075d3e2fda0b5c979b7ca13fbbfb10c27c`.
+- Checkpoint funcional original das Fases A–D: `d661e7ecc06cbff22df1bff137187f16defffcea`.
+- Handoff documental anterior: `f2f9ea83667baf562ce48b5369c5debbc8e3782b`.
+- Patch validado de correções B–D + Fase E: `cb77e9897de17268d52cf25e3f7f7437704cf33f`.
+- Os helpers one-shot usados apenas para aplicar a alteração grande do viewport foram removidos depois da validação; não fazem parte da implementação do produto.
+- Próximo passo obrigatório: gate manual. Não iniciar Fase F antes dele.
 
-## Arquitetura encontrada e preservada
+## Contratos preservados
 
-- `PatternDocumentV3` permanece a fonte canônica persistida.
-- `PanelInstanceV3` permanece a identidade física das cópias de painéis.
-- `SeamGroupV3` continua representando sewing; nenhum modelo paralelo de costura foi criado.
-- Cada lado de uma seam usa a sequência canônica de `EdgeRange`, incluindo `definitionId`, `edgeId`, `tStart` e `tEnd`.
-- `editorStore` já possuía o estado transitório `seamDraft`, proposta/validação, confirmação e integração com histórico/undo-redo. Esse fluxo foi reutilizado.
-- `PatternCanvasLegacy` já resolvia seleção 2D em `EdgeRange`; o 3D passou a alimentar exatamente a mesma ação de domínio.
-- `PanelTopology` e o source mapping da malha fornecem `sourceSegmentId`/`edgeId`/`t`, preservando a identidade material apesar da tesselação.
-- `GarmentAssembly.buildGlobalStitchConstraints` continua sendo o compilador físico canônico: resolve comprimento de arco, direção da seam, interpolação e bindings físicos.
-- `GlobalThreeViewport`/`GarmentViewport` continuam responsáveis pelo ciclo de vida visual. O overlay de authoring é separado do XPBD e não altera `physics/**`.
-
-## Arquivos alterados no checkpoint funcional
-
-- `apps/web/src/App.tsx`
-- `apps/web/src/editor/PatternCanvasLegacy.tsx`
-- `apps/web/src/garment3d/GarmentAssembly.ts`
-- `apps/web/src/state/editorStore.ts`
-- `apps/web/src/state/assemblyHistory.test.ts`
-- `apps/web/src/viewport/GarmentViewport.tsx`
-- `apps/web/src/viewport/GlobalThreeViewport.ts`
-- `apps/web/src/viewport/SewingViewportOverlay.ts`
-- `docs/modifications-11.0.8.md`
-
-## Fases concluídas
-
-### Fase A — auditoria e contrato canônico
-
-- Auditados `SeamGroupV3`, `EdgeRange`, `seamDraft`, proposta, confirmação, `PanelTopology`, source mapping e o compilador de constraints físicas.
-- Confirmado que 2D e 3D podem compartilhar a mesma identidade persistente de range sem criar schema novo.
-- Mantidos `PatternDocumentV3`, `PanelInstanceV3`, `SeamGroupV3`, histórico e undo/redo existentes.
-
-### Fase B — seleção de EdgeRange no 3D
-
-- Adicionado overlay das bordas materiais das `PanelInstanceV3` no viewport 3D.
-- `SewingViewportOverlay.buildEdgeSegments` agrupa os `vertexSources` pela borda canônica e ordena os pontos pelo parâmetro `t`.
-- O hit-test retorna o mesmo `EdgeRange` usado no canvas 2D e também o `PanelInstanceV3.id` físico tocado.
-- A seleção 3D chama a mesma ação `selectSeamRange` do fluxo 2D; não existe draft separado por viewport.
-- No escopo atual, clicar um segmento 3D seleciona o range material completo da borda (`0..1`). Ranges parciais e Free Sewing continuam pendentes.
-
-### Fase C — fluxo rápido A→B
-
-- No modo Segment Sewing, o primeiro clique define o lado A e o segundo define o lado B.
-- Depois de A e B, a proposta/validação existente é produzida sem botão intermediário obrigatório.
-- Cliques podem ser 2D→2D, 3D→3D ou mistos 2D↔3D porque todos convergem para `selectSeamRange` e para o mesmo `seamDraft` global.
-- O fluxo continua sem mutar o documento enquanto é apenas proposta; a confirmação persiste `SeamGroupV3` e usa o histórico existente.
-
-### Fase D — threads 3D canônicos e batched
-
-- Propostas e costuras confirmadas são representadas por threads no 3D.
-- Threads confirmados são derivados de `assemblyState.stitchConstraints`, portanto representam os constraints físicos efetivamente compilados.
-- Threads da proposta são derivados pelo mesmo `buildGlobalStitchConstraints`, sem compilador visual paralelo e sem mutar o documento.
-- Cada ponta usa a `GlobalPointReference` do constraint, com `instanceId`, vértices e pesos interpolados; direção `same/opposite` e distribuição seguem o compilador canônico.
-- Não foram inferidos threads por proximidade, nomes, triangulação renderizada ou índices transitórios.
-
-## Compartilhamento de EdgeRange entre 2D e 3D
-
-O canvas 2D e o overlay 3D produzem a mesma estrutura de domínio. No 2D, o hit vem da geometria da definição. No 3D, `buildEdgeSegments` reconstrói a borda material a partir do source mapping da malha e associa cada segmento visual a `definitionId + edgeId + tStart/tEnd`. Ambos entregam o resultado a `editorStore.selectSeamRange`.
-
-Assim, o viewport de origem não muda a semântica persistida. Triângulos e vértices são detalhes de resolução visual/física, enquanto `EdgeRange` continua sendo a identidade autoral.
-
-## Bindings físicos e PanelInstanceV3
-
-- Ao selecionar no 3D, o `instanceId` tocado é preservado no estado transitório e materializado em `physicalBindings` durante a confirmação.
-- Ao selecionar no 2D, um binding pode ser materializado somente quando a definição resolve de forma inequívoca para uma única instância física.
-- Se houver múltiplas instâncias possíveis no 2D, o código não inventa uma identidade física; a ambiguidade permanece explícita para evolução do authoring.
-- IDs dos bindings continuam derivados do ID da seam, mantendo estabilidade e compatibilidade com o compilador existente.
-- `physicalBindings` apontam para `PanelInstanceV3.id`, nunca apenas para `PatternDefinitionV3`.
-
-## Batching, buffers e caches introduzidos
-
-`SewingViewportOverlay` mantém dois draw calls principais com `THREE.LineSegments`:
-
-1. um batch para bordas selecionáveis;
-2. um batch para threads de proposta e seams confirmadas.
-
-Estruturas mantidas pelo overlay:
-
-- `edgeSegments`, com identidade material, instância e extremos locais;
-- `threadSegments`, derivados dos constraints compilados;
-- chave de hover/seleção ativa;
-- buffers de posição e cor para os dois batches;
-- geometrias e materiais compartilhados durante a vida do overlay.
-
-Hover e atualização de pose atualizam atributos dos buffers existentes. Não foi criado worker, RAF, listener global, clone de documento ou cache global novo. A troca de `BufferAttribute` em rebuilds ainda precisa de soak/memory profiling na fase de performance.
-
-## Testes adicionados ou ampliados
-
-- `apps/web/src/state/assemblyHistory.test.ts`: cobertura de seleção/confirmação com binding físico e preservação por histórico/undo-redo.
-- Testes existentes de `ResolvedGarmentAssembly` e `CoarseSeamConstraints`: usados para validar compilação dos constraints, bindings e correspondência física.
-- Cobertura focada confirmou que o fluxo novo não altera o contrato do assembly nem o solver.
-
-## Resultados de validação
-
-- Baseline da 11.0.7: build PASS.
-- Baseline da 11.0.7: 31 testes focados de arrangement/mobile PASS.
-- Typecheck final: PASS.
-- Testes focados finais: 3 arquivos, 26 testes PASS (`assemblyHistory`, `ResolvedGarmentAssembly`, `CoarseSeamConstraints`).
-- Build final: PASS.
-- `git diff --check`: PASS; somente avisos de conversão LF/CRLF do ambiente Windows.
+- `PatternDocumentV3` continua canônico.
+- `PanelInstanceV3` continua sendo a identidade física de cada painel.
+- `SeamGroupV3` continua sendo o único modelo persistido de sewing.
+- `EdgeRange` continua sendo a identidade autoral compartilhada entre 2D e 3D.
+- `physicalBindings` apontam para `PanelInstanceV3`, sem inferência por nome/template/role.
+- `Costurar` continua com physics OFF.
 - Nenhum arquivo em `apps/web/src/physics/**` foi alterado.
+- XPBD, gravity, dress e body collision de `Provar` não foram ligados pelo authoring de seam.
+- Escala/arrangement da 11.0.7 não foram reabertos.
 
-### Browser automático
+## Fases A–D já implementadas
 
-O servidor Vite iniciou, mas o executável `agent-browser` não estava instalado/disponível no ambiente (`CommandNotFoundException`). Por isso o gate visual automatizado não foi executado. A validação manual de hit 2D↔3D, threads e interação continua necessária.
+### Fase A — auditoria
+
+Foram mapeados e reutilizados:
+
+- `SeamGroupV3`;
+- `EdgeRange`;
+- `seamDraft` / proposal / review;
+- `PanelTopology` e source mapping;
+- `GarmentAssembly.buildGlobalStitchConstraints`;
+- histórico/undo-redo existentes.
+
+### Fase B — seleção bidirecional
+
+- O 3D reconstrói bordas materiais a partir do source mapping.
+- Hit 3D resolve a mesma identidade `EdgeRange` usada no 2D.
+- 2D e 3D alimentam o mesmo `editorStore.selectSeamRange`.
+- Não existe draft paralelo por viewport.
+- Segment Sewing atual seleciona a borda inteira `0..1`.
+
+### Fase C — fluxo rápido 1:1
+
+- Primeiro click/tap = Side A.
+- Segundo click/tap = Side B.
+- Funciona 2D→2D, 3D→3D e misto 2D↔3D.
+- Draft/proposal não persiste seam antes da confirmação.
+
+### Fase D — threads derivados da correspondência física
+
+- Threads confirmados vêm de `assemblyState.stitchConstraints`.
+- Proposal usa o mesmo `buildGlobalStitchConstraints`.
+- Não há nearest-vertex visual independente.
+- `GlobalPointReference` continua sendo a base de interpolação dos endpoints.
+
+## Gate manual `moldeon27.mp4`
+
+O vídeo mostrou três problemas claros no checkpoint da Fase D:
+
+1. **Threads visualmente fracos**
+   - apenas poucas linhas amarelas eram distinguíveis entre os painéis;
+   - amarelo tinha contraste ruim contra avatar, piso e painel;
+   - a leitura não lembrava o fan de sewing threads do CLO3D.
+
+2. **Saída de Costurar pouco explícita**
+   - o botão `Costurar` permanecia ativo;
+   - clicar nele novamente não encerrava o modo;
+   - o usuário estava entrando em `Pence` apenas para sair de sewing.
+
+3. **Painéis costurados não formavam unidade de movimento no arrangement**
+   - o drag 3D continuava usando somente `selectedInstanceIds`;
+   - o grafo de seams físicas ainda não participava da seleção de arrangement;
+   - portanto uma seam confirmada não fazia seus `PanelInstanceV3` se moverem rigidamente juntos.
+
+## Correções aplicadas após o vídeo
+
+### 1. Threads CLO-like mais legíveis
+
+Arquivo principal:
+
+- `apps/web/src/viewport/SewingViewportOverlay.ts`
+
+Alterações:
+
+- confirmed threads mudaram de amarelo para magenta de alto contraste;
+- proposal usa ciano brilhante;
+- o visual agora garante um mínimo de 14 threads por par costurado e limita o batch a 48 quando necessário;
+- essa densificação é **somente visual**;
+- nenhuma constraint física adicional é criada;
+- novos samples visuais são interpolados exclusivamente entre `GlobalPointReference`s canônicos adjacentes já produzidos pelo compiler físico;
+- portanto overlay e physical correspondence continuam semanticamente ligados;
+- `SewingViewportOverlay.visualThreadCount` expõe a densidade visual separadamente do número físico de constraints.
+
+A regra é:
+
+`physical stitch correspondence -> visual resampling -> CLO-like thread fan`
+
+Nunca:
+
+`nearest visual point -> thread inventado`.
+
+### 2. Directional notches da Fase E
+
+`SewingViewportOverlay` agora possui um terceiro batch de `THREE.LineSegments` para indicação direcional.
+
+- Side A usa feedback visual próprio;
+- Side B usa feedback visual próprio;
+- a seta é derivada do começo/fim da correspondência canônica;
+- em seam `opposite`, os endpoints do Side B já vêm invertidos pelo compiler e a seta consequentemente vira;
+- `Reverse` altera a correspondência física existente e o próximo rebuild atualiza os notches;
+- não é criado objeto/material por frame.
+
+Diagnostics adicionados:
+
+- `data-sewing-physical-thread-count`;
+- `data-sewing-thread-count` para threads visuais;
+- `data-sewing-direction-notch-count`.
+
+### 3. Saída explícita de Costurar
+
+Arquivo:
+
+- `apps/web/src/components/Toolbar.tsx`
+
+Com `Costurar` ativo:
+
+- o próprio botão vira visualmente `Sair`;
+- aria/title passam a `Sair do modo Costurar`;
+- clicar nele chama `onSelectTool("select")`;
+- não é necessário entrar em `Pence`, `Editar` ou outra ferramenta para encerrar sewing.
+
+### 4. Painéis costurados movem juntos
+
+Arquivos:
+
+- `apps/web/src/viewport/SewingInteraction.ts`;
+- `apps/web/src/viewport/GlobalThreeViewport.ts`;
+- `apps/web/src/viewport/SewingInteraction.test.ts`.
+
+Foi adicionado `connectedSewingInstanceIds`.
+
+A função constrói o connected component usando os `instanceA/instanceB` dos stitch constraints canônicos ativos.
+
+No arrangement:
+
+- clicar num painel que pertence a um componente costurado seleciona o componente físico inteiro;
+- translação usa o multi-select rígido já existente da 11.0.7;
+- rotação usa o mesmo pivot/rigid path já existente;
+- o body barrier continua sendo o mesmo caminho de grupo já validado;
+- cada painel recebe seu arrangement commit;
+- nenhum solver novo de roupa foi criado;
+- nenhum XPBD é utilizado.
+
+Darts são explicitamente ignorados pelo grafo de movimento porque são constraints internas do mesmo material e não devem conectar painéis independentes.
+
+Panels pinned continuam respeitando a semântica de pin existente.
+
+### 5. Reverse mais explícito
+
+A ação já existente de `toggleSeamDirection` foi preservada.
+
+No `AssemblyPanel`, a ação aparece como:
+
+`Inverter direção`
+
+em vez do rótulo genérico `Inverter`.
+
+## Validação automática do patch
+
+Workflow de aplicação/validação concluído com sucesso antes do commit funcional `cb77e9897de17268d52cf25e3f7f7437704cf33f`:
+
+- `git diff --check`: PASS;
+- `npm ci`: PASS;
+- `npm run typecheck`: PASS;
+- focused sewing tests: PASS;
+- `SewingInteraction.test.ts`: PASS;
+- `assemblyHistory.test.ts`: PASS;
+- production build: PASS.
+
+O teste de threads foi atualizado porque o contrato anterior exigia `visual threads == physical constraints`. Isso deixou de ser válido intencionalmente: agora o renderer pode mostrar mais linhas que as constraints físicas para obter a leitura CLO-like, mantendo todas elas interpoladas da correspondência canônica.
+
+O gate valida:
+
+- `visualThreadCount >= physical stitch constraint count`;
+- geometry de thread usa o visual thread count;
+- directional notches existem;
+- connected component transitivo A↔B↔C funciona;
+- componente desconectado fica fora;
+- darts não expandem seleção;
+- self/missing endpoints não quebram seleção.
+
+## Fase E — estado
+
+Implementado para o próximo gate manual:
+
+- directional feedback 3D;
+- notches/setas 3D;
+- Reverse usando o `direction` canônico já persistido;
+- `Inverter direção` exposto na UI existente;
+- thread correspondence continua vindo do compiler físico;
+- same/opposite continuam chegando aos stitch constraints físicos.
+
+Ainda precisa de validação visual humana antes de marcar Fase E como aceita.
+
+## Gate manual obrigatório agora
+
+Validar no produto:
+
+1. Criar seam 1:1 no 3D.
+2. Confirmar que aparecem várias threads magenta/ciano, não apenas 2–3 linhas amarelas difíceis de ler.
+3. Conferir que as linhas realmente percorrem a borda costurada, formando um fan de correspondência semelhante conceitualmente ao CLO3D.
+4. Confirmar que `Costurar` ativo mostra `Sair` e que clicar nele encerra sewing.
+5. Sair de Costurar, voltar ao arrangement e mover um painel costurado.
+6. Confirmar que todos os painéis do mesmo connected component se movem juntos rigidamente.
+7. Confirmar que painel não conectado não se move.
+8. Girar o componente e conferir rigidez/pivot.
+9. Usar `Inverter direção` e observar mudança dos notches/correspondência.
+10. Confirmar que criar/inverter seam não inicia physics.
+11. Confirmar que nenhum painel some.
+12. Repetir pelo menos o essencial em touch/mobile se disponível.
+
+Se algum item acima falhar, corrigir antes da Fase F.
 
 ## Ainda não implementado
 
-- directional notches;
-- ação `Reverse` e sua atualização visual/física;
-- gates completos de parametrização por comprimento de arco. O compilador físico canônico já usa arc-length, mas a autoria/visualização de ranges parciais ainda não está completa;
-- Free Sewing;
-- sewing 1:N;
-- sewing N:M;
+- Free Sewing completo com autoria de subrange;
+- Fase F completa de autoria/visualização de ranges parciais por arc-length;
+- chains de authoring 1:N / N:1 / N:M completas;
 - Edit Sewing completo;
-- authoring e feedback visual completos de active/inactive;
-- show/hide de sewing e preview contínuo completo durante hover;
-- conform incremental de STEP-0;
-- gate final de performance e memória;
-- validação automatizada em Chromium/mobile e WebKit.
+- show/hide de threads como preferência;
+- estados visuais finais active/inactive;
+- STEP-0 incremental conform;
+- performance/memory soak final;
+- browser gates finais automatizados.
 
-## Dívidas e riscos conhecidos
+Observação: o compiler físico existente já usa arc-length para constraints de seam. A Fase F restante é completar o contrato de authoring/ranges parciais e seus gates, não substituir esse compiler por nearest-vertex.
 
-- A tolerância de hit equivalente a aproximadamente 44 px usa a profundidade do target da câmera; deve ser validada em zoom extremo e mobile.
-- `refreshPositions` ainda cria alguns vetores temporários; medir antes de otimizar.
-- Rebuilds podem substituir `BufferAttribute`; validar estabilização de heap/GPU em soak test.
-- Seleção 2D de uma definição com várias instâncias físicas permanece ambígua e deliberadamente não inventa binding.
-- O fluxo rápido implementado é Segment Sewing de borda inteira; não deve ser confundido com Free Sewing ou ranges parciais finalizados.
-- Threads de seams inativas e estados avançados ainda precisam da semântica visual da fase de edição.
-- Falta o gate visual automático desta rodada; nenhuma conclusão de UX/performance deve se apoiar apenas nos testes unitários.
+## Próxima fase depois do gate
 
-## Continuação exata
+Somente se este checkpoint for aceito manualmente:
 
-Primeiro arquivo: `apps/web/src/viewport/SewingViewportOverlay.ts`.
+1. **Fase F** — arc-length authoring completo + partial ranges + testes same/opposite.
+2. **Fase G** — Free Sewing.
+3. **Fase H** — ordered chains 1:N / N:M.
+4. Parar novamente para gate humano antes de Edit/STEP-0.
 
-Funções/pontos iniciais:
-
-1. `SewingViewportOverlay.rebuild` e `refreshColors`: adicionar notches direcionais e feedback de direção sem criar objetos por frame.
-2. `buildThreadSegments`: preservar a derivação canônica ao exibir direção/reverse e estados active/inactive.
-3. `apps/web/src/state/editorStore.ts`, ação `toggleSeamDirection`: conectar Reverse ao draft/SeamGroup e ao histórico existente.
-4. UI existente em `apps/web/src/components/ContextBar.tsx` e `apps/web/src/components/AssemblyPanel.tsx`: expor Reverse/edição sem painel paralelo.
-5. `apps/web/src/viewport/GlobalThreeViewport.ts`, `refreshSewingOverlay`: atualizar overlay incrementalmente após ações de edição.
-
-Antes de editar, confirmar os nomes atuais com `rg`, pois componentes podem ter sido movidos. Não reauditar o repositório inteiro e não tocar `physics/**`.
-
-## Ordem recomendada das próximas fases
-
-1. Fase E: directional notches, Reverse e feedback coerente 2D/3D.
-2. Fase F: parametrização completa por comprimento de arco e ranges parciais, com testes same/opposite.
-3. Fase G: Free Sewing.
-4. Fase H: chains compostas 1:N e N:M, preservando ordem e arc-length global.
-5. Fase I: Edit Sewing, active/inactive, show/hide e histórico completo.
-6. Fase J: STEP-0 incremental conform, sem XPBD oculto e sem alterar métrica 2D.
-7. Fase K: gates finais de browser, performance, memória, mobile e soak.
-
-Não iniciar qualquer fase seguinte a partir deste checkpoint sem antes validar manualmente as Fases B–D.
+Não iniciar Fase F antes da aceitação manual deste checkpoint.
