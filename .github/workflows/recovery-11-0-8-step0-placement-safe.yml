@@ -1,0 +1,96 @@
+name: Recovery 11.0.8 placement-safe STEP-0 repair
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "recovery/11.0.8-sewing-2d-3d-authoring"
+    paths:
+      - "scripts/fix-11-0-8-step0-placement-safe.py"
+      - ".github/workflows/recovery-11-0-8-step0-placement-safe.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-11-0-8-step0-placement-safe
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: "recovery/11.0.8-sewing-2d-3d-authoring"
+          fetch-depth: 0
+
+      - name: Verify triggering commit is branch head
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Apply placement-safe local STEP-0 repair
+        run: python3 scripts/fix-11-0-8-step0-placement-safe.py
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Guard architecture and authored placement authority
+        shell: bash
+        run: |
+          if git diff --name-only | grep -q '^apps/web/src/physics/'; then
+            echo 'physics/** must remain untouched' >&2
+            exit 1
+          fi
+          if git diff -- apps/web/src/viewport/GlobalThreeViewport.ts | grep -E '^\+.*this\.assembly\.solve\('; then
+            echo 'STEP-0 repair must not delegate placement to coarse worker solve' >&2
+            exit 1
+          fi
+          if git diff -- apps/web/src/viewport/GlobalThreeViewport.ts | grep -E '^\+.*\.(dress|start|resume)\('; then
+            echo 'STEP-0 must not start XPBD/dress' >&2
+            exit 1
+          fi
+          grep -q 'solvePlacementAnchoredSewingStep0' apps/web/src/viewport/GlobalThreeViewport.ts
+          grep -q 'maximumCentroidDisplacementM: 0.018' apps/web/src/viewport/GlobalThreeViewport.ts
+          grep -q 'surfaceNormalDot' apps/web/src/viewport/GlobalThreeViewport.ts
+          grep -q 'restoreSnapshots' apps/web/src/viewport/GlobalThreeViewport.ts
+          grep -q 'simulation.pause()' apps/web/src/viewport/GlobalThreeViewport.ts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Focused STEP-0 and sewing tests
+        run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0Placement.test.ts src/viewport/SewingStep0.test.ts src/viewport/SewingInteraction.test.ts src/viewport/SewingVisualPairing.test.ts src/viewport/ArrangementWorkspace.test.ts src/state/assemblyHistory.test.ts src/garment3d/AssemblyWorkerClient.test.ts --reporter=verbose
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit validated repair and remove temporary helpers
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/web/src/viewport/SewingStep0.ts \
+            apps/web/src/viewport/SewingStep0Placement.test.ts \
+            apps/web/src/viewport/GlobalThreeViewport.ts \
+            apps/web/src/viewport/GarmentViewport.tsx \
+            docs/modifications-11.0.8.md
+          git rm -f scripts/fix-11-0-8-step0-placement-safe.py .github/workflows/recovery-11-0-8-step0-placement-safe.yml
+          git commit -m "fix(sewing): keep STEP-0 anchored to manual placement"
+          git push origin HEAD:recovery/11.0.8-sewing-2d-3d-authoring
