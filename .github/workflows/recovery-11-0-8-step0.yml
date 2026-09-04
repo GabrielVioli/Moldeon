@@ -37,6 +37,29 @@ jobs:
       - name: Apply geometric STEP-0 gate
         run: python3 scripts/apply-11-0-8-step0.py
 
+      - name: Resolve existing viewport centroid-name collision
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/web/src/viewport/GlobalThreeViewport.ts")
+          text = path.read_text(encoding="utf-8")
+          old_import = '''  meshWorldCentroid,
+            resolveSewingStep0Target,'''
+          new_import = '''  meshWorldCentroid as sewingStep0MeshWorldCentroid,
+            resolveSewingStep0Target,'''
+          if old_import not in text:
+              raise SystemExit("STEP-0 centroid import anchor not found")
+          text = text.replace(old_import, new_import, 1)
+          start = text.find("  async runSewingStep0(")
+          end = text.find('  rotateArrangementSelection(axis: Exclude<ArrangementAxis, "free">', start)
+          if start < 0 or end < 0:
+              raise SystemExit("STEP-0 method range not found")
+          block = text[start:end].replace("meshWorldCentroid(", "sewingStep0MeshWorldCentroid(")
+          text = text[:start] + block + text[end:]
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Diff check
         run: git diff --check
 
