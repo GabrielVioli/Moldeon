@@ -385,11 +385,11 @@ export const GarmentViewport = memo(function GarmentViewport({
               const viewport = viewportRef.current;
               if (!viewport || sewingStep0Running) return;
               setSewingStep0Running(true);
-              setSewingStep0Notice("Calculando montagem geométrica…");
+              setSewingStep0Notice("Ajustando costuras no placement atual…");
               const result = await viewport.runSewingStep0(selectedSeamId);
               setSewingStep0Running(false);
               if (result.status === "applied") {
-                setSewingStep0Notice(`STEP-0 aplicado em ${result.affectedPanels} painel(is). Física continua desligada.`);
+                setSewingStep0Notice(`STEP-0 local aplicado em ${result.affectedPanels} painel(is)${result.seamResidualMaxMm !== undefined ? ` · abertura máx. ${result.seamResidualMaxMm.toFixed(1)} mm` : ""}. Física desligada.`);
               } else if (result.status === "too-far") {
                 setSewingStep0Notice("Aproxime os painéis do corpo antes de ajustar a montagem.");
               } else if (result.status === "needs-placement") {

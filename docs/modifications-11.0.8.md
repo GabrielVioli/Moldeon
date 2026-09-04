@@ -403,3 +403,30 @@ Guard rails:
 10. Durante todo o gate, física/XPBD permanece OFF em Montar/Costurar.
 
 Não avançar para 11.0.9 antes deste gate humano.
+
+
+## Manual gate repair: placement-safe local STEP-0
+
+The first visual gate exposed an architectural failure: the coarse isometric
+solution was registered from one root panel and that root registration was then
+applied to every connected panel. That made the solver's legacy relative pose
+authoritative over manual 3D arrangement, allowing a back skirt panel to move
+to the front of the body. Body conform happened only after that destructive
+move, so it could not recover the authored hemisphere. The same global solve
+also made the explicit action unnecessarily slow.
+
+The gate now uses a bounded local projection starting from the currently visible
+mesh geometry. Every PanelInstance keeps its own Object3D transform; only local
+vertex geometry may change. Current structural edge lengths are restored every
+iteration, seam constraints attract canonical correspondence points, per-vertex
+movement is capped, per-panel centroid drift is capped, and the result is not
+committed until body-side, penetration, material and seam-residual audits pass.
+Any unsafe result restores the exact pre-click meshes atomically. The body
+surface normal selected before the solve remains a hemisphere guard after the
+solve, so front/back cannot silently swap.
+
+This path does not invoke the expensive coarse candidate Worker and never starts
+XPBD. It is intentionally incremental: when a complex garment cannot close
+safely inside the local displacement cage, it keeps the manual arrangement and
+reports the refusal instead of purchasing seam closure with a teleport.
+Undo/redo of seam authoring remains outside this repair pass per the manual gate.

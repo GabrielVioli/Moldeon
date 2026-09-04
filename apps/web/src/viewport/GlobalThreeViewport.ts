@@ -73,10 +73,12 @@ import {
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
 import {
-  applySewingStep0SolvedComponent,
   bakeWorldGeometryIntoAuthoredTransform,
+  measureCurrentSewingStep0MaterialDistortion,
+  measureCurrentSewingStep0Residual,
   meshWorldCentroid as sewingStep0MeshWorldCentroid,
   resolveSewingStep0Target,
+  solvePlacementAnchoredSewingStep0,
   syncMeshGeometryToAssemblyState,
   type SewingStep0RunResult,
 } from "./SewingStep0";
@@ -533,149 +535,257 @@ export class ThreeViewport {
 
     const body = avatar.humanBody.visualMesh;
     prepareBodySurfaceQuery(body);
+    const snapshots = new Map<string, {
+      item: GarmentAssemblyMeshData;
+      positions: Float32Array;
+      position: THREE.Vector3;
+      quaternion: THREE.Quaternion;
+      scale: THREE.Vector3;
+      matrixWorld: THREE.Matrix4;
+      centroid: THREE.Vector3;
+      surface: BodySurfaceFrame;
+      bodyAudit: ReturnType<typeof auditMeshBodyClearance>;
+    }>();
     for (const instanceId of target.instanceIds) {
       const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
       if (!item) return { status: "failed", affectedPanels: target.instanceIds.length };
       const centroid = sewingStep0MeshWorldCentroid(item.mesh);
-      if (!closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.36)) {
-        return { status: "too-far", affectedPanels: target.instanceIds.length };
-      }
+      const surface = closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 0, 0.24);
+      if (!surface) return { status: "too-far", affectedPanels: target.instanceIds.length };
+      const position = item.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+      item.mesh.updateMatrixWorld(true);
+      snapshots.set(instanceId, {
+        item,
+        positions: new Float32Array(position.array as Float32Array),
+        position: item.mesh.position.clone(),
+        quaternion: item.mesh.quaternion.clone(),
+        scale: item.mesh.scale.clone(),
+        matrixWorld: item.mesh.matrixWorld.clone(),
+        centroid,
+        surface,
+        bodyAudit: auditMeshBodyClearance(item.mesh, body, 0.5, 112),
+      });
     }
 
-    // STEP-0 is geometric authoring only. Keeping the XPBD worker paused is an
-    // explicit contract, not an implementation detail.
+    const restoreSnapshots = (): void => {
+      for (const snapshot of snapshots.values()) {
+        restoreMeshMaterialGeometry(snapshot.item.mesh, snapshot.positions);
+        snapshot.item.mesh.position.copy(snapshot.position);
+        snapshot.item.mesh.quaternion.copy(snapshot.quaternion);
+        snapshot.item.mesh.scale.copy(snapshot.scale);
+        snapshot.item.mesh.updateMatrixWorld(true);
+      }
+      this.refreshSewingOverlay();
+      this.requestRender();
+    };
+
+    // Costurar/Montar remains geometric-only. This operation never delegates
+    // placement to the old global candidate solver and never wakes XPBD.
     this.simulation.pause();
     const geometryRevision = input.geometryRevision;
     const sewingRevision = input.sewingRevision;
     const arrangementRevision = input.arrangementRevision;
-    const revision = `step0:${geometryRevision}:${sewingRevision}:${arrangementRevision}:${performance.now().toFixed(3)}`;
     const startedAt = performance.now();
-    this.host.dataset.sewingStep0Status = "solving";
+    const materialBefore = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target) ?? 0;
+    this.host.dataset.sewingStep0Status = "solving-local";
     this.host.dataset.sewingStep0Target = JSON.stringify(target.instanceIds);
 
+    // Give React one paint so the busy label is visible even though the local
+    // bounded solve is normally far faster than the old Worker solve.
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const current = this.currentInput;
+    if (!current
+      || current.geometryRevision !== geometryRevision
+      || current.sewingRevision !== sewingRevision
+      || current.arrangementRevision !== arrangementRevision
+      || this.viewportMode !== "assembly") {
+      this.host.dataset.sewingStep0Status = "stale";
+      return { status: "stale", affectedPanels: target.instanceIds.length };
+    }
+
     try {
-      const response = await this.assembly.solve({
-        document: input.assemblyDocument,
-        revision,
-        mode: "step0",
-      });
-      const current = this.currentInput;
-      if (!current
-        || current.geometryRevision !== geometryRevision
-        || current.sewingRevision !== sewingRevision
-        || current.arrangementRevision !== arrangementRevision
-        || this.viewportMode !== "assembly") {
-        this.host.dataset.sewingStep0Status = "stale";
-        return { status: "stale", affectedPanels: target.instanceIds.length };
-      }
-      if (response.state.invalid || response.diagnostics.assembly.invalid) {
+      const proposal = solvePlacementAnchoredSewingStep0(
+        state,
+        this.garmentMeshes,
+        target,
+        {
+          iterations: 72,
+          maximumVertexDisplacementM: 0.065,
+          maximumCentroidDisplacementM: 0.018,
+          seamRelaxation: 0.58,
+        },
+      );
+      if (!proposal || proposal.seamConstraintCount === 0) {
         this.host.dataset.sewingStep0Status = "failed";
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
-          warning: response.diagnostics.assembly.warnings[0] ?? response.warnings[0],
+          warning: "As costuras ativas não produziram correspondências físicas utilizáveis.",
         };
       }
 
-      const applied = applySewingStep0SolvedComponent(
-        state,
-        response.state,
-        this.garmentMeshes,
-        target,
-        0.45,
-      );
-      if (!applied) {
-        this.host.dataset.sewingStep0Status = "rejected-placement";
+      // A proposal that cannot even improve the current sewing residual is not
+      // allowed to touch the viewport. This is an atomic safety gate.
+      const proposalImproves = proposal.beforeResidual.meanM <= 0.0015
+        || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM * 0.985
+        || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM - 0.0005;
+      if (!proposalImproves || proposal.metricDistortionMax > 0.02) {
+        this.host.dataset.sewingStep0Status = "rejected-local-solve";
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
-          warning: "A solução geométrica exigiria deslocar demais o placement manual.",
+          warning: "Não encontrei uma aproximação segura que preserve o molde e o placement atual.",
         };
       }
 
-      for (const instanceId of applied.appliedIds) {
-        const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
-        if (item) refreshMeshFromAssembly(item, state);
+      for (const [instanceId, local] of proposal.positionsByInstanceId) {
+        const snapshot = snapshots.get(instanceId);
+        if (!snapshot) continue;
+        const attribute = snapshot.item.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+        if (attribute.count * 3 !== local.length) {
+          restoreSnapshots();
+          return { status: "failed", affectedPanels: target.instanceIds.length, warning: "Topologia mudou durante o STEP-0." };
+        }
+        (attribute.array as Float32Array).set(local);
+        attribute.needsUpdate = true;
+        snapshot.item.mesh.geometry.computeVertexNormals();
+        snapshot.item.mesh.geometry.computeBoundingBox();
+        snapshot.item.mesh.geometry.computeBoundingSphere();
       }
 
       let conformedPanels = 0;
       const bodyAudits: Record<string, unknown> = {};
-      for (const instanceId of applied.appliedIds) {
-        const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
-        if (!item) continue;
-        const centroid = sewingStep0MeshWorldCentroid(item.mesh);
-        const surface = closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.28);
-        if (!surface) {
-          bodyAudits[instanceId] = { conformed: false, reason: "surface-too-far-after-seam-solve" };
-          continue;
-        }
-
-        item.mesh.updateMatrixWorld(true);
-        const originalMatrixWorld = item.mesh.matrixWorld.clone();
-        const originalPosition = item.mesh.position.clone();
-        const originalQuaternion = item.mesh.quaternion.clone();
-        const originalScale = item.mesh.scale.clone();
-        const conform = adjustMeshToBodySurface(item.mesh, body, surface.attachment, undefined, {
-          clearanceMm: Math.max(12, surface.attachment.normalOffsetMm),
-          captureDistanceMm: 220,
-          maximumVertexProjectionDistanceMm: 160,
-          maximumMetricDistortion: 0.08,
-          minimumProjectedVertexRatio: 0.25,
+      let unsafeReason: string | null = null;
+      let maximumCentroidDisplacementM = 0;
+      for (const instanceId of target.instanceIds) {
+        const snapshot = snapshots.get(instanceId)!;
+        const item = snapshot.item;
+        const conform = adjustMeshToBodySurface(item.mesh, body, snapshot.surface.attachment, undefined, {
+          clearanceMm: 10,
+          captureDistanceMm: 90,
+          maximumVertexProjectionDistanceMm: 90,
+          maximumMetricDistortion: 0.025,
+          minimumProjectedVertexRatio: 0.2,
         });
         if (conform.conformed) {
-          // Adjust is allowed a small normal translation. Bake that visible
-          // result into geometry so the persisted/manual object transform
-          // remains the placement authority for STEP-0.
           bakeWorldGeometryIntoAuthoredTransform(
             item.mesh,
-            originalMatrixWorld,
-            originalPosition,
-            originalQuaternion,
-            originalScale,
+            snapshot.matrixWorld,
+            snapshot.position,
+            snapshot.quaternion,
+            snapshot.scale,
           );
-          syncMeshGeometryToAssemblyState(state, item);
           conformedPanels += 1;
         }
+
+        const finalCentroid = sewingStep0MeshWorldCentroid(item.mesh);
+        const centroidDisplacement = finalCentroid.distanceTo(snapshot.centroid);
+        maximumCentroidDisplacementM = Math.max(maximumCentroidDisplacementM, centroidDisplacement);
+        const finalSurface = closestBodySurfacePoint(body, [finalCentroid.x, finalCentroid.y, finalCentroid.z], 0, 0.24);
+        const finalAudit = auditMeshBodyClearance(item.mesh, body, 0.5, 112);
+        const normalDot = finalSurface
+          ? new THREE.Vector3(...snapshot.surface.outwardNormal)
+            .normalize()
+            .dot(new THREE.Vector3(...finalSurface.outwardNormal).normalize())
+          : -1;
+        const penetrationWorsened = finalAudit.penetratingSamples > snapshot.bodyAudit.penetratingSamples
+          || finalAudit.minimumSignedClearanceMm < snapshot.bodyAudit.minimumSignedClearanceMm - 2;
+        if (!finalSurface) unsafeReason ??= `${instanceId}: saiu da vizinhança corporal escolhida.`;
+        else if (normalDot < 0.15) unsafeReason ??= `${instanceId}: tentou trocar de lado do corpo.`;
+        else if (centroidDisplacement > 0.06) unsafeReason ??= `${instanceId}: tentou deslocar o placement mais de 60 mm.`;
+        else if (penetrationWorsened) unsafeReason ??= `${instanceId}: piorou a penetração no corpo.`;
         bodyAudits[instanceId] = {
-          ...conform,
-          clearance: auditMeshBodyClearance(item.mesh, body, 1, 96),
+          conform,
+          before: snapshot.bodyAudit,
+          after: finalAudit,
+          centroidDisplacementMm: centroidDisplacement * 1_000,
+          surfaceNormalDot: normalDot,
         };
       }
 
+      const finalResidual = measureCurrentSewingStep0Residual(state, this.garmentMeshes, target);
+      const materialAfter = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target);
+      if (!finalResidual || materialAfter === null) unsafeReason ??= "Não foi possível auditar a geometria final.";
+      const residualImproves = finalResidual
+        ? proposal.beforeResidual.meanM <= 0.0015
+          || finalResidual.meanM <= proposal.beforeResidual.meanM * 0.99
+          || finalResidual.meanM <= proposal.beforeResidual.meanM - 0.00035
+        : false;
+      const maximumResidualSafe = finalResidual
+        ? finalResidual.maximumM <= Math.max(
+          proposal.beforeResidual.maximumM + 0.003,
+          proposal.beforeResidual.maximumM * 1.08,
+        )
+        : false;
+      const materialSafe = materialAfter !== null
+        && materialAfter <= Math.max(0.03, materialBefore + 0.015);
+      if (!residualImproves) unsafeReason ??= "O ajuste não aproximou as costuras de forma mensurável.";
+      else if (!maximumResidualSafe) unsafeReason ??= "Uma das costuras piorou enquanto outra era aproximada.";
+      else if (!materialSafe) unsafeReason ??= "O ajuste exigiria deformar demais o material.";
+
+      if (unsafeReason) {
+        restoreSnapshots();
+        this.host.dataset.sewingStep0Status = "rolled-back";
+        this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
+          rollback: unsafeReason,
+          proposal,
+          finalResidual,
+          materialBefore,
+          materialAfter,
+          bodyAudits,
+        }, (_key, value) => value instanceof Map ? Object.fromEntries(value) : value);
+        return {
+          status: "failed",
+          affectedPanels: target.instanceIds.length,
+          warning: `STEP-0 cancelado sem alterar a roupa: ${unsafeReason}`,
+        };
+      }
+
+      for (const instanceId of target.instanceIds) {
+        const item = snapshots.get(instanceId)?.item;
+        if (item) syncMeshGeometryToAssemblyState(state, item);
+      }
       const intrinsic = measureIntrinsicDistortion(state);
       this.refreshSewingOverlay();
-      this.host.dataset.sewingStep0Status = "applied";
+      this.host.dataset.sewingStep0Status = "applied-local";
       this.host.dataset.sewingStep0Ms = (performance.now() - startedAt).toFixed(2);
       this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
-        affectedPanels: applied.appliedIds.length,
+        affectedPanels: target.instanceIds.length,
         conformedPanels,
-        maximumCentroidDisplacementMm: applied.maximumCentroidDisplacementM * 1_000,
+        maximumCentroidDisplacementMm: maximumCentroidDisplacementM * 1_000,
+        maximumVertexDisplacementMm: proposal.maximumVertexDisplacementM * 1_000,
+        proposalResidual: {
+          before: proposal.beforeResidual,
+          afterLocal: proposal.afterResidual,
+          afterBody: finalResidual,
+        },
         metricDistortionMax: intrinsic.maxRelativeDistortion,
-        assembly: response.diagnostics.assembly.metrics,
+        materialBefore,
+        materialAfter,
         bodyAudits,
+        iterations: proposal.iterations,
+        constraintCount: proposal.seamConstraintCount,
       });
       this.host.dataset.simulationStatus = "disabled-in-montar";
       this.requestRender();
+      const residualMm = (finalResidual?.maximumM ?? 0) * 1_000;
       return {
         status: "applied",
-        affectedPanels: applied.appliedIds.length,
+        affectedPanels: target.instanceIds.length,
         conformedPanels,
-        maximumCentroidDisplacementMm: applied.maximumCentroidDisplacementM * 1_000,
+        maximumCentroidDisplacementMm: maximumCentroidDisplacementM * 1_000,
         metricDistortionMax: intrinsic.maxRelativeDistortion,
-        seamResidualMaxMm: response.diagnostics.assembly.metrics.structuralSeamMaxMm,
-        warning: response.warnings[0],
+        seamResidualMaxMm: residualMm,
+        ...(residualMm > 20 ? { warning: `Ainda há uma costura com ${residualMm.toFixed(1)} mm de abertura.` } : {}),
       };
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        this.host.dataset.sewingStep0Status = "stale";
-        return { status: "stale", affectedPanels: target.instanceIds.length };
-      }
-      console.error("STEP-0 geométrico:", error);
+      restoreSnapshots();
+      console.error("STEP-0 geométrico local:", error);
       this.host.dataset.sewingStep0Status = "failed";
       return {
         status: "failed",
         affectedPanels: target.instanceIds.length,
-        warning: error instanceof Error ? error.message : "Falha no STEP-0 geométrico.",
+        warning: error instanceof Error ? error.message : "Falha no STEP-0 geométrico local.",
       };
     }
   }

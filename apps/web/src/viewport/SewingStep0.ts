@@ -170,6 +170,464 @@ export function applySewingStep0SolvedComponent(
   return { appliedIds: [...pending.keys()], maximumCentroidDisplacementM: maximumDisplacement };
 }
 
+
+export interface SewingStep0ResidualMetric {
+  maximumM: number;
+  meanM: number;
+  evaluated: number;
+  bySeam: Record<string, { maximumM: number; meanM: number; evaluated: number }>;
+}
+
+export interface PlacementAnchoredSewingStep0Options {
+  iterations?: number;
+  maximumVertexDisplacementM?: number;
+  maximumCentroidDisplacementM?: number;
+  seamRelaxation?: number;
+}
+
+export interface PlacementAnchoredSewingStep0Proposal {
+  positionsByInstanceId: Map<string, Float32Array>;
+  beforeResidual: SewingStep0ResidualMetric;
+  afterResidual: SewingStep0ResidualMetric;
+  maximumVertexDisplacementM: number;
+  maximumCentroidDisplacementM: number;
+  metricDistortionMax: number;
+  iterations: number;
+  seamConstraintCount: number;
+}
+
+/**
+ * Conservative STEP-0 used by Costurar/Montar after the user has authored the
+ * 3D placement. It deliberately starts from the meshes that are visible now,
+ * not from the legacy/canonical assembly candidate pose. Every panel keeps its
+ * own rigid transform; only its local geometry is proposed. This makes manual
+ * front/back/left/right placement an invariant instead of a hint.
+ *
+ * The projection is geometric, finite and history-free: seam correspondence
+ * attracts the already-near sewn boundaries while the current material edge
+ * metric is restored every pass. Per-vertex and per-panel displacement cages
+ * prevent a seam from buying closure by teleporting a panel through the body.
+ */
+export function solvePlacementAnchoredSewingStep0(
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+  target: SewingStep0Target,
+  options: PlacementAnchoredSewingStep0Options = {},
+): PlacementAnchoredSewingStep0Proposal | null {
+  const iterations = Math.max(8, Math.min(120, Math.round(options.iterations ?? 64)));
+  const maximumVertexDisplacementM = Math.max(0.005, options.maximumVertexDisplacementM ?? 0.065);
+  const maximumCentroidDisplacementM = Math.max(0.001, options.maximumCentroidDisplacementM ?? 0.018);
+  const seamRelaxation = Math.max(0.05, Math.min(0.9, options.seamRelaxation ?? 0.58));
+  const targetIds = new Set(target.instanceIds);
+  const built = buildCurrentWorldParticles(state, meshes, targetIds);
+  if (!built) return null;
+  const { world, filled } = built;
+  const initial = new Float64Array(world);
+
+  const structural = state.structuralConstraints.filter((constraint) =>
+    filled[constraint.a] === 1 && filled[constraint.b] === 1,
+  );
+  const structuralTargets = structural.map((constraint) => particleDistance(world, constraint.a, constraint.b));
+  const seams = state.stitchConstraints.filter((constraint) =>
+    !constraint.seamGroupId.startsWith("dart:")
+    && Boolean(constraint.instanceA && targetIds.has(constraint.instanceA))
+    && Boolean(constraint.instanceB && targetIds.has(constraint.instanceB))
+    && referenceIsFilled(constraint.a, filled)
+    && referenceIsFilled(constraint.b, filled),
+  );
+  if (seams.length === 0) return null;
+
+  const beforeResidual = measureResidualInWorld(world, seams);
+  const initialCentroids = new Map<string, THREE.Vector3>();
+  for (const instanceId of target.instanceIds) {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId);
+    if (!instance) return null;
+    initialCentroids.set(instanceId, instanceParticleCentroid(initial, instance.particleStart, instance.vertexCount));
+  }
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+  const reverse = iteration % 2 === 1;
+  // Material metric is the hard geometric contract. Multiple alternating
+  // sweeps make each seam pull behave as bending/rigid reorientation rather
+  // than stretching a boundary toward its mate.
+  for (let pass = 0; pass < 3; pass += 1) {
+    projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.985);
+  }
+  projectSeamRelations(world, seams, reverse, seamRelaxation * 0.42);
+  for (let pass = 0; pass < 5; pass += 1) {
+    projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? !reverse : reverse, 0.992);
+  }
+  projectSeamRelations(world, seams, !reverse, seamRelaxation * 0.14);
+  for (let pass = 0; pass < 3; pass += 1) {
+    projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.995);
+  }
+
+  // Keep every panel in the neighbourhood explicitly chosen by the user.
+  // A tiny spring removes accumulated numerical drift; the hard cage below
+  // is the actual safety contract.
+  for (const instanceId of target.instanceIds) {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+    const originalCentroid = initialCentroids.get(instanceId)!;
+    const centroid = instanceParticleCentroid(world, instance.particleStart, instance.vertexCount);
+    const drift = centroid.sub(originalCentroid);
+    translateInstanceParticles(world, instance.particleStart, instance.vertexCount, drift.multiplyScalar(-0.012));
+    cageInstanceCentroid(
+      world,
+      instance.particleStart,
+      instance.vertexCount,
+      originalCentroid,
+      maximumCentroidDisplacementM,
+    );
+  }
+  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+}
+
+// Final material polish is repeated inside the displacement cage so the
+// last safety clamp cannot leave the panel visibly stretched.
+for (let pass = 0; pass < 36; pass += 1) {
+  projectStructuralMetric(world, structural, structuralTargets, pass % 2 === 1, 0.997);
+  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+}
+for (const instanceId of target.instanceIds) {
+  const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+  cageInstanceCentroid(
+    world,
+    instance.particleStart,
+    instance.vertexCount,
+    initialCentroids.get(instanceId)!,
+    maximumCentroidDisplacementM,
+  );
+}
+
+  const afterResidual = measureResidualInWorld(world, seams);
+  let maximumVertex = 0;
+  for (let particle = 0; particle < filled.length; particle += 1) {
+    if (filled[particle] !== 1) continue;
+    maximumVertex = Math.max(maximumVertex, particleDisplacement(world, initial, particle));
+  }
+  let maximumCentroid = 0;
+  for (const instanceId of target.instanceIds) {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+    maximumCentroid = Math.max(
+      maximumCentroid,
+      instanceParticleCentroid(world, instance.particleStart, instance.vertexCount)
+        .distanceTo(initialCentroids.get(instanceId)!),
+    );
+  }
+
+  let metricDistortionMax = 0;
+  structural.forEach((constraint, index) => {
+    const rest = structuralTargets[index];
+    if (rest <= 1e-9) return;
+    metricDistortionMax = Math.max(
+      metricDistortionMax,
+      Math.abs(particleDistance(world, constraint.a, constraint.b) - rest) / rest,
+    );
+  });
+
+  const positionsByInstanceId = new Map<string, Float32Array>();
+  const point = new THREE.Vector3();
+  for (const instanceId of target.instanceIds) {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId);
+    const meshData = meshes.find((candidate) => candidate.key === instanceId);
+    if (!instance || !meshData) return null;
+    meshData.mesh.updateMatrixWorld(true);
+    const inverse = meshData.mesh.matrixWorld.clone().invert();
+    const local = new Float32Array(instance.vertexCount * 3);
+    for (let localIndex = 0; localIndex < instance.vertexCount; localIndex += 1) {
+      const particle = instance.particleStart + localIndex;
+      const offset = particle * 3;
+      point.set(world[offset], world[offset + 1], world[offset + 2]).applyMatrix4(inverse);
+      local[localIndex * 3] = point.x;
+      local[localIndex * 3 + 1] = point.y;
+      local[localIndex * 3 + 2] = point.z;
+    }
+    if (![...local].every(Number.isFinite)) return null;
+    positionsByInstanceId.set(instanceId, local);
+  }
+
+  return {
+    positionsByInstanceId,
+    beforeResidual,
+    afterResidual,
+    maximumVertexDisplacementM: maximumVertex,
+    maximumCentroidDisplacementM: maximumCentroid,
+    metricDistortionMax,
+    iterations,
+    seamConstraintCount: seams.length,
+  };
+}
+
+export function measureCurrentSewingStep0Residual(
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+  target: SewingStep0Target,
+): SewingStep0ResidualMetric | null {
+  const targetIds = new Set(target.instanceIds);
+  const built = buildCurrentWorldParticles(state, meshes, targetIds);
+  if (!built) return null;
+  const seams = state.stitchConstraints.filter((constraint) =>
+    !constraint.seamGroupId.startsWith("dart:")
+    && Boolean(constraint.instanceA && targetIds.has(constraint.instanceA))
+    && Boolean(constraint.instanceB && targetIds.has(constraint.instanceB))
+    && referenceIsFilled(constraint.a, built.filled)
+    && referenceIsFilled(constraint.b, built.filled),
+  );
+  return measureResidualInWorld(built.world, seams);
+}
+
+export function measureCurrentSewingStep0MaterialDistortion(
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+  target: SewingStep0Target,
+): number | null {
+  const built = buildCurrentWorldParticles(state, meshes, new Set(target.instanceIds));
+  if (!built) return null;
+  let maximum = 0;
+  for (const constraint of state.structuralConstraints) {
+    if (built.filled[constraint.a] !== 1 || built.filled[constraint.b] !== 1 || constraint.restLength <= 1e-9) continue;
+    maximum = Math.max(
+      maximum,
+      Math.abs(particleDistance(built.world, constraint.a, constraint.b) - constraint.restLength) / constraint.restLength,
+    );
+  }
+  return maximum;
+}
+
+function buildCurrentWorldParticles(
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+  targetIds: Set<string>,
+): { world: Float64Array; filled: Uint8Array } | null {
+  const world = new Float64Array(state.positions.length);
+  const filled = new Uint8Array(Math.floor(state.positions.length / 3));
+  const point = new THREE.Vector3();
+  for (const instance of state.instances) {
+    if (!targetIds.has(instance.id)) continue;
+    const meshData = meshes.find((candidate) => candidate.key === instance.id);
+    const position = meshData?.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!meshData || !position || position.count !== instance.vertexCount) return null;
+    meshData.mesh.updateMatrixWorld(true);
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      point.fromBufferAttribute(position, local).applyMatrix4(meshData.mesh.matrixWorld);
+      const particle = instance.particleStart + local;
+      const offset = particle * 3;
+      world[offset] = point.x;
+      world[offset + 1] = point.y;
+      world[offset + 2] = point.z;
+      filled[particle] = 1;
+    }
+  }
+  return { world, filled };
+}
+
+function referenceIsFilled(reference: AssemblyStitchConstraint["a"], filled: Uint8Array): boolean {
+  return reference.particleIndices.length > 0
+    && reference.particleIndices.every((particle) => filled[particle] === 1);
+}
+
+function weightedPointInWorld(world: Float64Array, reference: AssemblyStitchConstraint["a"]): THREE.Vector3 {
+  const result = new THREE.Vector3();
+  let total = 0;
+  reference.particleIndices.forEach((particle, index) => {
+    const weight = reference.weights[index] ?? 0;
+    const offset = particle * 3;
+    result.x += world[offset] * weight;
+    result.y += world[offset + 1] * weight;
+    result.z += world[offset + 2] * weight;
+    total += weight;
+  });
+  if (Math.abs(total) > 1e-9 && Math.abs(total - 1) > 1e-9) result.multiplyScalar(1 / total);
+  return result;
+}
+
+function applyReferenceCorrection(
+  world: Float64Array,
+  reference: AssemblyStitchConstraint["a"],
+  correction: THREE.Vector3,
+): void {
+  let sumSquares = 0;
+  for (const weight of reference.weights) sumSquares += weight * weight;
+  if (sumSquares <= 1e-12) return;
+  reference.particleIndices.forEach((particle, index) => {
+    const weight = reference.weights[index] ?? 0;
+    const scale = weight / sumSquares;
+    const offset = particle * 3;
+    world[offset] += correction.x * scale;
+    world[offset + 1] += correction.y * scale;
+    world[offset + 2] += correction.z * scale;
+  });
+}
+
+function projectSeamRelations(
+  world: Float64Array,
+  seams: readonly AssemblyStitchConstraint[],
+  reverse: boolean,
+  relaxation: number,
+): void {
+  const direction = new THREE.Vector3();
+  for (let cursor = 0; cursor < seams.length; cursor += 1) {
+    const seam = seams[reverse ? seams.length - 1 - cursor : cursor];
+    const a = weightedPointInWorld(world, seam.a);
+    const b = weightedPointInWorld(world, seam.b);
+    direction.copy(b).sub(a);
+    const current = direction.length();
+    const target = Math.max(0, seam.physicalRestDistance ?? 0);
+    if (current <= 1e-9 || current <= target + 1e-6) continue;
+    const magnitude = Math.min(0.0015, (current - target) * 0.5 * relaxation);
+    direction.multiplyScalar(magnitude / current);
+    applyReferenceCorrection(world, seam.a, direction);
+    applyReferenceCorrection(world, seam.b, direction.clone().multiplyScalar(-1));
+  }
+}
+
+function projectStructuralMetric(
+  world: Float64Array,
+  constraints: readonly { a: number; b: number }[],
+  targets: readonly number[],
+  reverse: boolean,
+  relaxation: number,
+): void {
+  for (let cursor = 0; cursor < constraints.length; cursor += 1) {
+    const index = reverse ? constraints.length - 1 - cursor : cursor;
+    const constraint = constraints[index];
+    const target = targets[index];
+    if (target <= 1e-9) continue;
+    const aOffset = constraint.a * 3;
+    const bOffset = constraint.b * 3;
+    const dx = world[bOffset] - world[aOffset];
+    const dy = world[bOffset + 1] - world[aOffset + 1];
+    const dz = world[bOffset + 2] - world[aOffset + 2];
+    const current = Math.hypot(dx, dy, dz);
+    if (current <= 1e-9) continue;
+    const magnitude = Math.max(-0.008, Math.min(0.008, (current - target) * 0.5 * relaxation));
+    const scale = magnitude / current;
+    world[aOffset] += dx * scale;
+    world[aOffset + 1] += dy * scale;
+    world[aOffset + 2] += dz * scale;
+    world[bOffset] -= dx * scale;
+    world[bOffset + 1] -= dy * scale;
+    world[bOffset + 2] -= dz * scale;
+  }
+}
+
+function cageParticleDisplacements(
+  world: Float64Array,
+  initial: Float64Array,
+  filled: Uint8Array,
+  maximumM: number,
+): void {
+  for (let particle = 0; particle < filled.length; particle += 1) {
+    if (filled[particle] !== 1) continue;
+    const offset = particle * 3;
+    const dx = world[offset] - initial[offset];
+    const dy = world[offset + 1] - initial[offset + 1];
+    const dz = world[offset + 2] - initial[offset + 2];
+    const distance = Math.hypot(dx, dy, dz);
+    if (distance <= maximumM || distance <= 1e-12) continue;
+    const scale = maximumM / distance;
+    world[offset] = initial[offset] + dx * scale;
+    world[offset + 1] = initial[offset + 1] + dy * scale;
+    world[offset + 2] = initial[offset + 2] + dz * scale;
+  }
+}
+
+function cageInstanceCentroid(
+  world: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+  original: THREE.Vector3,
+  maximumM: number,
+): void {
+  const centroid = instanceParticleCentroid(world, particleStart, vertexCount);
+  const drift = centroid.sub(original);
+  const distance = drift.length();
+  if (distance <= maximumM || distance <= 1e-12) return;
+  const correction = drift.multiplyScalar(-(distance - maximumM) / distance);
+  translateInstanceParticles(world, particleStart, vertexCount, correction);
+}
+
+function translateInstanceParticles(
+  world: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+  correction: THREE.Vector3,
+): void {
+  for (let local = 0; local < vertexCount; local += 1) {
+    const offset = (particleStart + local) * 3;
+    world[offset] += correction.x;
+    world[offset + 1] += correction.y;
+    world[offset + 2] += correction.z;
+  }
+}
+
+function instanceParticleCentroid(
+  world: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+): THREE.Vector3 {
+  const centroid = new THREE.Vector3();
+  if (vertexCount <= 0) return centroid;
+  for (let local = 0; local < vertexCount; local += 1) {
+    const offset = (particleStart + local) * 3;
+    centroid.x += world[offset];
+    centroid.y += world[offset + 1];
+    centroid.z += world[offset + 2];
+  }
+  return centroid.multiplyScalar(1 / vertexCount);
+}
+
+function particleDistance(world: Float64Array, a: number, b: number): number {
+  const aOffset = a * 3;
+  const bOffset = b * 3;
+  return Math.hypot(
+    world[bOffset] - world[aOffset],
+    world[bOffset + 1] - world[aOffset + 1],
+    world[bOffset + 2] - world[aOffset + 2],
+  );
+}
+
+function particleDisplacement(world: Float64Array, initial: Float64Array, particle: number): number {
+  const offset = particle * 3;
+  return Math.hypot(
+    world[offset] - initial[offset],
+    world[offset + 1] - initial[offset + 1],
+    world[offset + 2] - initial[offset + 2],
+  );
+}
+
+function measureResidualInWorld(
+  world: Float64Array,
+  seams: readonly AssemblyStitchConstraint[],
+): SewingStep0ResidualMetric {
+  let maximumM = 0;
+  let totalM = 0;
+  let evaluated = 0;
+  const buckets = new Map<string, { maximumM: number; totalM: number; evaluated: number }>();
+  for (const seam of seams) {
+    const distance = weightedPointInWorld(world, seam.a).distanceTo(weightedPointInWorld(world, seam.b));
+    const residual = Math.abs(distance - Math.max(0, seam.physicalRestDistance ?? 0));
+    maximumM = Math.max(maximumM, residual);
+    totalM += residual;
+    evaluated += 1;
+    const bucket = buckets.get(seam.seamId) ?? { maximumM: 0, totalM: 0, evaluated: 0 };
+    bucket.maximumM = Math.max(bucket.maximumM, residual);
+    bucket.totalM += residual;
+    bucket.evaluated += 1;
+    buckets.set(seam.seamId, bucket);
+  }
+  return {
+    maximumM,
+    meanM: evaluated > 0 ? totalM / evaluated : 0,
+    evaluated,
+    bySeam: Object.fromEntries([...buckets].map(([id, bucket]) => [id, {
+      maximumM: bucket.maximumM,
+      meanM: bucket.evaluated > 0 ? bucket.totalM / bucket.evaluated : 0,
+      evaluated: bucket.evaluated,
+    }])),
+  };
+}
+
 export function syncMeshGeometryToAssemblyState(
   state: GarmentAssemblyState,
   meshData: GarmentAssemblyMeshData,
