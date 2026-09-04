@@ -72,6 +72,14 @@ import {
 } from "./ArrangementWorkspace";
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
+import {
+  applySewingStep0SolvedComponent,
+  bakeWorldGeometryIntoAuthoredTransform,
+  meshWorldCentroid as sewingStep0MeshWorldCentroid,
+  resolveSewingStep0Target,
+  syncMeshGeometryToAssemblyState,
+  type SewingStep0RunResult,
+} from "./SewingStep0";
 
 export type RenderBackend = "webgpu" | "webgl2";
 export type ThreeViewportMode = "assembly" | "fitting";
@@ -496,6 +504,180 @@ export class ThreeViewport {
     this.host.dataset.sewingActiveConstraintCount = String(sewingConstraints.length);
     this.refreshSewingOverlay();
     this.requestRender();
+  }
+
+  async runSewingStep0(
+    selectedSeamId: string | null = this.sewingState.selectedSeamId,
+  ): Promise<SewingStep0RunResult> {
+    const input = this.currentInput;
+    const state = this.assemblyState;
+    const avatar = this.currentAvatarModel;
+    if (this.viewportMode !== "assembly" || !input || !state || !avatar) {
+      return { status: "failed", affectedPanels: 0, warning: "Montagem 3D ainda não está pronta." };
+    }
+    const target = resolveSewingStep0Target(
+      state.stitchConstraints,
+      selectedSeamId,
+      [...this.selectedInstanceIds],
+    );
+    if (!target) return { status: "no-seams", affectedPanels: 0 };
+
+    const targetIds = new Set(target.instanceIds);
+    const missingPlacement = input.panelInstances.some((instance) =>
+      targetIds.has(instance.id)
+      && (instance.placementStatus !== "confirmed" || !instance.arrangementAnchor),
+    );
+    if (missingPlacement) {
+      return { status: "needs-placement", affectedPanels: target.instanceIds.length };
+    }
+
+    const body = avatar.humanBody.visualMesh;
+    prepareBodySurfaceQuery(body);
+    for (const instanceId of target.instanceIds) {
+      const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
+      if (!item) return { status: "failed", affectedPanels: target.instanceIds.length };
+      const centroid = sewingStep0MeshWorldCentroid(item.mesh);
+      if (!closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.36)) {
+        return { status: "too-far", affectedPanels: target.instanceIds.length };
+      }
+    }
+
+    // STEP-0 is geometric authoring only. Keeping the XPBD worker paused is an
+    // explicit contract, not an implementation detail.
+    this.simulation.pause();
+    const geometryRevision = input.geometryRevision;
+    const sewingRevision = input.sewingRevision;
+    const arrangementRevision = input.arrangementRevision;
+    const revision = `step0:${geometryRevision}:${sewingRevision}:${arrangementRevision}:${performance.now().toFixed(3)}`;
+    const startedAt = performance.now();
+    this.host.dataset.sewingStep0Status = "solving";
+    this.host.dataset.sewingStep0Target = JSON.stringify(target.instanceIds);
+
+    try {
+      const response = await this.assembly.solve({
+        document: input.assemblyDocument,
+        revision,
+        mode: "step0",
+      });
+      const current = this.currentInput;
+      if (!current
+        || current.geometryRevision !== geometryRevision
+        || current.sewingRevision !== sewingRevision
+        || current.arrangementRevision !== arrangementRevision
+        || this.viewportMode !== "assembly") {
+        this.host.dataset.sewingStep0Status = "stale";
+        return { status: "stale", affectedPanels: target.instanceIds.length };
+      }
+      if (response.state.invalid || response.diagnostics.assembly.invalid) {
+        this.host.dataset.sewingStep0Status = "failed";
+        return {
+          status: "failed",
+          affectedPanels: target.instanceIds.length,
+          warning: response.diagnostics.assembly.warnings[0] ?? response.warnings[0],
+        };
+      }
+
+      const applied = applySewingStep0SolvedComponent(
+        state,
+        response.state,
+        this.garmentMeshes,
+        target,
+        0.45,
+      );
+      if (!applied) {
+        this.host.dataset.sewingStep0Status = "rejected-placement";
+        return {
+          status: "failed",
+          affectedPanels: target.instanceIds.length,
+          warning: "A solução geométrica exigiria deslocar demais o placement manual.",
+        };
+      }
+
+      for (const instanceId of applied.appliedIds) {
+        const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
+        if (item) refreshMeshFromAssembly(item, state);
+      }
+
+      let conformedPanels = 0;
+      const bodyAudits: Record<string, unknown> = {};
+      for (const instanceId of applied.appliedIds) {
+        const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
+        if (!item) continue;
+        const centroid = sewingStep0MeshWorldCentroid(item.mesh);
+        const surface = closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 12, 0.28);
+        if (!surface) {
+          bodyAudits[instanceId] = { conformed: false, reason: "surface-too-far-after-seam-solve" };
+          continue;
+        }
+
+        item.mesh.updateMatrixWorld(true);
+        const originalMatrixWorld = item.mesh.matrixWorld.clone();
+        const originalPosition = item.mesh.position.clone();
+        const originalQuaternion = item.mesh.quaternion.clone();
+        const originalScale = item.mesh.scale.clone();
+        const conform = adjustMeshToBodySurface(item.mesh, body, surface.attachment, undefined, {
+          clearanceMm: Math.max(12, surface.attachment.normalOffsetMm),
+          captureDistanceMm: 220,
+          maximumVertexProjectionDistanceMm: 160,
+          maximumMetricDistortion: 0.08,
+          minimumProjectedVertexRatio: 0.25,
+        });
+        if (conform.conformed) {
+          // Adjust is allowed a small normal translation. Bake that visible
+          // result into geometry so the persisted/manual object transform
+          // remains the placement authority for STEP-0.
+          bakeWorldGeometryIntoAuthoredTransform(
+            item.mesh,
+            originalMatrixWorld,
+            originalPosition,
+            originalQuaternion,
+            originalScale,
+          );
+          syncMeshGeometryToAssemblyState(state, item);
+          conformedPanels += 1;
+        }
+        bodyAudits[instanceId] = {
+          ...conform,
+          clearance: auditMeshBodyClearance(item.mesh, body, 1, 96),
+        };
+      }
+
+      const intrinsic = measureIntrinsicDistortion(state);
+      this.refreshSewingOverlay();
+      this.host.dataset.sewingStep0Status = "applied";
+      this.host.dataset.sewingStep0Ms = (performance.now() - startedAt).toFixed(2);
+      this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
+        affectedPanels: applied.appliedIds.length,
+        conformedPanels,
+        maximumCentroidDisplacementMm: applied.maximumCentroidDisplacementM * 1_000,
+        metricDistortionMax: intrinsic.maxRelativeDistortion,
+        assembly: response.diagnostics.assembly.metrics,
+        bodyAudits,
+      });
+      this.host.dataset.simulationStatus = "disabled-in-montar";
+      this.requestRender();
+      return {
+        status: "applied",
+        affectedPanels: applied.appliedIds.length,
+        conformedPanels,
+        maximumCentroidDisplacementMm: applied.maximumCentroidDisplacementM * 1_000,
+        metricDistortionMax: intrinsic.maxRelativeDistortion,
+        seamResidualMaxMm: response.diagnostics.assembly.metrics.structuralSeamMaxMm,
+        warning: response.warnings[0],
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        this.host.dataset.sewingStep0Status = "stale";
+        return { status: "stale", affectedPanels: target.instanceIds.length };
+      }
+      console.error("STEP-0 geométrico:", error);
+      this.host.dataset.sewingStep0Status = "failed";
+      return {
+        status: "failed",
+        affectedPanels: target.instanceIds.length,
+        warning: error instanceof Error ? error.message : "Falha no STEP-0 geométrico.",
+      };
+    }
   }
 
   rotateArrangementSelection(axis: Exclude<ArrangementAxis, "free">, deltaDeg: number): void {

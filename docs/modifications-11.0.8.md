@@ -357,3 +357,49 @@ Additional polish in the same checkpoint:
   (`stretch` projects canonically as `elastic`).
 
 No XPBD, physics/**, garment-specific inference or STEP-0 behavior was added.
+
+
+---
+
+## Fase J — STEP-0 geométrico para gate manual
+
+Foi adicionada uma ação **Ajustar montagem** no viewport 3D. Ela é deliberadamente explícita: não roda automaticamente ao confirmar uma seam e não liga XPBD.
+
+Fluxo:
+
+1. resolve o `connected component` físico a partir dos stitch constraints ativos (darts não conectam painéis);
+2. exige `PanelInstanceV3` com placement manual/confirmado;
+3. recusa componentes cujo painel esteja longe demais do `HumanBodyModel.visualMesh`;
+4. usa o Assembly Worker em modo `step0`, que chama o solver geométrico coarse/isometric já existente e separado de XPBD;
+5. registra rigidamente a solução do solver no frame mundial do painel-raiz atual, sem escala, mantendo o placement manual como autoridade;
+6. aplica somente os painéis do componente alvo ao workspace atual;
+7. executa conform corporal local e limitado usando `adjustMeshToBodySurface`, sem restaurar o molde flat e sem gravar deformação em `PatternDefinitionV3`;
+8. qualquer pequena translação normal feita pelo conform é baked na geometria runtime, preservando o transform rígido authored do painel;
+9. atualiza threads/notches a partir da mesma relação canônica e mantém `simulationStatus=disabled-in-montar`.
+
+Guard rails:
+
+- nenhum arquivo em `physics/**` é alterado;
+- `step0` usa Assembly Worker, não `XpbdWorkerClient`;
+- sem gravidade, velocidade, timestep ou auto-dress;
+- sem inferência por nome/template/role;
+- sem autoscale;
+- selected seam tem prioridade; se ela estiver inativa/sem constraint física, não há fallback silencioso para outra seam;
+- resultado é rejeitado se exigir deslocamento de centroide > 450 mm em relação ao placement manual;
+- mudanças de geometry/sewing/arrangement durante o solve invalidam o resultado como stale;
+- painel longe do corpo é recusado antes do solve.
+
+### Gate manual J1/J2
+
+1. Camiseta frente/costas próximas ao torso: costurar laterais/ombros e clicar `Ajustar montagem`.
+2. Verificar que bordas costuradas se aproximam e os painéis começam a formar um volume sem simulação.
+3. Frente continua na frente e costas continuam atrás; nenhuma peça atravessa o corpo para buscar caminho curto.
+4. Escala permanece 1 e o molde não encolhe para fechar seam.
+5. Saia/calça: laterais devem aproximar ao redor do quadril/pernas mantendo placement.
+6. Componente desconectado fica imóvel.
+7. Peça deliberadamente longe do corpo retorna `Aproxime os painéis do corpo antes de ajustar a montagem.`
+8. Repetir STEP-0 deve permanecer estável, sem segundo salto grande.
+9. Depois do STEP-0, mover/girar manualmente ainda funciona e as threads acompanham.
+10. Durante todo o gate, física/XPBD permanece OFF em Montar/Costurar.
+
+Não avançar para 11.0.9 antes deste gate humano.

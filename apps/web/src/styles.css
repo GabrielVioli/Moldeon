@@ -2892,3 +2892,50 @@ button {
     min-height: 44px;
   }
 }
+
+
+/* 11.0.8 Phase J: explicit geometric STEP-0 gate. */
+.viewport-sewing-step0 {
+  position: absolute;
+  z-index: 9;
+  top: 52px;
+  right: 10px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid rgba(78, 96, 84, .48);
+  border-radius: 9px;
+  background: rgba(244, 249, 244, .94);
+  box-shadow: 0 3px 12px rgba(24, 34, 28, .08);
+  color: #263a2d;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.viewport-sewing-step0:disabled { opacity: .62; cursor: progress; }
+.viewport-sewing-step0-status {
+  position: absolute;
+  z-index: 9;
+  top: 94px;
+  right: 10px;
+  max-width: min(290px, calc(100% - 20px));
+  padding: 7px 9px;
+  border: 1px solid rgba(78, 96, 84, .28);
+  border-radius: 8px;
+  background: rgba(250, 249, 246, .94);
+  color: #4d514c;
+  font-size: 10px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .viewport-sewing-step0 {
+    top: calc(58px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    min-height: 44px;
+  }
+  .viewport-sewing-step0-status {
+    top: calc(108px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    font-size: 10px;
+  }
+}

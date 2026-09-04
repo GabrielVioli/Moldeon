@@ -71,6 +71,8 @@ export const GarmentViewport = memo(function GarmentViewport({
   const [arrangementAxis, setArrangementAxis] = useState<ArrangementAxis>("free");
   const [arrangementNotice, setArrangementNotice] = useState<string | null>(null);
   const [touchMultiSelect, setTouchMultiSelect] = useState(false);
+  const [sewingStep0Running, setSewingStep0Running] = useState(false);
+  const [sewingStep0Notice, setSewingStep0Notice] = useState<string | null>(null);
   const [showSewingConnections, setShowSewingConnections] = useState(() => {
     try {
       return window.localStorage.getItem("moldeon.showSewingConnections") !== "false";
@@ -365,14 +367,48 @@ export const GarmentViewport = memo(function GarmentViewport({
             : AVATAR_NOT_CONFIGURED_MESSAGE}
       </div>
       {displayMode === "side-preview" ? (
-        <button
-          type="button"
-          className="viewport-sewing-visibility"
-          aria-pressed={showSewingConnections}
-          onClick={() => setShowSewingConnections((visible) => !visible)}
-        >
-          {showSewingConnections ? "Ocultar conexões" : "Mostrar conexões"}
-        </button>
+        <>
+          <button
+            type="button"
+            className="viewport-sewing-visibility"
+            aria-pressed={showSewingConnections}
+            onClick={() => setShowSewingConnections((visible) => !visible)}
+          >
+            {showSewingConnections ? "Ocultar conexões" : "Mostrar conexões"}
+          </button>
+          <button
+            type="button"
+            className="viewport-sewing-step0"
+            disabled={sewingStep0Running}
+            title="Aproxima e curva geometricamente o componente costurado. Não inicia física."
+            onClick={async () => {
+              const viewport = viewportRef.current;
+              if (!viewport || sewingStep0Running) return;
+              setSewingStep0Running(true);
+              setSewingStep0Notice("Calculando montagem geométrica…");
+              const result = await viewport.runSewingStep0(selectedSeamId);
+              setSewingStep0Running(false);
+              if (result.status === "applied") {
+                setSewingStep0Notice(`STEP-0 aplicado em ${result.affectedPanels} painel(is). Física continua desligada.`);
+              } else if (result.status === "too-far") {
+                setSewingStep0Notice("Aproxime os painéis do corpo antes de ajustar a montagem.");
+              } else if (result.status === "needs-placement") {
+                setSewingStep0Notice("Posicione os painéis no 3D antes de ajustar a montagem.");
+              } else if (result.status === "no-seams") {
+                setSewingStep0Notice("Selecione ou crie uma costura ativa para montar.");
+              } else if (result.status === "stale") {
+                setSewingStep0Notice("A montagem mudou durante o cálculo. Rode o STEP-0 novamente.");
+              } else {
+                setSewingStep0Notice(result.warning ?? "Não foi possível montar sem violar o placement atual.");
+              }
+            }}
+          >
+            {sewingStep0Running ? "Ajustando…" : "Ajustar montagem"}
+          </button>
+          {sewingStep0Notice ? (
+            <div className="viewport-sewing-step0-status" role="status">{sewingStep0Notice}</div>
+          ) : null}
+        </>
       ) : null}
       {displayMode === "side-preview" && !sewingActive ? (
         <div className="viewport-arrangement-controls" aria-label="Ações da montagem 3D">

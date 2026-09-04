@@ -62,6 +62,23 @@ describe("AssemblyWorkerClient isolated lifecycle", () => {
     expect(workers[1].terminated).toBe(true);
   });
 
+  it("forwards explicit geometric STEP-0 mode without touching XPBD", async () => {
+    const worker = new FakeWorker();
+    const client = new AssemblyWorkerClient(() => worker);
+    const document = garmentDraftToPatternDocumentV3(createBlankGarment());
+    const pending = client.solve({ document, revision: "step0", mode: "step0" });
+    const request = worker.requests[0];
+    expect(request.type).toBe("solve");
+    if (request.type !== "solve") throw new Error("solve request expected");
+    expect(request.mode).toBe("step0");
+    worker.emit({
+      type: "solved", generation: request.generation, revision: "step0",
+      state: emptyState(), diagnostics: emptyDiagnostics(), warnings: [],
+    });
+    await expect(pending).resolves.toMatchObject({ revision: "step0" });
+    client.dispose();
+  });
+
   it("ignores stale generation/revision responses", async () => {
     const worker = new FakeWorker();
     const client = new AssemblyWorkerClient(() => worker);
