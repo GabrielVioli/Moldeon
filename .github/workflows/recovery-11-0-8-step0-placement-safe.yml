@@ -37,6 +37,17 @@ jobs:
       - name: Apply placement-safe local STEP-0 repair
         run: python3 scripts/fix-11-0-8-step0-placement-safe.py
 
+      - name: Fix strict test fixture cast
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/web/src/viewport/SewingStep0Placement.test.ts")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace("  } as GarmentAssemblyMeshData;", "  } as unknown as GarmentAssemblyMeshData;", 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Diff check
         run: git diff --check
 
