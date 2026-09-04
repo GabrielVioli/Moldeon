@@ -48,6 +48,124 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
+      - name: Make material metric authoritative during local seam pull
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/web/src/viewport/SewingStep0.ts")
+          text = path.read_text(encoding="utf-8")
+          old = '''  for (let iteration = 0; iteration < iterations; iteration += 1) {
+            const reverse = iteration % 2 === 1;
+            projectStructuralMetric(world, structural, structuralTargets, reverse, 0.92);
+            projectSeamRelations(world, seams, reverse, seamRelaxation);
+            projectStructuralMetric(world, structural, structuralTargets, !reverse, 0.92);
+            projectSeamRelations(world, seams, !reverse, seamRelaxation * 0.52);
+
+            // Keep every panel in the neighbourhood explicitly chosen by the user.
+            // A tiny spring removes accumulated numerical drift; the hard cage below
+            // is the actual safety contract.
+            for (const instanceId of target.instanceIds) {
+              const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+              const originalCentroid = initialCentroids.get(instanceId)!;
+              const centroid = instanceParticleCentroid(world, instance.particleStart, instance.vertexCount);
+              const drift = centroid.sub(originalCentroid);
+              translateInstanceParticles(world, instance.particleStart, instance.vertexCount, drift.multiplyScalar(-0.012));
+              cageInstanceCentroid(
+                world,
+                instance.particleStart,
+                instance.vertexCount,
+                originalCentroid,
+                maximumCentroidDisplacementM,
+              );
+            }
+            cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+          }
+
+          // Finish with the material metric so STEP-0 never leaves a visibly stretched
+          // boundary just because it was the last constraint touched.
+          projectStructuralMetric(world, structural, structuralTargets, false, 0.96);
+          cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+          for (const instanceId of target.instanceIds) {
+            const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+            cageInstanceCentroid(
+              world,
+              instance.particleStart,
+              instance.vertexCount,
+              initialCentroids.get(instanceId)!,
+              maximumCentroidDisplacementM,
+            );
+          }'''
+          new = '''  for (let iteration = 0; iteration < iterations; iteration += 1) {
+            const reverse = iteration % 2 === 1;
+            // Material metric is the hard geometric contract. Multiple alternating
+            // sweeps make each seam pull behave as bending/rigid reorientation rather
+            // than stretching a boundary toward its mate.
+            for (let pass = 0; pass < 3; pass += 1) {
+              projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.985);
+            }
+            projectSeamRelations(world, seams, reverse, seamRelaxation * 0.42);
+            for (let pass = 0; pass < 5; pass += 1) {
+              projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? !reverse : reverse, 0.992);
+            }
+            projectSeamRelations(world, seams, !reverse, seamRelaxation * 0.14);
+            for (let pass = 0; pass < 3; pass += 1) {
+              projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.995);
+            }
+
+            // Keep every panel in the neighbourhood explicitly chosen by the user.
+            // A tiny spring removes accumulated numerical drift; the hard cage below
+            // is the actual safety contract.
+            for (const instanceId of target.instanceIds) {
+              const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+              const originalCentroid = initialCentroids.get(instanceId)!;
+              const centroid = instanceParticleCentroid(world, instance.particleStart, instance.vertexCount);
+              const drift = centroid.sub(originalCentroid);
+              translateInstanceParticles(world, instance.particleStart, instance.vertexCount, drift.multiplyScalar(-0.012));
+              cageInstanceCentroid(
+                world,
+                instance.particleStart,
+                instance.vertexCount,
+                originalCentroid,
+                maximumCentroidDisplacementM,
+              );
+            }
+            cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+          }
+
+          // A final alternating material polish runs inside the displacement cage.
+          // Clamping and metric restoration are repeated together so the last safety
+          // clamp cannot itself leave the panel visibly stretched.
+          for (let pass = 0; pass < 36; pass += 1) {
+            projectStructuralMetric(world, structural, structuralTargets, pass % 2 === 1, 0.997);
+            cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+          }
+          for (const instanceId of target.instanceIds) {
+            const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
+            cageInstanceCentroid(
+              world,
+              instance.particleStart,
+              instance.vertexCount,
+              initialCentroids.get(instanceId)!,
+              maximumCentroidDisplacementM,
+            );
+          }'''
+          if old not in text:
+              raise SystemExit("local STEP-0 iteration block not found")
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'const magnitude = Math.min(0.006, (current - target) * 0.5 * relaxation);',
+              'const magnitude = Math.min(0.0015, (current - target) * 0.5 * relaxation);',
+              1,
+          )
+          text = text.replace(
+              'const magnitude = Math.max(-0.0025, Math.min(0.0025, (current - target) * 0.5 * relaxation));',
+              'const magnitude = Math.max(-0.008, Math.min(0.008, (current - target) * 0.5 * relaxation));',
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Diff check
         run: git diff --check
 
@@ -71,6 +189,7 @@ jobs:
           grep -q 'surfaceNormalDot' apps/web/src/viewport/GlobalThreeViewport.ts
           grep -q 'restoreSnapshots' apps/web/src/viewport/GlobalThreeViewport.ts
           grep -q 'simulation.pause()' apps/web/src/viewport/GlobalThreeViewport.ts
+          grep -q 'Math.min(0.0015' apps/web/src/viewport/SewingStep0.ts
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
