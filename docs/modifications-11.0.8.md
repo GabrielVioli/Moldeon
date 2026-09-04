@@ -330,3 +330,30 @@ Existing seam rows and the proposal review show canonical 2D material lengths fo
 ### Manual gate still required
 
 This checkpoint must still be validated manually for Segment, Free, mixed 2D/3D, N:M, direction, inactive visualization, 3D thread selection and mobile portrait/landscape. Phase J STEP-0 remains intentionally pending until that interaction gate is accepted.
+
+
+## CLO-like sewing polish after manual gate
+
+Manual feedback showed that canonical sewing relationships were correct, but
+opposite-oriented panels rendered as giant X-shaped fans. This pass keeps the
+physical A(u) <-> B(u)/B(1-u) correspondence untouched and introduces a
+rendering-only pairing that chooses the shorter B-side display order. Direction
+continues to be communicated by canonical notches/arrows, never by mutating the
+physical bindings.
+
+Free Sewing UX is now explicit: it states that only a subrange is being sewn,
+shows the current side A/B and step 1/2 or 2/2, and instructs the user to click
+start and end on the same edge without dragging. Proposal review now reports
+Segmento/Livre/Vários trechos, range counts, direction, treatment and material
+length delta before confirmation.
+
+Additional polish in the same checkpoint:
+- overlay BufferAttributes reuse capacity and rely on drawRange;
+- seam editor controls stack in the narrow side panel instead of forcing
+  horizontal scrolling;
+- target ratio and slack commit on blur/Enter rather than every keystroke;
+- no-op grouped seam edits are ignored;
+- treatment edits keep the legacy field and canonicalTreatment synchronized
+  (`stretch` projects canonically as `elastic`).
+
+No XPBD, physics/**, garment-specific inference or STEP-0 behavior was added.

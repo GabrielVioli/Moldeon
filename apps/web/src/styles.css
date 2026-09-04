@@ -2787,3 +2787,108 @@ button {
     gap: 4px 7px;
   }
 }
+
+
+/* 11.0.8 CLO-like sewing polish */
+.free-sewing-guide {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid #94b9c4;
+  border-radius: 8px;
+  background: #eef9fc;
+  color: #2f454c;
+}
+.free-sewing-guide-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+.free-sewing-guide-title span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #456a75;
+}
+.free-sewing-guide p,
+.free-sewing-guide small {
+  margin: 0;
+  line-height: 1.35;
+}
+.free-sewing-mini-diagram {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4px;
+  align-items: center;
+  color: #0d9fc5;
+}
+.free-sewing-mini-diagram i {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0d9fc5, #55ca93);
+}
+.seam-proposal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+  margin: 5px 0 7px;
+}
+.seam-proposal-summary > * {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #ece8e1;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.seam-proposal-summary strong {
+  background: #ddeff4;
+  color: #294a55;
+}
+.assembly-panel .seam-editor-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.assembly-panel .seam-editor-row > .seam-select-button {
+  grid-column: 1;
+  grid-row: 1;
+}
+.assembly-panel .seam-editor-row > input[aria-label="Nome da costura"] {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  width: 100%;
+}
+.assembly-panel .seam-editor-row > .seam-length-summary,
+.assembly-panel .seam-editor-row > select,
+.assembly-panel .seam-editor-row > .seam-number-field,
+.assembly-panel .seam-editor-row > button:not(.seam-select-button) {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+}
+.assembly-panel .seam-number-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(70px, .8fr);
+  gap: 6px;
+  align-items: center;
+}
+.assembly-panel .seam-number-field input {
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .free-sewing-guide {
+    padding: 8px;
+  }
+  .free-sewing-guide-title {
+    display: grid;
+  }
+  .assembly-panel .seam-editor-row > button:not(.seam-select-button),
+  .assembly-panel .seam-editor-row > select {
+    min-height: 44px;
+  }
+}

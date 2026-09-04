@@ -1204,17 +1204,42 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateSeam: (seamId, update) => get().updateSeams([{ seamId, update }]),
   updateSeams: (updates) => {
     if (updates.length === 0) return;
+    const state = get();
     const byId = new Map(updates.map(({ seamId, update }) => [seamId, update] as const));
-    const selectedSeamId = get().selectedSeamId;
+    const hasChanges = (state.garment.seams ?? []).some((seam) => {
+      const update = byId.get(seam.id);
+      if (!update) return false;
+      const canonicalTreatment = update.treatment === undefined
+        ? seam.canonicalTreatment
+        : update.treatment === "stretch" ? "elastic" : update.treatment;
+      return (update.name !== undefined && update.name !== seam.name)
+        || (update.direction !== undefined && update.direction !== seam.direction)
+        || (update.treatment !== undefined && (update.treatment !== seam.treatment || canonicalTreatment !== seam.canonicalTreatment))
+        || (update.distribution !== undefined && update.distribution !== seam.distribution)
+        || (update.targetRatio !== undefined && update.targetRatio !== seam.targetRatio)
+        || (update.slackMm !== undefined && update.slackMm !== seam.slackMm)
+        || (update.active !== undefined && update.active !== (seam.active !== false));
+    });
+    if (!hasChanges) return;
+    const selectedSeamId = state.selectedSeamId;
     changeDocument(set, get, "seam", updates.length === 1 ? "Editar costura" : "Editar grupo de costura", (document) => ({
       ...document,
       garment: {
         ...document.garment,
         seams: (document.garment.seams ?? []).map((seam) => {
           const update = byId.get(seam.id);
-          return update
-            ? { ...seam, ...update, ...(update.treatment ? { type: update.treatment } : {}) }
-            : seam;
+          if (!update) return seam;
+          const canonicalTreatment = update.treatment === undefined
+            ? seam.canonicalTreatment
+            : update.treatment === "stretch" ? "elastic" : update.treatment;
+          return {
+            ...seam,
+            ...update,
+            ...(update.treatment ? {
+              type: update.treatment,
+              canonicalTreatment,
+            } : {}),
+          };
         }),
       },
     }), { selectedSeamId });

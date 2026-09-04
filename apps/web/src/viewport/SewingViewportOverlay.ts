@@ -26,6 +26,7 @@ interface ThreadSegment {
   direction?: "same" | "opposite";
   firstReference: GlobalPointReference;
   secondReference: GlobalPointReference;
+  canonicalSecondReference: GlobalPointReference;
   firstMesh: GarmentAssemblyMeshData;
   secondMesh: GarmentAssemblyMeshData;
   firstParticleStart: number;
@@ -112,11 +113,11 @@ export class SewingViewportOverlay {
       ? buildThreadSegments(meshes, state, proposalConstraints, inactiveConstraints)
       : [];
     this.directionNotches = buildDirectionNotches(this.threadSegments);
-    resetGeometry(this.edgeLines.geometry, this.edgeSegments.length);
-    resetGeometry(this.threadLines.geometry, this.threadSegments.length);
+    ensureGeometryCapacity(this.edgeLines.geometry, this.edgeSegments.length);
+    ensureGeometryCapacity(this.threadLines.geometry, this.threadSegments.length);
     // Each side of a notch is a shaft plus two arrow-head wings = 3 segments.
     // Two sides per sewing relation = 6 line segments per relation.
-    resetGeometry(this.notchLines.geometry, this.directionNotches.length * 6);
+    ensureGeometryCapacity(this.notchLines.geometry, this.directionNotches.length * 6);
     this.refreshPositions();
     this.refreshColors();
   }
@@ -274,6 +275,7 @@ function buildThreadSegments(
         direction: constraint.direction,
         firstReference: cloneReference(constraint.a),
         secondReference: cloneReference(constraint.b),
+        canonicalSecondReference: cloneReference(constraint.b),
         firstMesh,
         secondMesh,
         firstParticleStart: firstInstance.particleStart,
@@ -306,36 +308,103 @@ function resampleCanonicalThreads(segments: readonly ThreadSegment[]): ThreadSeg
   const result: ThreadSegment[] = [];
   for (const group of grouped.values()) {
     const ordered = [...group].sort((left, right) => left.progress - right.progress);
-    if (ordered.length < 2) {
-      result.push(...ordered);
-      continue;
-    }
-    const targetCount = Math.min(
-      MAX_VISUAL_THREADS_PER_PAIR,
-      Math.max(MIN_VISUAL_THREADS_PER_PAIR, ordered.length),
-    );
-    if (targetCount === ordered.length) {
-      result.push(...ordered);
-      continue;
-    }
-
-    for (let sampleIndex = 0; sampleIndex < targetCount; sampleIndex += 1) {
-      const u = targetCount === 1 ? 0 : sampleIndex / (targetCount - 1);
-      const scaled = u * (ordered.length - 1);
-      const lowerIndex = Math.floor(scaled);
-      const upperIndex = Math.min(ordered.length - 1, Math.ceil(scaled));
-      const alpha = scaled - lowerIndex;
-      const lower = ordered[lowerIndex];
-      const upper = ordered[upperIndex];
-      result.push({
-        ...lower,
-        firstReference: interpolateReference(lower.firstReference, upper.firstReference, alpha),
-        secondReference: interpolateReference(lower.secondReference, upper.secondReference, alpha),
-        progress: lower.progress + (upper.progress - lower.progress) * alpha,
-      });
-    }
+    const sampled = densifyCanonicalThreadGroup(ordered);
+    result.push(...untangleVisualThreadGroup(sampled));
   }
   return result;
+}
+
+function densifyCanonicalThreadGroup(ordered: readonly ThreadSegment[]): ThreadSegment[] {
+  if (ordered.length < 2) {
+    return ordered.map((segment) => ({
+      ...segment,
+      firstReference: cloneReference(segment.firstReference),
+      canonicalSecondReference: cloneReference(segment.canonicalSecondReference),
+      secondReference: cloneReference(segment.canonicalSecondReference),
+    }));
+  }
+
+  const targetCount = Math.min(
+    MAX_VISUAL_THREADS_PER_PAIR,
+    Math.max(MIN_VISUAL_THREADS_PER_PAIR, ordered.length),
+  );
+  const result: ThreadSegment[] = [];
+  for (let sampleIndex = 0; sampleIndex < targetCount; sampleIndex += 1) {
+    const u = targetCount === 1 ? 0 : sampleIndex / (targetCount - 1);
+    const scaled = u * (ordered.length - 1);
+    const lowerIndex = Math.floor(scaled);
+    const upperIndex = Math.min(ordered.length - 1, Math.ceil(scaled));
+    const alpha = scaled - lowerIndex;
+    const lower = ordered[lowerIndex];
+    const upper = ordered[upperIndex];
+    const canonicalSecondReference = interpolateReference(
+      lower.canonicalSecondReference,
+      upper.canonicalSecondReference,
+      alpha,
+    );
+    result.push({
+      ...lower,
+      firstReference: interpolateReference(lower.firstReference, upper.firstReference, alpha),
+      canonicalSecondReference,
+      secondReference: cloneReference(canonicalSecondReference),
+      progress: lower.progress + (upper.progress - lower.progress) * alpha,
+    });
+  }
+  return result;
+}
+
+/**
+ * Rendering-only de-crossing, inspired by CLO's readable sewing relationship
+ * lines. The canonical stitch correspondence stays untouched in
+ * canonicalSecondReference and in GarmentAssembly constraints. For display we
+ * choose the B-side ordering with the shorter total rung length, which avoids
+ * the giant X/fan when panels face opposite local directions.
+ */
+function untangleVisualThreadGroup(group: readonly ThreadSegment[]): ThreadSegment[] {
+  if (group.length < 2) return [...group];
+  const firstPoints = group.map((segment) => referenceWorldPoint(
+    segment.firstMesh,
+    segment.firstParticleStart,
+    segment.firstReference,
+  ).toArray() as [number, number, number]);
+  const secondPoints = group.map((segment) => referenceWorldPoint(
+    segment.secondMesh,
+    segment.secondParticleStart,
+    segment.canonicalSecondReference,
+  ).toArray() as [number, number, number]);
+  const reverse = shouldReverseVisualSewingSide(firstPoints, secondPoints);
+  return group.map((segment, index) => ({
+    ...segment,
+    secondReference: cloneReference(
+      reverse
+        ? group[group.length - 1 - index].canonicalSecondReference
+        : segment.canonicalSecondReference,
+    ),
+  }));
+}
+
+export function shouldReverseVisualSewingSide(
+  firstPoints: readonly [number, number, number][],
+  secondPoints: readonly [number, number, number][],
+): boolean {
+  if (firstPoints.length < 2 || firstPoints.length !== secondPoints.length) return false;
+  let directScore = 0;
+  let reversedScore = 0;
+  for (let index = 0; index < firstPoints.length; index += 1) {
+    directScore += pointDistanceSquared(firstPoints[index], secondPoints[index]);
+    reversedScore += pointDistanceSquared(firstPoints[index], secondPoints[firstPoints.length - 1 - index]);
+  }
+  return reversedScore + 1e-10 < directScore;
+}
+
+function pointDistanceSquared(
+  first: readonly [number, number, number],
+  second: readonly [number, number, number],
+): number {
+  const dx = first[0] - second[0];
+  const dy = first[1] - second[1];
+  const dz = first[2] - second[2];
+  return dx * dx + dy * dy + dz * dz;
 }
 
 function buildDirectionNotches(segments: readonly ThreadSegment[]): DirectionNotch[] {
@@ -360,8 +429,8 @@ function buildDirectionNotches(segments: readonly ThreadSegment[]): DirectionNot
       firstEnd: cloneReference(last.firstReference),
       // For an opposite seam these endpoints are already reversed by the
       // canonical compiler, so the arrow visibly flips with Reverse.
-      secondStart: cloneReference(first.secondReference),
-      secondEnd: cloneReference(last.secondReference),
+      secondStart: cloneReference(first.canonicalSecondReference),
+      secondEnd: cloneReference(last.canonicalSecondReference),
       seamId: first.seamId,
       inactive: first.inactive,
       proposal: first.proposal,
@@ -549,15 +618,23 @@ function writeReference(
   attribute.setXYZ(targetIndex, point.x, point.y, point.z);
 }
 
-function resetGeometry(geometry: THREE.BufferGeometry, segmentCount: number): void {
-  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segmentCount * 6), 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(segmentCount * 6), 3));
-  geometry.setDrawRange(0, segmentCount * 2);
+function ensureGeometryCapacity(geometry: THREE.BufferGeometry, segmentCount: number): void {
+  const requiredVertices = segmentCount * 2;
+  const currentPosition = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  const currentColor = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (!currentPosition || !currentColor || currentPosition.count < requiredVertices || currentColor.count < requiredVertices) {
+    const previousCapacity = Math.max(currentPosition?.count ?? 0, currentColor?.count ?? 0);
+    const grownCapacity = previousCapacity > 0 ? Math.ceil(previousCapacity * 1.5) : 16;
+    const capacity = Math.max(requiredVertices, grownCapacity);
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(capacity * 3), 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(capacity * 3), 3));
+  }
+  geometry.setDrawRange(0, requiredVertices);
 }
 
 function createLines(opacity: number): THREE.LineSegments {
   const geometry = new THREE.BufferGeometry();
-  resetGeometry(geometry, 0);
+  ensureGeometryCapacity(geometry, 0);
   const material = new THREE.LineBasicMaterial({
     vertexColors: true,
     transparent: true,

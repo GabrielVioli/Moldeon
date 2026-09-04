@@ -148,7 +148,7 @@ describe("assembly document history", () => {
     overlay.rebuild(meshes, arrangement.state, { first: [], second: [] });
 
     expect(overlay.edgeLines.geometry.getAttribute("position").count).toBeGreaterThan(0);
-    expect(overlay.threadLines.geometry.getAttribute("position").count)
+    expect(overlay.threadLines.geometry.drawRange.count)
       .toBe(overlay.visualThreadCount * 2);
     expect(overlay.visualThreadCount).toBeGreaterThanOrEqual(arrangement.state.stitchConstraints.length);
     expect(overlay.directionNotchCount).toBeGreaterThan(0);

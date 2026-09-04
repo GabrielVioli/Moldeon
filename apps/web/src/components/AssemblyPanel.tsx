@@ -48,6 +48,7 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const seamAuthoringMode = useEditorStore((state) => state.seamAuthoringMode);
   const seamChainMode = useEditorStore((state) => state.seamChainMode);
   const seamFreeStart = useEditorStore((state) => state.seamFreeStart);
+  const seamFirstEdge = useEditorStore((state) => state.seamFirstEdge);
   const setSeamAuthoringMode = useEditorStore((state) => state.setSeamAuthoringMode);
   const setSeamChainMode = useEditorStore((state) => state.setSeamChainMode);
   const finishSeamDraftSide = useEditorStore((state) => state.finishSeamDraftSide);
@@ -74,6 +75,14 @@ export const AssemblyPanel = memo(function AssemblyPanel({
   const firstDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.first) : 0;
   const secondDraftLengthMm = seamDraft ? edgeRangeSequenceLength(garment.pieces, seamDraft.second) : 0;
   const [seamNameDrafts, setSeamNameDrafts] = useState<Record<string, string>>({});
+  const freeCurrentSide = seamChainMode
+    ? (seamDraft?.activeSide ?? "first")
+    : seamFirstEdge ? "second" : "first";
+  const freeCurrentSideLabel = freeCurrentSide === "first" ? "A" : "B";
+  const freeWaitingForEnd = Boolean(seamFreeStart);
+  const proposalAuthoringLabel = seamChainMode
+    ? "Vários trechos"
+    : seamAuthoringMode === "free" ? "Livre" : "Segmento";
 
   return (
     <aside
@@ -95,6 +104,9 @@ export const AssemblyPanel = memo(function AssemblyPanel({
           key={`${proposal.first.pieceId}/${proposal.first.edgeId}/${proposal.second.pieceId}/${proposal.second.edgeId}`}
           sequence={(garment.seams?.length ?? 0) + 1}
           compatibility={proposal.compatibility}
+          authoringLabel={proposalAuthoringLabel}
+          firstRangeCount={proposal.firstRanges?.length ?? 1}
+          secondRangeCount={proposal.secondRanges?.length ?? 1}
           onCancel={cancelProposal}
           onConfirm={confirmProposal}
         />
@@ -128,13 +140,27 @@ export const AssemblyPanel = memo(function AssemblyPanel({
               onClick={() => setSeamChainMode(!seamChainMode)}
             >Vários trechos</button>
           </div>
-          <small className="sewing-authoring-help">
-            {seamAuthoringMode === "free"
-              ? seamFreeStart
-                ? `Início marcado em ${Math.round(seamFreeStart.t * 100)}%. Toque novamente na mesma borda para fechar a faixa.`
-                : "Livre: dois toques na mesma borda definem início e fim do EdgeRange."
-              : "Segmento: um toque seleciona a borda material inteira."}
-          </small>
+          {seamAuthoringMode === "free" ? (
+            <div className="free-sewing-guide" role="status" aria-live="polite">
+              <div className="free-sewing-guide-title">
+                <strong>Costura livre = só um trecho da borda</strong>
+                <span>Lado {freeCurrentSideLabel} · passo {freeWaitingForEnd ? "2/2" : "1/2"}</span>
+              </div>
+              <div className="free-sewing-mini-diagram" aria-hidden="true">
+                <span>●</span><i /><span>●</span>
+              </div>
+              <p>
+                {freeWaitingForEnd
+                  ? `Início marcado em ${Math.round((seamFreeStart?.t ?? 0) * 100)}%. Agora clique no FIM, na MESMA borda.`
+                  : `Clique uma vez no INÍCIO do trecho do lado ${freeCurrentSideLabel}.`}
+              </p>
+              <small>Não arraste. São dois cliques/toques na mesma borda: início e fim.</small>
+            </div>
+          ) : (
+            <small className="sewing-authoring-help">
+              Segmento: um toque seleciona a borda material inteira.
+            </small>
+          )}
           {seamChainMode ? (
             <div className="sewing-chain-status" role="status">
               <span>
@@ -248,29 +274,33 @@ export const AssemblyPanel = memo(function AssemblyPanel({
               <label className="seam-number-field">
                 Proporção
                 <input
+                  key={`${relationKey}/ratio/${representative.targetRatio ?? Math.max(0.01, 1 + representative.easeRatio)}`}
                   aria-label="Proporção alvo da costura"
                   type="number"
                   min="0.01"
                   step="0.01"
-                  value={representative.targetRatio ?? Math.max(0.01, 1 + representative.easeRatio)}
-                  onChange={(event) => {
+                  defaultValue={representative.targetRatio ?? Math.max(0.01, 1 + representative.easeRatio)}
+                  onBlur={(event) => {
                     const targetRatio = Math.max(0.01, event.currentTarget.valueAsNumber || 1);
                     updateSeams(group.map((seam) => ({ seamId: seam.id, update: { targetRatio } })));
                   }}
+                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
                 />
               </label>
               <label className="seam-number-field">
                 Folga (mm)
                 <input
+                  key={`${relationKey}/slack/${representative.slackMm ?? 0}`}
                   aria-label="Folga da costura em milímetros"
                   type="number"
                   min="0"
                   step="0.5"
-                  value={representative.slackMm ?? 0}
-                  onChange={(event) => {
+                  defaultValue={representative.slackMm ?? 0}
+                  onBlur={(event) => {
                     const slackMm = Math.max(0, event.currentTarget.valueAsNumber || 0);
                     updateSeams(group.map((seam) => ({ seamId: seam.id, update: { slackMm } })));
                   }}
+                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
                 />
               </label>
               <button type="button" onClick={(event) => {
@@ -416,11 +446,17 @@ export const AssemblyPanel = memo(function AssemblyPanel({
 function SeamProposalForm({
   sequence,
   compatibility,
+  authoringLabel,
+  firstRangeCount,
+  secondRangeCount,
   onCancel,
   onConfirm,
 }: {
   sequence: number;
   compatibility: SeamCompatibility;
+  authoringLabel: string;
+  firstRangeCount: number;
+  secondRangeCount: number;
   onCancel(): void;
   onConfirm(options: {
     name: string;
@@ -443,6 +479,13 @@ function SeamProposalForm({
       aria-label="Confirmar proposta de costura"
     >
       <h3>Proposta de costura</h3>
+      <div className="seam-proposal-summary">
+        <strong>{authoringLabel}</strong>
+        <span>Lado A: {firstRangeCount} trecho(s)</span>
+        <span>Lado B: {secondRangeCount} trecho(s)</span>
+        <span>Direção: {direction === "same" ? "mesmo sentido" : "sentidos opostos"}</span>
+        <span>Tratamento: {TREATMENTS.find((candidate) => candidate.value === treatment)?.label ?? treatment}</span>
+      </div>
       <div className={`seam-proposal-metrics${compatibility.differencePercent > 2 ? " has-mismatch" : ""}`}>
         <span>Lado A <strong>{compatibility.firstLengthMm.toFixed(1)} mm</strong></span>
         <span>Lado B <strong>{compatibility.secondLengthMm.toFixed(1)} mm</strong></span>
