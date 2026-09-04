@@ -559,3 +559,24 @@ body surface. They prove both:
 2. two PanelInstances connected by two independent side SeamGroups jointly
    wrap into a cycle, every SeamGroup improves, and front/back anchors remain
    within the original placement limit.
+
+## Manual-gate failure follow-up - body-clearance metric budget
+
+The browser identified the remaining early rejection as
+`canonical-material-metric-exceeded` for both the two-panel case and a single
+authored 1020 x 300 mm rectangle. Panel size was not the cause.
+
+STEP-0 was requesting 6 mm of body clearance while the final body audit uses
+0.5 mm. For a closed wrap, 6 mm adds approximately 37.7 mm (`2 * pi * 6 mm`)
+to the circumference that the material would have to cover. A 1020 mm panel
+around an approximately 1000 mm hip therefore could not satisfy both that
+clearance and the canonical 2D metric without crossing the 2% distortion gate.
+
+The STEP-0 integration now requests the same 0.5 mm clearance used by the
+final audit. Refreshed barrier frames retain the configured clearance instead
+of restoring a hard-coded 6 mm value. The material metric gate remains 2%; no
+autoscale, stretch allowance, XPBD or collision change was introduced.
+
+An additional regression builds the 1020 x 300 mm rectangle through the real
+authoring/resolved-assembly/triangulation pipeline and verifies closed-seam
+residual below 5 mm with material metric distortion below 2%.

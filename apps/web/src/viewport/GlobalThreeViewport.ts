@@ -638,7 +638,7 @@ export class ThreeViewport {
           maximumCentroidDisplacementM: 0.018,
           seamRelaxation: 0.58,
           body,
-          bodyClearanceM: 0.006,
+          bodyClearanceM: 0.0005,
           bodyQueryDistanceM: 0.24,
         },
       );

@@ -559,6 +559,7 @@ interface Step0BodyBarrier {
   frames: Array<BodySurfaceFrame | null>;
   minimumClearanceM: Float64Array;
   queryDistanceM: number;
+  requestedClearanceM: number;
   corrections: number;
   hemisphereRejects: number;
 }
@@ -597,6 +598,7 @@ function buildStep0BodyBarrier(
     frames,
     minimumClearanceM,
     queryDistanceM,
+    requestedClearanceM,
     corrections: 0,
     hemisphereRejects: 0,
   };
@@ -1135,7 +1137,10 @@ function refreshStep0BodyBarrierFrames(
     surface.set(...frame.position);
     normal.set(...frame.outwardNormal).normalize();
     const signed = point.clone().sub(surface).dot(normal);
-    barrier.minimumClearanceM[particle] = Math.min(0.006, Math.max(0, signed));
+    barrier.minimumClearanceM[particle] = Math.min(
+      barrier.requestedClearanceM,
+      Math.max(0, signed),
+    );
   }
 }
 

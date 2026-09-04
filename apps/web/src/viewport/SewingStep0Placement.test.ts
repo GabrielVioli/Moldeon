@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
+import { createBlankGarment } from "../domain/blankGarment";
+import { createDefaultFabricSource } from "../domain/fabric";
+import { getPatternEdges, type PatternPiece } from "../domain/pattern";
+import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import { buildResolvedGarmentAssembly } from "../garment3d/ResolvedGarmentAssembly";
 import {
   auditSewingStep0Seams,
   measureCurrentSewingStep0Residual,
@@ -213,6 +218,59 @@ function twoPanelCycle(): {
   };
 }
 
+function authoredRectangleFixture(widthMm: number, heightMm: number) {
+  const piece: PatternPiece = {
+    id: "authored-rectangle",
+    name: "authored-rectangle",
+    seamAllowanceMm: 0,
+    cutQuantity: 1,
+    points: [
+      { id: "a", xMm: 0, yMm: 0 },
+      { id: "b", xMm: widthMm, yMm: 0 },
+      { id: "c", xMm: widthMm, yMm: heightMm },
+      { id: "d", xMm: 0, yMm: heightMm },
+    ],
+  };
+  const edges = getPatternEdges(piece);
+  const blank = createBlankGarment();
+  const fabric = createDefaultFabricSource();
+  const draft = {
+    ...blank,
+    fabrics: [fabric],
+    pieces: [{ ...piece, fabricId: fabric.id }],
+    seams: [{
+      id: "authored-tube",
+      name: "authored-tube",
+      first: { pieceId: piece.id, edgeId: edges[1].id, startT: 0, endT: 1 },
+      second: { pieceId: piece.id, edgeId: edges[3].id, startT: 0, endT: 1 },
+      direction: "opposite" as const,
+      easeRatio: 0,
+      type: "standard",
+      active: true,
+    }],
+  };
+  const input = buildResolvedAssemblyInput(draft);
+  const state = buildResolvedGarmentAssembly(input);
+  const instance = state.instances[0];
+  const source = instance.topology.positions2DMm;
+  const positions = new Float32Array(instance.vertexCount * 3);
+  for (let index = 0; index < instance.vertexCount; index += 1) {
+    positions[index * 3] = (source[index * 2] - widthMm * 0.5) * 0.001;
+    positions[index * 3 + 1] = -(source[index * 2 + 1] - heightMm * 0.5) * 0.001;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(Array.from(instance.topology.triangles));
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  mesh.position.set(0, 1, 0.168);
+  mesh.updateMatrixWorld(true);
+  return {
+    state,
+    mesh: { key: instance.id, mesh, flat: new Float32Array(positions), dressed: new Float32Array(positions) } as unknown as GarmentAssemblyMeshData,
+    target: { rootInstanceId: instance.id, instanceIds: [instance.id] } as SewingStep0Target,
+  };
+}
+
 function quadGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
@@ -391,6 +449,19 @@ describe("placement-anchored STEP-0", () => {
     expect(proposal!.afterResidual.maximumM).toBeLessThan(0.008);
     expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
     expect(proposal!.maximumCentroidDisplacementM).toBeLessThanOrEqual(0.018001);
+  });
+
+  it("closes the real authored 1020 x 300 mm rectangle topology without metric rejection", () => {
+    const fixture = authoredRectangleFixture(1020, 300);
+    const proposal = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      { iterations: 72, body: cylinderBody(0.159), bodyClearanceM: 0.0005 },
+    );
+    expect(proposal).not.toBeNull();
+    expect(proposal!.afterResidual.maximumM).toBeLessThan(0.005);
+    expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
   });
 
   it("is deterministic and does not mutate the authored meshes while proposing", () => {
