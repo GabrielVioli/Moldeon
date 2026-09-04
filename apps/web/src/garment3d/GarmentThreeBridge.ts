@@ -138,6 +138,22 @@ export function copyGarmentAssemblyGeometry(
   target.computeBoundingSphere();
 }
 
+/**
+ * Adopts a newly built assembly mesh while retaining the renderer object.
+ * Geometry emitted by fitting is already in world coordinates, so retaining
+ * a workspace mesh transform would apply the authored placement twice.
+ */
+export function adoptGarmentAssemblyMesh(
+  target: THREE.Mesh,
+  source: THREE.Mesh,
+): void {
+  copyGarmentAssemblyGeometry(target.geometry, source.geometry);
+  target.position.copy(source.position);
+  target.quaternion.copy(source.quaternion);
+  target.scale.copy(source.scale);
+  target.updateMatrixWorld(true);
+}
+
 export function captureGarmentMeshDiagnostics(
   meshes: readonly GarmentAssemblyMeshData[],
 ): GarmentMeshDiagnostic[] {

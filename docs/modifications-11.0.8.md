@@ -580,3 +580,56 @@ autoscale, stretch allowance, XPBD or collision change was introduced.
 An additional regression builds the 1020 x 300 mm rectangle through the real
 authoring/resolved-assembly/triangulation pipeline and verifies closed-seam
 residual below 5 mm with material metric distortion below 2%.
+
+## Manual-gate failure follow-up - Montar to Provar state continuity
+
+The gate proved that the independent simulation assembly could close the
+cycle, but that its result replaced the visible Montar/STEP-0 state. Two
+transition defects were confirmed:
+
+1. entering Provar always launched a new Assembly Worker solve from
+   `simulationDocument`; the resulting state did not contain the geometric
+   deformation produced by STEP-0 in Montar;
+2. mesh reconciliation copied the newly solved world-space geometry into the
+   existing workspace mesh but retained the workspace position/quaternion.
+   This applied authored placement a second time and explains the closed tube
+   appearing above the avatar.
+
+The transition now captures the rendered world-space geometry of every
+compatible PanelInstance before leaving Montar. After the required simulation
+document compilation, it verifies geometry, sewing, arrangement, instance and
+topology identity, then transfers those exact positions into `positions`,
+`initialPositions` and `previousPositions`. Anchor targets are synchronized to
+the transferred particles. The independent simulation solve still supplies
+canonical topology and constraints, but no longer wins placement or geometry.
+
+When this transfer succeeds, legacy semantic body registration is recorded as
+a diagnostic proposal but is not applied. The body remains in canonical world
+coordinates and the manually authored workspace pose is the authority; no
+global recenter was added. Exact body contact remains enabled against that
+shared coordinate system. The existing legacy registration path remains only
+for entering Provar without a compatible Montar seed.
+
+Reusable mesh objects now adopt the source assembly transform together with
+their geometry. Fitting geometry is world-space with an identity mesh
+transform, preventing the old double-placement bug.
+
+DEV diagnostics are available in `data-assembly-mode-transition` and record:
+
+- workspace, raw simulation-solve and transferred position signatures;
+- per-instance centroids, bounding boxes, transforms, geometry signatures,
+  arrangement anchors and assembly arrangement;
+- garment centroid/bounding box;
+- per-SeamGroup residuals;
+- geometry/simulation revisions and assembly strategies;
+- whether the worker rebuilt a different pose, whether workspace geometry was
+  preserved, transfer result and whether legacy registration was applied.
+
+Regression coverage uses a real authored 1020 x 300 mm self-seamed rectangle.
+It creates a closed tube near the hip in the workspace, creates a separate
+simulation state above the avatar, transfers the workspace seed, and proves
+identical position signature, centroid, bounds, seam residuals and zero-step
+buffers. A second test proves reconciliation resets the stale workspace
+transform. The focused gate passed 12 files / 76 tests; typecheck, production
+build and `git diff --check` passed. No file under `apps/web/src/physics/**`
+was changed.

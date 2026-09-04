@@ -24,9 +24,9 @@ import {
 import type { BodyType, EdgeRange, Seam } from "../domain/pattern";
 import {
   buildGarmentAssemblyMeshes,
+  adoptGarmentAssemblyMesh,
   canReuseGarmentAssemblyMesh,
   captureGarmentMeshDiagnostics,
-  copyGarmentAssemblyGeometry,
   type GarmentAssemblyMeshData,
 } from "../garment3d/GarmentThreeBridge";
 import type { ResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
@@ -83,6 +83,13 @@ import {
   syncMeshGeometryToAssemblyState,
   type SewingStep0RunResult,
 } from "./SewingStep0";
+import {
+  applyWorkspaceAssemblySeed,
+  assemblyPositionSignature,
+  captureAssemblyTransitionDiagnostic,
+  captureWorkspaceAssemblySeed,
+  type WorkspaceAssemblyCapture,
+} from "./AssemblyModeTransition";
 
 export type RenderBackend = "webgpu" | "webgl2";
 export type ThreeViewportMode = "assembly" | "fitting";
@@ -224,6 +231,7 @@ export class ThreeViewport {
   private lastAppliedFrameAt = 0;
   private viewportMode: ThreeViewportMode = "fitting";
   private currentInput: ResolvedAssemblyInput | null = null;
+  private workspaceSimulationCapture: WorkspaceAssemblyCapture | null = null;
   private readonly selectedInstanceIds = new Set<string>();
   private arrangementCommitHandler?: (commits: ArrangementCommit[]) => void;
   private arrangementSelectionHandler?: (instanceIds: string[]) => void;
@@ -944,6 +952,18 @@ export class ThreeViewport {
 
   updateGarment(input: ResolvedAssemblyInput, mode: ThreeViewportMode = "fitting"): string[] {
     const enteringAssembly = mode === "assembly" && this.viewportMode !== "assembly";
+    const enteringFittingFromAssembly = mode === "fitting" && this.viewportMode === "assembly";
+    const capturedWorkspace = enteringFittingFromAssembly && this.assemblyState
+      ? captureWorkspaceAssemblySeed(
+          this.assemblyState,
+          this.garmentMeshes,
+          this.currentInput ?? input,
+          this.host.dataset.assemblyStrategy ?? "workspace-worker-solve",
+        )
+      : null;
+    if (enteringAssembly) this.workspaceSimulationCapture = null;
+    if (capturedWorkspace) this.workspaceSimulationCapture = capturedWorkspace;
+    const workspaceCapture = mode === "fitting" ? this.workspaceSimulationCapture : null;
     this.viewportMode = mode;
     this.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
     this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
@@ -1007,11 +1027,25 @@ export class ThreeViewport {
     }).then((response) => {
       if (this.disposed || this.pendingAssemblyRevision !== response.revision || response.revision !== revision) return;
       const state = response.state;
-      if (mode === "fitting") applyAuthoredArrangementToAssemblyState(state, input, avatarModel);
+      const simulationSolveDiagnostic = mode === "fitting"
+        ? captureAssemblyTransitionDiagnostic(
+            state,
+            input,
+            "simulation-worker-solve",
+            response.revision,
+            response.diagnostics.assembly.strategy,
+          )
+        : null;
+      const workspaceTransfer = mode === "fitting" && workspaceCapture
+        ? applyWorkspaceAssemblySeed(state, workspaceCapture.seed, input)
+        : null;
+      if (mode === "fitting" && !workspaceTransfer?.applied) {
+        applyAuthoredArrangementToAssemblyState(state, input, avatarModel);
+      }
       const registration = mode === "fitting"
         ? resolveGarmentBodyRegistration(state, avatarModel)
         : null;
-      if (registration) applyGarmentBodyRegistration(state, registration);
+      if (registration && !workspaceTransfer?.applied) applyGarmentBodyRegistration(state, registration);
       const visibleInstanceIds = new Set(state.instances.map((instance) => instance.id));
       const nextMeshes = buildGarmentAssemblyMeshes(state, garment, {
         castShadow: this.profile.shadows,
@@ -1026,6 +1060,7 @@ export class ThreeViewport {
       this.host.dataset.simulationGeometryRevision = response.revision;
       this.host.dataset.assemblyStatus = response.diagnostics.assembly.invalid ? "invalid" : "ready";
       this.host.dataset.coarseAssemblyDiagnostics = JSON.stringify(response.diagnostics);
+      this.host.dataset.assemblyStrategy = response.diagnostics.assembly.strategy;
       this.host.dataset.assemblyWarnings = JSON.stringify(response.warnings);
 
       if (mode === "assembly") {
@@ -1056,13 +1091,40 @@ export class ThreeViewport {
       }
 
       if (!registration) return;
-      this.bodyRegistrationStatus = registration.status;
+      this.bodyRegistrationStatus = workspaceTransfer?.applied ? "registered" : registration.status;
+      this.host.dataset.bodyRegistrationAuthority = workspaceTransfer?.applied
+        ? "workspace-canonical-world"
+        : "legacy-semantic-registration";
       this.currentBodyTransform = IDENTITY_BODY_TRANSFORM;
-      const exactBodyMesh = registration.status === "registered"
+      const exactBodyMesh = this.bodyRegistrationStatus === "registered"
         ? packHumanBodyMesh(avatarModel.humanBody.visualMesh)
         : undefined;
       this.host.dataset.bodyRegistration = JSON.stringify(registration);
       this.host.dataset.garmentRegistration = JSON.stringify(registration);
+      if (workspaceCapture && simulationSolveDiagnostic) {
+        const transferredDiagnostic = captureAssemblyTransitionDiagnostic(
+          state,
+          input,
+          "workspace-seed-transfer",
+          response.revision,
+          workspaceTransfer?.applied ? "workspace-seed-transfer" : response.diagnostics.assembly.strategy,
+        );
+        this.host.dataset.assemblyModeTransition = JSON.stringify({
+          workspace: workspaceCapture.diagnostic,
+          simulationSolve: simulationSolveDiagnostic,
+          transfer: workspaceTransfer,
+          simulationInitial: transferredDiagnostic,
+          simulationWorkerRebuiltGeometry:
+            simulationSolveDiagnostic.positionSignature !== workspaceCapture.diagnostic.positionSignature,
+          workspaceGeometryPreserved:
+            workspaceTransfer?.applied === true
+            && transferredDiagnostic.positionSignature === workspaceCapture.diagnostic.positionSignature,
+          legacyRegistrationApplied: !workspaceTransfer?.applied,
+          legacyRegistrationProposal: registration,
+        });
+      } else {
+        delete this.host.dataset.assemblyModeTransition;
+      }
       this.host.dataset.avatarMeasurementOrigins = JSON.stringify(avatarModel.measurementOrigins ?? {});
       this.host.dataset.avatarResolvedMeasurements = JSON.stringify(avatarModel.measurements);
       this.host.dataset.physicalFloorY = String(this.floor.position.y);
@@ -1076,7 +1138,7 @@ export class ThreeViewport {
       if (import.meta.env.DEV) this.configureRegistrationAxes(state, registration);
       const initialization = buildXpbdInitialization(state, garment, response.revision, {
         exactBodyMesh,
-        bodyCollisionEnabled: registration.status === "registered" && this.devSettings.bodyCollisionEnabled,
+        bodyCollisionEnabled: this.bodyRegistrationStatus === "registered" && this.devSettings.bodyCollisionEnabled,
         config: {
           gravity: this.scaledGravity(),
           maximumSubsteps: settings.substeps,
@@ -1100,7 +1162,7 @@ export class ThreeViewport {
         revision: response.revision,
         strategy: response.diagnostics.assembly.strategy,
         intrinsicDistortion: measureIntrinsicDistortion(state),
-        initialPositionSignature: positionSignature(state.positions),
+        initialPositionSignature: assemblyPositionSignature(state.positions),
         coarseVertexCount: response.diagnostics.coarseVertexCount,
         coarseTriangleCount: response.diagnostics.coarseTriangleCount,
         hingeCount: response.diagnostics.hingeCount,
@@ -1360,7 +1422,7 @@ export class ThreeViewport {
         continue;
       }
 
-      copyGarmentAssemblyGeometry(previous.mesh.geometry, next.mesh.geometry);
+      adoptGarmentAssemblyMesh(previous.mesh, next.mesh);
       disposeMaterial(previous.mesh.material);
       previous.mesh.material = next.mesh.material;
       next.mesh.geometry.dispose();
@@ -2471,7 +2533,7 @@ export class ThreeViewport {
         if (import.meta.env.DEV) {
           this.host.dataset.garmentMeshDiagnostics = JSON.stringify(captureGarmentMeshDiagnostics(this.garmentMeshes));
         }
-        this.host.dataset.simulationPositionSignature = positionSignature(frame.positions);
+        this.host.dataset.simulationPositionSignature = assemblyPositionSignature(frame.positions);
         this.host.dataset.simulationWorkerReady = JSON.stringify({
           revision: frame.revision,
           generation: frame.generation,
@@ -2610,16 +2672,6 @@ function summarizeAssemblySeamGraph(state: GarmentAssemblyState): {
       || left.firstInstanceId.localeCompare(right.firstInstanceId)
       || left.secondInstanceId.localeCompare(right.secondInstanceId)),
   };
-}
-
-function positionSignature(positions: Float32Array): string {
-  const bytes = new Uint8Array(positions.buffer, positions.byteOffset, positions.byteLength);
-  let hash = 0x811c9dc5;
-  for (const value of bytes) {
-    hash ^= value;
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `${positions.length}:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function frameCanUpdateMeshes(
