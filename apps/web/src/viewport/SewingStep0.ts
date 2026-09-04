@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { closestBodySurfacePoint, type BodySurfaceFrame } from "../avatar/BodySurfaceQuery";
+import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
 import type { AssemblyStitchConstraint, GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
@@ -183,6 +185,49 @@ export interface PlacementAnchoredSewingStep0Options {
   maximumVertexDisplacementM?: number;
   maximumCentroidDisplacementM?: number;
   seamRelaxation?: number;
+  /** Exact visual body. When present it is a solve-time inequality barrier. */
+  body?: HumanBodyMesh;
+  bodyClearanceM?: number;
+  bodyQueryDistanceM?: number;
+}
+
+export interface SewingStep0SeamAudit {
+  accepted: boolean;
+  missingSeamIds: string[];
+  unimprovedSeamIds: string[];
+  worsenedSeamIds: string[];
+}
+
+/** Every physical SeamGroup is audited independently; a good average cannot hide one bad seam. */
+export function auditSewingStep0Seams(
+  before: SewingStep0ResidualMetric,
+  after: SewingStep0ResidualMetric,
+): SewingStep0SeamAudit {
+  const missingSeamIds: string[] = [];
+  const unimprovedSeamIds: string[] = [];
+  const worsenedSeamIds: string[] = [];
+  for (const [seamId, previous] of Object.entries(before.bySeam)) {
+    const next = after.bySeam[seamId];
+    if (!next || next.evaluated !== previous.evaluated) {
+      missingSeamIds.push(seamId);
+      continue;
+    }
+    const alreadyClosed = previous.meanM <= 0.0015;
+    const measurablyImproved = next.meanM <= previous.meanM * 0.995
+      || next.meanM <= previous.meanM - 0.00015;
+    if (!alreadyClosed && !measurablyImproved) unimprovedSeamIds.push(seamId);
+    if (next.maximumM > Math.max(previous.maximumM + 0.001, previous.maximumM * 1.08)) {
+      worsenedSeamIds.push(seamId);
+    }
+  }
+  return {
+    accepted: missingSeamIds.length === 0
+      && unimprovedSeamIds.length === 0
+      && worsenedSeamIds.length === 0,
+    missingSeamIds,
+    unimprovedSeamIds,
+    worsenedSeamIds,
+  };
 }
 
 export interface PlacementAnchoredSewingStep0Proposal {
@@ -194,6 +239,15 @@ export interface PlacementAnchoredSewingStep0Proposal {
   metricDistortionMax: number;
   iterations: number;
   seamConstraintCount: number;
+  bodyBarrierCorrections: number;
+  bodyHemisphereRejects: number;
+  minimumBodyClearanceM: number | null;
+  phaseTimingsMs: {
+    setup: number;
+    solve: number;
+    materialPolish: number;
+    serialize: number;
+  };
 }
 
 /**
@@ -214,6 +268,7 @@ export function solvePlacementAnchoredSewingStep0(
   target: SewingStep0Target,
   options: PlacementAnchoredSewingStep0Options = {},
 ): PlacementAnchoredSewingStep0Proposal | null {
+  const startedAt = step0Now();
   const iterations = Math.max(8, Math.min(120, Math.round(options.iterations ?? 64)));
   const maximumVertexDisplacementM = Math.max(0.005, options.maximumVertexDisplacementM ?? 0.065);
   const maximumCentroidDisplacementM = Math.max(0.001, options.maximumCentroidDisplacementM ?? 0.018);
@@ -227,7 +282,9 @@ export function solvePlacementAnchoredSewingStep0(
   const structural = state.structuralConstraints.filter((constraint) =>
     filled[constraint.a] === 1 && filled[constraint.b] === 1,
   );
-  const structuralTargets = structural.map((constraint) => particleDistance(world, constraint.a, constraint.b));
+  // The 2D material metric is canonical. Using the current 3D edge lengths here
+  // made repeated Adjust operations preserve (and accumulate) an earlier error.
+  const structuralTargets = structural.map((constraint) => constraint.restLength);
   const seams = state.stitchConstraints.filter((constraint) =>
     !constraint.seamGroupId.startsWith("dart:")
     && Boolean(constraint.instanceA && targetIds.has(constraint.instanceA))
@@ -238,6 +295,15 @@ export function solvePlacementAnchoredSewingStep0(
   if (seams.length === 0) return null;
 
   const beforeResidual = measureResidualInWorld(world, seams);
+  const bodyBarrier = options.body
+    ? buildStep0BodyBarrier(
+      options.body,
+      initial,
+      filled,
+      options.bodyClearanceM ?? 0.006,
+      options.bodyQueryDistanceM ?? 0.24,
+    )
+    : null;
   const initialCentroids = new Map<string, THREE.Vector3>();
   for (const instanceId of target.instanceIds) {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
@@ -245,6 +311,7 @@ export function solvePlacementAnchoredSewingStep0(
     initialCentroids.set(instanceId, instanceParticleCentroid(initial, instance.particleStart, instance.vertexCount));
   }
 
+  const setupFinishedAt = step0Now();
   for (let iteration = 0; iteration < iterations; iteration += 1) {
   const reverse = iteration % 2 === 1;
   // Material metric is the hard geometric contract. Multiple alternating
@@ -261,6 +328,7 @@ export function solvePlacementAnchoredSewingStep0(
   for (let pass = 0; pass < 3; pass += 1) {
     projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.995);
   }
+  if (bodyBarrier) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.65);
 
   // Keep every panel in the neighbourhood explicitly chosen by the user.
   // A tiny spring removes accumulated numerical drift; the hard cage below
@@ -282,10 +350,13 @@ export function solvePlacementAnchoredSewingStep0(
   cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
 }
 
+const solveFinishedAt = step0Now();
+
 // Final material polish is repeated inside the displacement cage so the
 // last safety clamp cannot leave the panel visibly stretched.
 for (let pass = 0; pass < 36; pass += 1) {
   projectStructuralMetric(world, structural, structuralTargets, pass % 2 === 1, 0.997);
+  if (bodyBarrier && pass % 3 === 2) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.8);
   cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
 }
 for (const instanceId of target.instanceIds) {
@@ -298,6 +369,11 @@ for (const instanceId of target.instanceIds) {
     maximumCentroidDisplacementM,
   );
 }
+if (bodyBarrier) {
+  projectStep0BodyBarrier(world, filled, bodyBarrier, 1);
+  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+}
+const polishFinishedAt = step0Now();
 
   const afterResidual = measureResidualInWorld(world, seams);
   let maximumVertex = 0;
@@ -346,6 +422,8 @@ for (const instanceId of target.instanceIds) {
     positionsByInstanceId.set(instanceId, local);
   }
 
+  const serializedAt = step0Now();
+
   return {
     positionsByInstanceId,
     beforeResidual,
@@ -355,6 +433,15 @@ for (const instanceId of target.instanceIds) {
     metricDistortionMax,
     iterations,
     seamConstraintCount: seams.length,
+    bodyBarrierCorrections: bodyBarrier?.corrections ?? 0,
+    bodyHemisphereRejects: bodyBarrier?.hemisphereRejects ?? 0,
+    minimumBodyClearanceM: bodyBarrier ? measureStep0BodyClearance(world, filled, bodyBarrier) : null,
+    phaseTimingsMs: {
+      setup: setupFinishedAt - startedAt,
+      solve: solveFinishedAt - setupFinishedAt,
+      materialPolish: polishFinishedAt - solveFinishedAt,
+      serialize: serializedAt - polishFinishedAt,
+    },
   };
 }
 
@@ -419,6 +506,136 @@ function buildCurrentWorldParticles(
     }
   }
   return { world, filled };
+}
+
+interface Step0BodyBarrier {
+  body: HumanBodyMesh;
+  frames: Array<BodySurfaceFrame | null>;
+  minimumClearanceM: Float64Array;
+  queryDistanceM: number;
+  corrections: number;
+  hemisphereRejects: number;
+}
+
+function buildStep0BodyBarrier(
+  body: HumanBodyMesh,
+  initial: Float64Array,
+  filled: Uint8Array,
+  requestedClearanceM: number,
+  queryDistanceM: number,
+): Step0BodyBarrier {
+  const frames: Array<BodySurfaceFrame | null> = Array.from({ length: filled.length }, () => null);
+  const minimumClearanceM = new Float64Array(filled.length);
+  const point = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  for (let particle = 0; particle < filled.length; particle += 1) {
+    if (filled[particle] !== 1) continue;
+    const offset = particle * 3;
+    point.set(initial[offset], initial[offset + 1], initial[offset + 2]);
+    const frame = closestBodySurfacePoint(body, [point.x, point.y, point.z], 0, queryDistanceM);
+    frames[particle] = frame;
+    if (!frame) continue;
+    surface.set(...frame.position);
+    normal.set(...frame.outwardNormal).normalize();
+    const initialSigned = point.clone().sub(surface).dot(normal);
+    // Never make an existing penetration worse. An already healthy point keeps
+    // a small skin clearance, while a pre-existing inside point is allowed to
+    // recover without an instantaneous projection/teleport.
+    minimumClearanceM[particle] = initialSigned >= 0
+      ? Math.min(requestedClearanceM, initialSigned)
+      : initialSigned;
+  }
+  return {
+    body,
+    frames,
+    minimumClearanceM,
+    queryDistanceM,
+    corrections: 0,
+    hemisphereRejects: 0,
+  };
+}
+
+function projectStep0BodyBarrier(
+  world: Float64Array,
+  filled: Uint8Array,
+  barrier: Step0BodyBarrier,
+  relaxation: number,
+): void {
+  const point = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  const initialNormal = new THREE.Vector3();
+  for (let particle = 0; particle < filled.length; particle += 1) {
+    const initialFrame = barrier.frames[particle];
+    if (filled[particle] !== 1 || !initialFrame) continue;
+    const offset = particle * 3;
+    point.set(world[offset], world[offset + 1], world[offset + 2]);
+    const candidate = closestBodySurfacePoint(
+      barrier.body,
+      [point.x, point.y, point.z],
+      0,
+      barrier.queryDistanceM,
+    );
+    initialNormal.set(...initialFrame.outwardNormal).normalize();
+    let frame = candidate;
+    if (frame) {
+      normal.set(...frame.outwardNormal).normalize();
+      // A nearest-point jump to the opposite body hemisphere is not a valid
+      // shortcut for closing a seam. Keep the original material-side plane.
+      if (normal.dot(initialNormal) < -0.2) {
+        frame = null;
+        barrier.hemisphereRejects += 1;
+      }
+    }
+    if (frame) {
+      surface.set(...frame.position);
+      normal.set(...frame.outwardNormal).normalize();
+    } else {
+      surface.set(...initialFrame.position);
+      normal.copy(initialNormal);
+    }
+    const signed = point.clone().sub(surface).dot(normal);
+    const deficit = barrier.minimumClearanceM[particle] - signed;
+    if (deficit <= 1e-8) continue;
+    // Bounded inequality projection: tangential seam motion is untouched.
+    const correction = Math.min(0.0025, deficit * relaxation);
+    world[offset] += normal.x * correction;
+    world[offset + 1] += normal.y * correction;
+    world[offset + 2] += normal.z * correction;
+    barrier.corrections += 1;
+  }
+}
+
+function measureStep0BodyClearance(
+  world: Float64Array,
+  filled: Uint8Array,
+  barrier: Step0BodyBarrier,
+): number | null {
+  const point = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let particle = 0; particle < filled.length; particle += 1) {
+    const initialFrame = barrier.frames[particle];
+    if (filled[particle] !== 1 || !initialFrame) continue;
+    const offset = particle * 3;
+    point.set(world[offset], world[offset + 1], world[offset + 2]);
+    const candidate = closestBodySurfacePoint(barrier.body, [point.x, point.y, point.z], 0, barrier.queryDistanceM);
+    const initialNormal = new THREE.Vector3(...initialFrame.outwardNormal).normalize();
+    const frame = candidate
+      && new THREE.Vector3(...candidate.outwardNormal).normalize().dot(initialNormal) >= -0.2
+      ? candidate
+      : initialFrame;
+    surface.set(...frame.position);
+    normal.set(...frame.outwardNormal).normalize();
+    minimum = Math.min(minimum, point.clone().sub(surface).dot(normal));
+  }
+  return Number.isFinite(minimum) ? minimum : null;
+}
+
+function step0Now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
 function referenceIsFilled(reference: AssemblyStitchConstraint["a"], filled: Uint8Array): boolean {

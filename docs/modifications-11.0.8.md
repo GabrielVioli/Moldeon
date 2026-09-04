@@ -430,3 +430,87 @@ XPBD. It is intentionally incremental: when a complex garment cannot close
 safely inside the local displacement cage, it keeps the manual arrangement and
 reports the refusal instead of purchasing seam closure with a teleport.
 Undo/redo of seam authoring remains outside this repair pass per the manual gate.
+
+
+## STEP-0 refinement — body-aware isometric seam closure
+
+Base: `29cbfa30fdb11fbf0bc0b88cce09c3843bf326e9` on
+`recovery/11.0.8-sewing-2d-3d-authoring`.
+
+### Root cause of the false `rejected-local-solve`
+
+The local projection restored structural edges against their length in the
+current 3D mesh instead of the canonical `AssemblyDistanceConstraint.restLength`.
+That preserved earlier runtime metric error and permitted creep across repeated
+Adjust operations. More importantly, the solver knew nothing about the body:
+body conform and hemisphere/penetration auditing occurred only after the local
+proposal. A seam could therefore choose the straight path through the avatar,
+then be moved again by a disconnected one-shot conform, and finally be rejected
+by the post-audit despite having a valid body-aware path.
+
+The uniform displacement cages were not loosened. The correction changes the
+geometry being solved rather than increasing the accepted error budget.
+
+### Implementation
+
+- Structural projection now targets the canonical 2D material rest lengths.
+- The exact `HumanBodyModel.visualMesh` and existing accelerated
+  `closestBodySurfacePoint` query are passed into the bounded STEP-0 solver.
+- Every solve iteration includes an inequality body barrier. It corrects only
+  the inward normal component, leaving tangential seam motion and isometric
+  bending free.
+- Initial body frames are frozen as material-side references. Nearest-surface
+  candidates from the opposite hemisphere are rejected, preventing a front or
+  back panel from crossing the body to buy shorter seam residual.
+- A point that starts outside keeps a bounded skin clearance; a pre-existing
+  penetration cannot become worse and may recover incrementally.
+- Alternating structural passes propagate each seam correction through panel
+  topology instead of concentrating deformation only at the stitched sample.
+- The old one-shot `adjustMeshToBodySurface` pass was removed specifically from
+  `runSewingStep0`; it could undo joint seam convergence after the body-aware
+  solve. The existing authoring/conform uses elsewhere remain unchanged.
+- Proposal and final acceptance now audit each `SeamGroup` independently. A
+  good global average cannot hide a missing, unimproved or worsened seam.
+- A selected active SeamGroup without compiled physical bindings reports
+  `missing-physical-bindings` explicitly instead of silently looking like no
+  sewing.
+- Apply remains atomic: meshes are mutated only after proposal acceptance and
+  exact snapshots are restored on every failed final audit.
+- Diagnostics now report rejection reason, per-seam audits, body-barrier
+  correction count, rejected hemisphere candidates, minimum clearance and
+  setup/solve/material-polish/serialization timings.
+
+No garment-name/template/role inference, autoscale, XPBD, gravity, collision
+solver or file under `apps/web/src/physics/**` was changed.
+
+### Files changed
+
+- `apps/web/src/viewport/SewingStep0.ts`
+- `apps/web/src/viewport/GlobalThreeViewport.ts`
+- `apps/web/src/viewport/SewingStep0Placement.test.ts`
+- `docs/modifications-11.0.8.md`
+
+### Automated evidence
+
+- `git diff --check`: PASS.
+- `npm run typecheck --workspace @moldeon/web`: PASS.
+- Focused gate: 11 files / 71 tests PASS, covering STEP-0, same-panel seams,
+  multi-SeamGroup convergence, deterministic proposals, repeated-run metric
+  stability, body hemisphere/clearance, sewing interaction/visual pairing,
+  arrangement conform, resolved/physical assembly and arc-length authoring.
+- `npm run build --workspace @moldeon/web`: PASS (fallback Vite production
+  build; only the pre-existing chunk-size warning).
+
+### Manual gate pending
+
+Validate in the browser with the supplied simple front/back skirt:
+
+1. front remains in front and back remains behind;
+2. both lateral SeamGroups converge together around the body;
+3. no body crossing, inversion, autoscale or concentrated seam spike;
+4. repeated `Ajustar montagem` does not drift or accumulate metric error;
+5. a far garment is rejected unchanged;
+6. self-seam and a multi-panel garment remain recognizable;
+7. XPBD/gravity remain off throughout Montar/Costurar.
+
+Stop here for the manual gate; do not start 11.0.9.

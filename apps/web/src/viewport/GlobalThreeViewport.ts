@@ -73,7 +73,7 @@ import {
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
 import {
-  bakeWorldGeometryIntoAuthoredTransform,
+  auditSewingStep0Seams,
   measureCurrentSewingStep0MaterialDistortion,
   measureCurrentSewingStep0Residual,
   meshWorldCentroid as sewingStep0MeshWorldCentroid,
@@ -522,7 +522,25 @@ export class ThreeViewport {
       selectedSeamId,
       [...this.selectedInstanceIds],
     );
-    if (!target) return { status: "no-seams", affectedPanels: 0 };
+    if (!target) {
+      const selectedGroup = selectedSeamId
+        ? input.seamGroups.find((group) => group.id === selectedSeamId && group.active)
+        : undefined;
+      if (selectedGroup) {
+        this.host.dataset.sewingStep0Status = "missing-physical-bindings";
+        this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
+          rejectionReason: "missing-physical-bindings",
+          seamGroupId: selectedGroup.id,
+          physicalBindingCount: selectedGroup.physicalBindings?.length ?? 0,
+        });
+        return {
+          status: "failed",
+          affectedPanels: 0,
+          warning: "A costura selecionada ainda não possui correspondências físicas válidas entre PanelInstances.",
+        };
+      }
+      return { status: "no-seams", affectedPanels: 0 };
+    }
 
     const targetIds = new Set(target.instanceIds);
     const missingPlacement = input.panelInstances.some((instance) =>
@@ -541,7 +559,6 @@ export class ThreeViewport {
       position: THREE.Vector3;
       quaternion: THREE.Quaternion;
       scale: THREE.Vector3;
-      matrixWorld: THREE.Matrix4;
       centroid: THREE.Vector3;
       surface: BodySurfaceFrame;
       bodyAudit: ReturnType<typeof auditMeshBodyClearance>;
@@ -560,7 +577,6 @@ export class ThreeViewport {
         position: item.mesh.position.clone(),
         quaternion: item.mesh.quaternion.clone(),
         scale: item.mesh.scale.clone(),
-        matrixWorld: item.mesh.matrixWorld.clone(),
         centroid,
         surface,
         bodyAudit: auditMeshBodyClearance(item.mesh, body, 0.5, 112),
@@ -613,6 +629,9 @@ export class ThreeViewport {
           maximumVertexDisplacementM: 0.065,
           maximumCentroidDisplacementM: 0.018,
           seamRelaxation: 0.58,
+          body,
+          bodyClearanceM: 0.006,
+          bodyQueryDistanceM: 0.24,
         },
       );
       if (!proposal || proposal.seamConstraintCount === 0) {
@@ -626,11 +645,22 @@ export class ThreeViewport {
 
       // A proposal that cannot even improve the current sewing residual is not
       // allowed to touch the viewport. This is an atomic safety gate.
+      const proposalSeamAudit = auditSewingStep0Seams(proposal.beforeResidual, proposal.afterResidual);
       const proposalImproves = proposal.beforeResidual.meanM <= 0.0015
         || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM * 0.985
         || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM - 0.0005;
-      if (!proposalImproves || proposal.metricDistortionMax > 0.02) {
+      if (!proposalImproves || !proposalSeamAudit.accepted || proposal.metricDistortionMax > 0.02) {
         this.host.dataset.sewingStep0Status = "rejected-local-solve";
+        this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
+          rejectionReason: !proposalImproves
+            ? "global-residual-not-improved"
+            : !proposalSeamAudit.accepted
+              ? "per-seam-acceptance-failed"
+              : "canonical-material-metric-exceeded",
+          proposalSeamAudit,
+          proposal,
+          materialBefore,
+        }, (_key, value) => value instanceof Map ? Object.fromEntries(value) : value);
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
@@ -660,23 +690,6 @@ export class ThreeViewport {
       for (const instanceId of target.instanceIds) {
         const snapshot = snapshots.get(instanceId)!;
         const item = snapshot.item;
-        const conform = adjustMeshToBodySurface(item.mesh, body, snapshot.surface.attachment, undefined, {
-          clearanceMm: 10,
-          captureDistanceMm: 90,
-          maximumVertexProjectionDistanceMm: 90,
-          maximumMetricDistortion: 0.025,
-          minimumProjectedVertexRatio: 0.2,
-        });
-        if (conform.conformed) {
-          bakeWorldGeometryIntoAuthoredTransform(
-            item.mesh,
-            snapshot.matrixWorld,
-            snapshot.position,
-            snapshot.quaternion,
-            snapshot.scale,
-          );
-          conformedPanels += 1;
-        }
 
         const finalCentroid = sewingStep0MeshWorldCentroid(item.mesh);
         const centroidDisplacement = finalCentroid.distanceTo(snapshot.centroid);
@@ -695,7 +708,7 @@ export class ThreeViewport {
         else if (centroidDisplacement > 0.06) unsafeReason ??= `${instanceId}: tentou deslocar o placement mais de 60 mm.`;
         else if (penetrationWorsened) unsafeReason ??= `${instanceId}: piorou a penetração no corpo.`;
         bodyAudits[instanceId] = {
-          conform,
+          solveTimeBarrier: true,
           before: snapshot.bodyAudit,
           after: finalAudit,
           centroidDisplacementMm: centroidDisplacement * 1_000,
@@ -719,8 +732,12 @@ export class ThreeViewport {
         : false;
       const materialSafe = materialAfter !== null
         && materialAfter <= Math.max(0.03, materialBefore + 0.015);
+      const finalSeamAudit = finalResidual
+        ? auditSewingStep0Seams(proposal.beforeResidual, finalResidual)
+        : null;
       if (!residualImproves) unsafeReason ??= "O ajuste não aproximou as costuras de forma mensurável.";
       else if (!maximumResidualSafe) unsafeReason ??= "Uma das costuras piorou enquanto outra era aproximada.";
+      else if (!finalSeamAudit?.accepted) unsafeReason ??= "Uma SeamGroup não convergiu com segurança junto das demais.";
       else if (!materialSafe) unsafeReason ??= "O ajuste exigiria deformar demais o material.";
 
       if (unsafeReason) {
@@ -730,6 +747,8 @@ export class ThreeViewport {
           rollback: unsafeReason,
           proposal,
           finalResidual,
+          proposalSeamAudit,
+          finalSeamAudit,
           materialBefore,
           materialAfter,
           bodyAudits,
@@ -765,6 +784,14 @@ export class ThreeViewport {
         bodyAudits,
         iterations: proposal.iterations,
         constraintCount: proposal.seamConstraintCount,
+        bodyBarrierCorrections: proposal.bodyBarrierCorrections,
+        bodyHemisphereRejects: proposal.bodyHemisphereRejects,
+        minimumBodyClearanceMm: proposal.minimumBodyClearanceM === null
+          ? null
+          : proposal.minimumBodyClearanceM * 1_000,
+        phaseTimingsMs: proposal.phaseTimingsMs,
+        proposalSeamAudit,
+        finalSeamAudit,
       });
       this.host.dataset.simulationStatus = "disabled-in-montar";
       this.requestRender();
