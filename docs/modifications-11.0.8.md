@@ -514,3 +514,48 @@ Validate in the browser with the supplied simple front/back skirt:
 7. XPBD/gravity remain off throughout Montar/Costurar.
 
 Stop here for the manual gate; do not start 11.0.9.
+
+
+## Manual-gate failure follow-up — cyclic material freedom
+
+The first body-aware revision still showed the same early
+`rejected-local-solve` in the browser. The remaining cause was the uniform
+65 mm per-vertex cage: it treated every large local deformation as a placement
+teleport. Closing a wide panel's self-seam into a tube, or wrapping front/back
+panels joined by two side seams, legitimately moves remote material vertices
+farther than 65 mm while the authored placement anchor remains fixed.
+
+This follow-up replaces centroid/per-vertex placement assumptions with the
+correct separation:
+
+- one material vertex nearest the authored panel centre becomes the frozen
+  placement anchor;
+- rigid anchor drift remains bounded to the existing 18 mm limit;
+- each other vertex gets a finite deformation envelope derived from its
+  material distance to that anchor, so a whole-panel rigid teleport is still
+  impossible while isometric bending is allowed;
+- final hemisphere and distance auditing follows that same material anchor,
+  not the centroid of the deformed shape (a tube's centroid is naturally near
+  its axis, not on the body surface);
+- same-instance cycles receive a generic cylindrical isometric seed derived
+  from their seam ranges, material width, authored body normal and seam axis;
+- multi-panel seam-graph cycles receive the equivalent joint seed only when
+  the graph really contains a cycle; tree-like attachments are untouched;
+- panel chirality is selected by minimizing canonical SeamGroup endpoint
+  residual across the cycle, preserving the authored front/back anchors;
+- body frames are refreshed along the explicitly developed cycle so a single
+  wrapping panel may legitimately occupy front, sides and back without the
+  opposite-hemisphere shortcut becoming available to unrelated panels.
+
+No tolerance was increased and no material-distortion threshold was relaxed.
+The user-facing rejection now includes the exact diagnostic reason if a future
+case still fails before apply.
+
+New focused regression fixtures use dense material grids and an exact closed
+body surface. They prove both:
+
+1. one large `PanelInstance` with a self-seam becomes a closed tube with less
+   than 2% material metric error and a stationary authored anchor;
+2. two PanelInstances connected by two independent side SeamGroups jointly
+   wrap into a cycle, every SeamGroup improves, and front/back anchors remain
+   within the original placement limit.

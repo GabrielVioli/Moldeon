@@ -76,7 +76,8 @@ import {
   auditSewingStep0Seams,
   measureCurrentSewingStep0MaterialDistortion,
   measureCurrentSewingStep0Residual,
-  meshWorldCentroid as sewingStep0MeshWorldCentroid,
+  meshWorldMaterialAnchor as sewingStep0MeshWorldMaterialAnchor,
+  meshWorldVertex as sewingStep0MeshWorldVertex,
   resolveSewingStep0Target,
   solvePlacementAnchoredSewingStep0,
   syncMeshGeometryToAssemblyState,
@@ -559,15 +560,21 @@ export class ThreeViewport {
       position: THREE.Vector3;
       quaternion: THREE.Quaternion;
       scale: THREE.Vector3;
-      centroid: THREE.Vector3;
+      materialAnchorVertex: number;
+      materialAnchorWorld: THREE.Vector3;
       surface: BodySurfaceFrame;
       bodyAudit: ReturnType<typeof auditMeshBodyClearance>;
     }>();
     for (const instanceId of target.instanceIds) {
       const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
       if (!item) return { status: "failed", affectedPanels: target.instanceIds.length };
-      const centroid = sewingStep0MeshWorldCentroid(item.mesh);
-      const surface = closestBodySurfacePoint(body, [centroid.x, centroid.y, centroid.z], 0, 0.24);
+      const materialAnchor = sewingStep0MeshWorldMaterialAnchor(item.mesh);
+      const surface = closestBodySurfacePoint(
+        body,
+        [materialAnchor.position.x, materialAnchor.position.y, materialAnchor.position.z],
+        0,
+        0.24,
+      );
       if (!surface) return { status: "too-far", affectedPanels: target.instanceIds.length };
       const position = item.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
       item.mesh.updateMatrixWorld(true);
@@ -577,7 +584,8 @@ export class ThreeViewport {
         position: item.mesh.position.clone(),
         quaternion: item.mesh.quaternion.clone(),
         scale: item.mesh.scale.clone(),
-        centroid,
+        materialAnchorVertex: materialAnchor.vertexIndex,
+        materialAnchorWorld: materialAnchor.position,
         surface,
         bodyAudit: auditMeshBodyClearance(item.mesh, body, 0.5, 112),
       });
@@ -651,12 +659,13 @@ export class ThreeViewport {
         || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM - 0.0005;
       if (!proposalImproves || !proposalSeamAudit.accepted || proposal.metricDistortionMax > 0.02) {
         this.host.dataset.sewingStep0Status = "rejected-local-solve";
+        const rejectionReason = !proposalImproves
+          ? "global-residual-not-improved"
+          : !proposalSeamAudit.accepted
+            ? "per-seam-acceptance-failed"
+            : "canonical-material-metric-exceeded";
         this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
-          rejectionReason: !proposalImproves
-            ? "global-residual-not-improved"
-            : !proposalSeamAudit.accepted
-              ? "per-seam-acceptance-failed"
-              : "canonical-material-metric-exceeded",
+          rejectionReason,
           proposalSeamAudit,
           proposal,
           materialBefore,
@@ -664,7 +673,7 @@ export class ThreeViewport {
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
-          warning: "Não encontrei uma aproximação segura que preserve o molde e o placement atual.",
+          warning: `Não encontrei uma aproximação segura (${rejectionReason}). A roupa permaneceu inalterada.`,
         };
       }
 
@@ -691,10 +700,12 @@ export class ThreeViewport {
         const snapshot = snapshots.get(instanceId)!;
         const item = snapshot.item;
 
-        const finalCentroid = sewingStep0MeshWorldCentroid(item.mesh);
-        const centroidDisplacement = finalCentroid.distanceTo(snapshot.centroid);
-        maximumCentroidDisplacementM = Math.max(maximumCentroidDisplacementM, centroidDisplacement);
-        const finalSurface = closestBodySurfacePoint(body, [finalCentroid.x, finalCentroid.y, finalCentroid.z], 0, 0.24);
+        const finalAnchor = sewingStep0MeshWorldVertex(item.mesh, snapshot.materialAnchorVertex);
+        const anchorDisplacement = finalAnchor?.distanceTo(snapshot.materialAnchorWorld) ?? Number.POSITIVE_INFINITY;
+        maximumCentroidDisplacementM = Math.max(maximumCentroidDisplacementM, anchorDisplacement);
+        const finalSurface = finalAnchor
+          ? closestBodySurfacePoint(body, [finalAnchor.x, finalAnchor.y, finalAnchor.z], 0, 0.24)
+          : null;
         const finalAudit = auditMeshBodyClearance(item.mesh, body, 0.5, 112);
         const normalDot = finalSurface
           ? new THREE.Vector3(...snapshot.surface.outwardNormal)
@@ -705,13 +716,13 @@ export class ThreeViewport {
           || finalAudit.minimumSignedClearanceMm < snapshot.bodyAudit.minimumSignedClearanceMm - 2;
         if (!finalSurface) unsafeReason ??= `${instanceId}: saiu da vizinhança corporal escolhida.`;
         else if (normalDot < 0.15) unsafeReason ??= `${instanceId}: tentou trocar de lado do corpo.`;
-        else if (centroidDisplacement > 0.06) unsafeReason ??= `${instanceId}: tentou deslocar o placement mais de 60 mm.`;
+        else if (anchorDisplacement > 0.06) unsafeReason ??= `${instanceId}: tentou deslocar a âncora material mais de 60 mm.`;
         else if (penetrationWorsened) unsafeReason ??= `${instanceId}: piorou a penetração no corpo.`;
         bodyAudits[instanceId] = {
           solveTimeBarrier: true,
           before: snapshot.bodyAudit,
           after: finalAudit,
-          centroidDisplacementMm: centroidDisplacement * 1_000,
+          materialAnchorDisplacementMm: anchorDisplacement * 1_000,
           surfaceNormalDot: normalDot,
         };
       }

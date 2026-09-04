@@ -191,6 +191,34 @@ export interface PlacementAnchoredSewingStep0Options {
   bodyQueryDistanceM?: number;
 }
 
+export function meshWorldMaterialAnchor(mesh: THREE.Mesh): { vertexIndex: number; position: THREE.Vector3 } {
+  const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const centroid = meshWorldCentroid(mesh);
+  mesh.updateMatrixWorld(true);
+  const point = new THREE.Vector3();
+  let vertexIndex = 0;
+  let minimumDistanceSq = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < positions.count; index += 1) {
+    point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+    const distanceSq = point.distanceToSquared(centroid);
+    if (distanceSq < minimumDistanceSq) {
+      minimumDistanceSq = distanceSq;
+      vertexIndex = index;
+    }
+  }
+  return {
+    vertexIndex,
+    position: point.fromBufferAttribute(positions, vertexIndex).applyMatrix4(mesh.matrixWorld).clone(),
+  };
+}
+
+export function meshWorldVertex(mesh: THREE.Mesh, vertexIndex: number): THREE.Vector3 | null {
+  const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  if (vertexIndex < 0 || vertexIndex >= positions.count) return null;
+  mesh.updateMatrixWorld(true);
+  return new THREE.Vector3().fromBufferAttribute(positions, vertexIndex).applyMatrix4(mesh.matrixWorld);
+}
+
 export interface SewingStep0SeamAudit {
   accepted: boolean;
   missingSeamIds: string[];
@@ -304,11 +332,38 @@ export function solvePlacementAnchoredSewingStep0(
       options.bodyQueryDistanceM ?? 0.24,
     )
     : null;
-  const initialCentroids = new Map<string, THREE.Vector3>();
+  const anchorParticles = new Map<string, number>();
+  const initialAnchors = new Map<string, THREE.Vector3>();
   for (const instanceId of target.instanceIds) {
     const instance = state.instances.find((candidate) => candidate.id === instanceId);
     if (!instance) return null;
-    initialCentroids.set(instanceId, instanceParticleCentroid(initial, instance.particleStart, instance.vertexCount));
+    const centroid = instanceParticleCentroid(initial, instance.particleStart, instance.vertexCount);
+    const anchorParticle = nearestInstanceParticle(initial, instance.particleStart, instance.vertexCount, centroid);
+    anchorParticles.set(instanceId, anchorParticle);
+    initialAnchors.set(instanceId, particlePoint(initial, anchorParticle));
+  }
+  const displacementBudgets = buildMaterialDisplacementBudgets(
+    state,
+    target.instanceIds,
+    initial,
+    anchorParticles,
+    maximumVertexDisplacementM,
+  );
+  if (bodyBarrier) {
+    const wrapped = seedBodyAwareSelfSeamWrap(world, initial, state, seams, anchorParticles, bodyBarrier);
+    for (const instanceId of seedBodyAwareMultiPanelCycleWrap(
+      world,
+      initial,
+      state,
+      seams,
+      anchorParticles,
+      bodyBarrier,
+      wrapped,
+    )) wrapped.add(instanceId);
+    for (const instanceId of wrapped) {
+      const instance = state.instances.find((candidate) => candidate.id === instanceId);
+      if (instance) refreshStep0BodyBarrierFrames(bodyBarrier, world, instance.particleStart, instance.vertexCount);
+    }
   }
 
   const setupFinishedAt = step0Now();
@@ -330,24 +385,18 @@ export function solvePlacementAnchoredSewingStep0(
   }
   if (bodyBarrier) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.65);
 
-  // Keep every panel in the neighbourhood explicitly chosen by the user.
-  // A tiny spring removes accumulated numerical drift; the hard cage below
-  // is the actual safety contract.
+  // Keep the authored material anchor in place while allowing the rest of the
+  // panel to bend. A centroid is not a stable placement invariant: the centroid
+  // of a flat rectangle legitimately moves to the tube centre when it wraps.
   for (const instanceId of target.instanceIds) {
-    const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
-    const originalCentroid = initialCentroids.get(instanceId)!;
-    const centroid = instanceParticleCentroid(world, instance.particleStart, instance.vertexCount);
-    const drift = centroid.sub(originalCentroid);
-    translateInstanceParticles(world, instance.particleStart, instance.vertexCount, drift.multiplyScalar(-0.012));
-    cageInstanceCentroid(
+    cageAnchorParticle(
       world,
-      instance.particleStart,
-      instance.vertexCount,
-      originalCentroid,
+      anchorParticles.get(instanceId)!,
+      initialAnchors.get(instanceId)!,
       maximumCentroidDisplacementM,
     );
   }
-  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+  cageParticleDisplacements(world, initial, filled, displacementBudgets);
 }
 
 const solveFinishedAt = step0Now();
@@ -357,21 +406,19 @@ const solveFinishedAt = step0Now();
 for (let pass = 0; pass < 36; pass += 1) {
   projectStructuralMetric(world, structural, structuralTargets, pass % 2 === 1, 0.997);
   if (bodyBarrier && pass % 3 === 2) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.8);
-  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+  cageParticleDisplacements(world, initial, filled, displacementBudgets);
 }
 for (const instanceId of target.instanceIds) {
-  const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
-  cageInstanceCentroid(
+  cageAnchorParticle(
     world,
-    instance.particleStart,
-    instance.vertexCount,
-    initialCentroids.get(instanceId)!,
+    anchorParticles.get(instanceId)!,
+    initialAnchors.get(instanceId)!,
     maximumCentroidDisplacementM,
   );
 }
 if (bodyBarrier) {
   projectStep0BodyBarrier(world, filled, bodyBarrier, 1);
-  cageParticleDisplacements(world, initial, filled, maximumVertexDisplacementM);
+  cageParticleDisplacements(world, initial, filled, displacementBudgets);
 }
 const polishFinishedAt = step0Now();
 
@@ -383,11 +430,10 @@ const polishFinishedAt = step0Now();
   }
   let maximumCentroid = 0;
   for (const instanceId of target.instanceIds) {
-    const instance = state.instances.find((candidate) => candidate.id === instanceId)!;
     maximumCentroid = Math.max(
       maximumCentroid,
-      instanceParticleCentroid(world, instance.particleStart, instance.vertexCount)
-        .distanceTo(initialCentroids.get(instanceId)!),
+      particlePoint(world, anchorParticles.get(instanceId)!)
+        .distanceTo(initialAnchors.get(instanceId)!),
     );
   }
 
@@ -728,11 +774,376 @@ function projectStructuralMetric(
   }
 }
 
+function buildMaterialDisplacementBudgets(
+  state: GarmentAssemblyState,
+  instanceIds: readonly string[],
+  initial: Float64Array,
+  anchorParticles: ReadonlyMap<string, number>,
+  baseAllowanceM: number,
+): Float64Array {
+  const budgets = new Float64Array(Math.floor(initial.length / 3));
+  budgets.fill(baseAllowanceM);
+  for (const instanceId of instanceIds) {
+    const instance = state.instances.find((candidate) => candidate.id === instanceId);
+    const anchorParticle = anchorParticles.get(instanceId);
+    if (!instance || anchorParticle === undefined) continue;
+    const anchor = particlePoint(initial, anchorParticle);
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      const particle = instance.particleStart + local;
+      // Local deformation freedom scales with material reach from the frozen
+      // anchor. This admits isometric bending of a large panel but still rules
+      // out a rigid teleport of the whole instance.
+      budgets[particle] = baseAllowanceM + particlePoint(initial, particle).distanceTo(anchor) * 1.5;
+    }
+  }
+  return budgets;
+}
+
+function seedBodyAwareSelfSeamWrap(
+  world: Float64Array,
+  initial: Float64Array,
+  state: GarmentAssemblyState,
+  seams: readonly AssemblyStitchConstraint[],
+  anchorParticles: ReadonlyMap<string, number>,
+  barrier: Step0BodyBarrier,
+): Set<string> {
+  const grouped = new Map<string, AssemblyStitchConstraint[]>();
+  for (const seam of seams) {
+    if (!seam.instanceA || seam.instanceA !== seam.instanceB) continue;
+    const group = grouped.get(seam.seamId) ?? [];
+    group.push(seam);
+    grouped.set(seam.seamId, group);
+  }
+  const wrapped = new Set<string>();
+  const candidates = [...grouped.values()]
+    .filter((group) => group.length >= 2)
+    .sort((left, right) => right.length - left.length);
+  for (const group of candidates) {
+    const instanceId = group[0].instanceA!;
+    if (wrapped.has(instanceId)) continue;
+    const instance = state.instances.find((candidate) => candidate.id === instanceId);
+    const anchorParticle = anchorParticles.get(instanceId);
+    const anchorFrame = anchorParticle === undefined ? null : barrier.frames[anchorParticle];
+    if (!instance || anchorParticle === undefined || !anchorFrame) continue;
+
+    const ordered = [...group].sort((left, right) => (left.progress ?? 0) - (right.progress ?? 0));
+    const firstA = weightedPointInWorld(initial, ordered[0].a);
+    const lastA = weightedPointInWorld(initial, ordered[ordered.length - 1].a);
+    const firstB = weightedPointInWorld(initial, ordered[0].b);
+    const lastB = weightedPointInWorld(initial, ordered[ordered.length - 1].b);
+    const axis = lastA.clone().sub(firstA);
+    if (axis.lengthSq() <= 1e-10) axis.copy(lastB).sub(firstB);
+    const outward = new THREE.Vector3(...anchorFrame.outwardNormal).normalize();
+    axis.addScaledVector(outward, -axis.dot(outward));
+    if (axis.lengthSq() <= 1e-10) continue;
+    axis.normalize();
+
+    const sideA = new THREE.Vector3();
+    const sideB = new THREE.Vector3();
+    for (const seam of ordered) {
+      sideA.add(weightedPointInWorld(initial, seam.a));
+      sideB.add(weightedPointInWorld(initial, seam.b));
+    }
+    sideA.multiplyScalar(1 / ordered.length);
+    sideB.multiplyScalar(1 / ordered.length);
+    const sideDelta = sideB.clone().sub(sideA);
+    const tangent = new THREE.Vector3().crossVectors(axis, outward).normalize();
+    if (tangent.dot(sideDelta) < 0) tangent.negate();
+    const circumferenceM = Math.abs(sideDelta.dot(tangent));
+    if (!Number.isFinite(circumferenceM) || circumferenceM <= 0.03) continue;
+    const radiusM = circumferenceM / (Math.PI * 2);
+    const anchor = particlePoint(initial, anchorParticle);
+    const centre = anchor.clone().addScaledVector(outward, -radiusM);
+    const relative = new THREE.Vector3();
+    const radial = new THREE.Vector3();
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      const particle = instance.particleStart + local;
+      const source = particlePoint(initial, particle);
+      relative.copy(source).sub(anchor);
+      const axial = relative.dot(axis);
+      const materialU = relative.dot(tangent);
+      const normalOffset = relative.dot(outward);
+      const angle = materialU / radiusM;
+      radial.copy(outward).multiplyScalar(Math.cos(angle))
+        .addScaledVector(tangent, Math.sin(angle))
+        .multiplyScalar(radiusM + normalOffset);
+      const target = centre.clone().addScaledVector(axis, axial).add(radial);
+      const offset = particle * 3;
+      world[offset] = target.x;
+      world[offset + 1] = target.y;
+      world[offset + 2] = target.z;
+    }
+    wrapped.add(instanceId);
+  }
+  return wrapped;
+}
+
+interface CycleBoundary {
+  seamId: string;
+  points: THREE.Vector3[];
+}
+
+function seedBodyAwareMultiPanelCycleWrap(
+  world: Float64Array,
+  initial: Float64Array,
+  state: GarmentAssemblyState,
+  seams: readonly AssemblyStitchConstraint[],
+  anchorParticles: ReadonlyMap<string, number>,
+  barrier: Step0BodyBarrier,
+  excluded: ReadonlySet<string>,
+): Set<string> {
+  const graphEdges = new Map<string, [string, string]>();
+  const boundaries = new Map<string, Map<string, CycleBoundary>>();
+  const addPoint = (instanceId: string, seamId: string, point: THREE.Vector3): void => {
+    const bySeam = boundaries.get(instanceId) ?? new Map<string, CycleBoundary>();
+    const boundary = bySeam.get(seamId) ?? { seamId, points: [] };
+    boundary.points.push(point);
+    bySeam.set(seamId, boundary);
+    boundaries.set(instanceId, bySeam);
+  };
+  for (const seam of seams) {
+    if (!seam.instanceA || !seam.instanceB || seam.instanceA === seam.instanceB) continue;
+    graphEdges.set(seam.seamId, [seam.instanceA, seam.instanceB]);
+    addPoint(seam.instanceA, seam.seamId, weightedPointInWorld(initial, seam.a));
+    addPoint(seam.instanceB, seam.seamId, weightedPointInWorld(initial, seam.b));
+  }
+  const graphNodes = new Set([...graphEdges.values()].flat());
+  // A tree is an attachment layout, not a closed circumference. Only a real
+  // seam-graph cycle is eligible for this isometric cylindrical seed.
+  if (graphNodes.size < 2 || graphEdges.size < graphNodes.size) return new Set();
+
+  const plans: Array<{
+    instanceId: string;
+    axis: THREE.Vector3;
+    outward: THREE.Vector3;
+    tangent: THREE.Vector3;
+    widthM: number;
+    anchorParticle: number;
+    boundaryCentroids: Map<string, THREE.Vector3>;
+    chirality: 1 | -1;
+  }> = [];
+  for (const instanceId of graphNodes) {
+    if (excluded.has(instanceId)) continue;
+    const instanceBoundaries = [...(boundaries.get(instanceId)?.values() ?? [])];
+    const anchorParticle = anchorParticles.get(instanceId);
+    const anchorFrame = anchorParticle === undefined ? null : barrier.frames[anchorParticle];
+    if (instanceBoundaries.length < 2 || anchorParticle === undefined || !anchorFrame) continue;
+    let first = instanceBoundaries[0];
+    let second = instanceBoundaries[1];
+    let widest = 0;
+    for (let a = 0; a < instanceBoundaries.length; a += 1) {
+      for (let b = a + 1; b < instanceBoundaries.length; b += 1) {
+        const distance = centroidOfPoints(instanceBoundaries[a].points)
+          .distanceTo(centroidOfPoints(instanceBoundaries[b].points));
+        if (distance > widest) {
+          widest = distance;
+          first = instanceBoundaries[a];
+          second = instanceBoundaries[b];
+        }
+      }
+    }
+    const outward = new THREE.Vector3(...anchorFrame.outwardNormal).normalize();
+    const axis = farthestPointDirection(first.points);
+    if (axis.lengthSq() <= 1e-10) axis.copy(farthestPointDirection(second.points));
+    axis.addScaledVector(outward, -axis.dot(outward));
+    if (axis.lengthSq() <= 1e-10) continue;
+    axis.normalize();
+    const sideDelta = centroidOfPoints(second.points).sub(centroidOfPoints(first.points));
+    const tangent = new THREE.Vector3().crossVectors(axis, outward).normalize();
+    if (tangent.dot(sideDelta) < 0) tangent.negate();
+    const widthM = Math.abs(sideDelta.dot(tangent));
+    if (!Number.isFinite(widthM) || widthM <= 0.015) continue;
+    plans.push({
+      instanceId,
+      axis,
+      outward,
+      tangent,
+      widthM,
+      anchorParticle,
+      boundaryCentroids: new Map(instanceBoundaries.map((boundary) => [
+        boundary.seamId,
+        centroidOfPoints(boundary.points),
+      ])),
+      chirality: 1,
+    });
+  }
+  if (plans.length !== graphNodes.size) return new Set();
+  const circumferenceM = plans.reduce((sum, plan) => sum + plan.widthM, 0);
+  if (!Number.isFinite(circumferenceM) || circumferenceM <= 0.06) return new Set();
+  const radiusM = circumferenceM / (Math.PI * 2);
+  chooseCycleChiralities(plans, graphEdges, initial, radiusM);
+  const wrapped = new Set<string>();
+  for (const plan of plans) {
+    const instance = state.instances.find((candidate) => candidate.id === plan.instanceId);
+    if (!instance) continue;
+    wrapInstanceAroundAxis(
+      world,
+      initial,
+      instance.particleStart,
+      instance.vertexCount,
+      plan.anchorParticle,
+      plan.axis,
+      plan.outward,
+      plan.tangent,
+      radiusM,
+      plan.chirality,
+    );
+    wrapped.add(plan.instanceId);
+  }
+  return wrapped;
+}
+
+function wrapInstanceAroundAxis(
+  world: Float64Array,
+  initial: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+  anchorParticle: number,
+  axis: THREE.Vector3,
+  outward: THREE.Vector3,
+  tangent: THREE.Vector3,
+  radiusM: number,
+  chirality: 1 | -1 = 1,
+): void {
+  const anchor = particlePoint(initial, anchorParticle);
+  const centre = anchor.clone().addScaledVector(outward, -radiusM);
+  const relative = new THREE.Vector3();
+  const radial = new THREE.Vector3();
+  const aroundTangent = new THREE.Vector3().crossVectors(axis, outward).normalize();
+  const target = new THREE.Vector3();
+  for (let local = 0; local < vertexCount; local += 1) {
+    const particle = particleStart + local;
+    relative.copy(particlePoint(initial, particle)).sub(anchor);
+    const axial = relative.dot(axis);
+    const materialU = relative.dot(tangent);
+    const normalOffset = relative.dot(outward);
+    const angle = materialU / radiusM;
+    radial.copy(outward).multiplyScalar(Math.cos(angle))
+      .addScaledVector(aroundTangent, Math.sin(angle) * chirality)
+      .multiplyScalar(radiusM + normalOffset);
+    target.copy(centre).addScaledVector(axis, axial).add(radial);
+    const offset = particle * 3;
+    world[offset] = target.x;
+    world[offset + 1] = target.y;
+    world[offset + 2] = target.z;
+  }
+}
+
+function chooseCycleChiralities(
+  plans: Array<{
+    instanceId: string;
+    axis: THREE.Vector3;
+    outward: THREE.Vector3;
+    tangent: THREE.Vector3;
+    anchorParticle: number;
+    boundaryCentroids: Map<string, THREE.Vector3>;
+    chirality: 1 | -1;
+  }>,
+  graphEdges: ReadonlyMap<string, [string, string]>,
+  initial: Float64Array,
+  radiusM: number,
+): void {
+  if (plans.length <= 1 || plans.length > 12) return;
+  const byId = new Map(plans.map((plan) => [plan.instanceId, plan]));
+  let bestMask = 0;
+  let bestError = Number.POSITIVE_INFINITY;
+  const combinations = 2 ** (plans.length - 1);
+  for (let mask = 0; mask < combinations; mask += 1) {
+    let error = 0;
+    for (const [seamId, [firstId, secondId]] of graphEdges) {
+      const first = byId.get(firstId);
+      const second = byId.get(secondId);
+      const firstPoint = first?.boundaryCentroids.get(seamId);
+      const secondPoint = second?.boundaryCentroids.get(seamId);
+      if (!first || !second || !firstPoint || !secondPoint) continue;
+      const firstSign: 1 | -1 = plans.indexOf(first) === 0 || (mask & (1 << (plans.indexOf(first) - 1))) === 0 ? 1 : -1;
+      const secondSign: 1 | -1 = plans.indexOf(second) === 0 || (mask & (1 << (plans.indexOf(second) - 1))) === 0 ? 1 : -1;
+      error += mapCycleSeedPoint(first, firstPoint, initial, radiusM, firstSign)
+        .distanceToSquared(mapCycleSeedPoint(second, secondPoint, initial, radiusM, secondSign));
+    }
+    if (error < bestError) {
+      bestError = error;
+      bestMask = mask;
+    }
+  }
+  plans.forEach((plan, index) => {
+    plan.chirality = index === 0 || (bestMask & (1 << (index - 1))) === 0 ? 1 : -1;
+  });
+}
+
+function mapCycleSeedPoint(
+  plan: {
+    axis: THREE.Vector3;
+    outward: THREE.Vector3;
+    tangent: THREE.Vector3;
+    anchorParticle: number;
+  },
+  source: THREE.Vector3,
+  initial: Float64Array,
+  radiusM: number,
+  chirality: 1 | -1,
+): THREE.Vector3 {
+  const anchor = particlePoint(initial, plan.anchorParticle);
+  const relative = source.clone().sub(anchor);
+  const angle = relative.dot(plan.tangent) / radiusM;
+  const aroundTangent = new THREE.Vector3().crossVectors(plan.axis, plan.outward).normalize();
+  const radial = plan.outward.clone().multiplyScalar(Math.cos(angle))
+    .addScaledVector(aroundTangent, Math.sin(angle) * chirality)
+    .multiplyScalar(radiusM + relative.dot(plan.outward));
+  return anchor.clone().addScaledVector(plan.outward, -radiusM)
+    .addScaledVector(plan.axis, relative.dot(plan.axis))
+    .add(radial);
+}
+
+function centroidOfPoints(points: readonly THREE.Vector3[]): THREE.Vector3 {
+  const centroid = new THREE.Vector3();
+  for (const point of points) centroid.add(point);
+  return points.length > 0 ? centroid.multiplyScalar(1 / points.length) : centroid;
+}
+
+function farthestPointDirection(points: readonly THREE.Vector3[]): THREE.Vector3 {
+  const direction = new THREE.Vector3();
+  let farthestSq = 0;
+  for (let a = 0; a < points.length; a += 1) {
+    for (let b = a + 1; b < points.length; b += 1) {
+      const distanceSq = points[a].distanceToSquared(points[b]);
+      if (distanceSq > farthestSq) {
+        farthestSq = distanceSq;
+        direction.copy(points[b]).sub(points[a]);
+      }
+    }
+  }
+  return direction;
+}
+
+function refreshStep0BodyBarrierFrames(
+  barrier: Step0BodyBarrier,
+  world: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+): void {
+  const point = new THREE.Vector3();
+  const surface = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  for (let local = 0; local < vertexCount; local += 1) {
+    const particle = particleStart + local;
+    const offset = particle * 3;
+    point.set(world[offset], world[offset + 1], world[offset + 2]);
+    const frame = closestBodySurfacePoint(barrier.body, [point.x, point.y, point.z], 0, barrier.queryDistanceM);
+    if (!frame) continue;
+    barrier.frames[particle] = frame;
+    surface.set(...frame.position);
+    normal.set(...frame.outwardNormal).normalize();
+    const signed = point.clone().sub(surface).dot(normal);
+    barrier.minimumClearanceM[particle] = Math.min(0.006, Math.max(0, signed));
+  }
+}
+
 function cageParticleDisplacements(
   world: Float64Array,
   initial: Float64Array,
   filled: Uint8Array,
-  maximumM: number,
+  maximumM: number | Float64Array,
 ): void {
   for (let particle = 0; particle < filled.length; particle += 1) {
     if (filled[particle] !== 1) continue;
@@ -741,41 +1152,57 @@ function cageParticleDisplacements(
     const dy = world[offset + 1] - initial[offset + 1];
     const dz = world[offset + 2] - initial[offset + 2];
     const distance = Math.hypot(dx, dy, dz);
-    if (distance <= maximumM || distance <= 1e-12) continue;
-    const scale = maximumM / distance;
+    const particleMaximumM = typeof maximumM === "number" ? maximumM : maximumM[particle];
+    if (distance <= particleMaximumM || distance <= 1e-12) continue;
+    const scale = particleMaximumM / distance;
     world[offset] = initial[offset] + dx * scale;
     world[offset + 1] = initial[offset + 1] + dy * scale;
     world[offset + 2] = initial[offset + 2] + dz * scale;
   }
 }
 
-function cageInstanceCentroid(
+function cageAnchorParticle(
   world: Float64Array,
-  particleStart: number,
-  vertexCount: number,
+  particle: number,
   original: THREE.Vector3,
   maximumM: number,
 ): void {
-  const centroid = instanceParticleCentroid(world, particleStart, vertexCount);
-  const drift = centroid.sub(original);
-  const distance = drift.length();
+  const offset = particle * 3;
+  const correction = new THREE.Vector3(
+    world[offset] - original.x,
+    world[offset + 1] - original.y,
+    world[offset + 2] - original.z,
+  );
+  const distance = correction.length();
   if (distance <= maximumM || distance <= 1e-12) return;
-  const correction = drift.multiplyScalar(-(distance - maximumM) / distance);
-  translateInstanceParticles(world, particleStart, vertexCount, correction);
+  correction.multiplyScalar(maximumM / distance);
+  world[offset] = original.x + correction.x;
+  world[offset + 1] = original.y + correction.y;
+  world[offset + 2] = original.z + correction.z;
 }
 
-function translateInstanceParticles(
+function nearestInstanceParticle(
   world: Float64Array,
   particleStart: number,
   vertexCount: number,
-  correction: THREE.Vector3,
-): void {
+  point: THREE.Vector3,
+): number {
+  let nearest = particleStart;
+  let nearestDistanceSq = Number.POSITIVE_INFINITY;
   for (let local = 0; local < vertexCount; local += 1) {
-    const offset = (particleStart + local) * 3;
-    world[offset] += correction.x;
-    world[offset + 1] += correction.y;
-    world[offset + 2] += correction.z;
+    const particle = particleStart + local;
+    const distanceSq = particlePoint(world, particle).distanceToSquared(point);
+    if (distanceSq < nearestDistanceSq) {
+      nearestDistanceSq = distanceSq;
+      nearest = particle;
+    }
   }
+  return nearest;
+}
+
+function particlePoint(world: Float64Array, particle: number): THREE.Vector3 {
+  const offset = particle * 3;
+  return new THREE.Vector3(world[offset], world[offset + 1], world[offset + 2]);
 }
 
 function instanceParticleCentroid(

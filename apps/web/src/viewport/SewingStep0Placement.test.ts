@@ -29,6 +29,190 @@ function boxBody(): HumanBodyMesh {
   };
 }
 
+function cylinderBody(radiusM = 0.05): HumanBodyMesh {
+  const geometry = new THREE.CylinderGeometry(radiusM, radiusM, 0.5, 48, 4, false);
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const normal = geometry.getAttribute("normal") as THREE.BufferAttribute;
+  const index = geometry.getIndex()!;
+  return {
+    positions: new Float32Array(Array.from(position.array as Float32Array, (value, offset) => (
+      offset % 3 === 1 ? value + 1 : value
+    ))),
+    normals: new Float32Array(normal.array as Float32Array),
+    indices: new Uint32Array(index.array),
+    regionIds: Array.from({ length: position.count }, () => "pelvis-front"),
+    bounds: { min: [-radiusM, 0.75, -radiusM], max: [radiusM, 1.25, radiusM] },
+    topologySignature: "step0-cylinder-body",
+    sourceAssetId: "canonical-female.glb",
+  };
+}
+
+function selfSeamedGrid(): { state: GarmentAssemblyState; mesh: GarmentAssemblyMeshData; target: SewingStep0Target } {
+  const columns = 24;
+  const rows = 4;
+  const width = 0.4;
+  const height = 0.2;
+  const positions: number[] = [];
+  const triangles: number[] = [];
+  for (let row = 0; row <= rows; row += 1) {
+    for (let column = 0; column <= columns; column += 1) {
+      positions.push((column / columns - 0.5) * width, (row / rows - 0.5) * height, 0);
+    }
+  }
+  const vertex = (column: number, row: number) => row * (columns + 1) + column;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const a = vertex(column, row);
+      const b = vertex(column + 1, row);
+      const c = vertex(column + 1, row + 1);
+      const d = vertex(column, row + 1);
+      triangles.push(a, b, c, a, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geometry.setIndex(triangles);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  mesh.position.set(0, 1, 0.07);
+  mesh.updateMatrixWorld(true);
+  const structural = new Map<string, { a: number; b: number; restLength: number; stiffness: number }>();
+  for (let offset = 0; offset + 2 < triangles.length; offset += 3) {
+    const ids = [triangles[offset], triangles[offset + 1], triangles[offset + 2]];
+    for (const [a, b] of [[ids[0], ids[1]], [ids[1], ids[2]], [ids[2], ids[0]]]) {
+      const low = Math.min(a, b);
+      const high = Math.max(a, b);
+      const key = `${low}:${high}`;
+      if (structural.has(key)) continue;
+      const ax = positions[low * 3];
+      const ay = positions[low * 3 + 1];
+      const bx = positions[high * 3];
+      const by = positions[high * 3 + 1];
+      structural.set(key, { a: low, b: high, restLength: Math.hypot(bx - ax, by - ay), stiffness: 1 });
+    }
+  }
+  const stitches = Array.from({ length: rows + 1 }, (_, row) => ({
+    id: `tube:${row}`,
+    seamId: "tube",
+    seamGroupId: "tube",
+    treatment: "plain",
+    distribution: "uniform" as const,
+    targetRatio: 1,
+    slackMm: 0,
+    a: { particleIndices: [vertex(0, row)], weights: [1] },
+    b: { particleIndices: [vertex(columns, row)], weights: [1] },
+    restDistance: 0,
+    physicalRestDistance: 0,
+    stiffness: 1,
+    instanceA: "tube-panel",
+    instanceB: "tube-panel",
+    progress: row / rows,
+  }));
+  const assembly = {
+    positions: new Float32Array(positions.length),
+    initialPositions: new Float32Array(positions.length),
+    previousPositions: new Float32Array(positions.length),
+    inverseMasses: new Float32Array(positions.length / 3),
+    instances: [{
+      id: "tube-panel",
+      particleStart: 0,
+      vertexCount: positions.length / 3,
+      topology: { triangles: Uint32Array.from(triangles) },
+    }],
+    structuralConstraints: [...structural.values()],
+    stitchConstraints: stitches,
+    anchorConstraints: [],
+    warnings: [],
+    invalid: false,
+  } as unknown as GarmentAssemblyState;
+  return {
+    state: assembly,
+    mesh: {
+      key: "tube-panel",
+      mesh,
+      flat: new Float32Array(positions),
+      dressed: new Float32Array(positions),
+    } as unknown as GarmentAssemblyMeshData,
+    target: { rootInstanceId: "tube-panel", instanceIds: ["tube-panel"] },
+  };
+}
+
+function twoPanelCycle(): {
+  state: GarmentAssemblyState;
+  meshes: GarmentAssemblyMeshData[];
+  target: SewingStep0Target;
+} {
+  const source = selfSeamedGrid();
+  const sourcePositions = source.mesh.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const local = new Float32Array(sourcePositions.array as Float32Array);
+  for (let index = 0; index < local.length; index += 3) local[index] *= 0.5;
+  const triangles = source.mesh.mesh.geometry.getIndex()!.array;
+  const count = sourcePositions.count;
+  const makeMesh = (key: string, z: number) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(local), 3));
+    geometry.setIndex(Array.from(triangles));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    mesh.position.set(0, 1, z);
+    mesh.updateMatrixWorld(true);
+    return { key, mesh, flat: new Float32Array(local), dressed: new Float32Array(local) } as unknown as GarmentAssemblyMeshData;
+  };
+  const front = makeMesh("front-cycle", 0.07);
+  const back = makeMesh("back-cycle", -0.07);
+  const structural: GarmentAssemblyState["structuralConstraints"] = [];
+  for (const offset of [0, count]) {
+    for (const edge of source.state.structuralConstraints) {
+      const ax = local[edge.a * 3];
+      const ay = local[edge.a * 3 + 1];
+      const bx = local[edge.b * 3];
+      const by = local[edge.b * 3 + 1];
+      structural.push({ a: edge.a + offset, b: edge.b + offset, restLength: Math.hypot(bx - ax, by - ay), stiffness: 1 });
+    }
+  }
+  const columns = 24;
+  const rows = 4;
+  const vertex = (column: number, row: number) => row * (columns + 1) + column;
+  const stitch = (seamId: string, row: number, a: number, b: number) => ({
+    id: `${seamId}:${row}`,
+    seamId,
+    seamGroupId: seamId,
+    treatment: "plain",
+    distribution: "uniform" as const,
+    targetRatio: 1,
+    slackMm: 0,
+    a: { particleIndices: [a], weights: [1] },
+    b: { particleIndices: [count + b], weights: [1] },
+    restDistance: 0,
+    physicalRestDistance: 0,
+    stiffness: 1,
+    instanceA: "front-cycle",
+    instanceB: "back-cycle",
+    progress: row / rows,
+  });
+  const stitches = Array.from({ length: rows + 1 }, (_, row) => [
+    stitch("left-cycle", row, vertex(0, row), vertex(columns, row)),
+    stitch("right-cycle", row, vertex(columns, row), vertex(0, row)),
+  ]).flat();
+  return {
+    state: {
+      positions: new Float32Array(count * 6),
+      initialPositions: new Float32Array(count * 6),
+      previousPositions: new Float32Array(count * 6),
+      inverseMasses: new Float32Array(count * 2),
+      instances: [
+        { id: "front-cycle", particleStart: 0, vertexCount: count, topology: { triangles } },
+        { id: "back-cycle", particleStart: count, vertexCount: count, topology: { triangles } },
+      ],
+      structuralConstraints: structural,
+      stitchConstraints: stitches,
+      anchorConstraints: [],
+      warnings: [],
+      invalid: false,
+    } as unknown as GarmentAssemblyState,
+    meshes: [front, back],
+    target: { rootInstanceId: "front-cycle", instanceIds: ["front-cycle", "back-cycle"] },
+  };
+}
+
 function quadGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
@@ -125,7 +309,9 @@ describe("placement-anchored STEP-0", () => {
     expect(proposal!.afterResidual.meanM).toBeLessThan(before.meanM);
     expect(auditSewingStep0Seams(proposal!.beforeResidual, proposal!.afterResidual).accepted).toBe(true);
     expect(proposal!.maximumCentroidDisplacementM).toBeLessThanOrEqual(0.018001);
-    expect(proposal!.maximumVertexDisplacementM).toBeLessThanOrEqual(0.065001);
+    // Local bending may move a remote material point farther than the old
+    // uniform cage; the authored material anchor above remains bounded.
+    expect(proposal!.maximumVertexDisplacementM).toBeLessThan(0.15);
     expect(proposal!.metricDistortionMax).toBeLessThan(0.025);
     expect(front.mesh.position.toArray()).toEqual(frontPosition.toArray());
     expect(back.mesh.position.toArray()).toEqual(backPosition.toArray());
@@ -172,6 +358,39 @@ describe("placement-anchored STEP-0", () => {
     const backLocal = proposal!.positionsByInstanceId.get("back")!;
     expect(Math.min(...[2, 5, 8, 11].map((offset) => frontLocal[offset] + front.mesh.position.z))).toBeGreaterThan(0.049);
     expect(Math.max(...[2, 5, 8, 11].map((offset) => backLocal[offset] + back.mesh.position.z))).toBeLessThan(-0.049);
+  });
+
+  it("closes a large same-panel cycle by isometric bending without moving its material anchor", () => {
+    const fixture = selfSeamedGrid();
+    const proposal = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      { iterations: 72, body: cylinderBody(), bodyClearanceM: 0.006 },
+    );
+    expect(proposal).not.toBeNull();
+    expect(proposal!.afterResidual.maximumM).toBeLessThan(0.004);
+    expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
+    expect(proposal!.maximumCentroidDisplacementM).toBeLessThanOrEqual(0.018001);
+    const local = proposal!.positionsByInstanceId.get("tube-panel")!;
+    const worldZ = Array.from({ length: local.length / 3 }, (_, index) => local[index * 3 + 2] + 0.07);
+    expect(Math.min(...worldZ)).toBeLessThan(-0.045);
+    expect(Math.max(...worldZ)).toBeGreaterThan(0.065);
+  });
+
+  it("jointly wraps a two-panel seam-graph cycle without swapping front and back anchors", () => {
+    const fixture = twoPanelCycle();
+    const proposal = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      fixture.meshes,
+      fixture.target,
+      { iterations: 72, body: cylinderBody(), bodyClearanceM: 0.006 },
+    );
+    expect(proposal).not.toBeNull();
+    expect(auditSewingStep0Seams(proposal!.beforeResidual, proposal!.afterResidual).accepted).toBe(true);
+    expect(proposal!.afterResidual.maximumM).toBeLessThan(0.008);
+    expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
+    expect(proposal!.maximumCentroidDisplacementM).toBeLessThanOrEqual(0.018001);
   });
 
   it("is deterministic and does not mutate the authored meshes while proposing", () => {
