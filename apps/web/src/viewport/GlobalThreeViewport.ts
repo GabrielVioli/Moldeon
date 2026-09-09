@@ -81,7 +81,9 @@ import {
   resolveSewingStep0Target,
   solvePlacementAnchoredSewingStep0,
   syncMeshGeometryToAssemblyState,
+  type PlacementAnchoredSewingStep0Proposal,
   type SewingStep0RunResult,
+  type SewingStep0Target,
 } from "./SewingStep0";
 import {
   applyWorkspaceAssemblySeed,
@@ -648,6 +650,7 @@ export class ThreeViewport {
           body,
           bodyClearanceM: 0.0005,
           bodyQueryDistanceM: 0.24,
+          captureMaterialDiagnostics: import.meta.env.DEV,
         },
       );
       if (!proposal || proposal.seamConstraintCount === 0) {
@@ -657,6 +660,11 @@ export class ThreeViewport {
           affectedPanels: target.instanceIds.length,
           warning: "As costuras ativas não produziram correspondências físicas utilizáveis.",
         };
+      }
+
+      const runtimeMaterialAudit = buildSewingStep0RuntimeMaterialDiagnostic(state, target, current, proposal);
+      if (import.meta.env.DEV) {
+        this.host.dataset.sewingStep0MaterialAudit = JSON.stringify(runtimeMaterialAudit);
       }
 
       // A proposal that cannot even improve the current sewing residual is not
@@ -675,9 +683,9 @@ export class ThreeViewport {
         this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
           rejectionReason,
           proposalSeamAudit,
-          proposal,
+          runtimeMaterialAudit,
           materialBefore,
-        }, (_key, value) => value instanceof Map ? Object.fromEntries(value) : value);
+        });
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
@@ -2671,6 +2679,56 @@ function summarizeAssemblySeamGraph(state: GarmentAssemblyState): {
       left.seamGroupId.localeCompare(right.seamGroupId)
       || left.firstInstanceId.localeCompare(right.firstInstanceId)
       || left.secondInstanceId.localeCompare(right.secondInstanceId)),
+  };
+}
+
+function buildSewingStep0RuntimeMaterialDiagnostic(
+  state: GarmentAssemblyState,
+  target: SewingStep0Target,
+  input: ResolvedAssemblyInput,
+  proposal: PlacementAnchoredSewingStep0Proposal,
+): Record<string, unknown> {
+  const targetIds = new Set(target.instanceIds);
+  const instances = state.instances.filter((instance) => targetIds.has(instance.id));
+  const ownsParticle = (particle: number) => instances.some((instance) =>
+    particle >= instance.particleStart && particle < instance.particleStart + instance.vertexCount,
+  );
+  const targetSeams = state.stitchConstraints.filter((constraint) =>
+    !constraint.seamGroupId.startsWith("dart:")
+    && Boolean(constraint.instanceA && targetIds.has(constraint.instanceA))
+    && Boolean(constraint.instanceB && targetIds.has(constraint.instanceB)),
+  );
+  return {
+    geometryRevision: input.geometryRevision,
+    sewingRevision: input.sewingRevision,
+    arrangementRevision: input.arrangementRevision,
+    instances: instances.map((instance) => ({
+      instanceId: instance.id,
+      vertexCount: instance.vertexCount,
+      triangleCount: instance.topology.triangles.length / 3,
+      geometrySignature: instance.geometrySignature,
+    })),
+    structuralConstraintCount: state.structuralConstraints.filter((constraint) =>
+      ownsParticle(constraint.a) && ownsParticle(constraint.b),
+    ).length,
+    seamConstraintCount: proposal.seamConstraintCount,
+    seamGroupIds: [...new Set(targetSeams.map((constraint) => constraint.seamGroupId))].sort(),
+    beforeResidual: proposal.beforeResidual,
+    afterResidual: proposal.afterResidual,
+    metricDistortionMax: proposal.metricDistortionMax,
+    materialAudit: proposal.materialAudit,
+    phaseMaterialAudits: proposal.phaseMaterialAudits,
+    seedResidual: proposal.seedResidual,
+    seedMinimumBodyClearanceMm: proposal.seedMinimumBodyClearanceM === null
+      ? null
+      : proposal.seedMinimumBodyClearanceM * 1_000,
+    bodyBarrierCorrections: proposal.bodyBarrierCorrections,
+    bodyHemisphereRejects: proposal.bodyHemisphereRejects,
+    minimumBodyClearanceMm: proposal.minimumBodyClearanceM === null
+      ? null
+      : proposal.minimumBodyClearanceM * 1_000,
+    iterations: proposal.iterations,
+    phaseTimingsMs: proposal.phaseTimingsMs,
   };
 }
 

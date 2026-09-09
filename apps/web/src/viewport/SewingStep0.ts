@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { closestBodySurfacePoint, type BodySurfaceFrame } from "../avatar/BodySurfaceQuery";
 import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
-import type { AssemblyStitchConstraint, GarmentAssemblyState } from "../garment3d/GarmentAssembly";
+import type { AssemblyDistanceConstraint, AssemblyStitchConstraint, GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
 
@@ -189,6 +189,8 @@ export interface PlacementAnchoredSewingStep0Options {
   body?: HumanBodyMesh;
   bodyClearanceM?: number;
   bodyQueryDistanceM?: number;
+  /** DEV/test-only phase snapshots; final material audit is always computed. */
+  captureMaterialDiagnostics?: boolean;
 }
 
 export function meshWorldMaterialAnchor(mesh: THREE.Mesh): { vertexIndex: number; position: THREE.Vector3 } {
@@ -265,6 +267,10 @@ export interface PlacementAnchoredSewingStep0Proposal {
   maximumVertexDisplacementM: number;
   maximumCentroidDisplacementM: number;
   metricDistortionMax: number;
+  materialAudit: SewingStep0MaterialAudit;
+  phaseMaterialAudits: Record<string, SewingStep0MaterialAuditSummary>;
+  seedResidual: SewingStep0ResidualMetric | null;
+  seedMinimumBodyClearanceM: number | null;
   iterations: number;
   seamConstraintCount: number;
   bodyBarrierCorrections: number;
@@ -272,10 +278,51 @@ export interface PlacementAnchoredSewingStep0Proposal {
   minimumBodyClearanceM: number | null;
   phaseTimingsMs: {
     setup: number;
+    seed: number;
     solve: number;
     materialPolish: number;
+    metricAudit: number;
     serialize: number;
   };
+}
+
+export type SewingStep0StructuralEdgeCategory =
+  | "boundary"
+  | "structural-diagonal"
+  | "triangulation/internal"
+  | "other";
+
+export interface SewingStep0MaterialConstraintDiagnostic {
+  constraintIndex: number;
+  instanceId: string | null;
+  particleA: number;
+  particleB: number;
+  localVertexA: number | null;
+  localVertexB: number | null;
+  restLengthMm: number;
+  finalLengthMm: number;
+  absoluteErrorMm: number;
+  relativeError: number;
+  source2DA: [number, number] | null;
+  source2DB: [number, number] | null;
+  category: SewingStep0StructuralEdgeCategory;
+  touchesSewnEdgeRange: boolean;
+}
+
+export interface SewingStep0MaterialAuditSummary {
+  evaluatedConstraintCount: number;
+  relativeErrorMean: number;
+  p50: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  max: number;
+  maximumAbsoluteErrorMm: number;
+  restLengthMm: { minimum: number; median: number; maximum: number };
+}
+
+export interface SewingStep0MaterialAudit extends SewingStep0MaterialAuditSummary {
+  topWorstConstraints: SewingStep0MaterialConstraintDiagnostic[];
 }
 
 /**
@@ -322,7 +369,21 @@ export function solvePlacementAnchoredSewingStep0(
   );
   if (seams.length === 0) return null;
 
+  let metricAuditMs = 0;
+  const auditMaterial = (positions: Float64Array): SewingStep0MaterialAudit => {
+    const auditStartedAt = step0Now();
+    const audit = auditMaterialMetricWorld(positions, structural, state, seams);
+    metricAuditMs += step0Now() - auditStartedAt;
+    return audit;
+  };
+  const phaseMaterialAudits: Record<string, SewingStep0MaterialAuditSummary> = {};
+  const capturePhase = (name: string): void => {
+    if (!options.captureMaterialDiagnostics) return;
+    phaseMaterialAudits[name] = materialAuditSummary(auditMaterial(world));
+  };
+
   const beforeResidual = measureResidualInWorld(world, seams);
+  capturePhase("initial");
   const bodyBarrier = options.body
     ? buildStep0BodyBarrier(
       options.body,
@@ -349,8 +410,14 @@ export function solvePlacementAnchoredSewingStep0(
     anchorParticles,
     maximumVertexDisplacementM,
   );
+  const seedStartedAt = step0Now();
+  const wrapped = new Set<string>();
+  const selfWrapped = new Set<string>();
   if (bodyBarrier) {
-    const wrapped = seedBodyAwareSelfSeamWrap(world, initial, state, seams, anchorParticles, bodyBarrier);
+    for (const instanceId of seedBodyAwareSelfSeamWrap(world, initial, state, seams, anchorParticles, bodyBarrier)) {
+      wrapped.add(instanceId);
+      selfWrapped.add(instanceId);
+    }
     for (const instanceId of seedBodyAwareMultiPanelCycleWrap(
       world,
       initial,
@@ -365,9 +432,23 @@ export function solvePlacementAnchoredSewingStep0(
       if (instance) refreshStep0BodyBarrierFrames(bodyBarrier, world, instance.particleStart, instance.vertexCount);
     }
   }
+  capturePhase("afterSeed");
+  const seedResidual = wrapped.size > 0 ? measureResidualInWorld(world, seams) : null;
+  const seedMinimumBodyClearanceM = bodyBarrier && wrapped.size > 0
+    ? measureStep0BodyClearance(world, filled, bodyBarrier)
+    : null;
+  const seedFinishedAt = step0Now();
 
-  const setupFinishedAt = step0Now();
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
+  // A body-aware, arc-length seed starts already near the constrained
+  // solution. Limiting only that proven path keeps an explicit UI action fast
+  // without reducing convergence work for generic or multi-panel layouts.
+  const alreadyClosedSelfSeam = Boolean(bodyBarrier)
+    && beforeResidual.maximumM <= 0.005
+    && seams.some((seam) => seam.instanceA && seam.instanceA === seam.instanceB);
+  const effectiveIterations = selfWrapped.size > 0 || alreadyClosedSelfSeam
+    ? Math.min(iterations, 12)
+    : iterations;
+  for (let iteration = 0; iteration < effectiveIterations; iteration += 1) {
   const reverse = iteration % 2 === 1;
   // Material metric is the hard geometric contract. Multiple alternating
   // sweeps make each seam pull behave as bending/rigid reorientation rather
@@ -375,15 +456,21 @@ export function solvePlacementAnchoredSewingStep0(
   for (let pass = 0; pass < 3; pass += 1) {
     projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.985);
   }
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterStructuralA");
   projectSeamRelations(world, seams, reverse, seamRelaxation * 0.42);
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterSeamA");
   for (let pass = 0; pass < 5; pass += 1) {
     projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? !reverse : reverse, 0.992);
   }
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterStructuralB");
   projectSeamRelations(world, seams, !reverse, seamRelaxation * 0.14);
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterSeamB");
   for (let pass = 0; pass < 3; pass += 1) {
     projectStructuralMetric(world, structural, structuralTargets, (pass % 2 === 0) ? reverse : !reverse, 0.995);
   }
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterStructuralC");
   if (bodyBarrier) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.65);
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterBodyBarrier");
 
   // Keep the authored material anchor in place while allowing the rest of the
   // panel to bend. A centroid is not a stable placement invariant: the centroid
@@ -396,10 +483,13 @@ export function solvePlacementAnchoredSewingStep0(
       maximumCentroidDisplacementM,
     );
   }
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterAnchorCage");
   cageParticleDisplacements(world, initial, filled, displacementBudgets);
+  if (iteration === effectiveIterations - 1) capturePhase("lastIteration.afterDisplacementCage");
 }
 
 const solveFinishedAt = step0Now();
+capturePhase("afterSolve");
 
 // Final material polish is repeated inside the displacement cage so the
 // last safety clamp cannot leave the panel visibly stretched.
@@ -408,6 +498,7 @@ for (let pass = 0; pass < 36; pass += 1) {
   if (bodyBarrier && pass % 3 === 2) projectStep0BodyBarrier(world, filled, bodyBarrier, 0.8);
   cageParticleDisplacements(world, initial, filled, displacementBudgets);
 }
+capturePhase("afterPolishSweeps");
 for (const instanceId of target.instanceIds) {
   cageAnchorParticle(
     world,
@@ -418,9 +509,12 @@ for (const instanceId of target.instanceIds) {
 }
 if (bodyBarrier) {
   projectStep0BodyBarrier(world, filled, bodyBarrier, 1);
+  capturePhase("afterFinalBodyBarrier");
   cageParticleDisplacements(world, initial, filled, displacementBudgets);
 }
 const polishFinishedAt = step0Now();
+  const materialAudit = auditMaterial(world);
+  if (options.captureMaterialDiagnostics) phaseMaterialAudits.final = materialAuditSummary(materialAudit);
 
   const afterResidual = measureResidualInWorld(world, seams);
   let maximumVertex = 0;
@@ -437,16 +531,9 @@ const polishFinishedAt = step0Now();
     );
   }
 
-  let metricDistortionMax = 0;
-  structural.forEach((constraint, index) => {
-    const rest = structuralTargets[index];
-    if (rest <= 1e-9) return;
-    metricDistortionMax = Math.max(
-      metricDistortionMax,
-      Math.abs(particleDistance(world, constraint.a, constraint.b) - rest) / rest,
-    );
-  });
+  const metricDistortionMax = materialAudit.max;
 
+  const serializationStartedAt = step0Now();
   const positionsByInstanceId = new Map<string, Float32Array>();
   const point = new THREE.Vector3();
   for (const instanceId of target.instanceIds) {
@@ -477,16 +564,22 @@ const polishFinishedAt = step0Now();
     maximumVertexDisplacementM: maximumVertex,
     maximumCentroidDisplacementM: maximumCentroid,
     metricDistortionMax,
-    iterations,
+    materialAudit,
+    phaseMaterialAudits,
+    seedResidual,
+    seedMinimumBodyClearanceM,
+    iterations: effectiveIterations,
     seamConstraintCount: seams.length,
     bodyBarrierCorrections: bodyBarrier?.corrections ?? 0,
     bodyHemisphereRejects: bodyBarrier?.hemisphereRejects ?? 0,
     minimumBodyClearanceM: bodyBarrier ? measureStep0BodyClearance(world, filled, bodyBarrier) : null,
     phaseTimingsMs: {
-      setup: setupFinishedAt - startedAt,
-      solve: solveFinishedAt - setupFinishedAt,
+      setup: seedStartedAt - startedAt,
+      seed: seedFinishedAt - seedStartedAt,
+      solve: solveFinishedAt - seedFinishedAt,
       materialPolish: polishFinishedAt - solveFinishedAt,
-      serialize: serializedAt - polishFinishedAt,
+      metricAudit: metricAuditMs,
+      serialize: serializedAt - serializationStartedAt,
     },
   };
 }
@@ -514,17 +607,165 @@ export function measureCurrentSewingStep0MaterialDistortion(
   meshes: readonly GarmentAssemblyMeshData[],
   target: SewingStep0Target,
 ): number | null {
+  return measureCurrentSewingStep0MaterialAudit(state, meshes, target)?.max ?? null;
+}
+
+export function measureCurrentSewingStep0MaterialAudit(
+  state: GarmentAssemblyState,
+  meshes: readonly GarmentAssemblyMeshData[],
+  target: SewingStep0Target,
+): SewingStep0MaterialAudit | null {
   const built = buildCurrentWorldParticles(state, meshes, new Set(target.instanceIds));
   if (!built) return null;
-  let maximum = 0;
-  for (const constraint of state.structuralConstraints) {
-    if (built.filled[constraint.a] !== 1 || built.filled[constraint.b] !== 1 || constraint.restLength <= 1e-9) continue;
-    maximum = Math.max(
-      maximum,
-      Math.abs(particleDistance(built.world, constraint.a, constraint.b) - constraint.restLength) / constraint.restLength,
-    );
+  const structural = state.structuralConstraints.filter((constraint) =>
+    built.filled[constraint.a] === 1 && built.filled[constraint.b] === 1,
+  );
+  const seams = state.stitchConstraints.filter((constraint) =>
+    !constraint.seamGroupId.startsWith("dart:")
+    && referenceIsFilled(constraint.a, built.filled)
+    && referenceIsFilled(constraint.b, built.filled),
+  );
+  return auditMaterialMetricWorld(built.world, structural, state, seams);
+}
+
+function auditMaterialMetricWorld(
+  world: Float64Array,
+  constraints: readonly AssemblyDistanceConstraint[],
+  state: GarmentAssemblyState,
+  seams: readonly AssemblyStitchConstraint[],
+): SewingStep0MaterialAudit {
+  const originalIndex = new Map(state.structuralConstraints.map((constraint, index) => [constraint, index] as const));
+  const sewnParticles = new Set<number>();
+  for (const seam of seams) {
+    for (const particle of [...seam.a.particleIndices, ...seam.b.particleIndices]) sewnParticles.add(particle);
   }
-  return maximum;
+  const instanceByParticle = new Map<number, GarmentAssemblyState["instances"][number]>();
+  const boundaryEdges = new Map<string, Set<string>>();
+  const triangleEdgeCounts = new Map<string, Map<string, number>>();
+  for (const instance of state.instances) {
+    for (let local = 0; local < instance.vertexCount; local += 1) {
+      instanceByParticle.set(instance.particleStart + local, instance);
+    }
+    const boundary = new Set<string>();
+    if (instance.topology.edges) {
+      for (const path of instance.topology.edges.values()) {
+        for (let index = 1; index < path.vertexIndices.length; index += 1) {
+          boundary.add(localEdgeKey(path.vertexIndices[index - 1], path.vertexIndices[index]));
+        }
+      }
+    }
+    boundaryEdges.set(instance.id, boundary);
+    const counts = new Map<string, number>();
+    const triangles = instance.topology.triangles ?? new Uint32Array();
+    for (let offset = 0; offset + 2 < triangles.length; offset += 3) {
+      const vertices = [triangles[offset], triangles[offset + 1], triangles[offset + 2]];
+      for (const [a, b] of [[vertices[0], vertices[1]], [vertices[1], vertices[2]], [vertices[2], vertices[0]]]) {
+        const key = localEdgeKey(a, b);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    triangleEdgeCounts.set(instance.id, counts);
+  }
+
+  const diagnostics: SewingStep0MaterialConstraintDiagnostic[] = [];
+  for (const constraint of constraints) {
+    if (constraint.restLength <= 1e-9) continue;
+    const instance = instanceByParticle.get(constraint.a);
+    const sameInstance = instance && instanceByParticle.get(constraint.b)?.id === instance.id ? instance : null;
+    const localA = sameInstance ? constraint.a - sameInstance.particleStart : null;
+    const localB = sameInstance ? constraint.b - sameInstance.particleStart : null;
+    const finalLengthM = particleDistance(world, constraint.a, constraint.b);
+    const absoluteErrorM = Math.abs(finalLengthM - constraint.restLength);
+    const sourcePositions = sameInstance?.topology.positions2DMm;
+    const sourceA = sourcePositions && localA !== null
+      ? [sameInstance.topology.positions2DMm[localA * 2], sameInstance.topology.positions2DMm[localA * 2 + 1]] as [number, number]
+      : null;
+    const sourceB = sourcePositions && localB !== null
+      ? [sameInstance.topology.positions2DMm[localB * 2], sameInstance.topology.positions2DMm[localB * 2 + 1]] as [number, number]
+      : null;
+    const edgeKey = localA !== null && localB !== null ? localEdgeKey(localA, localB) : null;
+    diagnostics.push({
+      constraintIndex: originalIndex.get(constraint) ?? -1,
+      instanceId: sameInstance?.id ?? null,
+      particleA: constraint.a,
+      particleB: constraint.b,
+      localVertexA: localA,
+      localVertexB: localB,
+      restLengthMm: constraint.restLength * 1_000,
+      finalLengthMm: finalLengthM * 1_000,
+      absoluteErrorMm: absoluteErrorM * 1_000,
+      relativeError: absoluteErrorM / constraint.restLength,
+      source2DA: sourceA,
+      source2DB: sourceB,
+      category: sameInstance && edgeKey
+        ? classifyStructuralEdge(
+            edgeKey,
+            boundaryEdges.get(sameInstance.id),
+            triangleEdgeCounts.get(sameInstance.id),
+            sourceA,
+            sourceB,
+          )
+        : "other",
+      touchesSewnEdgeRange: sewnParticles.has(constraint.a) || sewnParticles.has(constraint.b),
+    });
+  }
+  diagnostics.sort((left, right) =>
+    right.relativeError - left.relativeError
+    || right.absoluteErrorMm - left.absoluteErrorMm
+    || left.constraintIndex - right.constraintIndex,
+  );
+  const relative = diagnostics.map((entry) => entry.relativeError).sort((a, b) => a - b);
+  const restLengths = diagnostics.map((entry) => entry.restLengthMm).sort((a, b) => a - b);
+  return {
+    evaluatedConstraintCount: diagnostics.length,
+    relativeErrorMean: relative.length > 0
+      ? relative.reduce((sum, value) => sum + value, 0) / relative.length
+      : 0,
+    p50: percentile(relative, 0.5),
+    p90: percentile(relative, 0.9),
+    p95: percentile(relative, 0.95),
+    p99: percentile(relative, 0.99),
+    max: relative.at(-1) ?? 0,
+    maximumAbsoluteErrorMm: diagnostics.reduce((maximum, entry) => Math.max(maximum, entry.absoluteErrorMm), 0),
+    restLengthMm: {
+      minimum: restLengths[0] ?? 0,
+      median: percentile(restLengths, 0.5),
+      maximum: restLengths.at(-1) ?? 0,
+    },
+    topWorstConstraints: diagnostics.slice(0, 20),
+  };
+}
+
+function materialAuditSummary(audit: SewingStep0MaterialAudit): SewingStep0MaterialAuditSummary {
+  const { topWorstConstraints: _topWorstConstraints, ...summary } = audit;
+  return summary;
+}
+
+function classifyStructuralEdge(
+  edgeKey: string,
+  boundaryEdges: ReadonlySet<string> | undefined,
+  triangleEdgeCounts: ReadonlyMap<string, number> | undefined,
+  sourceA: [number, number] | null,
+  sourceB: [number, number] | null,
+): SewingStep0StructuralEdgeCategory {
+  if (boundaryEdges?.has(edgeKey)) return "boundary";
+  if (!triangleEdgeCounts?.has(edgeKey)) return "other";
+  if (sourceA && sourceB) {
+    const dx = Math.abs(sourceB[0] - sourceA[0]);
+    const dy = Math.abs(sourceB[1] - sourceA[1]);
+    if (Math.min(dx, dy) > Math.max(dx, dy) * 0.1) return "structural-diagonal";
+  }
+  return "triangulation/internal";
+}
+
+function localEdgeKey(a: number, b: number): string {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+function percentile(sorted: readonly number[], fraction: number): number {
+  if (sorted.length === 0) return 0;
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1));
+  return sorted[index];
 }
 
 function buildCurrentWorldParticles(
@@ -833,12 +1074,10 @@ function seedBodyAwareSelfSeamWrap(
     const lastA = weightedPointInWorld(initial, ordered[ordered.length - 1].a);
     const firstB = weightedPointInWorld(initial, ordered[0].b);
     const lastB = weightedPointInWorld(initial, ordered[ordered.length - 1].b);
-    const axis = lastA.clone().sub(firstA);
-    if (axis.lengthSq() <= 1e-10) axis.copy(lastB).sub(firstB);
-    const outward = new THREE.Vector3(...anchorFrame.outwardNormal).normalize();
-    axis.addScaledVector(outward, -axis.dot(outward));
-    if (axis.lengthSq() <= 1e-10) continue;
-    axis.normalize();
+    const materialAxis = lastA.clone().sub(firstA);
+    if (materialAxis.lengthSq() <= 1e-10) materialAxis.copy(lastB).sub(firstB);
+    if (materialAxis.lengthSq() <= 1e-10) continue;
+    materialAxis.normalize();
 
     const sideA = new THREE.Vector3();
     const sideB = new THREE.Vector3();
@@ -849,27 +1088,57 @@ function seedBodyAwareSelfSeamWrap(
     sideA.multiplyScalar(1 / ordered.length);
     sideB.multiplyScalar(1 / ordered.length);
     const sideDelta = sideB.clone().sub(sideA);
-    const tangent = new THREE.Vector3().crossVectors(axis, outward).normalize();
-    if (tangent.dot(sideDelta) < 0) tangent.negate();
-    const circumferenceM = Math.abs(sideDelta.dot(tangent));
+    const materialTangent = sideDelta.clone()
+      .addScaledVector(materialAxis, -sideDelta.dot(materialAxis));
+    const circumferenceM = materialTangent.length();
     if (!Number.isFinite(circumferenceM) || circumferenceM <= 0.03) continue;
-    const radiusM = circumferenceM / (Math.PI * 2);
+    materialTangent.normalize();
+    const materialNormal = new THREE.Vector3().crossVectors(materialTangent, materialAxis).normalize();
+    const outward = new THREE.Vector3(...anchorFrame.outwardNormal)
+      .addScaledVector(materialAxis, -new THREE.Vector3(...anchorFrame.outwardNormal).dot(materialAxis));
+    if (outward.lengthSq() <= 1e-10) outward.copy(materialNormal);
+    outward.normalize();
+    if (materialNormal.dot(outward) < 0) materialNormal.negate();
+    const around = new THREE.Vector3().crossVectors(materialAxis, outward).normalize();
+    if (around.dot(materialTangent) < 0) around.negate();
     const anchor = particlePoint(initial, anchorParticle);
-    const centre = anchor.clone().addScaledVector(outward, -radiusM);
+    const ellipse = fitBodyAwareSelfSeamEllipse(
+      barrier.body,
+      initial,
+      instance.particleStart,
+      instance.vertexCount,
+      anchor,
+      materialAxis,
+      around,
+      outward,
+      circumferenceM,
+      barrier.requestedClearanceM,
+    );
+    const radiusM = circumferenceM / (Math.PI * 2);
+    const semiTangentM = ellipse?.semiTangentM ?? radiusM;
+    const semiOutwardM = ellipse?.semiOutwardM ?? radiusM;
+    const arcTable = buildEllipseArcTable(semiTangentM, semiOutwardM);
+    const centre = anchor.clone().addScaledVector(outward, -semiOutwardM);
     const relative = new THREE.Vector3();
     const radial = new THREE.Vector3();
+    const surfaceNormal = new THREE.Vector3();
     for (let local = 0; local < instance.vertexCount; local += 1) {
       const particle = instance.particleStart + local;
       const source = particlePoint(initial, particle);
       relative.copy(source).sub(anchor);
-      const axial = relative.dot(axis);
-      const materialU = relative.dot(tangent);
-      const normalOffset = relative.dot(outward);
-      const angle = materialU / radiusM;
-      radial.copy(outward).multiplyScalar(Math.cos(angle))
-        .addScaledVector(tangent, Math.sin(angle))
-        .multiplyScalar(radiusM + normalOffset);
-      const target = centre.clone().addScaledVector(axis, axial).add(radial);
+      const axial = relative.dot(materialAxis);
+      const materialU = relative.dot(materialTangent);
+      const normalOffset = relative.dot(materialNormal);
+      const angle = ellipseAngleAtSignedArc(materialU, arcTable);
+      const sin = Math.sin(angle);
+      const cos = Math.cos(angle);
+      radial.copy(around).multiplyScalar(semiTangentM * sin)
+        .addScaledVector(outward, semiOutwardM * cos);
+      surfaceNormal.copy(around).multiplyScalar(sin / semiTangentM)
+        .addScaledVector(outward, cos / semiOutwardM)
+        .normalize();
+      const target = centre.clone().addScaledVector(materialAxis, axial).add(radial)
+        .addScaledVector(surfaceNormal, normalOffset);
       const offset = particle * 3;
       world[offset] = target.x;
       world[offset + 1] = target.y;
@@ -878,6 +1147,148 @@ function seedBodyAwareSelfSeamWrap(
     wrapped.add(instanceId);
   }
   return wrapped;
+}
+
+interface EllipseArcTable {
+  circumferenceM: number;
+  angles: Float64Array;
+  lengths: Float64Array;
+}
+
+/**
+ * Fits the closest fixed-perimeter ellipse around the exact central-body
+ * samples across the panel's axial span while keeping the authored front
+ * anchor fixed. Changing only the aspect ratio never changes material length;
+ * arc-length parameterization supplies the isometric development used by the
+ * seed, and the exact barrier resolves any remaining submillimetric overlap.
+ */
+function fitBodyAwareSelfSeamEllipse(
+  body: HumanBodyMesh,
+  initial: Float64Array,
+  particleStart: number,
+  vertexCount: number,
+  anchor: THREE.Vector3,
+  axis: THREE.Vector3,
+  tangent: THREE.Vector3,
+  outward: THREE.Vector3,
+  circumferenceM: number,
+  clearanceM: number,
+): { semiTangentM: number; semiOutwardM: number } | null {
+  let axialMinimum = Number.POSITIVE_INFINITY;
+  let axialMaximum = Number.NEGATIVE_INFINITY;
+  const point = new THREE.Vector3();
+  for (let local = 0; local < vertexCount; local += 1) {
+    point.copy(particlePoint(initial, particleStart + local)).sub(anchor);
+    const axial = point.dot(axis);
+    axialMinimum = Math.min(axialMinimum, axial);
+    axialMaximum = Math.max(axialMaximum, axial);
+  }
+  if (!Number.isFinite(axialMinimum) || !Number.isFinite(axialMaximum)) return null;
+
+  const samples: Array<{ tangent: number; outward: number }> = [];
+  const maximumRadialDistanceM = circumferenceM * 0.42;
+  let maximumAbsoluteTangentM = 0;
+  let minimumOutwardM = 0;
+  for (let offset = 0; offset < body.positions.length; offset += 3) {
+    const regionId = body.regionIds[offset / 3];
+    if (regionId && !BODY_WRAP_REGION_IDS.has(regionId)) continue;
+    point.set(body.positions[offset], body.positions[offset + 1], body.positions[offset + 2]).sub(anchor);
+    const axial = point.dot(axis);
+    if (axial < axialMinimum - 0.012 || axial > axialMaximum + 0.012) continue;
+    const tangentCoordinate = point.dot(tangent);
+    const outwardCoordinate = point.dot(outward);
+    if (Math.hypot(tangentCoordinate, outwardCoordinate) > maximumRadialDistanceM) continue;
+    samples.push({ tangent: tangentCoordinate, outward: outwardCoordinate });
+    maximumAbsoluteTangentM = Math.max(maximumAbsoluteTangentM, Math.abs(tangentCoordinate));
+    minimumOutwardM = Math.min(minimumOutwardM, outwardCoordinate);
+  }
+  if (samples.length < 12 || maximumAbsoluteTangentM <= 0.01 || minimumOutwardM >= -0.01) return null;
+
+  let best: { semiTangentM: number; semiOutwardM: number; maximumRadiusSq: number } | null = null;
+  // Search only the cross-section aspect ratio. Every candidate is scaled to
+  // exactly the authored circumference, so this cannot autoscale material.
+  for (let step = 0; step <= 96; step += 1) {
+    const aspect = 0.65 * ((2.8 / 0.65) ** (step / 96));
+    const unitCircumference = ellipseCircumference(aspect, 1);
+    const semiOutwardM = circumferenceM / unitCircumference;
+    const semiTangentM = aspect * semiOutwardM;
+    let maximumRadiusSq = 0;
+    for (const sample of samples) {
+      const expandedTangent = sample.tangent + Math.sign(sample.tangent) * clearanceM;
+      const x = expandedTangent / semiTangentM;
+      const z = (sample.outward + clearanceM + semiOutwardM) / semiOutwardM;
+      maximumRadiusSq = Math.max(maximumRadiusSq, x * x + z * z);
+    }
+    if (!best || maximumRadiusSq < best.maximumRadiusSq) {
+      best = { semiTangentM, semiOutwardM, maximumRadiusSq };
+    }
+  }
+  // The material cannot enclose this body section without stretch. Let the
+  // conservative barrier/validator reject instead of silently scaling it.
+  // A near fit is still a much better isometric seed than a circle. The exact
+  // barrier remains authoritative and resolves the small residual overlap.
+  return best && best.maximumRadiusSq <= 1.08
+    ? { semiTangentM: best.semiTangentM, semiOutwardM: best.semiOutwardM }
+    : null;
+}
+
+const BODY_WRAP_REGION_IDS = new Set<string>([
+  "bust-left",
+  "bust-right",
+  "underbust",
+  "ribcage",
+  "chest-front",
+  "back-upper",
+  "waist",
+  "abdomen",
+  "high-hip",
+  "full-hip",
+  "pelvis",
+  "pelvis-front",
+  "pelvis-back",
+  "glute-left",
+  "glute-right",
+  "crotch",
+  "thigh-left",
+  "thigh-right",
+] as const);
+
+function ellipseCircumference(semiA: number, semiB: number): number {
+  const h = ((semiA - semiB) ** 2) / ((semiA + semiB) ** 2);
+  return Math.PI * (semiA + semiB) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
+}
+
+function buildEllipseArcTable(semiA: number, semiB: number): EllipseArcTable {
+  const sampleCount = 2048;
+  const angles = new Float64Array(sampleCount + 1);
+  const lengths = new Float64Array(sampleCount + 1);
+  let previousX = 0;
+  let previousZ = semiB;
+  for (let index = 1; index <= sampleCount; index += 1) {
+    const angle = (index / sampleCount) * Math.PI * 2;
+    const x = semiA * Math.sin(angle);
+    const z = semiB * Math.cos(angle);
+    angles[index] = angle;
+    lengths[index] = lengths[index - 1] + Math.hypot(x - previousX, z - previousZ);
+    previousX = x;
+    previousZ = z;
+  }
+  return { circumferenceM: lengths[sampleCount], angles, lengths };
+}
+
+function ellipseAngleAtSignedArc(signedArcM: number, table: EllipseArcTable): number {
+  let target = signedArcM % table.circumferenceM;
+  if (target < 0) target += table.circumferenceM;
+  let low = 0;
+  let high = table.lengths.length - 1;
+  while (high - low > 1) {
+    const middle = (low + high) >>> 1;
+    if (table.lengths[middle] <= target) low = middle;
+    else high = middle;
+  }
+  const span = table.lengths[high] - table.lengths[low];
+  const ratio = span > 1e-12 ? (target - table.lengths[low]) / span : 0;
+  return table.angles[low] + (table.angles[high] - table.angles[low]) * ratio;
 }
 
 interface CycleBoundary {

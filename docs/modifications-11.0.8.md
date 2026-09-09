@@ -633,3 +633,71 @@ buffers. A second test proves reconciliation resets the stale workspace
 transform. The focused gate passed 12 files / 76 tests; typecheck, production
 build and `git diff --check` passed. No file under `apps/web/src/physics/**`
 was changed.
+
+## Real-editor STEP-0 parity - 1020 x 300 mm self-seam
+
+The old regression was not equivalent to the browser case: it used a simpler
+runtime-authored rectangle against a synthetic cylindrical body. The exact
+editor-equivalent regression now goes through `PatternPiece` (four authored
+points), `garmentDraftToPatternDocumentV3`, `ResolvedAssemblyInput`, runtime
+triangulation and `GarmentAssembly`, then uses the calibrated female
+`HumanBodyModel` and the same 0.5 mm body clearance/options as
+`GlobalThreeViewport`. It contains 901 vertices, 1,664 triangles, 2,564
+structural constraints and 23 physical seam samples.
+
+Diagnostics proved this was not a short-edge numerical false positive. Before
+the fix, the final worst constraint was a meaningful 19.638 mm boundary edge
+away from the sewn range. It became 21.053 mm: 1.414 mm absolute error and
+7.2009% relative error. The 2% canonical maximum-relative gate therefore
+remains unchanged.
+
+Two coupled seed defects caused the real distortion:
+
+1. the body outward normal was also used as the material frame, mixing the
+   sloped hip normal into the panel's seam axis/depth and creating 34.66%
+   distortion in the initial circular development;
+2. after separating material and body frames, the isometric circle preserved
+   material to 0.061% but penetrated the non-circular hip section by 22.542 mm.
+   Repeated per-particle body-barrier corrections then produced the measured
+   7.2009% boundary stretch.
+
+The self-seam seed now keeps independent material-axis/tangent/normal and body
+outward/around frames. For central-body wraps it samples the exact body mesh in
+the panel's axial span, searches only an ellipse aspect ratio whose perimeter
+is exactly the authored material circumference, and maps material width to the
+ellipse by arc length. The authored front anchor stays fixed. A small remaining
+overlap is resolved by the existing exact barrier; no body barrier, validator,
+seam length, pattern geometry, autoscale or physics path was changed.
+
+After the fix, the exact case measures:
+
+- seam mean: 1,020.570 mm before, 0.150 mm after;
+- seam maximum: 1,021.170 mm before, 0.343 mm after;
+- material maximum: 0.09927% / 0.01857 mm absolute;
+- final minimum body clearance: +0.260 mm;
+- authored-anchor movement: 0.070 mm;
+- non-planar depth span: greater than 200 mm;
+- seed/body corrections: 82, down from 5,363 in the circular case.
+
+The detailed DEV dataset records revisions, topology/constraint counts,
+SeamGroup IDs, rest-length distribution, p50/p90/p95/p99/max, top 20 offending
+constraints with 2D endpoints/category/sewn-range membership, seed residual and
+clearance, phase audits, exact-body corrections and timings. Production keeps
+the concise user warning. The acceptance rule is still the worst canonical
+structural-edge relative error `<= 2%`.
+
+The body-aware self-seam path converges in 12 iterations (generic and
+multi-panel paths keep their existing budget). A representative DEV run of the
+first exact adjustment measured 84.36 ms setup, 62.47 ms seed, 329.08 ms solve,
+283.76 ms material polish and 0.77 ms serialization; the 90.77 ms diagnostic
+audit is included within those phase times. No global candidate search was
+added. Repeating STEP-0 is covered: it remains under 2%, keeps the seam below
+5 mm and moves no vertex more than 5 mm from the accepted tube.
+
+The focused gate passed 7 files / 52 tests, the exact regression passed again
+after the final diagnostic assertions, and typecheck plus the fallback
+production build passed (only the pre-existing chunk-size warning). The
+browser manual gate remains: create
+the same 1020 x 300 mm panel, position at the hip, sew the vertical edges,
+verify an immediate tube in Montar, repeat Adjust without drift, then enter
+Provar and verify the identical tube/placement.

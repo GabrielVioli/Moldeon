@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
+import { buildAvatarParametricModel } from "../avatar/AvatarParametricModel";
+import { prepareBodySurfaceQuery } from "../avatar/BodySurfaceQuery";
 import { createBlankGarment } from "../domain/blankGarment";
 import { createDefaultFabricSource } from "../domain/fabric";
 import { getPatternEdges, type PatternPiece } from "../domain/pattern";
-import { buildResolvedAssemblyInput } from "../garment3d/ResolvedAssemblyInput";
+import { garmentDraftToPatternDocumentV3 } from "../domain/patternDocumentV3";
+import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
+import { buildResolvedAssemblyInput, buildResolvedAssemblyInputFromDocument } from "../garment3d/ResolvedAssemblyInput";
 import { buildResolvedGarmentAssembly } from "../garment3d/ResolvedGarmentAssembly";
 import {
   auditSewingStep0Seams,
@@ -271,6 +275,65 @@ function authoredRectangleFixture(widthMm: number, heightMm: number) {
   };
 }
 
+function editorAuthoredRectangleFixture() {
+  const piece: PatternPiece = {
+    id: "editor-authored-rectangle",
+    name: "Nova peça",
+    seamAllowanceMm: 0,
+    cutQuantity: 1,
+    points: [
+      { id: "a", xMm: 0, yMm: 0 },
+      { id: "b", xMm: 1020, yMm: 0 },
+      { id: "c", xMm: 1021.2, yMm: 299.3 },
+      { id: "d", xMm: 0, yMm: 300 },
+    ],
+  };
+  const edges = getPatternEdges(piece);
+  const blank = createBlankGarment();
+  const fabric = createDefaultFabricSource();
+  const draft = {
+    ...blank,
+    bodyType: "feminine" as const,
+    measurements: { ...DEFAULT_BODY_MEASUREMENTS },
+    fabrics: [fabric],
+    pieces: [{ ...piece, fabricId: fabric.id }],
+    seams: [{
+      id: "editor-tube",
+      name: "Costura 1",
+      first: { pieceId: piece.id, edgeId: edges[1].id, startT: 0, endT: 1 },
+      second: { pieceId: piece.id, edgeId: edges[3].id, startT: 0, endT: 1 },
+      direction: "opposite" as const,
+      easeRatio: 0,
+      type: "standard",
+      active: true,
+    }],
+  };
+  const input = buildResolvedAssemblyInputFromDocument(garmentDraftToPatternDocumentV3(draft));
+  const state = buildResolvedGarmentAssembly(input);
+  const instance = state.instances[0];
+  const source = instance.topology.positions2DMm;
+  const positions = new Float32Array(instance.vertexCount * 3);
+  for (let index = 0; index < instance.vertexCount; index += 1) {
+    positions[index * 3] = (source[index * 2] - 510.3) * 0.001;
+    positions[index * 3 + 1] = -(source[index * 2 + 1] - 150) * 0.001;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(Array.from(instance.topology.triangles));
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  const avatar = buildAvatarParametricModel(input.document.measurements.values, input.document.body.type);
+  mesh.position.set(0, avatar.landmarks.waistY - 0.13, avatar.humanBody.visualMesh.bounds.max[2] + 0.012);
+  mesh.updateMatrixWorld(true);
+  prepareBodySurfaceQuery(avatar.humanBody.visualMesh);
+  return {
+    input,
+    state,
+    body: avatar.humanBody.visualMesh,
+    mesh: { key: instance.id, mesh, flat: new Float32Array(positions), dressed: new Float32Array(positions) } as unknown as GarmentAssemblyMeshData,
+    target: { rootInstanceId: instance.id, instanceIds: [instance.id] } as SewingStep0Target,
+  };
+}
+
 function quadGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
@@ -344,6 +407,28 @@ function applyProposal(
     (attribute.array as Float32Array).set(positions);
     attribute.needsUpdate = true;
   }
+}
+
+function componentSpan(positions: Float32Array, component: 0 | 1 | 2): number {
+  let minimum = Number.POSITIVE_INFINITY;
+  let maximum = Number.NEGATIVE_INFINITY;
+  for (let offset = component; offset < positions.length; offset += 3) {
+    minimum = Math.min(minimum, positions[offset]);
+    maximum = Math.max(maximum, positions[offset]);
+  }
+  return maximum - minimum;
+}
+
+function maximumPositionDelta(left: Float32Array, right: Float32Array): number {
+  let maximum = 0;
+  for (let offset = 0; offset < left.length; offset += 3) {
+    maximum = Math.max(maximum, Math.hypot(
+      left[offset] - right[offset],
+      left[offset + 1] - right[offset + 1],
+      left[offset + 2] - right[offset + 2],
+    ));
+  }
+  return maximum;
 }
 
 const target: SewingStep0Target = { rootInstanceId: "front", instanceIds: ["front", "back"] };
@@ -463,6 +548,69 @@ describe("placement-anchored STEP-0", () => {
     expect(proposal!.afterResidual.maximumM).toBeLessThan(0.005);
     expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
   });
+
+  it("forms a near-isometric body-aware tube from the real editor-equivalent 1020 x 300 mm document", () => {
+    const fixture = editorAuthoredRectangleFixture();
+    const authoredPosition = fixture.mesh.mesh.position.clone();
+    const authoredScale = fixture.mesh.mesh.scale.clone();
+    const proposal = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      {
+        iterations: 72,
+        body: fixture.body,
+        bodyClearanceM: 0.0005,
+        bodyQueryDistanceM: 0.24,
+        captureMaterialDiagnostics: true,
+      },
+    );
+    expect(proposal).not.toBeNull();
+    expect(fixture.state.instances[0].vertexCount).toBe(901);
+    expect(fixture.state.instances[0].topology.triangles.length / 3).toBe(1664);
+    expect(fixture.state.structuralConstraints).toHaveLength(2564);
+    expect(fixture.state.stitchConstraints).toHaveLength(23);
+    expect(proposal!.beforeResidual.meanM).toBeGreaterThan(1);
+    expect(proposal!.afterResidual.meanM).toBeLessThan(proposal!.beforeResidual.meanM * 0.005);
+    expect(proposal!.afterResidual.maximumM).toBeLessThanOrEqual(0.005);
+    expect(proposal!.phaseMaterialAudits.afterSeed.max).toBeLessThan(0.002);
+    expect(proposal!.materialAudit.max).toBeLessThan(0.02);
+    expect(proposal!.materialAudit.maximumAbsoluteErrorMm).toBeLessThan(0.1);
+    expect(proposal!.materialAudit.topWorstConstraints[0]).toMatchObject({
+      instanceId: fixture.state.instances[0].id,
+      touchesSewnEdgeRange: false,
+    });
+    expect(proposal!.materialAudit.topWorstConstraints[0].restLengthMm).toBeGreaterThan(18);
+    expect(proposal!.materialAudit.topWorstConstraints[0].source2DA).not.toBeNull();
+    expect(proposal!.materialAudit.topWorstConstraints[0].source2DB).not.toBeNull();
+    expect(proposal!.minimumBodyClearanceM).not.toBeNull();
+    expect(proposal!.minimumBodyClearanceM!).toBeGreaterThan(-0.001);
+    expect(proposal!.maximumCentroidDisplacementM).toBeLessThan(0.001);
+    expect(proposal!.iterations).toBe(12);
+    const firstPositions = proposal!.positionsByInstanceId.get(fixture.state.instances[0].id)!;
+    expect(componentSpan(firstPositions, 2)).toBeGreaterThan(0.2);
+    expect(fixture.mesh.mesh.position).toEqual(authoredPosition);
+    expect(fixture.mesh.mesh.scale).toEqual(authoredScale);
+
+    applyProposal([fixture.mesh], proposal!.positionsByInstanceId);
+    const repeated = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      {
+        iterations: 72,
+        body: fixture.body,
+        bodyClearanceM: 0.0005,
+        bodyQueryDistanceM: 0.24,
+      },
+    );
+    expect(repeated).not.toBeNull();
+    const repeatedPositions = repeated!.positionsByInstanceId.get(fixture.state.instances[0].id)!;
+    expect(repeated!.metricDistortionMax).toBeLessThan(0.02);
+    expect(repeated!.afterResidual.maximumM).toBeLessThanOrEqual(0.005);
+    expect(repeated!.iterations).toBe(12);
+    expect(maximumPositionDelta(firstPositions, repeatedPositions)).toBeLessThan(0.005);
+  }, 15_000);
 
   it("is deterministic and does not mutate the authored meshes while proposing", () => {
     const assembly = state();
