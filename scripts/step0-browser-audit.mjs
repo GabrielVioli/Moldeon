@@ -10,17 +10,17 @@ const browser = await chromium.launch({ headless: true });
 const report = { generatedAt: new Date().toISOString(), baseUrl, browserVersion: browser.version(), scenarios: [] };
 
 try {
-  await runScenario("self-seam-1020x300", 1020, 300, true);
-  await runScenario("self-seam-435x227", 435, 227, false);
+  await runScenario("self-seam-1020x300", 1020, 300, "wrap");
+  await runScenario("self-seam-435x227", 435, 227, "reject-too-small");
 } finally {
   await browser.close();
 }
 
 await writeFile(resolve(outputDirectory, "report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 console.log(JSON.stringify(report, null, 2));
-if (report.scenarios.some((scenario) => scenario.required && scenario.status !== "passed")) process.exitCode = 1;
+if (report.scenarios.some((scenario) => scenario.status !== "passed")) process.exitCode = 1;
 
-async function runScenario(name, widthMm, heightMm, required) {
+async function runScenario(name, widthMm, heightMm, expectation) {
   const context = await browser.newContext({ viewport: { width: 1365, height: 768 }, locale: "pt-BR", colorScheme: "light" });
   const page = await context.newPage();
   const consoleMessages = [];
@@ -30,36 +30,64 @@ async function runScenario(name, widthMm, heightMm, required) {
   });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   let status = "failed";
+  let prepared = null;
   let result = null;
   let error = null;
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForFunction(() => Boolean(window.__moldeonPhase0), null, { timeout: 20_000 });
-    await page.evaluate(async ({ widthMm, heightMm }) => {
+    prepared = await page.evaluate(async ({ widthMm, heightMm }) => {
       const fixtures = await import("/src/testFixtures/baselineGarments.ts");
+      const patternModule = await import("/src/domain/pattern.ts");
       const storeModule = await import("/src/state/editorStore.ts");
       const avatarModule = await import("/src/avatar/AvatarParametricModel.ts");
       const garment = fixtures.createBaselineFixture("exact-contact-tube");
-      const piece = garment.pieces[0];
-      if (!piece) throw new Error("Fixture exact-contact-tube sem peça.");
-      const minX = Math.min(...piece.points.map((point) => point.xMm));
-      const minY = Math.min(...piece.points.map((point) => point.yMm));
-      const maxX = Math.max(...piece.points.map((point) => point.xMm));
-      const maxY = Math.max(...piece.points.map((point) => point.yMm));
-      const oldWidth = Math.max(1, maxX - minX);
-      const oldHeight = Math.max(1, maxY - minY);
-      piece.points = piece.points.map((point) => ({
-        ...point,
-        xMm: minX + ((point.xMm - minX) / oldWidth) * widthMm,
-        yMm: minY + ((point.yMm - minY) / oldHeight) * heightMm,
-      }));
+      const originalPiece = garment.pieces[0];
+      const originalSeam = garment.seams?.[0];
+      if (!originalPiece || !originalSeam) throw new Error("Fixture exact-contact-tube incompleto.");
+
+      // Rebuild the canonical material geometry instead of mutating only
+      // legacy points. PatternPiece.segments are authoritative when present;
+      // mutating points alone made the former E2E silently keep 1040 x 260 mm
+      // for both scenarios.
+      const piece = patternModule.migrateLegacyPieceToSegments({
+        id: originalPiece.id,
+        name: originalPiece.name,
+        seamAllowanceMm: originalPiece.seamAllowanceMm,
+        cutQuantity: 1,
+        points: [
+          { id: `${originalPiece.id}:e2e-a`, xMm: 0, yMm: 0 },
+          { id: `${originalPiece.id}:e2e-b`, xMm: widthMm, yMm: 0 },
+          { id: `${originalPiece.id}:e2e-c`, xMm: widthMm, yMm: heightMm },
+          { id: `${originalPiece.id}:e2e-d`, xMm: 0, yMm: heightMm },
+        ],
+      });
+      piece.fabricId = originalPiece.fabricId;
+      const edges = patternModule.getPatternEdges(piece);
+      if (edges.length !== 4) throw new Error(`Retângulo E2E gerou ${edges.length} bordas.`);
+      garment.pieces = [piece];
+      garment.seams = [{
+        ...originalSeam,
+        first: { pieceId: piece.id, edgeId: edges[1].id, startT: 0, endT: 1 },
+        second: { pieceId: piece.id, edgeId: edges[3].id, startT: 0, endT: 1 },
+        firstRanges: undefined,
+        secondRanges: undefined,
+        physicalBindings: undefined,
+      }];
       garment.name = `STEP0 E2E ${widthMm}x${heightMm}`;
       garment.id = `step0-e2e-${widthMm}x${heightMm}`;
+
       const store = storeModule.useEditorStore.getState();
       store.loadGarment(garment);
       const avatar = avatarModule.buildAvatarParametricModel(garment.measurements, garment.bodyType);
-      const yMm = (avatar.landmarks.waistY - 0.13) * 1000;
-      const zMm = (avatar.humanBody.visualMesh.bounds.max[2] + 0.012) * 1000;
+      const fullHip = avatar.humanBody.crossSections.find((section) => section.region === "full-hip")
+        ?? avatar.humanBody.crossSections.reduce((best, section) =>
+          Math.abs(section.yM - avatar.landmarks.hipY) < Math.abs(best.yM - avatar.landmarks.hipY) ? section : best,
+        avatar.humanBody.crossSections[0]);
+      if (!fullHip) throw new Error("Manequim sem seção corporal para o gate STEP-0.");
+      const yMm = fullHip.yM * 1000;
+      const bodyFrontZ = fullHip.centerZM + fullHip.frontDepthM;
+      const zMm = (bodyFrontZ + 0.012) * 1000;
       storeModule.useEditorStore.getState().setPanelInstanceArrangement(piece.id, 0, {
         id: "step0-e2e-placement",
         pieceId: piece.id,
@@ -76,7 +104,32 @@ async function runScenario(name, widthMm, heightMm, required) {
         orientationDeg: [0, 0, 0],
         presentationMode: "authored",
       });
+
+      const currentPiece = storeModule.useEditorStore.getState().garment.pieces[0];
+      const xs = currentPiece.points.map((point) => point.xMm);
+      const ys = currentPiece.points.map((point) => point.yMm);
+      return {
+        requested: { widthMm, heightMm },
+        canonical: {
+          widthMm: Math.max(...xs) - Math.min(...xs),
+          heightMm: Math.max(...ys) - Math.min(...ys),
+          segmentCount: currentPiece.segments?.length ?? 0,
+        },
+        body: {
+          sectionId: fullHip.id,
+          sectionRegion: fullHip.region,
+          actualCircumferenceMm: fullHip.actualCircumferenceMm,
+          centerM: fullHip.centerM ?? [0, fullHip.yM, fullHip.centerZM],
+          halfWidthM: fullHip.halfWidthM,
+          frontDepthM: fullHip.frontDepthM,
+          backDepthM: fullHip.backDepthM,
+        },
+      };
     }, { widthMm, heightMm });
+
+    if (Math.abs(prepared.canonical.widthMm - widthMm) > 0.01 || Math.abs(prepared.canonical.heightMm - heightMm) > 0.01) {
+      throw new Error(`Fixture E2E não materializou ${widthMm} x ${heightMm} mm: ${JSON.stringify(prepared.canonical)}`);
+    }
 
     const montar = page.getByRole("button", { name: "Montar", exact: true });
     if (await montar.count()) await montar.click();
@@ -90,8 +143,8 @@ async function runScenario(name, widthMm, heightMm, required) {
     await adjust.click();
     await page.waitForFunction(() => {
       const host = document.querySelector('[data-testid="dressed-avatar-viewport"]');
-      const status = host?.dataset.sewingStep0Status ?? "";
-      return Boolean(status) && !status.startsWith("solving") && !status.startsWith("polishing");
+      const value = host?.dataset.sewingStep0Status ?? "";
+      return Boolean(value) && !value.startsWith("solving") && !value.startsWith("polishing");
     }, null, { timeout: 45_000 });
     await page.waitForTimeout(350);
     await page.screenshot({ path: resolve(outputDirectory, `${name}-after.png`), fullPage: true });
@@ -121,14 +174,43 @@ async function runScenario(name, widthMm, heightMm, required) {
       Number(audit?.after?.penetratingSamples ?? 1) === 0
       && Number(audit?.after?.minimumSignedClearanceMm ?? -999) >= -0.5,
     );
-    status = required
-      ? applied && Number.isFinite(residualMm) && residualMm <= 5 && Number.isFinite(material) && material <= 0.02 && bodySafe ? "passed" : "failed"
-      : "observed";
+    const rendered = diagnostics?.renderedMeshes?.[0]?.boundingBox;
+    const bodyBounds = diagnostics?.bodyBounds;
+    const bodyCenter = bodyBounds
+      ? [
+          (bodyBounds.min[0] + bodyBounds.max[0]) * 0.5,
+          (bodyBounds.min[1] + bodyBounds.max[1]) * 0.5,
+          (bodyBounds.min[2] + bodyBounds.max[2]) * 0.5,
+        ]
+      : prepared?.body?.centerM;
+    const surroundsBodyCenter = Boolean(rendered && bodyCenter)
+      && rendered.min[0] < bodyCenter[0] && rendered.max[0] > bodyCenter[0]
+      && rendered.min[2] < bodyCenter[2] && rendered.max[2] > bodyCenter[2];
+    const fit = diagnostics?.bodyFit ?? diagnostics?.registration?.bodyFit ?? diagnostics?.globalShape?.bodyFit ?? null;
+    const tooSmall = result?.status === "insufficient-body-circumference"
+      || diagnostics?.rejectionReason === "insufficient-body-circumference"
+      || fit?.status === "insufficient-circumference";
+    const quantitativeTooSmall = tooSmall
+      && Number.isFinite(Number(fit?.materialCircumferenceMm))
+      && Number.isFinite(Number(fit?.requiredCircumferenceMm))
+      && Number(fit.materialCircumferenceMm) < Number(fit.requiredCircumferenceMm);
+
+    if (expectation === "wrap") {
+      status = applied
+        && Number.isFinite(residualMm) && residualMm <= 5
+        && Number.isFinite(material) && material <= 0.02
+        && bodySafe
+        && surroundsBodyCenter
+        ? "passed"
+        : "failed";
+    } else {
+      status = !applied && quantitativeTooSmall ? "passed" : "failed";
+    }
   } catch (reason) {
     error = reason instanceof Error ? reason.stack ?? reason.message : String(reason);
     await page.screenshot({ path: resolve(outputDirectory, `${name}-error.png`), fullPage: true }).catch(() => undefined);
   } finally {
-    report.scenarios.push({ name, widthMm, heightMm, required, status, result, error, consoleMessages, pageErrors });
+    report.scenarios.push({ name, widthMm, heightMm, expectation, status, prepared, result, error, consoleMessages, pageErrors });
     await context.close();
   }
 }
