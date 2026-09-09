@@ -1,0 +1,64 @@
+name: Recovery 11.0.8 STEP-0 Browser Gate
+
+on:
+  push:
+    branches:
+      - recovery/11.0.8-sewing-2d-3d-authoring
+    paths:
+      - "apps/web/src/viewport/SewingStep0.ts"
+      - "apps/web/src/viewport/GlobalThreeViewport.ts"
+      - "apps/web/src/viewport/GarmentViewport.tsx"
+      - "apps/web/src/garment3d/**"
+      - "scripts/step0-browser-audit.mjs"
+      - ".github/workflows/recovery-11-0-8-step0-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install project
+        run: npm ci
+      - name: Install Chromium gate tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run typecheck --workspace @moldeon/web
+      - name: Start fallback server
+        run: |
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/moldeon-step0-server.log 2>&1 &
+          echo $! > /tmp/moldeon-step0-server.pid
+          for i in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:5173/ >/dev/null; then exit 0; fi
+            sleep 0.5
+          done
+          cat /tmp/moldeon-step0-server.log
+          exit 1
+      - name: Run real browser STEP-0 audit
+        env:
+          STEP0_BASE_URL: http://127.0.0.1:5173
+          STEP0_ARTIFACT_DIR: artifacts/step0-browser
+        run: node scripts/step0-browser-audit.mjs
+      - name: Production build
+        if: always()
+        run: npm run build --workspace @moldeon/web
+      - name: Upload STEP-0 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step0-browser-${{ github.sha }}
+          path: |
+            artifacts/step0-browser
+            /tmp/moldeon-step0-server.log
+          retention-days: 14
+          if-no-files-found: warn
