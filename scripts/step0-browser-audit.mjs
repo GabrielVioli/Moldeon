@@ -38,6 +38,7 @@ async function runScenario(name, widthMm, heightMm, required) {
     await page.evaluate(async ({ widthMm, heightMm }) => {
       const fixtures = await import("/src/testFixtures/baselineGarments.ts");
       const storeModule = await import("/src/state/editorStore.ts");
+      const avatarModule = await import("/src/avatar/AvatarParametricModel.ts");
       const garment = fixtures.createBaselineFixture("exact-contact-tube");
       const piece = garment.pieces[0];
       if (!piece) throw new Error("Fixture exact-contact-tube sem peça.");
@@ -54,7 +55,27 @@ async function runScenario(name, widthMm, heightMm, required) {
       }));
       garment.name = `STEP0 E2E ${widthMm}x${heightMm}`;
       garment.id = `step0-e2e-${widthMm}x${heightMm}`;
-      storeModule.useEditorStore.getState().loadGarment(garment);
+      const store = storeModule.useEditorStore.getState();
+      store.loadGarment(garment);
+      const avatar = avatarModule.buildAvatarParametricModel(garment.measurements, garment.bodyType);
+      const yMm = (avatar.landmarks.waistY - 0.13) * 1000;
+      const zMm = (avatar.humanBody.visualMesh.bounds.max[2] + 0.012) * 1000;
+      storeModule.useEditorStore.getState().setPanelInstanceArrangement(piece.id, 0, {
+        id: "step0-e2e-placement",
+        pieceId: piece.id,
+        region: "hip",
+        surface: "front",
+        bodySide: "center",
+        rotationDeg: 0,
+        offsetXMm: 0,
+        offsetYMm: 0,
+        offsetZMm: 12,
+        scale: 1,
+        mirrorX: false,
+        positionMm: [0, yMm, zMm],
+        orientationDeg: [0, 0, 0],
+        presentationMode: "authored",
+      });
     }, { widthMm, heightMm });
 
     const montar = page.getByRole("button", { name: "Montar", exact: true });
@@ -95,8 +116,13 @@ async function runScenario(name, widthMm, heightMm, required) {
     const diagnostics = result?.diagnostics ?? {};
     const residualMm = Number(diagnostics?.proposalResidual?.afterBody?.maximumM ?? diagnostics?.finalResidual?.maximumM ?? Number.POSITIVE_INFINITY) * 1000;
     const material = Number(diagnostics?.materialAfter ?? diagnostics?.metricDistortionMax ?? Number.POSITIVE_INFINITY);
+    const bodyAudits = Object.values(diagnostics?.bodyAudits ?? {});
+    const bodySafe = bodyAudits.length > 0 && bodyAudits.every((audit) =>
+      Number(audit?.after?.penetratingSamples ?? 1) === 0
+      && Number(audit?.after?.minimumSignedClearanceMm ?? -999) >= -0.5,
+    );
     status = required
-      ? applied && Number.isFinite(residualMm) && residualMm <= 5 && Number.isFinite(material) && material <= 0.02 ? "passed" : "failed"
+      ? applied && Number.isFinite(residualMm) && residualMm <= 5 && Number.isFinite(material) && material <= 0.02 && bodySafe ? "passed" : "failed"
       : "observed";
   } catch (reason) {
     error = reason instanceof Error ? reason.stack ?? reason.message : String(reason);
