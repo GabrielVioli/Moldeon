@@ -59,4 +59,26 @@ describe("11.0.8 STEP-0 target and rigid registration", () => {
     const mappedCentroid = transformSewingStep0Point(registration!.solvedRootCentroid, registration!);
     expect(mappedCentroid.distanceTo(registration!.currentRootCentroid)).toBeLessThan(1e-8);
   });
+
+  it("pins the same authored material vertex while discarding the solver pose", () => {
+    const solved = new Float32Array([
+      4, 7, 2,
+      5, 7, 2,
+      4, 8, 2,
+    ]);
+    const current = new Float32Array([
+      -3, 1, 9,
+      -3, 2, 9,
+      -4, 1, 9,
+    ]);
+    const registration = buildSewingStep0Registration(
+      solved,
+      current,
+      new Uint32Array([0, 1, 2]),
+      1,
+    );
+    expect(registration).not.toBeNull();
+    const mappedAnchor = transformSewingStep0Point(new THREE.Vector3(5, 7, 2), registration!);
+    expect(mappedAnchor.distanceTo(new THREE.Vector3(-3, 2, 9))).toBeLessThan(1e-8);
+  });
 });

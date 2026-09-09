@@ -701,3 +701,58 @@ browser manual gate remains: create
 the same 1020 x 300 mm panel, position at the hip, sew the vertical edges,
 verify an immediate tube in Montar, repeat Adjust without drift, then enter
 Provar and verify the identical tube/placement.
+
+## Proven assembly-shape reuse in Montar
+
+The following manual gate showed that the specialized local STEP-0 path still
+left the browser mesh flat, while the former independent simulation assembly
+had already demonstrated that it could close the exact same seam graph into a
+tube. The coarse isometric assembly pipeline was therefore restored as the
+source of **intrinsic sewn shape**, not as a placement authority.
+
+`Ajustar montagem` now asks `AssemblyWorkerClient` for a `mode: "step0"`
+solve of the canonical `assemblyDocument`. That mode reaches the same
+`buildCoarseIsometricAssembly` path formerly used by the independent
+simulation solve. Only the selected connected sewing component is copied back.
+One rigid registration is computed from the root panel and applied to every
+instance in that component, preserving the solver's relative multi-panel sewn
+shape. XPBD stays paused.
+
+The worker's global translation/orientation is discarded. Registration is
+anchored at the same stable material vertex and its incident material frame in
+the solved and authored meshes. This fixes the earlier centroid-based defect:
+centroid registration kept the tube center near the flat plate center but
+moved the authored material patch into/through the body. The new registration
+keeps that exact authored material point stationary and transfers only the
+non-rigid sewn deformation. The existing placement-anchored solver then runs
+as a short local seam/body/material polish; it no longer has to invent the
+tube from a flat panel.
+
+The operation is atomic. Stale worker results are ignored, invalid assemblies
+are rejected, and every rejection/exception restores both mesh geometry and
+the canonical assembly state. DEV diagnostics now record the global strategy,
+selected component seeds, worker metrics/warnings, authored and registered
+residuals, registered material distortion and registration displacement.
+
+Concrete focused evidence:
+
+- the exact editor-equivalent 1020 x 300 mm self-seam selected the
+  `developable-metric-restored-raw` family;
+- worker structural seam maximum: 0.194203 mm;
+- worker material maximum: approximately 0.07024%;
+- resulting non-planar depth span: greater than 0.30 m;
+- authored material-anchor movement after registration: less than 0.1 mm;
+- calibrated-body audit: zero penetrating samples and more than 0.5 mm
+  minimum signed clearance in the fixture;
+- the complete global-shape plus local-polish sequence remains below 1 mm seam
+  maximum and below the unchanged 2% material gate;
+- repeating the transplant changes no vertex by more than 1 mm;
+- the 435 x 227 mm panel from the later screenshot also closes into a
+  non-planar tube without falsely claiming that its insufficient circumference
+  can fit around the calibrated pelvis.
+
+Focused validation passed: 5 files / 26 tests, including STEP-0 registration,
+the exact 1020 x 300 mm editor path, the 435 x 227 mm path, sewing interaction,
+visual pairing and Montar-to-Provar transition. Typecheck and `git diff
+--check` passed. No file under `apps/web/src/physics/**` was changed. Browser
+manual validation remains required for the visible `Ajustar montagem` result.

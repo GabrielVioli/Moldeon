@@ -12,10 +12,16 @@ import { garmentDraftToPatternDocumentV3 } from "../domain/patternDocumentV3";
 import { DEFAULT_BODY_MEASUREMENTS } from "../patterns/templateCatalog";
 import { buildResolvedAssemblyInput, buildResolvedAssemblyInputFromDocument } from "../garment3d/ResolvedAssemblyInput";
 import { buildResolvedGarmentAssembly } from "../garment3d/ResolvedGarmentAssembly";
+import { buildCoarseIsometricAssembly } from "../garment3d/CoarseAssemblyPipeline";
+import { refreshMeshFromAssembly } from "../garment3d/GarmentThreeBridge";
+import { auditMeshBodyClearance } from "./ArrangementWorkspace";
 import {
+  applySewingStep0SolvedComponent,
   auditSewingStep0Seams,
   measureCurrentSewingStep0Residual,
   measureCurrentSewingStep0MaterialDistortion,
+  meshWorldMaterialAnchor,
+  meshWorldVertex,
   solvePlacementAnchoredSewingStep0,
   type SewingStep0Target,
 } from "./SewingStep0";
@@ -275,7 +281,7 @@ function authoredRectangleFixture(widthMm: number, heightMm: number) {
   };
 }
 
-function editorAuthoredRectangleFixture() {
+function editorAuthoredRectangleFixture(widthMm = 1020, heightMm = 300) {
   const piece: PatternPiece = {
     id: "editor-authored-rectangle",
     name: "Nova peça",
@@ -283,9 +289,9 @@ function editorAuthoredRectangleFixture() {
     cutQuantity: 1,
     points: [
       { id: "a", xMm: 0, yMm: 0 },
-      { id: "b", xMm: 1020, yMm: 0 },
-      { id: "c", xMm: 1021.2, yMm: 299.3 },
-      { id: "d", xMm: 0, yMm: 300 },
+      { id: "b", xMm: widthMm, yMm: 0 },
+      { id: "c", xMm: widthMm + 1.2, yMm: heightMm - 0.7 },
+      { id: "d", xMm: 0, yMm: heightMm },
     ],
   };
   const edges = getPatternEdges(piece);
@@ -314,8 +320,8 @@ function editorAuthoredRectangleFixture() {
   const source = instance.topology.positions2DMm;
   const positions = new Float32Array(instance.vertexCount * 3);
   for (let index = 0; index < instance.vertexCount; index += 1) {
-    positions[index * 3] = (source[index * 2] - 510.3) * 0.001;
-    positions[index * 3 + 1] = -(source[index * 2 + 1] - 150) * 0.001;
+    positions[index * 3] = (source[index * 2] - (widthMm + 0.6) * 0.5) * 0.001;
+    positions[index * 3 + 1] = -(source[index * 2 + 1] - heightMm * 0.5) * 0.001;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -434,6 +440,97 @@ function maximumPositionDelta(left: Float32Array, right: Float32Array): number {
 const target: SewingStep0Target = { rootInstanceId: "front", instanceIds: ["front", "back"] };
 
 describe("placement-anchored STEP-0", () => {
+  it("closes the current 435 x 227 mm editor panel without pretending it fits around the body", () => {
+    const fixture = editorAuthoredRectangleFixture(435, 227);
+    const authoredAnchor = meshWorldMaterialAnchor(fixture.mesh.mesh);
+    const solved = buildCoarseIsometricAssembly(fixture.input.assemblyDocument);
+    expect(applySewingStep0SolvedComponent(
+      fixture.state,
+      solved.state,
+      [fixture.mesh],
+      fixture.target,
+    )).not.toBeNull();
+    refreshMeshFromAssembly(fixture.mesh, fixture.state);
+    const proposal = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      {
+        iterations: 72,
+        body: fixture.body,
+        bodyClearanceM: 0.0005,
+        bodyQueryDistanceM: 0.24,
+      },
+    );
+    expect(proposal).not.toBeNull();
+    applyProposal([fixture.mesh], proposal!.positionsByInstanceId);
+    const local = fixture.mesh.mesh.geometry.getAttribute("position").array as Float32Array;
+    const residual = measureCurrentSewingStep0Residual(fixture.state, [fixture.mesh], fixture.target)!;
+    const bodyAudit = auditMeshBodyClearance(fixture.mesh.mesh, fixture.body, 0.5, 112);
+    expect(componentSpan(local, 2)).toBeGreaterThan(0.1);
+    expect(residual.maximumM).toBeLessThan(0.001);
+    expect(proposal!.metricDistortionMax).toBeLessThan(0.02);
+    expect(meshWorldVertex(fixture.mesh.mesh, authoredAnchor.vertexIndex)!.distanceTo(authoredAnchor.position)).toBeLessThan(0.001);
+    expect(bodyAudit.penetratingSamples).toBe(0);
+  }, 15_000);
+
+  it("transplants the proven global self-seam shape into the authored workspace", () => {
+    const fixture = editorAuthoredRectangleFixture();
+    const authoredAnchor = meshWorldMaterialAnchor(fixture.mesh.mesh);
+    const solved = buildCoarseIsometricAssembly(fixture.input.assemblyDocument);
+    const applied = applySewingStep0SolvedComponent(
+      fixture.state,
+      solved.state,
+      [fixture.mesh],
+      fixture.target,
+    );
+    expect(applied).not.toBeNull();
+    refreshMeshFromAssembly(fixture.mesh, fixture.state);
+    const residual = measureCurrentSewingStep0Residual(fixture.state, [fixture.mesh], fixture.target);
+    const metric = measureCurrentSewingStep0MaterialDistortion(fixture.state, [fixture.mesh], fixture.target);
+    const local = fixture.mesh.mesh.geometry.getAttribute("position").array as Float32Array;
+    const finalAnchor = meshWorldVertex(fixture.mesh.mesh, authoredAnchor.vertexIndex)!;
+    const bodyAudit = auditMeshBodyClearance(fixture.mesh.mesh, fixture.body, 0.5, 112);
+    expect(solved.assembly.components[0]?.selectedSeed).toContain("developable");
+    expect(solved.assembly.metrics.structuralSeamMaxMm).toBeLessThan(0.5);
+    expect(residual!.maximumM).toBeLessThan(0.0005);
+    expect(metric!).toBeLessThan(0.002);
+    expect(componentSpan(local, 2)).toBeGreaterThan(0.3);
+    expect(finalAnchor.distanceTo(authoredAnchor.position)).toBeLessThan(0.0001);
+    expect(bodyAudit.penetratingSamples).toBe(0);
+    expect(bodyAudit.minimumSignedClearanceMm).toBeGreaterThan(0.5);
+
+    const polish = solvePlacementAnchoredSewingStep0(
+      fixture.state,
+      [fixture.mesh],
+      fixture.target,
+      {
+        iterations: 72,
+        body: fixture.body,
+        bodyClearanceM: 0.0005,
+        bodyQueryDistanceM: 0.24,
+      },
+    );
+    expect(polish).not.toBeNull();
+    expect(polish!.afterResidual.maximumM).toBeLessThan(0.001);
+    expect(polish!.metricDistortionMax).toBeLessThan(0.02);
+    applyProposal([fixture.mesh], polish!.positionsByInstanceId);
+
+    const accepted = new Float32Array(
+      fixture.mesh.mesh.geometry.getAttribute("position").array as Float32Array,
+    );
+    const repeated = applySewingStep0SolvedComponent(
+      fixture.state,
+      solved.state,
+      [fixture.mesh],
+      fixture.target,
+    );
+    expect(repeated).not.toBeNull();
+    refreshMeshFromAssembly(fixture.mesh, fixture.state);
+    const repeatedLocal = fixture.mesh.mesh.geometry.getAttribute("position").array as Float32Array;
+    expect(maximumPositionDelta(accepted, repeatedLocal)).toBeLessThan(0.001);
+  }, 15_000);
+
   it("improves sewn boundaries without replacing either manually authored transform", () => {
     const assembly = state();
     const front = meshData("front", -0.07, 0.11);

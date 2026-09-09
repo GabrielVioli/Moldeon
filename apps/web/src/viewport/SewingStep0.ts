@@ -32,6 +32,8 @@ export interface SewingStep0Registration {
   rotation: THREE.Quaternion;
   solvedRootCentroid: THREE.Vector3;
   currentRootCentroid: THREE.Vector3;
+  solvedRootOrigin: THREE.Vector3;
+  currentRootOrigin: THREE.Vector3;
 }
 
 export function resolveSewingStep0Target(
@@ -82,10 +84,11 @@ export function buildSewingStep0Registration(
   solvedRootPositions: Float32Array,
   currentRootWorldPositions: Float32Array,
   triangles: Uint16Array | Uint32Array,
+  materialAnchorVertex?: number,
 ): SewingStep0Registration | null {
   if (solvedRootPositions.length !== currentRootWorldPositions.length || solvedRootPositions.length < 9) return null;
-  const solvedFrame = firstStableTriangleFrame(solvedRootPositions, triangles);
-  const currentFrame = firstStableTriangleFrame(currentRootWorldPositions, triangles);
+  const solvedFrame = firstStableTriangleFrame(solvedRootPositions, triangles, materialAnchorVertex);
+  const currentFrame = firstStableTriangleFrame(currentRootWorldPositions, triangles, materialAnchorVertex);
   if (!solvedFrame || !currentFrame) return null;
 
   const solvedBasis = new THREE.Matrix4().makeBasis(solvedFrame.x, solvedFrame.y, solvedFrame.z);
@@ -93,10 +96,23 @@ export function buildSewingStep0Registration(
   const solvedQuaternion = new THREE.Quaternion().setFromRotationMatrix(solvedBasis);
   const currentQuaternion = new THREE.Quaternion().setFromRotationMatrix(currentBasis);
   const rotation = currentQuaternion.multiply(solvedQuaternion.invert()).normalize();
+  const solvedRootCentroid = centroidOfPositions(solvedRootPositions);
+  const currentRootCentroid = centroidOfPositions(currentRootWorldPositions);
+  const validAnchor = materialAnchorVertex !== undefined
+    && materialAnchorVertex >= 0
+    && materialAnchorVertex * 3 + 2 < solvedRootPositions.length;
+  const solvedRootOrigin = solvedRootCentroid.clone();
+  const currentRootOrigin = currentRootCentroid.clone();
+  if (validAnchor) {
+    readPoint(solvedRootPositions, materialAnchorVertex, solvedRootOrigin);
+    readPoint(currentRootWorldPositions, materialAnchorVertex, currentRootOrigin);
+  }
   return {
     rotation,
-    solvedRootCentroid: centroidOfPositions(solvedRootPositions),
-    currentRootCentroid: centroidOfPositions(currentRootWorldPositions),
+    solvedRootCentroid,
+    currentRootCentroid,
+    solvedRootOrigin,
+    currentRootOrigin,
   };
 }
 
@@ -106,9 +122,9 @@ export function transformSewingStep0Point(
 ): THREE.Vector3 {
   return point
     .clone()
-    .sub(registration.solvedRootCentroid)
+    .sub(registration.solvedRootOrigin)
     .applyQuaternion(registration.rotation)
-    .add(registration.currentRootCentroid);
+    .add(registration.currentRootOrigin);
 }
 
 export function applySewingStep0SolvedComponent(
@@ -128,6 +144,7 @@ export function applySewingStep0SolvedComponent(
     solvedRootPositions,
     currentRootWorldPositions,
     solvedRoot.topology.triangles,
+    meshWorldMaterialAnchor(currentRootMesh.mesh).vertexIndex,
   );
   if (!registration) return null;
 
@@ -1780,22 +1797,29 @@ function centroidOfPositions(positions: Float32Array): THREE.Vector3 {
 function firstStableTriangleFrame(
   positions: Float32Array,
   triangles: Uint16Array | Uint32Array,
+  preferredVertex?: number,
 ): { x: THREE.Vector3; y: THREE.Vector3; z: THREE.Vector3 } | null {
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const c = new THREE.Vector3();
-  for (let offset = 0; offset + 2 < triangles.length; offset += 3) {
-    readPoint(positions, triangles[offset], a);
-    readPoint(positions, triangles[offset + 1], b);
-    readPoint(positions, triangles[offset + 2], c);
-    const x = b.clone().sub(a);
-    const side = c.clone().sub(a);
-    const z = new THREE.Vector3().crossVectors(x, side);
-    if (x.lengthSq() <= 1e-12 || z.lengthSq() <= 1e-12) continue;
-    x.normalize();
-    z.normalize();
-    const y = new THREE.Vector3().crossVectors(z, x).normalize();
-    return { x, y, z };
+  for (const preferAnchor of preferredVertex === undefined ? [false] : [true, false]) {
+    for (let offset = 0; offset + 2 < triangles.length; offset += 3) {
+      if (preferAnchor
+        && triangles[offset] !== preferredVertex
+        && triangles[offset + 1] !== preferredVertex
+        && triangles[offset + 2] !== preferredVertex) continue;
+      readPoint(positions, triangles[offset], a);
+      readPoint(positions, triangles[offset + 1], b);
+      readPoint(positions, triangles[offset + 2], c);
+      const x = b.clone().sub(a);
+      const side = c.clone().sub(a);
+      const z = new THREE.Vector3().crossVectors(x, side);
+      if (x.lengthSq() <= 1e-12 || z.lengthSq() <= 1e-12) continue;
+      x.normalize();
+      z.normalize();
+      const y = new THREE.Vector3().crossVectors(z, x).normalize();
+      return { x, y, z };
+    }
   }
   return null;
 }

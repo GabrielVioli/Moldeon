@@ -73,6 +73,7 @@ import {
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
 import {
+  applySewingStep0SolvedComponent,
   auditSewingStep0Seams,
   measureCurrentSewingStep0MaterialDistortion,
   measureCurrentSewingStep0Residual,
@@ -608,20 +609,24 @@ export class ThreeViewport {
         snapshot.item.mesh.quaternion.copy(snapshot.quaternion);
         snapshot.item.mesh.scale.copy(snapshot.scale);
         snapshot.item.mesh.updateMatrixWorld(true);
+        syncMeshGeometryToAssemblyState(state, snapshot.item);
       }
       this.refreshSewingOverlay();
       this.requestRender();
     };
 
-    // Costurar/Montar remains geometric-only. This operation never delegates
-    // placement to the old global candidate solver and never wakes XPBD.
+    // Costurar/Montar remains geometric-only. The proven isometric solver
+    // supplies intrinsic sewn shape only; its global pose is discarded and
+    // XPBD remains paused.
     this.simulation.pause();
     const geometryRevision = input.geometryRevision;
     const sewingRevision = input.sewingRevision;
     const arrangementRevision = input.arrangementRevision;
+    const step0Revision = `step0-shape:${geometryRevision}:${sewingRevision}:${arrangementRevision}:${performance.now().toFixed(3)}`;
     const startedAt = performance.now();
     const materialBefore = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target) ?? 0;
-    this.host.dataset.sewingStep0Status = "solving-local";
+    const authoredResidualBefore = measureCurrentSewingStep0Residual(state, this.garmentMeshes, target);
+    this.host.dataset.sewingStep0Status = "solving-global-shape";
     this.host.dataset.sewingStep0Target = JSON.stringify(target.instanceIds);
 
     // Give React one paint so the busy label is visible even though the local
@@ -638,6 +643,58 @@ export class ThreeViewport {
     }
 
     try {
+      // The proven coarse isometric pipeline answers only "what is the sewn
+      // shape?". Its arbitrary global pose is discarded below; one rigid
+      // component registration restores the user's authored material frame.
+      const response = await this.assembly.solve({
+        document: input.assemblyDocument,
+        revision: step0Revision,
+        mode: "step0",
+      });
+      const afterWorkerInput = this.currentInput;
+      if (!afterWorkerInput
+        || afterWorkerInput.geometryRevision !== geometryRevision
+        || afterWorkerInput.sewingRevision !== sewingRevision
+        || afterWorkerInput.arrangementRevision !== arrangementRevision
+        || this.viewportMode !== "assembly") {
+        this.host.dataset.sewingStep0Status = "stale";
+        return { status: "stale", affectedPanels: target.instanceIds.length };
+      }
+      if (response.state.invalid || response.diagnostics.assembly.invalid) {
+        this.host.dataset.sewingStep0Status = "failed-global-shape";
+        return {
+          status: "failed",
+          affectedPanels: target.instanceIds.length,
+          warning: response.diagnostics.assembly.warnings[0]
+            ?? response.warnings[0]
+            ?? "O assembly geométrico não produziu uma forma válida.",
+        };
+      }
+      const transplanted = applySewingStep0SolvedComponent(
+        state,
+        response.state,
+        this.garmentMeshes,
+        target,
+        0.45,
+      );
+      if (!transplanted) {
+        this.host.dataset.sewingStep0Status = "rejected-shape-registration";
+        return {
+          status: "failed",
+          affectedPanels: target.instanceIds.length,
+          warning: "A forma costurada não pôde ser registrada no placement manual.",
+        };
+      }
+      for (const instanceId of transplanted.appliedIds) {
+        const item = snapshots.get(instanceId)?.item;
+        if (item) refreshMeshFromAssembly(item, state);
+      }
+      const workerResidual = measureCurrentSewingStep0Residual(state, this.garmentMeshes, target);
+      const workerMaterial = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target);
+
+      // Only a short local polish remains: preserve the transplanted shape,
+      // enforce the exact-body inequality and remove submillimetric residuals.
+      this.host.dataset.sewingStep0Status = "polishing-authored-shape";
       const proposal = solvePlacementAnchoredSewingStep0(
         state,
         this.garmentMeshes,
@@ -654,6 +711,7 @@ export class ThreeViewport {
         },
       );
       if (!proposal || proposal.seamConstraintCount === 0) {
+        restoreSnapshots();
         this.host.dataset.sewingStep0Status = "failed";
         return {
           status: "failed",
@@ -674,6 +732,7 @@ export class ThreeViewport {
         || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM * 0.985
         || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM - 0.0005;
       if (!proposalImproves || !proposalSeamAudit.accepted || proposal.metricDistortionMax > 0.02) {
+        restoreSnapshots();
         this.host.dataset.sewingStep0Status = "rejected-local-solve";
         const rejectionReason = !proposalImproves
           ? "global-residual-not-improved"
@@ -793,7 +852,7 @@ export class ThreeViewport {
       }
       const intrinsic = measureIntrinsicDistortion(state);
       this.refreshSewingOverlay();
-      this.host.dataset.sewingStep0Status = "applied-local";
+      this.host.dataset.sewingStep0Status = "applied-global-shape";
       this.host.dataset.sewingStep0Ms = (performance.now() - startedAt).toFixed(2);
       this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
         affectedPanels: target.instanceIds.length,
@@ -809,6 +868,20 @@ export class ThreeViewport {
         materialBefore,
         materialAfter,
         bodyAudits,
+        globalShape: {
+          strategy: response.diagnostics.assembly.strategy,
+          selectedSeeds: response.diagnostics.assembly.components.map((component) => ({
+            componentId: component.componentId,
+            panelInstanceIds: component.panelInstanceIds,
+            selectedSeed: component.selectedSeed,
+          })),
+          metrics: response.diagnostics.assembly.metrics,
+          warnings: response.warnings,
+          authoredResidualBefore,
+          registeredResidual: workerResidual,
+          registeredMaterialDistortionMax: workerMaterial,
+          maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
+        },
         iterations: proposal.iterations,
         constraintCount: proposal.seamConstraintCount,
         bodyBarrierCorrections: proposal.bodyBarrierCorrections,
