@@ -1,4 +1,4 @@
-name: Recovery 11.0.8 STEP-0 Body-Wrap Candidate
+name: Recovery 11.0.8 STEP-0 Browser Gate
 
 on:
   push:
@@ -11,14 +11,11 @@ on:
       - "apps/web/src/viewport/ArrangementWorkspace.ts"
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
-      - "scripts/apply-step0-body-wrap-fix.py"
-      - "scripts/apply-step0-clearance-diagnostic.py"
-      - "scripts/apply-step0-surface-sampling-fix.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   browser-gate:
@@ -26,50 +23,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: npm
       - name: Install project
         run: npm ci
-      - name: Apply STEP-0 body-wrap candidate and diagnostics
-        run: |
-          python scripts/apply-step0-body-wrap-fix.py
-          python scripts/apply-step0-surface-sampling-fix.py
-          python scripts/apply-step0-clearance-diagnostic.py
-          git fetch --no-tags origin 7dfda1f5a2a765e68b9191296415a403e9312be7
-          git show 7dfda1f5a2a765e68b9191296415a403e9312be7:scripts/step0-browser-audit.mjs > scripts/step0-browser-audit.mjs
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          path = Path('apps/web/src/viewport/SewingStep0.test.ts')
-          text = path.read_text(encoding='utf-8')
-          text, count = re.subn(
-              r'(centerZM:\s*[^,\n]+,)(\s*\n\s*)(\})',
-              lambda m: m.group(1) + m.group(2)
-              + 'frontLobeM: 0,\n      backLobeM: 0,\n      lobeHalfDistanceM: 0,\n      ' + m.group(3),
-              text,
-          )
-          path.write_text(text, encoding='utf-8')
-          print(f'Normalized HumanBodyCrossSection fixtures: {count}')
-          PY
-          mkdir -p artifacts/step0-browser
-          git diff > artifacts/step0-browser/source.patch
-          git diff --check
-          git status --short
       - name: Typecheck
         run: npm run typecheck --workspace @moldeon/web
       - name: Focused STEP-0 tests
         run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
-      - name: Publish inspectable candidate before browser gate
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs
-          git commit -m "wip(step0): surface-only body-wrap candidate"
-          git push --force origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Install Chromium gate tooling
         run: |
           npm install --no-save playwright@1.55.0
@@ -90,7 +53,6 @@ jobs:
           STEP0_ARTIFACT_DIR: artifacts/step0-browser
         run: node scripts/step0-browser-audit.mjs
       - name: Production build
-        if: success()
         run: npm run build --workspace @moldeon/web
       - name: Upload STEP-0 browser evidence
         if: always()
