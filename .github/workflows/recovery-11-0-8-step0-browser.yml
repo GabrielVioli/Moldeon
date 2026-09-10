@@ -34,6 +34,11 @@ jobs:
       - name: Apply pending STEP-0 body-wrap source patch
         run: |
           python scripts/apply-step0-body-wrap-fix.py
+          git fetch --no-tags origin 7dfda1f5a2a765e68b9191296415a403e9312be7
+          git show 7dfda1f5a2a765e68b9191296415a403e9312be7:scripts/apply-step0-exact-body-profile-fix.py > /tmp/apply-step0-exact-body-profile-fix.py
+          git show 7dfda1f5a2a765e68b9191296415a403e9312be7:scripts/apply-step0-profile-trace-fix.py > /tmp/apply-step0-profile-trace-fix.py
+          python /tmp/apply-step0-exact-body-profile-fix.py
+          python /tmp/apply-step0-profile-trace-fix.py
           python - <<'PY'
           from pathlib import Path
           import re
@@ -61,7 +66,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts
-          git commit -m "wip(step0): body-wrap candidate for browser audit"
+          git commit -m "wip(step0): exact body-profile candidate for browser audit"
           git push --force origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Install Chromium gate tooling
         run: |
