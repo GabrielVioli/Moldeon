@@ -1,4 +1,4 @@
-name: Recovery 11.0.8 STEP-0 Browser Gate
+name: Recovery 11.0.8 STEP-0 Body-Wrap Candidate
 
 on:
   push:
@@ -10,30 +10,40 @@ on:
       - "apps/web/src/viewport/GarmentViewport.tsx"
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
+      - "scripts/apply-step0-body-wrap-fix.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   browser-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: npm
       - name: Install project
         run: npm ci
+      - name: Apply pending STEP-0 body-wrap source patch
+        run: |
+          python scripts/apply-step0-body-wrap-fix.py
+          git diff --check
+          git status --short
+      - name: Typecheck
+        run: npm run typecheck --workspace @moldeon/web
+      - name: Focused STEP-0 tests
+        run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
       - name: Install Chromium gate tooling
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Typecheck
-        run: npm run typecheck --workspace @moldeon/web
       - name: Start fallback server
         run: |
           npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/moldeon-step0-server.log 2>&1 &
@@ -50,8 +60,19 @@ jobs:
           STEP0_ARTIFACT_DIR: artifacts/step0-browser
         run: node scripts/step0-browser-audit.mjs
       - name: Production build
-        if: always()
         run: npm run build --workspace @moldeon/web
+      - name: Commit validated candidate
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No source patch produced; nothing to publish."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md || true
+          git add -u
+          git commit -m "fix(step0): register sewn shape around authored body placement"
+          git push --force-with-lease origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Upload STEP-0 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
