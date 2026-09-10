@@ -1,0 +1,77 @@
+name: Recovery 11.0.8 STEP-0 Preassembly Contract
+
+on:
+  push:
+    branches:
+      - recovery/11.0.8-sewing-2d-3d-authoring
+    paths:
+      - "scripts/apply-step0-preassembly-contract.py"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install project
+        run: npm ci
+      - name: Apply corrected STEP-0 contract
+        run: |
+          python scripts/apply-step0-preassembly-contract.py
+          git diff --check
+          git status --short
+      - name: Typecheck
+        run: npm run typecheck --workspace @moldeon/web
+      - name: Focused STEP-0 tests
+        run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
+      - name: Install Chromium gate tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start fallback server
+        run: |
+          npm run dev:fallback --workspace @moldeon/web -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/moldeon-step0-server.log 2>&1 &
+          echo $! > /tmp/moldeon-step0-server.pid
+          for i in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:5173/ >/dev/null; then exit 0; fi
+            sleep 0.5
+          done
+          cat /tmp/moldeon-step0-server.log
+          exit 1
+      - name: Run browser STEP-0 gate
+        env:
+          STEP0_BASE_URL: http://127.0.0.1:5173
+          STEP0_ARTIFACT_DIR: artifacts/step0-browser
+        run: node scripts/step0-browser-audit.mjs
+      - name: Production build
+        run: npm run build --workspace @moldeon/web
+      - name: Commit corrected product code
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md
+          if git diff --cached --quiet; then
+            echo "No product changes to commit."
+            exit 0
+          fi
+          git commit -m "fix(sewing): make STEP-0 preassembly body-centered"
+          git push origin HEAD:recovery/11.0.8-sewing-2d-3d-authoring
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step0-preassembly-${{ github.sha }}
+          path: |
+            artifacts/step0-browser
+            /tmp/moldeon-step0-server.log
+          retention-days: 14
+          if-no-files-found: warn
