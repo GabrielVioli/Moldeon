@@ -1,0 +1,51 @@
+name: Dead Code Audit
+
+on:
+  push:
+    branches:
+      - cleanup/11.0.8-dead-code
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install project
+        run: npm ci
+      - name: Typecheck baseline
+        run: npm run typecheck
+      - name: Test baseline
+        run: npm test
+      - name: Build baseline
+        run: npm run build
+      - name: Knip dead-code audit
+        continue-on-error: true
+        run: |
+          npx --yes knip@latest --reporter compact | tee /tmp/knip.txt
+      - name: Dependency audit
+        continue-on-error: true
+        run: |
+          npx --yes depcheck@latest --json | tee /tmp/depcheck.json
+      - name: TypeScript unused audit
+        continue-on-error: true
+        run: |
+          npx --yes ts-prune@latest -p apps/web/tsconfig.json | tee /tmp/ts-prune.txt
+      - name: Print audit reports
+        if: always()
+        run: |
+          echo '===== KNIP ====='
+          cat /tmp/knip.txt 2>/dev/null || true
+          echo '===== DEPCHECK ====='
+          cat /tmp/depcheck.json 2>/dev/null || true
+          echo '===== TS-PRUNE ====='
+          cat /tmp/ts-prune.txt 2>/dev/null || true
