@@ -34,6 +34,23 @@ jobs:
       - name: Apply pending STEP-0 body-wrap source patch
         run: |
           python scripts/apply-step0-body-wrap-fix.py
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('apps/web/src/viewport/SewingStep0.test.ts')
+          text = path.read_text(encoding='utf-8')
+          pattern = re.compile(r'(\n(?P<indent>\s*)centerZM:\s*[^,\n]+,\n)(?P=indent)\}', re.M)
+          text, count = pattern.subn(
+              lambda m: m.group(1)
+              + m.group('indent') + 'frontLobeM: 0,\n'
+              + m.group('indent') + 'backLobeM: 0,\n'
+              + m.group('indent') + 'lobeHalfDistanceM: 0,\n'
+              + m.group('indent') + '}',
+              text,
+          )
+          path.write_text(text, encoding='utf-8')
+          print(f'Normalized HumanBodyCrossSection fixtures: {count}')
+          PY
           git diff --check
           git status --short
       - name: Typecheck
@@ -69,7 +86,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md || true
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md || true
           git add -u
           git commit -m "fix(step0): register sewn shape around authored body placement"
           git push --force-with-lease origin HEAD:refs/heads/automation/step0-body-wrap-candidate
