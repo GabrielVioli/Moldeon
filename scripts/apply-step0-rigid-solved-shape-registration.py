@@ -52,6 +52,9 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   const currentCentroid = centroidOfPositions(currentWorld);
   const anchorVertex = nearestWorldVertexIndex(currentWorld, currentCentroid);
   const anchorMaterial = new THREE.Vector2(material[anchorVertex * 2], material[anchorVertex * 2 + 1]);
+  const sectionCenter = section.centerM
+    ? new THREE.Vector3(...section.centerM)
+    : new THREE.Vector3(0, section.yM, section.centerZM);
 
   let targetAxis = section.normal
     ? new THREE.Vector3(...section.normal)
@@ -66,9 +69,8 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   let outward = new THREE.Vector3(...rootSurface.outwardNormal);
   outward.addScaledVector(targetAxis, -outward.dot(targetAxis));
   if (outward.lengthSq() <= 1e-10) {
-    const sectionCenter = new THREE.Vector3(...section.centerM);
-    outward.copy(currentCentroid).sub(sectionCenter)
-      .addScaledVector(targetAxis, -currentCentroid.clone().sub(sectionCenter).dot(targetAxis));
+    const radial = currentCentroid.clone().sub(sectionCenter);
+    outward.copy(radial).addScaledVector(targetAxis, -radial.dot(targetAxis));
   }
   if (outward.lengthSq() <= 1e-10) outward.set(0, 0, 1).addScaledVector(targetAxis, -targetAxis.z);
   if (outward.lengthSq() <= 1e-10) return null;
@@ -106,7 +108,6 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   // Preserve only the authored coordinate along the section axis, which keeps
   // the user's chosen body level while allowing the necessary inward normal
   // motion for the garment to surround the avatar.
-  const sectionCenter = new THREE.Vector3(...section.centerM);
   const authoredAxialOffset = currentCentroid.clone().sub(sectionCenter).dot(targetAxis);
   const targetCentroid = sectionCenter.clone().addScaledVector(targetAxis, authoredAxialOffset);
 
