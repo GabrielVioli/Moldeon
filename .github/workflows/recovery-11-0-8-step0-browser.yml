@@ -39,6 +39,20 @@ jobs:
           python scripts/apply-step0-clearance-diagnostic.py
           git fetch --no-tags origin 7dfda1f5a2a765e68b9191296415a403e9312be7
           git show 7dfda1f5a2a765e68b9191296415a403e9312be7:scripts/step0-browser-audit.mjs > scripts/step0-browser-audit.mjs
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('apps/web/src/viewport/SewingStep0.test.ts')
+          text = path.read_text(encoding='utf-8')
+          text, count = re.subn(
+              r'(centerZM:\s*[^,\n]+,)(\s*\n\s*)(\})',
+              lambda m: m.group(1) + m.group(2)
+              + 'frontLobeM: 0,\n      backLobeM: 0,\n      lobeHalfDistanceM: 0,\n      ' + m.group(3),
+              text,
+          )
+          path.write_text(text, encoding='utf-8')
+          print(f'Normalized HumanBodyCrossSection fixtures: {count}')
+          PY
           mkdir -p artifacts/step0-browser
           git diff > artifacts/step0-browser/source.patch
           git diff --check
