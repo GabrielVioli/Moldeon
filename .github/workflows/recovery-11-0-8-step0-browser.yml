@@ -42,6 +42,13 @@ jobs:
         run: npm run typecheck --workspace @moldeon/web
       - name: Focused STEP-0 tests
         run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
+      - name: Publish candidate for manual validation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/viewport/SewingStep0.ts
+          git commit -m "test(step0): publish current candidate for manual validation"
+          git push --force origin HEAD:refs/heads/test/11.0.8-step0-manual
       - name: Install Chromium gate tooling
         run: |
           npm install --no-save playwright@1.55.0
