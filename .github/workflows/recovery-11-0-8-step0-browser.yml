@@ -1,16 +1,16 @@
-name: Recovery 11.0.8 STEP-0 Body-Wrap Candidate
+name: Recovery 11.0.8 STEP-0 Exact Body Profile Gate
 
 on:
   push:
     branches:
-      - recovery/11.0.8-sewing-2d-3d-authoring
+      - automation/step0-body-wrap-candidate
     paths:
       - "apps/web/src/viewport/SewingStep0.ts"
       - "apps/web/src/viewport/GlobalThreeViewport.ts"
       - "apps/web/src/viewport/GarmentViewport.tsx"
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
-      - "scripts/apply-step0-body-wrap-fix.py"
+      - "scripts/apply-step0-exact-body-profile-fix.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
@@ -31,38 +31,17 @@ jobs:
           cache: npm
       - name: Install project
         run: npm ci
-      - name: Apply pending STEP-0 body-wrap source patch
+      - name: Apply exact visual-body profile patch
         run: |
-          python scripts/apply-step0-body-wrap-fix.py
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          path = Path('apps/web/src/viewport/SewingStep0.test.ts')
-          text = path.read_text(encoding='utf-8')
-          text, count = re.subn(
-              r'(centerZM:\s*[^,\n]+,)(\s*\n\s*)(\})',
-              lambda m: m.group(1) + m.group(2)
-              + 'frontLobeM: 0,\n      backLobeM: 0,\n      lobeHalfDistanceM: 0,\n      ' + m.group(3),
-              text,
-          )
-          path.write_text(text, encoding='utf-8')
-          print(f'Normalized HumanBodyCrossSection fixtures: {count}')
-          PY
+          python scripts/apply-step0-exact-body-profile-fix.py
           mkdir -p artifacts/step0-browser
-          git diff > artifacts/step0-browser/source.patch
+          git diff > artifacts/step0-browser/exact-body-profile-source.patch
           git diff --check
           git status --short
       - name: Typecheck
         run: npm run typecheck --workspace @moldeon/web
       - name: Focused STEP-0 tests
         run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
-      - name: Publish inspectable candidate before browser gate
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts
-          git commit -m "wip(step0): body-wrap candidate for browser audit"
-          git push --force origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Install Chromium gate tooling
         run: |
           npm install --no-save playwright@1.55.0
@@ -83,13 +62,19 @@ jobs:
           STEP0_ARTIFACT_DIR: artifacts/step0-browser
         run: node scripts/step0-browser-audit.mjs
       - name: Production build
-        if: success()
         run: npm run build --workspace @moldeon/web
+      - name: Publish validated candidate
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts
+          git commit -m "fix(step0): wrap sewn self seam on exact body profile"
+          git push --force origin HEAD:refs/heads/automation/step0-body-wrap-validated
       - name: Upload STEP-0 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step0-browser-${{ github.sha }}
+          name: step0-exact-profile-${{ github.sha }}
           path: |
             artifacts/step0-browser
             /tmp/moldeon-step0-server.log
