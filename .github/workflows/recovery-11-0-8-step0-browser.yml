@@ -1,4 +1,4 @@
-name: Recovery 11.0.8 STEP-0 Exact Body Profile Gate
+name: Recovery 11.0.8 STEP-0 Rigid Solved Shape Gate
 
 on:
   push:
@@ -10,8 +10,7 @@ on:
       - "apps/web/src/viewport/GarmentViewport.tsx"
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
-      - "scripts/apply-step0-exact-body-profile-fix.py"
-      - "scripts/apply-step0-profile-trace-fix.py"
+      - "scripts/apply-step0-rigid-solved-shape-registration.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
@@ -32,12 +31,11 @@ jobs:
           cache: npm
       - name: Install project
         run: npm ci
-      - name: Apply exact visual-body profile patches
+      - name: Apply rigid solved-shape registration candidate
         run: |
-          python scripts/apply-step0-exact-body-profile-fix.py
-          python scripts/apply-step0-profile-trace-fix.py
+          python scripts/apply-step0-rigid-solved-shape-registration.py
           mkdir -p artifacts/step0-browser
-          git diff > artifacts/step0-browser/exact-body-profile-source.patch
+          git diff > artifacts/step0-browser/source.patch
           git diff --check
           git status --short
       - name: Typecheck
@@ -69,14 +67,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts
-          git commit -m "fix(step0): wrap sewn self seam on exact body profile"
+          git add apps/web/src/viewport/SewingStep0.ts
+          git commit -m "fix(step0): register proven sewn shape on authored body placement"
           git push --force origin HEAD:refs/heads/automation/step0-body-wrap-validated
       - name: Upload STEP-0 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step0-exact-profile-${{ github.sha }}
+          name: step0-rigid-registration-${{ github.sha }}
           path: |
             artifacts/step0-browser
             /tmp/moldeon-step0-server.log
