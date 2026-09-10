@@ -13,16 +13,13 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   section: HumanBodyCrossSection,
   rootSurface: BodySurfaceFrame,
   fit: SewingStep0BodyFit,
-  body: HumanBodyMesh | null,
   clearanceM: number,
 ): Float32Array | null {
   // The coarse/isometric assembly already produced the sewn intrinsic shape.
-  // Do not rebuild that shape from a body profile here: doing so introduced
-  // local material strain before the body barrier even started. Instead keep
-  // the solved component rigid and use the authored material frame only to
-  // register its pose against the body. A later bounded conform may correct
-  // genuinely small surface contact, but it must not create the tube again.
-  void body;
+  // Do not rebuild that shape from a body profile here. Doing so made a second
+  // solver responsible for creating the garment again and introduced material
+  // strain before contact handling. Keep the solved shape rigid and use the
+  // authored material frame only to register its pose against the body.
   void clearanceM;
   const materialCircumferenceM = (fit.materialCircumferenceMm ?? 0) * 0.001;
   const requiredCircumferenceM = (fit.requiredCircumferenceMm ?? 0) * 0.001;
@@ -102,6 +99,9 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   const faceAuthoredSide = new THREE.Quaternion().setFromAxisAngle(targetAxis, signedAngle);
   const rotation = faceAuthoredSide.multiply(alignAxis);
 
+  // Keep the authored material anchor fixed. For a front-authored flat panel,
+  // this naturally moves the centre of the newly closed tube inward while the
+  // user's chosen body location remains the point of attachment.
   const registeredAnchorOffset = solvedAnchor.clone().sub(solvedCentroid).applyQuaternion(rotation);
   const translation = currentAnchor.clone().sub(registeredAnchorOffset);
   const result = new Float32Array(solvedWorld.length);
