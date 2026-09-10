@@ -15,11 +15,11 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   fit: SewingStep0BodyFit,
   clearanceM: number,
 ): Float32Array | null {
-  // The coarse/isometric assembly already produced the sewn intrinsic shape.
-  // Do not rebuild that shape from a body profile here. Doing so made a second
-  // solver responsible for creating the garment again and introduced material
-  // strain before contact handling. Keep the solved shape rigid and use the
-  // authored material frame only to register its pose against the body.
+  // The coarse/isometric assembly is the authority for the sewn intrinsic shape.
+  // STEP-0 only registers that proven shape against the body. In particular, do
+  // not pin a front material point and leave the whole closed tube on one side of
+  // the avatar: a closed component must be centered on the selected body section
+  // while preserving its authored axial level and radial/material orientation.
   void clearanceM;
   const materialCircumferenceM = (fit.materialCircumferenceMm ?? 0) * 0.001;
   const requiredCircumferenceM = (fit.requiredCircumferenceMm ?? 0) * 0.001;
@@ -61,8 +61,15 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   const currentAxis = materialDirectionInWorld(currentWorld, material, anchorMaterial, materialAxis);
   if (currentAxis.lengthSq() > 1e-10 && targetAxis.dot(currentAxis) < 0) targetAxis.negate();
 
+  // Preserve which material side the user authored toward the body. This fixes
+  // the seam/orientation ambiguity of a closed tube without using names/templates.
   let outward = new THREE.Vector3(...rootSurface.outwardNormal);
   outward.addScaledVector(targetAxis, -outward.dot(targetAxis));
+  if (outward.lengthSq() <= 1e-10) {
+    const sectionCenter = new THREE.Vector3(...section.centerM);
+    outward.copy(currentCentroid).sub(sectionCenter)
+      .addScaledVector(targetAxis, -currentCentroid.clone().sub(sectionCenter).dot(targetAxis));
+  }
   if (outward.lengthSq() <= 1e-10) outward.set(0, 0, 1).addScaledVector(targetAxis, -targetAxis.z);
   if (outward.lengthSq() <= 1e-10) return null;
   outward.normalize();
@@ -77,11 +84,6 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
     solvedWorld[anchorVertex * 3],
     solvedWorld[anchorVertex * 3 + 1],
     solvedWorld[anchorVertex * 3 + 2],
-  );
-  const currentAnchor = new THREE.Vector3(
-    currentWorld[anchorVertex * 3],
-    currentWorld[anchorVertex * 3 + 1],
-    currentWorld[anchorVertex * 3 + 2],
   );
 
   const alignAxis = new THREE.Quaternion().setFromUnitVectors(solvedAxis, targetAxis);
@@ -99,18 +101,22 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
   const faceAuthoredSide = new THREE.Quaternion().setFromAxisAngle(targetAxis, signedAngle);
   const rotation = faceAuthoredSide.multiply(alignAxis);
 
-  // Keep the authored material anchor fixed. For a front-authored flat panel,
-  // this naturally moves the centre of the newly closed tube inward while the
-  // user's chosen body location remains the point of attachment.
-  const registeredAnchorOffset = solvedAnchor.clone().sub(solvedCentroid).applyQuaternion(rotation);
-  const translation = currentAnchor.clone().sub(registeredAnchorOffset);
+  // A closed tube cannot keep its previous flat-panel centroid/anchor as its
+  // radial center. Center the solved component on the selected body section.
+  // Preserve only the authored coordinate along the section axis, which keeps
+  // the user's chosen body level while allowing the necessary inward normal
+  // motion for the garment to surround the avatar.
+  const sectionCenter = new THREE.Vector3(...section.centerM);
+  const authoredAxialOffset = currentCentroid.clone().sub(sectionCenter).dot(targetAxis);
+  const targetCentroid = sectionCenter.clone().addScaledVector(targetAxis, authoredAxialOffset);
+
   const result = new Float32Array(solvedWorld.length);
   const point = new THREE.Vector3();
   for (let offset = 0; offset < solvedWorld.length; offset += 3) {
     point.set(solvedWorld[offset], solvedWorld[offset + 1], solvedWorld[offset + 2])
       .sub(solvedCentroid)
       .applyQuaternion(rotation)
-      .add(translation);
+      .add(targetCentroid);
     result[offset] = point.x;
     result[offset + 1] = point.y;
     result[offset + 2] = point.z;
@@ -121,4 +127,4 @@ replacement = r'''function buildBodyAwareSelfSeamWorldPositions(
 
 text = text[:start] + replacement + text[end:]
 path.write_text(text, encoding="utf-8")
-print("Applied rigid solved-shape STEP-0 body registration patch")
+print("Applied body-centered rigid solved-shape STEP-0 registration patch")
