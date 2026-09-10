@@ -34,14 +34,11 @@ jobs:
       - name: Apply pending STEP-0 body-wrap source patch
         run: |
           python scripts/apply-step0-body-wrap-fix.py
-          echo '--- SewingStep0.test.ts lines 120-165 after patch ---'
-          nl -ba apps/web/src/viewport/SewingStep0.test.ts | sed -n '120,165p'
           python - <<'PY'
           from pathlib import Path
           import re
           path = Path('apps/web/src/viewport/SewingStep0.test.ts')
           text = path.read_text(encoding='utf-8')
-          # Normalize synthetic HumanBodyCrossSection literals introduced by the patch.
           text, count = re.subn(
               r'(centerZM:\s*[^,\n]+,)(\s*\n\s*)(\})',
               lambda m: m.group(1) + m.group(2)
@@ -51,14 +48,21 @@ jobs:
           path.write_text(text, encoding='utf-8')
           print(f'Normalized HumanBodyCrossSection fixtures: {count}')
           PY
-          echo '--- SewingStep0.test.ts lines 120-175 normalized ---'
-          nl -ba apps/web/src/viewport/SewingStep0.test.ts | sed -n '120,175p'
+          mkdir -p artifacts/step0-browser
+          git diff > artifacts/step0-browser/source.patch
           git diff --check
           git status --short
       - name: Typecheck
         run: npm run typecheck --workspace @moldeon/web
       - name: Focused STEP-0 tests
         run: npm run test --workspace @moldeon/web -- src/viewport/SewingStep0.test.ts src/viewport/SewingStep0Placement.test.ts src/viewport/AssemblyModeTransition.test.ts
+      - name: Publish inspectable candidate before browser gate
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts
+          git commit -m "wip(step0): body-wrap candidate for browser audit"
+          git push --force origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Install Chromium gate tooling
         run: |
           npm install --no-save playwright@1.55.0
@@ -79,19 +83,8 @@ jobs:
           STEP0_ARTIFACT_DIR: artifacts/step0-browser
         run: node scripts/step0-browser-audit.mjs
       - name: Production build
+        if: success()
         run: npm run build --workspace @moldeon/web
-      - name: Commit validated candidate
-        run: |
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "No source patch produced; nothing to publish."
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md || true
-          git add -u
-          git commit -m "fix(step0): register sewn shape around authored body placement"
-          git push --force-with-lease origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Upload STEP-0 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
