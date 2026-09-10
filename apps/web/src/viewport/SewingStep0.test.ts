@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
+  analyzeSewingStep0BodyFit,
   buildSewingStep0Registration,
   resolveSewingStep0Target,
   transformSewingStep0Point,
@@ -8,6 +9,51 @@ import {
 
 function constraint(instanceA: string, instanceB: string, seamId: string, seamGroupId = seamId) {
   return { instanceA, instanceB, seamId, seamGroupId };
+}
+
+
+function selfSeamFitState(circumferenceMm: number) {
+  return {
+    positions: new Float32Array(12),
+    initialPositions: new Float32Array(12),
+    previousPositions: new Float32Array(12),
+    inverseMasses: new Float32Array(4),
+    instances: [{
+      id: "tube",
+      particleStart: 0,
+      vertexCount: 4,
+      topology: {
+        positions2DMm: new Float32Array([
+          0, 0,
+          circumferenceMm, 0,
+          circumferenceMm, 300,
+          0, 300,
+        ]),
+        triangles: new Uint32Array([0, 1, 2, 0, 2, 3]),
+      },
+    }],
+    structuralConstraints: [],
+    stitchConstraints: [0, 1, 2].map((index) => ({
+      id: `self:${index}`,
+      seamId: "self",
+      seamGroupId: "self",
+      treatment: "plain",
+      distribution: "uniform",
+      targetRatio: 1,
+      slackMm: 0,
+      a: { particleIndices: [index === 2 ? 3 : 0], weights: [1] },
+      b: { particleIndices: [index === 2 ? 2 : 1], weights: [1] },
+      restDistance: 0,
+      physicalRestDistance: 0,
+      stiffness: 1,
+      instanceA: "tube",
+      instanceB: "tube",
+      progress: index / 2,
+    })),
+    anchorConstraints: [],
+    warnings: [],
+    invalid: false,
+  } as any;
 }
 
 describe("11.0.8 STEP-0 target and rigid registration", () => {
@@ -81,4 +127,49 @@ describe("11.0.8 STEP-0 target and rigid registration", () => {
     const mappedAnchor = transformSewingStep0Point(new THREE.Vector3(5, 7, 2), registration!);
     expect(mappedAnchor.distanceTo(new THREE.Vector3(-3, 2, 9))).toBeLessThan(1e-8);
   });
+
+  it("accepts 1020 mm around a 1000 mm full hip within the 2% material contract", () => {
+    const state = selfSeamFitState(1020);
+    const fit = analyzeSewingStep0BodyFit(state, { rootInstanceId: "tube", instanceIds: ["tube"] }, {
+      id: "full-hip",
+      region: "full-hip",
+      yM: 0.9,
+      targetCircumferenceMm: 1000,
+      actualCircumferenceMm: 1000,
+      halfWidthM: 0.16,
+      frontDepthM: 0.09,
+      backDepthM: 0.11,
+      centerZM: 0,
+    frontLobeM: 0,
+      backLobeM: 0,
+      lobeHalfDistanceM: 0,
+      }, 0.0005);
+    expect(fit.status).toBe("fits");
+    expect(fit.materialCircumferenceMm).toBeCloseTo(1020, 3);
+    expect(fit.requiredCircumferenceMm).toBeGreaterThan(1000);
+    expect(fit.stretchRequiredPercent).toBe(0);
+  });
+
+  it("rejects a 435 mm loop quantitatively instead of pretending it fits a 1000 mm hip", () => {
+    const state = selfSeamFitState(435);
+    const fit = analyzeSewingStep0BodyFit(state, { rootInstanceId: "tube", instanceIds: ["tube"] }, {
+      id: "full-hip",
+      region: "full-hip",
+      yM: 0.9,
+      targetCircumferenceMm: 1000,
+      actualCircumferenceMm: 1000,
+      halfWidthM: 0.16,
+      frontDepthM: 0.09,
+      backDepthM: 0.11,
+      centerZM: 0,
+    frontLobeM: 0,
+      backLobeM: 0,
+      lobeHalfDistanceM: 0,
+      }, 0.0005);
+    expect(fit.status).toBe("insufficient-circumference");
+    expect(fit.materialCircumferenceMm).toBeCloseTo(435, 3);
+    expect(fit.requiredCircumferenceMm).toBeGreaterThan(1000);
+    expect(fit.stretchRequiredPercent!).toBeGreaterThan(100);
+  });
+
 });

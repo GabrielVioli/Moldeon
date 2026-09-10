@@ -389,7 +389,9 @@ export const GarmentViewport = memo(function GarmentViewport({
               const result = await viewport.runSewingStep0(selectedSeamId);
               setSewingStep0Running(false);
               if (result.status === "applied") {
-                setSewingStep0Notice(`STEP-0 local aplicado em ${result.affectedPanels} painel(is)${result.seamResidualMaxMm !== undefined ? ` · abertura máx. ${result.seamResidualMaxMm.toFixed(1)} mm` : ""}. Física desligada.`);
+                setSewingStep0Notice(`Montagem ajustada ao corpo em ${result.affectedPanels} painel(is)${result.seamResidualMaxMm !== undefined ? ` · abertura máx. ${result.seamResidualMaxMm.toFixed(1)} mm` : ""}. Física desligada.`);
+              } else if (result.status === "insufficient-body-circumference") {
+                setSewingStep0Notice(result.warning ?? "A peça fecha, mas não possui material suficiente para envolver esta região do corpo sem stretch excessivo.");
               } else if (result.status === "too-far") {
                 setSewingStep0Notice("Aproxime os painéis do corpo antes de ajustar a montagem.");
               } else if (result.status === "needs-placement") {
