@@ -46,10 +46,6 @@ async function runScenario(name, widthMm, heightMm, expectation) {
       const originalSeam = garment.seams?.[0];
       if (!originalPiece || !originalSeam) throw new Error("Fixture exact-contact-tube incompleto.");
 
-      // Rebuild the canonical material geometry instead of mutating only
-      // legacy points. PatternPiece.segments are authoritative when present;
-      // mutating points alone made the former E2E silently keep 1040 x 260 mm
-      // for both scenarios.
       const piece = patternModule.migrateLegacyPieceToSegments({
         id: originalPiece.id,
         name: originalPiece.name,
@@ -108,6 +104,20 @@ async function runScenario(name, widthMm, heightMm, expectation) {
       const currentPiece = storeModule.useEditorStore.getState().garment.pieces[0];
       const xs = currentPiece.points.map((point) => point.xMm);
       const ys = currentPiece.points.map((point) => point.yMm);
+      const relevantMinY = fullHip.yM - heightMm * 0.001 - 0.03;
+      const relevantMaxY = fullHip.yM + 0.03;
+      const nearbySections = avatar.humanBody.crossSections
+        .filter((section) => section.yM >= relevantMinY && section.yM <= relevantMaxY)
+        .map((section) => ({
+          id: section.id,
+          region: section.region,
+          yM: section.yM,
+          centerM: section.centerM ?? [0, section.yM, section.centerZM],
+          actualCircumferenceMm: section.actualCircumferenceMm,
+          halfWidthM: section.halfWidthM,
+          frontDepthM: section.frontDepthM,
+          backDepthM: section.backDepthM,
+        }));
       return {
         requested: { widthMm, heightMm },
         canonical: {
@@ -123,6 +133,7 @@ async function runScenario(name, widthMm, heightMm, expectation) {
           halfWidthM: fullHip.halfWidthM,
           frontDepthM: fullHip.frontDepthM,
           backDepthM: fullHip.backDepthM,
+          nearbySections,
         },
       };
     }, { widthMm, heightMm });
