@@ -6,6 +6,7 @@ on:
       - recovery/11.0.8-sewing-2d-3d-authoring
     paths:
       - "scripts/apply-step0-preassembly-contract.py"
+      - "scripts/apply-step0-preassembly-test-contract.py"
 
 permissions:
   contents: write
@@ -27,6 +28,7 @@ jobs:
       - name: Apply corrected STEP-0 contract
         run: |
           python scripts/apply-step0-preassembly-contract.py
+          python scripts/apply-step0-preassembly-test-contract.py
           git diff --check
           git status --short
       - name: Typecheck
@@ -58,7 +60,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md
+          git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs docs/modifications-11.0.8.md
           if git diff --cached --quiet; then
             echo "No product changes to commit."
             exit 0
