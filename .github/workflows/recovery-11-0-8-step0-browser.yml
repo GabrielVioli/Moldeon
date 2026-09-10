@@ -34,23 +34,25 @@ jobs:
       - name: Apply pending STEP-0 body-wrap source patch
         run: |
           python scripts/apply-step0-body-wrap-fix.py
+          echo '--- SewingStep0.test.ts lines 120-165 after patch ---'
+          nl -ba apps/web/src/viewport/SewingStep0.test.ts | sed -n '120,165p'
           python - <<'PY'
           from pathlib import Path
           import re
           path = Path('apps/web/src/viewport/SewingStep0.test.ts')
           text = path.read_text(encoding='utf-8')
-          pattern = re.compile(r'(\n(?P<indent>\s*)centerZM:\s*[^,\n]+,\n)(?P=indent)\}', re.M)
-          text, count = pattern.subn(
-              lambda m: m.group(1)
-              + m.group('indent') + 'frontLobeM: 0,\n'
-              + m.group('indent') + 'backLobeM: 0,\n'
-              + m.group('indent') + 'lobeHalfDistanceM: 0,\n'
-              + m.group('indent') + '}',
+          # Normalize synthetic HumanBodyCrossSection literals introduced by the patch.
+          text, count = re.subn(
+              r'(centerZM:\s*[^,\n]+,)(\s*\n\s*)(\})',
+              lambda m: m.group(1) + m.group(2)
+              + 'frontLobeM: 0,\n      backLobeM: 0,\n      lobeHalfDistanceM: 0,\n      ' + m.group(3),
               text,
           )
           path.write_text(text, encoding='utf-8')
           print(f'Normalized HumanBodyCrossSection fixtures: {count}')
           PY
+          echo '--- SewingStep0.test.ts lines 120-175 normalized ---'
+          nl -ba apps/web/src/viewport/SewingStep0.test.ts | sed -n '120,175p'
           git diff --check
           git status --short
       - name: Typecheck
