@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { closestBodySurfacePoint, type BodySurfaceFrame } from "../avatar/BodySurfaceQuery";
-import type { HumanBodyMesh } from "../avatar/HumanBodyModel";
+import type { HumanBodyCrossSection, HumanBodyMesh } from "../avatar/HumanBodyModel";
 import type { AssemblyDistanceConstraint, AssemblyStitchConstraint, GarmentAssemblyState } from "../garment3d/GarmentAssembly";
 import type { GarmentAssemblyMeshData } from "../garment3d/GarmentThreeBridge";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
@@ -10,6 +10,7 @@ export type SewingStep0Status =
   | "no-seams"
   | "needs-placement"
   | "too-far"
+  | "insufficient-body-circumference"
   | "stale"
   | "failed";
 
@@ -26,6 +27,60 @@ export interface SewingStep0RunResult {
 export interface SewingStep0Target {
   rootInstanceId: string;
   instanceIds: string[];
+}
+
+export interface SewingStep0BodyFit {
+  status: "not-applicable" | "fits" | "insufficient-circumference";
+  bodySectionId: string | null;
+  materialCircumferenceMm: number | null;
+  requiredCircumferenceMm: number | null;
+  targetCircumferenceMm: number | null;
+  stretchRequiredPercent: number | null;
+  maximumAllowedStretchPercent: number;
+  clearanceMm: number;
+}
+
+const STEP0_MAXIMUM_MATERIAL_STRETCH_PERCENT = 2;
+
+/**
+ * Quantitative preflight for a one-panel self seam. The material circumference
+ * comes from the canonical/rest chart, never from the already-closed 3D seam.
+ * This prevents a tiny loop from being accepted merely because it can close in
+ * empty space.
+ */
+export function analyzeSewingStep0BodyFit(
+  state: GarmentAssemblyState,
+  target: SewingStep0Target,
+  section: HumanBodyCrossSection | null,
+  clearanceM = 0.0005,
+): SewingStep0BodyFit {
+  const base: SewingStep0BodyFit = {
+    status: "not-applicable",
+    bodySectionId: section?.id ?? null,
+    materialCircumferenceMm: null,
+    requiredCircumferenceMm: null,
+    targetCircumferenceMm: section?.targetCircumferenceMm ?? null,
+    stretchRequiredPercent: null,
+    maximumAllowedStretchPercent: STEP0_MAXIMUM_MATERIAL_STRETCH_PERCENT,
+    clearanceMm: clearanceM * 1_000,
+  };
+  if (!section || target.instanceIds.length !== 1) return base;
+  const instanceId = target.instanceIds[0];
+  const selfSeams = physicalSelfSeamConstraints(state, instanceId);
+  if (selfSeams.length < 2) return base;
+  const materialCircumferenceMm = estimateSelfSeamMaterialCircumferenceMm(state, instanceId, selfSeams);
+  if (!Number.isFinite(materialCircumferenceMm) || materialCircumferenceMm <= 1) return base;
+  const requiredCircumferenceMm = section.actualCircumferenceMm + Math.PI * 2 * clearanceM * 1_000;
+  const stretchRequiredPercent = Math.max(0, requiredCircumferenceMm / materialCircumferenceMm - 1) * 100;
+  return {
+    ...base,
+    status: stretchRequiredPercent > STEP0_MAXIMUM_MATERIAL_STRETCH_PERCENT
+      ? "insufficient-circumference"
+      : "fits",
+    materialCircumferenceMm,
+    requiredCircumferenceMm,
+    stretchRequiredPercent,
+  };
 }
 
 export interface SewingStep0Registration {
@@ -127,19 +182,77 @@ export function transformSewingStep0Point(
     .add(registration.currentRootOrigin);
 }
 
+export interface SewingStep0SolvedComponentOptions {
+  maximumCentroidDisplacementM?: number;
+  bodySection?: HumanBodyCrossSection | null;
+  rootSurface?: BodySurfaceFrame | null;
+  bodyClearanceM?: number;
+  bodyFit?: SewingStep0BodyFit | null;
+}
+
 export function applySewingStep0SolvedComponent(
   currentState: GarmentAssemblyState,
   solvedState: GarmentAssemblyState,
   meshes: readonly GarmentAssemblyMeshData[],
   target: SewingStep0Target,
-  maximumCentroidDisplacementM = 0.45,
-): { appliedIds: string[]; maximumCentroidDisplacementM: number } | null {
+  optionsOrMaximum: SewingStep0SolvedComponentOptions | number = 0.45,
+): {
+  appliedIds: string[];
+  maximumCentroidDisplacementM: number;
+  registrationMode: "body-aware-self-seam" | "authored-rigid";
+  bodyFit: SewingStep0BodyFit | null;
+} | null {
+  const options: SewingStep0SolvedComponentOptions = typeof optionsOrMaximum === "number"
+    ? { maximumCentroidDisplacementM: optionsOrMaximum }
+    : optionsOrMaximum;
+  const maximumCentroidDisplacementM = options.maximumCentroidDisplacementM ?? 0.45;
   const currentRootMesh = meshes.find((item) => item.key === target.rootInstanceId);
   const solvedRoot = solvedState.instances.find((instance) => instance.id === target.rootInstanceId);
   if (!currentRootMesh || !solvedRoot) return null;
   const solvedRootPositions = sliceInstancePositions(solvedState, solvedRoot.id);
   const currentRootWorldPositions = worldPositions(currentRootMesh.mesh);
   if (!solvedRootPositions) return null;
+
+  const bodyAware = options.bodySection
+    && options.rootSurface
+    && options.bodyFit?.status === "fits"
+    && target.instanceIds.length === 1
+    ? buildBodyAwareSelfSeamWorldPositions(
+      solvedState,
+      solvedRoot,
+      currentRootWorldPositions,
+      options.bodySection,
+      options.rootSurface,
+      options.bodyFit,
+      options.bodyClearanceM ?? 0.0005,
+    )
+    : null;
+
+  if (bodyAware) {
+    currentRootMesh.mesh.updateMatrixWorld(true);
+    const inverseCurrentWorld = currentRootMesh.mesh.matrixWorld.clone().invert();
+    const local = new Float32Array(bodyAware.length);
+    const point = new THREE.Vector3();
+    for (let offset = 0; offset < bodyAware.length; offset += 3) {
+      point.set(bodyAware[offset], bodyAware[offset + 1], bodyAware[offset + 2]).applyMatrix4(inverseCurrentWorld);
+      local[offset] = point.x;
+      local[offset + 1] = point.y;
+      local[offset + 2] = point.z;
+    }
+    const currentCentroid = meshWorldCentroid(currentRootMesh.mesh);
+    const nextCentroid = centroidOfPositions(bodyAware);
+    const displacement = currentCentroid.distanceTo(nextCentroid);
+    if (!Number.isFinite(displacement) || displacement > maximumCentroidDisplacementM) return null;
+    if (![...local].every(Number.isFinite)) return null;
+    writeInstancePositions(currentState, solvedRoot.id, local);
+    return {
+      appliedIds: [solvedRoot.id],
+      maximumCentroidDisplacementM: displacement,
+      registrationMode: "body-aware-self-seam",
+      bodyFit: options.bodyFit ?? null,
+    };
+  }
+
   const registration = buildSewingStep0Registration(
     solvedRootPositions,
     currentRootWorldPositions,
@@ -186,7 +299,195 @@ export function applySewingStep0SolvedComponent(
   }
 
   for (const [id, local] of pending) writeInstancePositions(currentState, id, local);
-  return { appliedIds: [...pending.keys()], maximumCentroidDisplacementM: maximumDisplacement };
+  return {
+    appliedIds: [...pending.keys()],
+    maximumCentroidDisplacementM: maximumDisplacement,
+    registrationMode: "authored-rigid",
+    bodyFit: options.bodyFit ?? null,
+  };
+}
+
+function physicalSelfSeamConstraints(
+  state: GarmentAssemblyState,
+  instanceId: string,
+): AssemblyStitchConstraint[] {
+  return state.stitchConstraints.filter((constraint) =>
+    !constraint.seamGroupId.startsWith("dart:")
+    && constraint.instanceA === instanceId
+    && constraint.instanceB === instanceId,
+  );
+}
+
+function estimateSelfSeamMaterialCircumferenceMm(
+  state: GarmentAssemblyState,
+  instanceId: string,
+  seams: readonly AssemblyStitchConstraint[],
+): number {
+  const instance = state.instances.find((candidate) => candidate.id === instanceId);
+  if (!instance) return Number.NaN;
+  const distancesMm: number[] = [];
+  for (const seam of seams) {
+    const a = weightedMaterialPoint2D(instance, seam.a);
+    const b = weightedMaterialPoint2D(instance, seam.b);
+    if (!a || !b) continue;
+    const distance = Math.hypot(b.x - a.x, b.y - a.y);
+    if (Number.isFinite(distance) && distance > 1) distancesMm.push(distance);
+  }
+  if (distancesMm.length > 0) {
+    distancesMm.sort((a, b) => a - b);
+    return distancesMm[Math.floor(distancesMm.length / 2)];
+  }
+  const radiusM = instance.arrangement?.tubeRadiusM;
+  return radiusM && radiusM > 0 ? radiusM * Math.PI * 2 * 1_000 : Number.NaN;
+}
+
+function weightedMaterialPoint2D(
+  instance: GarmentAssemblyState["instances"][number],
+  reference: AssemblyStitchConstraint["a"],
+): THREE.Vector2 | null {
+  const material = instance.topology.positions2DMm;
+  if (!material || reference.particleIndices.length === 0) return null;
+  const result = new THREE.Vector2();
+  let total = 0;
+  for (let index = 0; index < reference.particleIndices.length; index += 1) {
+    const local = reference.particleIndices[index] - instance.particleStart;
+    const weight = reference.weights[index] ?? 0;
+    if (local < 0 || local * 2 + 1 >= material.length) return null;
+    result.x += material[local * 2] * weight;
+    result.y += material[local * 2 + 1] * weight;
+    total += weight;
+  }
+  if (Math.abs(total) <= 1e-9) return null;
+  if (Math.abs(total - 1) > 1e-9) result.multiplyScalar(1 / total);
+  return result;
+}
+
+function buildBodyAwareSelfSeamWorldPositions(
+  solvedState: GarmentAssemblyState,
+  instance: GarmentAssemblyState["instances"][number],
+  currentWorld: Float32Array,
+  section: HumanBodyCrossSection,
+  rootSurface: BodySurfaceFrame,
+  fit: SewingStep0BodyFit,
+  clearanceM: number,
+): Float32Array | null {
+  const materialCircumferenceM = (fit.materialCircumferenceMm ?? 0) * 0.001;
+  const requiredCircumferenceM = (fit.requiredCircumferenceMm ?? 0) * 0.001;
+  if (materialCircumferenceM <= 0 || requiredCircumferenceM <= 0) return null;
+  const seams = physicalSelfSeamConstraints(solvedState, instance.id);
+  if (seams.length < 2) return null;
+  const material = instance.topology.positions2DMm;
+  if (!material || material.length !== instance.vertexCount * 2) return null;
+
+  let across = new THREE.Vector2();
+  let acrossSamples = 0;
+  for (const seam of seams) {
+    const a = weightedMaterialPoint2D(instance, seam.a);
+    const b = weightedMaterialPoint2D(instance, seam.b);
+    if (!a || !b) continue;
+    const delta = b.sub(a);
+    if (delta.lengthSq() <= 1e-8) continue;
+    across.add(delta.normalize());
+    acrossSamples += 1;
+  }
+  if (acrossSamples === 0 || across.lengthSq() <= 1e-8) return null;
+  across.normalize();
+  const materialAxis = new THREE.Vector2(-across.y, across.x);
+
+  const anchorVertex = nearestWorldVertexIndex(currentWorld, centroidOfPositions(currentWorld));
+  const anchorMaterial = new THREE.Vector2(material[anchorVertex * 2], material[anchorVertex * 2 + 1]);
+  const currentAxis = materialDirectionInWorld(currentWorld, material, anchorMaterial, materialAxis);
+  let targetAxis = section.normal
+    ? new THREE.Vector3(...section.normal)
+    : new THREE.Vector3(0, 1, 0);
+  if (targetAxis.lengthSq() <= 1e-10) targetAxis.set(0, 1, 0);
+  targetAxis.normalize();
+  if (currentAxis.lengthSq() > 1e-10 && targetAxis.dot(currentAxis) < 0) targetAxis.negate();
+
+  let outward = new THREE.Vector3(...rootSurface.outwardNormal);
+  outward.addScaledVector(targetAxis, -outward.dot(targetAxis));
+  if (outward.lengthSq() <= 1e-10) outward.set(0, 0, 1).addScaledVector(targetAxis, -targetAxis.z);
+  if (outward.lengthSq() <= 1e-10) return null;
+  outward.normalize();
+  const around = new THREE.Vector3().crossVectors(targetAxis, outward).normalize();
+  if (around.lengthSq() <= 1e-10) return null;
+
+  const sectionCenter = section.centerM
+    ? new THREE.Vector3(...section.centerM)
+    : new THREE.Vector3(0, section.yM, section.centerZM);
+  const baseTangentM = Math.max(0.005, section.halfWidthM + clearanceM);
+  const baseOutwardM = Math.max(0.005, Math.max(section.frontDepthM, section.backDepthM) + clearanceM);
+  const targetCircumferenceM = Math.max(materialCircumferenceM, requiredCircumferenceM);
+  const baseCircumferenceM = ellipseCircumference(baseTangentM, baseOutwardM);
+  if (!Number.isFinite(baseCircumferenceM) || baseCircumferenceM <= 1e-9) return null;
+  const sectionScale = targetCircumferenceM / baseCircumferenceM;
+  const semiTangentM = baseTangentM * sectionScale;
+  const semiOutwardM = baseOutwardM * sectionScale;
+  const arcTable = buildEllipseArcTable(semiTangentM, semiOutwardM);
+  const stretchRatio = targetCircumferenceM / materialCircumferenceM;
+  if (stretchRatio > 1 + STEP0_MAXIMUM_MATERIAL_STRETCH_PERCENT / 100 + 1e-6) return null;
+
+  const currentAnchor = new THREE.Vector3(
+    currentWorld[anchorVertex * 3],
+    currentWorld[anchorVertex * 3 + 1],
+    currentWorld[anchorVertex * 3 + 2],
+  );
+  const axialAnchor = currentAnchor.clone().sub(sectionCenter).dot(targetAxis);
+  const result = new Float32Array(instance.vertexCount * 3);
+  const ellipseNormal = new THREE.Vector3();
+  const point = new THREE.Vector3();
+  for (let local = 0; local < instance.vertexCount; local += 1) {
+    const materialPoint = new THREE.Vector2(material[local * 2], material[local * 2 + 1]).sub(anchorMaterial);
+    const signedArcM = materialPoint.dot(across) * 0.001 * stretchRatio;
+    const axialM = materialPoint.dot(materialAxis) * 0.001;
+    const angle = ellipseAngleAtSignedArc(signedArcM, arcTable);
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    ellipseNormal.copy(around).multiplyScalar(sin / semiTangentM)
+      .addScaledVector(outward, cos / semiOutwardM)
+      .normalize();
+    point.copy(sectionCenter)
+      .addScaledVector(targetAxis, axialAnchor + axialM)
+      .addScaledVector(around, semiTangentM * sin)
+      .addScaledVector(outward, semiOutwardM * cos);
+    result[local * 3] = point.x;
+    result[local * 3 + 1] = point.y;
+    result[local * 3 + 2] = point.z;
+  }
+  return result;
+}
+
+function nearestWorldVertexIndex(positions: Float32Array, target: THREE.Vector3): number {
+  let best = 0;
+  let bestDistanceSq = Number.POSITIVE_INFINITY;
+  const point = new THREE.Vector3();
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    point.set(positions[offset], positions[offset + 1], positions[offset + 2]);
+    const distanceSq = point.distanceToSquared(target);
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      best = offset / 3;
+    }
+  }
+  return best;
+}
+
+function materialDirectionInWorld(
+  world: Float32Array,
+  material: Float32Array,
+  materialOrigin: THREE.Vector2,
+  direction: THREE.Vector2,
+): THREE.Vector3 {
+  const centroid = centroidOfPositions(world);
+  const result = new THREE.Vector3();
+  for (let local = 0; local < world.length / 3; local += 1) {
+    const scalar = (material[local * 2] - materialOrigin.x) * direction.x
+      + (material[local * 2 + 1] - materialOrigin.y) * direction.y;
+    result.x += (world[local * 3] - centroid.x) * scalar;
+    result.y += (world[local * 3 + 1] - centroid.y) * scalar;
+    result.z += (world[local * 3 + 2] - centroid.z) * scalar;
+  }
+  return result.normalize();
 }
 
 
