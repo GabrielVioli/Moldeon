@@ -73,15 +73,12 @@ import {
 import { SewingViewportOverlay, type SewingOverlaySelection } from "./SewingViewportOverlay";
 import { connectedSewingInstanceIds } from "./SewingInteraction";
 import {
-  analyzeSewingStep0BodyFit,
   applySewingStep0SolvedComponent,
-  auditSewingStep0Seams,
   measureCurrentSewingStep0MaterialDistortion,
   measureCurrentSewingStep0Residual,
   meshWorldMaterialAnchor as sewingStep0MeshWorldMaterialAnchor,
   meshWorldVertex as sewingStep0MeshWorldVertex,
   resolveSewingStep0Target,
-  solvePlacementAnchoredSewingStep0,
   syncMeshGeometryToAssemblyState,
   type PlacementAnchoredSewingStep0Proposal,
   type SewingStep0RunResult,
@@ -574,20 +571,12 @@ export class ThreeViewport {
       scale: THREE.Vector3;
       materialAnchorVertex: number;
       materialAnchorWorld: THREE.Vector3;
-      surface: BodySurfaceFrame;
       bodyAudit: ReturnType<typeof auditMeshBodyClearance>;
     }>();
     for (const instanceId of target.instanceIds) {
       const item = this.garmentMeshes.find((candidate) => candidate.key === instanceId);
       if (!item) return { status: "failed", affectedPanels: target.instanceIds.length };
       const materialAnchor = sewingStep0MeshWorldMaterialAnchor(item.mesh);
-      const surface = closestBodySurfacePoint(
-        body,
-        [materialAnchor.position.x, materialAnchor.position.y, materialAnchor.position.z],
-        0,
-        0.24,
-      );
-      if (!surface) return { status: "too-far", affectedPanels: target.instanceIds.length };
       const position = item.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
       item.mesh.updateMatrixWorld(true);
       snapshots.set(instanceId, {
@@ -598,7 +587,6 @@ export class ThreeViewport {
         scale: item.mesh.scale.clone(),
         materialAnchorVertex: materialAnchor.vertexIndex,
         materialAnchorWorld: materialAnchor.position,
-        surface,
         bodyAudit: auditMeshBodyClearance(item.mesh, body, 0.5, 112),
       });
     }
@@ -671,47 +659,24 @@ export class ThreeViewport {
             ?? "O assembly geométrico não produziu uma forma válida.",
         };
       }
-      const rootSnapshot = snapshots.get(target.rootInstanceId);
-      const bodySection = rootSnapshot
-        ? avatar.humanBody.crossSections.reduce((best, section) => {
-          const sectionCenter = section.centerM
-            ? new THREE.Vector3(...section.centerM)
-            : new THREE.Vector3(0, section.yM, section.centerZM);
-          const bestCenter = best.centerM
-            ? new THREE.Vector3(...best.centerM)
-            : new THREE.Vector3(0, best.yM, best.centerZM);
-          return sectionCenter.distanceToSquared(rootSnapshot.materialAnchorWorld)
-            < bestCenter.distanceToSquared(rootSnapshot.materialAnchorWorld)
-            ? section
-            : best;
-        })
-        : null;
-      const bodyFit = analyzeSewingStep0BodyFit(response.state, target, bodySection, 0.0005);
-      if (bodyFit.status === "insufficient-circumference") {
-        restoreSnapshots();
-        this.host.dataset.sewingStep0Status = "insufficient-body-circumference";
-        this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
-          rejectionReason: "insufficient-body-circumference",
-          bodyFit,
-          bodyBounds: body.bounds,
-          globalShape: {
-            strategy: response.diagnostics.assembly.strategy,
-            metrics: response.diagnostics.assembly.metrics,
-          },
-        });
-        const materialMm = bodyFit.materialCircumferenceMm ?? 0;
-        const requiredMm = bodyFit.requiredCircumferenceMm ?? 0;
-        const missingMm = Math.max(0, requiredMm - materialMm);
-        const stretch = bodyFit.stretchRequiredPercent ?? 0;
-        return {
-          status: "insufficient-body-circumference",
-          affectedPanels: target.instanceIds.length,
-          warning: "A peça fecha, mas não cabe ao redor desta região do corpo: "
-            + materialMm.toFixed(0) + " mm de material para cerca de " + requiredMm.toFixed(0)
-            + " mm necessários (faltam " + missingMm.toFixed(0) + " mm; exigiria "
-            + stretch.toFixed(1) + "% de stretch, limite STEP-0 2%).",
-        };
+      // Resolve only the authored vertical neighborhood. The body is a
+      // placement reference here, never a fit target.
+      const authoredComponentCenter = new THREE.Vector3();
+      let authoredComponentCount = 0;
+      for (const instanceId of target.instanceIds) {
+        const snapshot = snapshots.get(instanceId);
+        if (!snapshot) continue;
+        authoredComponentCenter.add(meshWorldCentroid(snapshot.item.mesh));
+        authoredComponentCount += 1;
       }
+      if (authoredComponentCount > 0) authoredComponentCenter.multiplyScalar(1 / authoredComponentCount);
+      const bodySection = avatar.humanBody.crossSections.length > 0
+        ? avatar.humanBody.crossSections.reduce((best, section) =>
+          Math.abs(section.yM - authoredComponentCenter.y) < Math.abs(best.yM - authoredComponentCenter.y)
+            ? section
+            : best,
+        )
+        : null;
 
       const transplanted = applySewingStep0SolvedComponent(
         state,
@@ -721,9 +686,6 @@ export class ThreeViewport {
         {
           maximumCentroidDisplacementM: 0.45,
           bodySection,
-          rootSurface: rootSnapshot?.surface ?? null,
-          bodyClearanceM: 0.0005,
-          bodyFit,
         },
       );
       if (!transplanted) {
@@ -741,241 +703,73 @@ export class ThreeViewport {
       }
       const workerResidual = measureCurrentSewingStep0Residual(state, this.garmentMeshes, target);
       const workerMaterial = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target);
-      const registeredBodyAudits: Record<string, unknown> = {};
-      let registeredBodySafe = true;
+      const bodyAudits: Record<string, unknown> = {};
       for (const instanceId of target.instanceIds) {
         const snapshot = snapshots.get(instanceId)!;
-        const after = auditMeshBodyClearance(snapshot.item.mesh, body, 0.5, 112);
-        const finalAnchor = sewingStep0MeshWorldVertex(snapshot.item.mesh, snapshot.materialAnchorVertex);
-        const materialAnchorDisplacementMm = finalAnchor
-          ? finalAnchor.distanceTo(snapshot.materialAnchorWorld) * 1_000
-          : Number.POSITIVE_INFINITY;
-        if (after.penetratingSamples !== 0 || after.minimumSignedClearanceMm < -0.5) registeredBodySafe = false;
-        registeredBodyAudits[instanceId] = {
-          solveTimeBarrier: false,
+        bodyAudits[instanceId] = {
           before: snapshot.bodyAudit,
-          after,
-          materialAnchorDisplacementMm,
+          after: auditMeshBodyClearance(snapshot.item.mesh, body, 0.5, 112),
+          contactDeferredToPhysics: true,
         };
       }
-      const registeredDirectSafe = transplanted.registrationMode === "body-aware-self-seam"
-        && bodyFit.status === "fits"
-        && Boolean(workerResidual)
-        && (workerResidual?.maximumM ?? Number.POSITIVE_INFINITY) <= 0.005
+
+      const residualMm = (workerResidual?.maximumM ?? Number.POSITIVE_INFINITY) * 1_000;
+      const globalShapeSafe = Boolean(workerResidual)
+        && Number.isFinite(residualMm)
+        && residualMm <= 5
         && workerMaterial !== null
-        && workerMaterial <= 0.02
-        && registeredBodySafe;
-      if (registeredDirectSafe) {
-        for (const instanceId of target.instanceIds) {
-          const item = snapshots.get(instanceId)?.item;
-          if (item) syncMeshGeometryToAssemblyState(state, item);
-        }
-        const intrinsic = measureIntrinsicDistortion(state);
-        const renderedMeshes = captureGarmentMeshDiagnostics(
-          this.garmentMeshes.filter((item) => targetIds.has(item.key)),
-        );
-        this.refreshSewingOverlay();
-        this.host.dataset.sewingStep0Status = "applied-global-shape";
-        this.host.dataset.sewingStep0Ms = (performance.now() - startedAt).toFixed(2);
-        this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
-          affectedPanels: target.instanceIds.length,
-          conformedPanels: target.instanceIds.length,
-          maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
-          metricDistortionMax: intrinsic.maxRelativeDistortion,
-          materialBefore,
-          materialAfter: workerMaterial,
-          bodyFit,
-          bodyBounds: body.bounds,
-          renderedMeshes,
-          registrationMode: transplanted.registrationMode,
-          bodyAudits: registeredBodyAudits,
-          proposalResidual: {
-            before: authoredResidualBefore,
-            afterLocal: workerResidual,
-            afterBody: workerResidual,
-          },
-          globalShape: {
-            strategy: response.diagnostics.assembly.strategy,
-            selectedSeeds: response.diagnostics.assembly.components.map((component) => ({
-              componentId: component.componentId,
-              panelInstanceIds: component.panelInstanceIds,
-              selectedSeed: component.selectedSeed,
-            })),
-            metrics: response.diagnostics.assembly.metrics,
-            warnings: response.warnings,
-            bodyFit,
-            authoredResidualBefore,
-            registeredResidual: workerResidual,
-            registeredMaterialDistortionMax: workerMaterial,
-            maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
-          },
-        });
-        this.host.dataset.simulationStatus = "disabled-in-montar";
-        this.requestRender();
-        return {
-          status: "applied",
-          affectedPanels: target.instanceIds.length,
-          conformedPanels: target.instanceIds.length,
-          maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
-          metricDistortionMax: intrinsic.maxRelativeDistortion,
-          seamResidualMaxMm: (workerResidual?.maximumM ?? 0) * 1_000,
-        };
-      }
-
-      // Only a bounded local polish remains when the body-aware registration
-      // still has a small exact-surface overlap. Generic components retain the
-      // older budget, while a valid closed tube is never sent through a second
-      // full assembly solve.
-      // enforce the exact-body inequality and remove submillimetric residuals.
-      this.host.dataset.sewingStep0Status = "polishing-authored-shape";
-      const proposal = solvePlacementAnchoredSewingStep0(
-        state,
-        this.garmentMeshes,
-        target,
-        {
-          iterations: transplanted.registrationMode === "body-aware-self-seam" ? 24 : 72,
-          maximumVertexDisplacementM: transplanted.registrationMode === "body-aware-self-seam" ? 0.03 : 0.065,
-          maximumCentroidDisplacementM: transplanted.registrationMode === "body-aware-self-seam" ? 0.008 : 0.018,
-          seamRelaxation: transplanted.registrationMode === "body-aware-self-seam" ? 0.35 : 0.58,
-          body,
-          bodyClearanceM: 0.0005,
-          bodyQueryDistanceM: 0.24,
-          captureMaterialDiagnostics: import.meta.env.DEV,
-        },
-      );
-      if (!proposal || proposal.seamConstraintCount === 0) {
+        && workerMaterial <= 0.02;
+      if (!globalShapeSafe) {
         restoreSnapshots();
-        this.host.dataset.sewingStep0Status = "failed";
-        return {
-          status: "failed",
-          affectedPanels: target.instanceIds.length,
-          warning: "As costuras ativas não produziram correspondências físicas utilizáveis.",
-        };
-      }
-
-      const runtimeMaterialAudit = buildSewingStep0RuntimeMaterialDiagnostic(state, target, current, proposal);
-      if (import.meta.env.DEV) {
-        this.host.dataset.sewingStep0MaterialAudit = JSON.stringify(runtimeMaterialAudit);
-      }
-
-      // A proposal that cannot even improve the current sewing residual is not
-      // allowed to touch the viewport. This is an atomic safety gate.
-      const proposalSeamAudit = auditSewingStep0Seams(proposal.beforeResidual, proposal.afterResidual);
-      const proposalImproves = proposal.beforeResidual.meanM <= 0.0015
-        || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM * 0.985
-        || proposal.afterResidual.meanM <= proposal.beforeResidual.meanM - 0.0005;
-      if (!proposalImproves || !proposalSeamAudit.accepted || proposal.metricDistortionMax > 0.02) {
-        restoreSnapshots();
-        this.host.dataset.sewingStep0Status = "rejected-local-solve";
-        const rejectionReason = !proposalImproves
-          ? "global-residual-not-improved"
-          : !proposalSeamAudit.accepted
-            ? "per-seam-acceptance-failed"
-            : "canonical-material-metric-exceeded";
+        const rejectionReason = !workerResidual || !Number.isFinite(residualMm) || residualMm > 5
+          ? "global-sewing-shape-not-closed"
+          : "canonical-material-metric-exceeded";
+        this.host.dataset.sewingStep0Status = "rejected-global-shape";
         this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
           rejectionReason,
-          proposalSeamAudit,
-          runtimeMaterialAudit,
-          materialBefore,
+          authoredResidualBefore,
+          registeredResidual: workerResidual,
+          registeredMaterialDistortionMax: workerMaterial,
+          bodyAudits,
         });
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
-          warning: `Não encontrei uma aproximação segura (${rejectionReason}). A roupa permaneceu inalterada.`,
+          warning: `A montagem costurada não pôde ser formada sem alterar o molde (${rejectionReason}).`,
         };
       }
 
-      for (const [instanceId, local] of proposal.positionsByInstanceId) {
-        const snapshot = snapshots.get(instanceId);
-        if (!snapshot) continue;
-        const attribute = snapshot.item.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-        if (attribute.count * 3 !== local.length) {
-          restoreSnapshots();
-          return { status: "failed", affectedPanels: target.instanceIds.length, warning: "Topologia mudou durante o STEP-0." };
-        }
-        (attribute.array as Float32Array).set(local);
-        attribute.needsUpdate = true;
-        snapshot.item.mesh.geometry.computeVertexNormals();
-        snapshot.item.mesh.geometry.computeBoundingBox();
-        snapshot.item.mesh.geometry.computeBoundingSphere();
-      }
-
-      let conformedPanels = 0;
-      const bodyAudits: Record<string, unknown> = {};
-      let unsafeReason: string | null = null;
-      let maximumCentroidDisplacementM = 0;
+      // Body placement gate: verify the sewn component is centered on the body
+      // axis, not beside/above it. Exact contact/clearance is intentionally NOT
+      // an acceptance condition in Montar; XPBD owns that in Provar.
+      const componentBox = new THREE.Box3();
       for (const instanceId of target.instanceIds) {
-        const snapshot = snapshots.get(instanceId)!;
-        const item = snapshot.item;
-
-        const finalAnchor = sewingStep0MeshWorldVertex(item.mesh, snapshot.materialAnchorVertex);
-        const anchorDisplacement = finalAnchor?.distanceTo(snapshot.materialAnchorWorld) ?? Number.POSITIVE_INFINITY;
-        maximumCentroidDisplacementM = Math.max(maximumCentroidDisplacementM, anchorDisplacement);
-        const finalSurface = finalAnchor
-          ? closestBodySurfacePoint(body, [finalAnchor.x, finalAnchor.y, finalAnchor.z], 0, 0.24)
-          : null;
-        const finalAudit = auditMeshBodyClearance(item.mesh, body, 0.5, 112);
-        const normalDot = finalSurface
-          ? new THREE.Vector3(...snapshot.surface.outwardNormal)
-            .normalize()
-            .dot(new THREE.Vector3(...finalSurface.outwardNormal).normalize())
-          : -1;
-        const penetrationWorsened = finalAudit.penetratingSamples > snapshot.bodyAudit.penetratingSamples
-          || finalAudit.minimumSignedClearanceMm < snapshot.bodyAudit.minimumSignedClearanceMm - 2;
-        if (!finalSurface) unsafeReason ??= `${instanceId}: saiu da vizinhança corporal escolhida.`;
-        else if (normalDot < 0.15) unsafeReason ??= `${instanceId}: tentou trocar de lado do corpo.`;
-        else if (anchorDisplacement > 0.06) unsafeReason ??= `${instanceId}: tentou deslocar a âncora material mais de 60 mm.`;
-        else if (penetrationWorsened) unsafeReason ??= `${instanceId}: piorou a penetração no corpo.`;
-        bodyAudits[instanceId] = {
-          solveTimeBarrier: true,
-          before: snapshot.bodyAudit,
-          after: finalAudit,
-          materialAnchorDisplacementMm: anchorDisplacement * 1_000,
-          surfaceNormalDot: normalDot,
-        };
+        const snapshot = snapshots.get(instanceId);
+        if (snapshot) componentBox.expandByObject(snapshot.item.mesh);
       }
-
-      const finalResidual = measureCurrentSewingStep0Residual(state, this.garmentMeshes, target);
-      const materialAfter = measureCurrentSewingStep0MaterialDistortion(state, this.garmentMeshes, target);
-      if (!finalResidual || materialAfter === null) unsafeReason ??= "Não foi possível auditar a geometria final.";
-      const residualImproves = finalResidual
-        ? proposal.beforeResidual.meanM <= 0.0015
-          || finalResidual.meanM <= proposal.beforeResidual.meanM * 0.99
-          || finalResidual.meanM <= proposal.beforeResidual.meanM - 0.00035
-        : false;
-      const maximumResidualSafe = finalResidual
-        ? finalResidual.maximumM <= Math.max(
-          proposal.beforeResidual.maximumM + 0.003,
-          proposal.beforeResidual.maximumM * 1.08,
-        )
-        : false;
-      const materialSafe = materialAfter !== null
-        && materialAfter <= 0.02;
-      const finalSeamAudit = finalResidual
-        ? auditSewingStep0Seams(proposal.beforeResidual, finalResidual)
-        : null;
-      if (!residualImproves) unsafeReason ??= "O ajuste não aproximou as costuras de forma mensurável.";
-      else if (!maximumResidualSafe) unsafeReason ??= "Uma das costuras piorou enquanto outra era aproximada.";
-      else if (!finalSeamAudit?.accepted) unsafeReason ??= "Uma SeamGroup não convergiu com segurança junto das demais.";
-      else if (!materialSafe) unsafeReason ??= "O ajuste exigiria deformar demais o material.";
-
-      if (unsafeReason) {
+      const componentCenter = componentBox.getCenter(new THREE.Vector3());
+      const sectionCenter = bodySection
+        ? bodySection.centerM
+          ? new THREE.Vector3(...bodySection.centerM)
+          : new THREE.Vector3(0, bodySection.yM, bodySection.centerZM)
+        : componentCenter.clone();
+      const horizontalOffsetM = Math.hypot(
+        componentCenter.x - sectionCenter.x,
+        componentCenter.z - sectionCenter.z,
+      );
+      if (bodySection && horizontalOffsetM > 0.08) {
         restoreSnapshots();
-        this.host.dataset.sewingStep0Status = "rolled-back";
+        this.host.dataset.sewingStep0Status = "rejected-component-placement";
         this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
-          rollback: unsafeReason,
-          proposal,
-          finalResidual,
-          proposalSeamAudit,
-          finalSeamAudit,
-          materialBefore,
-          materialAfter,
-          bodyAudits,
-        }, (_key, value) => value instanceof Map ? Object.fromEntries(value) : value);
+          rejectionReason: "component-not-centered-around-body",
+          horizontalOffsetMm: horizontalOffsetM * 1_000,
+          componentCenter: componentCenter.toArray(),
+          bodySectionCenter: sectionCenter.toArray(),
+        });
         return {
           status: "failed",
           affectedPanels: target.instanceIds.length,
-          warning: `STEP-0 cancelado sem alterar a roupa: ${unsafeReason}`,
+          warning: "A forma costurada fechou, mas não pôde ser centralizada ao redor do manequim.",
         };
       }
 
@@ -984,29 +778,31 @@ export class ThreeViewport {
         if (item) syncMeshGeometryToAssemblyState(state, item);
       }
       const intrinsic = measureIntrinsicDistortion(state);
+      const renderedMeshes = captureGarmentMeshDiagnostics(
+        this.garmentMeshes.filter((item) => targetIds.has(item.key)),
+      );
       this.refreshSewingOverlay();
       this.host.dataset.sewingStep0Status = "applied-global-shape";
       this.host.dataset.sewingStep0Ms = (performance.now() - startedAt).toFixed(2);
       this.host.dataset.sewingStep0Diagnostics = JSON.stringify({
         affectedPanels: target.instanceIds.length,
-        conformedPanels,
-        maximumCentroidDisplacementMm: maximumCentroidDisplacementM * 1_000,
-        maximumVertexDisplacementMm: proposal.maximumVertexDisplacementM * 1_000,
-        proposalResidual: {
-          before: proposal.beforeResidual,
-          afterLocal: proposal.afterResidual,
-          afterBody: finalResidual,
-        },
+        conformedPanels: 0,
+        maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
         metricDistortionMax: intrinsic.maxRelativeDistortion,
         materialBefore,
-        materialAfter,
-        bodyFit,
+        materialAfter: workerMaterial,
+        bodyContactDeferredToPhysics: true,
         bodyBounds: body.bounds,
-        renderedMeshes: captureGarmentMeshDiagnostics(
-          this.garmentMeshes.filter((item) => targetIds.has(item.key)),
-        ),
+        bodySectionId: bodySection?.id ?? null,
+        horizontalOffsetMm: horizontalOffsetM * 1_000,
+        renderedMeshes,
         registrationMode: transplanted.registrationMode,
         bodyAudits,
+        proposalResidual: {
+          before: authoredResidualBefore,
+          afterLocal: workerResidual,
+          afterBody: workerResidual,
+        },
         globalShape: {
           strategy: response.diagnostics.assembly.strategy,
           selectedSeeds: response.diagnostics.assembly.components.map((component) => ({
@@ -1016,34 +812,21 @@ export class ThreeViewport {
           })),
           metrics: response.diagnostics.assembly.metrics,
           warnings: response.warnings,
-          bodyFit,
           authoredResidualBefore,
           registeredResidual: workerResidual,
           registeredMaterialDistortionMax: workerMaterial,
           maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
         },
-        iterations: proposal.iterations,
-        constraintCount: proposal.seamConstraintCount,
-        bodyBarrierCorrections: proposal.bodyBarrierCorrections,
-        bodyHemisphereRejects: proposal.bodyHemisphereRejects,
-        minimumBodyClearanceMm: proposal.minimumBodyClearanceM === null
-          ? null
-          : proposal.minimumBodyClearanceM * 1_000,
-        phaseTimingsMs: proposal.phaseTimingsMs,
-        proposalSeamAudit,
-        finalSeamAudit,
       });
       this.host.dataset.simulationStatus = "disabled-in-montar";
       this.requestRender();
-      const residualMm = (finalResidual?.maximumM ?? 0) * 1_000;
       return {
         status: "applied",
         affectedPanels: target.instanceIds.length,
-        conformedPanels,
-        maximumCentroidDisplacementMm: maximumCentroidDisplacementM * 1_000,
+        conformedPanels: 0,
+        maximumCentroidDisplacementMm: transplanted.maximumCentroidDisplacementM * 1_000,
         metricDistortionMax: intrinsic.maxRelativeDistortion,
         seamResidualMaxMm: residualMm,
-        ...(residualMm > 20 ? { warning: `Ainda há uma costura com ${residualMm.toFixed(1)} mm de abertura.` } : {}),
       };
     } catch (error) {
       restoreSnapshots();

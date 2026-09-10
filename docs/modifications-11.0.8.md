@@ -756,3 +756,28 @@ the exact 1020 x 300 mm editor path, the 435 x 227 mm path, sewing interaction,
 visual pairing and Montar-to-Provar transition. Typecheck and `git diff
 --check` passed. No file under `apps/web/src/physics/**` was changed. Browser
 manual validation remains required for the visible `Ajustar montagem` result.
+
+
+---
+
+## STEP-0 contract correction — preassembly, not body fitting
+
+Manual browser validation exposed a conceptual error in the previous STEP-0: it treated the mannequin circumference as a target and attempted to fit/shrink-wrap the sewn garment to the body before physics. That is not the Moldeon contract.
+
+The corrected contract is:
+
+`2D pattern -> sewing assembly -> closed sewn volume -> approximate body-centered placement -> Provar/XPBD resolves gravity, collision, ease and drape.`
+
+Consequences:
+
+- the body is a placement reference/obstacle, not a geometric fit target in Montar;
+- STEP-0 never requires the garment circumference to match a body circumference;
+- oversized garments keep their authored ease instead of being vacuum-packed to the avatar;
+- undersized loops are still sewn/assembled rather than rejected by a body-circumference preflight;
+- one rigid transform is applied to the entire connected sewing component, regardless of whether it contains 1, 2, 4, 8 or more PanelInstances;
+- the sewn component is centered on the body axis at the authored vertical level;
+- exact body contact/clearance and final fitting are deferred to Provar/XPBD;
+- no second local body-aware sewing solve runs after the global sewn shape, so it cannot undo seam closure or introduce material stretch;
+- seam closure and canonical material preservation remain STEP-0 acceptance gates.
+
+The key invariant is now: **Montar assembles the garment; Provar dresses it.**

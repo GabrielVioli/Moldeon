@@ -199,7 +199,7 @@ export function applySewingStep0SolvedComponent(
 ): {
   appliedIds: string[];
   maximumCentroidDisplacementM: number;
-  registrationMode: "body-aware-self-seam" | "authored-rigid";
+  registrationMode: "body-aware-self-seam" | "authored-rigid" | "body-centered-rigid";
   bodyFit: SewingStep0BodyFit | null;
 } | null {
   const options: SewingStep0SolvedComponentOptions = typeof optionsOrMaximum === "number"
@@ -261,6 +261,50 @@ export function applySewingStep0SolvedComponent(
   );
   if (!registration) return null;
 
+  // STEP-0 registration is component-wide. The sewing solver already knows
+  // the intrinsic sewn shape; the body only supplies an approximate spatial
+  // center for preassembly. We deliberately preserve the authored vertical
+  // level and material orientation, but do not fit/inflate/shrink the garment
+  // to the body circumference. XPBD will resolve contact and ease later.
+  const solvedComponentCenter = new THREE.Vector3();
+  const currentComponentCenter = new THREE.Vector3();
+  let solvedPointCount = 0;
+  let currentPointCount = 0;
+  for (const id of target.instanceIds) {
+    const solvedInstance = solvedState.instances.find((instance) => instance.id === id);
+    const meshData = meshes.find((item) => item.key === id);
+    if (!solvedInstance || !meshData) return null;
+    const solved = sliceInstancePositions(solvedState, id);
+    if (!solved) return null;
+    for (let offset = 0; offset < solved.length; offset += 3) {
+      solvedComponentCenter.x += solved[offset];
+      solvedComponentCenter.y += solved[offset + 1];
+      solvedComponentCenter.z += solved[offset + 2];
+      solvedPointCount += 1;
+    }
+    const currentWorld = worldPositions(meshData.mesh);
+    for (let offset = 0; offset < currentWorld.length; offset += 3) {
+      currentComponentCenter.x += currentWorld[offset];
+      currentComponentCenter.y += currentWorld[offset + 1];
+      currentComponentCenter.z += currentWorld[offset + 2];
+      currentPointCount += 1;
+    }
+  }
+  if (solvedPointCount === 0 || currentPointCount === 0) return null;
+  solvedComponentCenter.multiplyScalar(1 / solvedPointCount);
+  currentComponentCenter.multiplyScalar(1 / currentPointCount);
+
+  const targetComponentCenter = currentComponentCenter.clone();
+  if (options.bodySection) {
+    const sectionCenter = options.bodySection.centerM
+      ? new THREE.Vector3(...options.bodySection.centerM)
+      : new THREE.Vector3(0, options.bodySection.yM, options.bodySection.centerZM);
+    // x/z identify the body axis. y remains authored so "Montar" does not
+    // silently move a skirt to the chest or a blouse to the hips.
+    targetComponentCenter.x = sectionCenter.x;
+    targetComponentCenter.z = sectionCenter.z;
+  }
+
   const pending = new Map<string, Float32Array>();
   let maximumDisplacement = 0;
   for (const id of target.instanceIds) {
@@ -279,7 +323,11 @@ export function applySewingStep0SolvedComponent(
     const point = new THREE.Vector3();
     for (let offset = 0; offset < solved.length; offset += 3) {
       point.set(solved[offset], solved[offset + 1], solved[offset + 2]);
-      const world = transformSewingStep0Point(point, registration);
+      const world = point
+        .clone()
+        .sub(solvedComponentCenter)
+        .applyQuaternion(registration.rotation)
+        .add(targetComponentCenter);
       transformedWorld[offset] = world.x;
       transformedWorld[offset + 1] = world.y;
       transformedWorld[offset + 2] = world.z;
@@ -302,8 +350,8 @@ export function applySewingStep0SolvedComponent(
   return {
     appliedIds: [...pending.keys()],
     maximumCentroidDisplacementM: maximumDisplacement,
-    registrationMode: "authored-rigid",
-    bodyFit: options.bodyFit ?? null,
+    registrationMode: options.bodySection ? "body-centered-rigid" : "authored-rigid",
+    bodyFit: null,
   };
 }
 

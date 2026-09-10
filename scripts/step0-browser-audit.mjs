@@ -11,7 +11,8 @@ const report = { generatedAt: new Date().toISOString(), baseUrl, browserVersion:
 
 try {
   await runScenario("self-seam-1020x300", 1020, 300, "wrap");
-  await runScenario("self-seam-435x227", 435, 227, "reject-too-small");
+  await runScenario("self-seam-1400x300", 1400, 300, "wrap");
+  await runScenario("self-seam-435x227", 435, 227, "wrap");
 } finally {
   await browser.close();
 }
@@ -180,11 +181,6 @@ async function runScenario(name, widthMm, heightMm, expectation) {
     const diagnostics = result?.diagnostics ?? {};
     const residualMm = Number(diagnostics?.proposalResidual?.afterBody?.maximumM ?? diagnostics?.finalResidual?.maximumM ?? Number.POSITIVE_INFINITY) * 1000;
     const material = Number(diagnostics?.materialAfter ?? diagnostics?.metricDistortionMax ?? Number.POSITIVE_INFINITY);
-    const bodyAudits = Object.values(diagnostics?.bodyAudits ?? {});
-    const bodySafe = bodyAudits.length > 0 && bodyAudits.every((audit) =>
-      Number(audit?.after?.penetratingSamples ?? 1) === 0
-      && Number(audit?.after?.minimumSignedClearanceMm ?? -999) >= -0.5,
-    );
     const rendered = diagnostics?.renderedMeshes?.[0]?.boundingBox;
     const bodyBounds = diagnostics?.bodyBounds;
     const bodyCenter = bodyBounds
@@ -210,8 +206,8 @@ async function runScenario(name, widthMm, heightMm, expectation) {
       status = applied
         && Number.isFinite(residualMm) && residualMm <= 5
         && Number.isFinite(material) && material <= 0.02
-        && bodySafe
         && surroundsBodyCenter
+        && diagnostics?.bodyContactDeferredToPhysics === true
         ? "passed"
         : "failed";
     } else {
