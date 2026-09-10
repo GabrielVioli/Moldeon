@@ -13,6 +13,7 @@ on:
       - "scripts/step0-browser-audit.mjs"
       - "scripts/apply-step0-body-wrap-fix.py"
       - "scripts/apply-step0-clearance-diagnostic.py"
+      - "scripts/apply-step0-surface-sampling-fix.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
@@ -33,9 +34,10 @@ jobs:
           cache: npm
       - name: Install project
         run: npm ci
-      - name: Apply STEP-0 ellipse candidate and diagnostics
+      - name: Apply STEP-0 body-wrap candidate and diagnostics
         run: |
           python scripts/apply-step0-body-wrap-fix.py
+          python scripts/apply-step0-surface-sampling-fix.py
           python scripts/apply-step0-clearance-diagnostic.py
           git fetch --no-tags origin 7dfda1f5a2a765e68b9191296415a403e9312be7
           git show 7dfda1f5a2a765e68b9191296415a403e9312be7:scripts/step0-browser-audit.mjs > scripts/step0-browser-audit.mjs
@@ -66,7 +68,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/src/viewport/SewingStep0.ts apps/web/src/viewport/GlobalThreeViewport.ts apps/web/src/viewport/GarmentViewport.tsx apps/web/src/viewport/ArrangementWorkspace.ts apps/web/src/viewport/SewingStep0.test.ts apps/web/src/viewport/SewingStep0Placement.test.ts scripts/step0-browser-audit.mjs
-          git commit -m "wip(step0): instrument ellipse body-wrap candidate"
+          git commit -m "wip(step0): surface-only body-wrap candidate"
           git push --force origin HEAD:refs/heads/automation/step0-body-wrap-candidate
       - name: Install Chromium gate tooling
         run: |
