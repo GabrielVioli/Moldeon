@@ -113,6 +113,13 @@ export interface BodyClearanceAudit {
   minimumSignedClearanceMm: number;
   penetratingSamples: number;
   sampledPoints: number;
+  /** DEV/audit evidence for the worst sampled contact. */
+  worstSample?: number;
+  worstPointWorld?: [number, number, number];
+  worstSurfaceWorld?: [number, number, number];
+  worstSurfaceNormal?: [number, number, number];
+  worstTriangleIndex?: number;
+  worstRegionIds?: string[];
 }
 
 export const DEFAULT_SURFACE_CANDIDATE_POLICY: SurfaceCandidatePolicy = {
@@ -258,10 +265,13 @@ export function createBodyBarrierState(mesh: THREE.Mesh, maximumSamples = 20): B
     local.push(point.x, point.y, point.z);
   }
 
-  mesh.geometry.computeBoundingBox();
-  const center = mesh.geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
-  local.push(center.x, center.y, center.z);
-
+  // Body barriers must sample the garment SURFACE only. A bounding-box center
+  // is not a surface point once a sewn panel becomes a tube: it lies inside the
+  // hollow garment volume (and, correctly, inside the avatar). Treating that
+  // synthetic point as garment geometry made Ajustar montagem "detect" a body
+  // penetration that did not exist and could trigger a destructive second solve.
+  // Vertices and triangle centroids below are actual surface samples and give
+  // the same coverage without inventing volume-interior contacts.
   const index = mesh.geometry.getIndex();
   const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(position.count / 3);
   const triangleBudget = Math.max(0, maximumSamples - local.length / 3);
@@ -528,6 +538,12 @@ export function auditMeshBodyClearance(
   const normal = new THREE.Vector3();
   let minimumSignedClearanceMm = Number.POSITIVE_INFINITY;
   let penetratingSamples = 0;
+  let worstSample: number | undefined;
+  let worstPointWorld: [number, number, number] | undefined;
+  let worstSurfaceWorld: [number, number, number] | undefined;
+  let worstSurfaceNormal: [number, number, number] | undefined;
+  let worstTriangleIndex: number | undefined;
+  let worstRegionIds: string[] | undefined;
   const sampleCount = Math.floor(state.localSamples.length / 3);
   mesh.updateMatrixWorld(true);
   for (let sample = 0; sample < sampleCount; sample += 1) {
@@ -537,13 +553,34 @@ export function auditMeshBodyClearance(
     surface.set(...nearest.position);
     normal.set(...nearest.outwardNormal).normalize();
     const signedMm = point.clone().sub(surface).dot(normal) * 1_000;
-    minimumSignedClearanceMm = Math.min(minimumSignedClearanceMm, signedMm);
+    if (signedMm < minimumSignedClearanceMm) {
+      minimumSignedClearanceMm = signedMm;
+      worstSample = sample;
+      worstPointWorld = [point.x, point.y, point.z];
+      worstSurfaceWorld = [...nearest.position];
+      worstSurfaceNormal = [...nearest.outwardNormal];
+      worstTriangleIndex = nearest.attachment.triangleIndex;
+      const base = nearest.attachment.triangleIndex * 3;
+      const regions = new Set<string>();
+      for (let corner = 0; corner < 3; corner += 1) {
+        const vertexIndex = body.indices[base + corner];
+        const region = body.regionIds[vertexIndex];
+        if (region) regions.add(region);
+      }
+      worstRegionIds = [...regions];
+    }
     if (signedMm < requiredClearanceMm) penetratingSamples += 1;
   }
   return {
     minimumSignedClearanceMm: Number.isFinite(minimumSignedClearanceMm) ? minimumSignedClearanceMm : Number.POSITIVE_INFINITY,
     penetratingSamples,
     sampledPoints: sampleCount,
+    worstSample,
+    worstPointWorld,
+    worstSurfaceWorld,
+    worstSurfaceNormal,
+    worstTriangleIndex,
+    worstRegionIds,
   };
 }
 
