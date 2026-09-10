@@ -4,6 +4,11 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 path = ROOT / "apps/web/src/viewport/SewingStep0Placement.test.ts"
 text = path.read_text(encoding="utf-8")
+text = text.replace(
+    '  measureCurrentSewingStep0MaterialDistortion,\n  meshWorldMaterialAnchor,\n',
+    '  measureCurrentSewingStep0MaterialDistortion,\n  meshWorldCentroid,\n  meshWorldMaterialAnchor,\n',
+    1,
+)
 
 first_pattern = re.compile(r'''  it\("closes the current 435 x 227 mm editor panel without pretending it fits around the body", \(\) => \{.*?  \}, 15_000\);\n\n  it\("transplants the proven global self-seam shape into the authored workspace", \(\) => \{''', re.S)
 first_replacement = '''  it("closes and body-centers the current 435 x 227 mm editor panel without body fitting", () => {
