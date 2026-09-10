@@ -11,6 +11,7 @@ on:
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
       - "scripts/apply-step0-exact-body-profile-fix.py"
+      - "scripts/apply-step0-profile-trace-fix.py"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
 
@@ -31,9 +32,10 @@ jobs:
           cache: npm
       - name: Install project
         run: npm ci
-      - name: Apply exact visual-body profile patch
+      - name: Apply exact visual-body profile patches
         run: |
           python scripts/apply-step0-exact-body-profile-fix.py
+          python scripts/apply-step0-profile-trace-fix.py
           mkdir -p artifacts/step0-browser
           git diff > artifacts/step0-browser/exact-body-profile-source.patch
           git diff --check
