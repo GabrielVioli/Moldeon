@@ -9,10 +9,22 @@ on:
       - "apps/web/src/viewport/GlobalThreeViewport.ts"
       - "apps/web/src/viewport/GarmentViewport.tsx"
       - "apps/web/src/viewport/ArrangementWorkspace.ts"
+      - "apps/web/src/editor/PatternCanvasLegacy.tsx"
       - "apps/web/src/garment3d/**"
       - "scripts/step0-browser-audit.mjs"
+      - "scripts/step0-browser-scenarios.mjs"
+      - "docs/step0-e2e-coverage.md"
       - ".github/workflows/recovery-11-0-8-step0-browser.yml"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: STEP-0 browser suite
+        required: true
+        default: full
+        type: choice
+        options:
+          - quick
+          - full
 
 permissions:
   contents: read
@@ -51,6 +63,7 @@ jobs:
         env:
           STEP0_BASE_URL: http://127.0.0.1:5173
           STEP0_ARTIFACT_DIR: artifacts/step0-browser
+          STEP0_SUITE: ${{ github.event_name == 'workflow_dispatch' && inputs.suite || 'quick' }}
         run: node scripts/step0-browser-audit.mjs
       - name: Production build
         run: npm run build --workspace @moldeon/web
